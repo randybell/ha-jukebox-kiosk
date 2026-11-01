@@ -12,7 +12,7 @@ pip install -r requirements_test.txt
 pytest -q                          # tests/ (websocket API, permissions, client, frontend, setup)
 ```
 
-Every Music Assistant command the integration forwards is in `MA_COMMANDS` in `custom_components/jukebox_kiosk/const.py`, with its permission class and a status (`client`, `live`, `checked`, `TODO-VERIFY`). Anything not in that table is refused.
+Every Music Assistant command the integration forwards is in `MA_COMMANDS` in `custom_components/jukebox_kiosk/const.py`, with its permission class and a status (`client`, `live`, `checked`, `TODO-VERIFY`). Anything not in that table is refused. Commands marked `TODO-VERIFY` are left out of `capabilities.commands`; none are marked that way at present. `allow_update_metadata: true` is refused on every command, and `music/item_by_uri` always gets `false`.
 
 ## Build
 

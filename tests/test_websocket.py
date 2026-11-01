@@ -31,7 +31,10 @@ async def test_capabilities_admin(hass: HomeAssistant, hass_ws_client: Any, admi
     assert not r["guest"] and "admin" in r["classes"]
     assert r["features"]["unfavorite"] and r["features"]["queue_edit"]
     assert "player_queues/play_index" in r["commands"]
-    assert all(c not in r["commands"] for c in r["todo_verify"])
+    assert r["todo_verify"] == []
+    for cmd in ("music/genres/overview", "music/podcasts/library_items", "music/audiobooks/library_items", "music/item_by_uri"):
+        assert cmd in r["commands"], cmd
+    assert r["features"]["genre_overview"] and r["features"]["podcast_library"] and r["features"]["audiobook_library"]
 
 
 async def test_capabilities_guest_default(hass: HomeAssistant, hass_ws_client: Any, user_token: Any) -> None:
@@ -208,3 +211,48 @@ async def test_ma_not_loaded(hass: HomeAssistant, hass_ws_client: Any, admin_tok
     assert res["error"]["code"] == "ma_unavailable"
     caps = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
     assert caps["ma_connected"] is False
+
+
+async def test_item_by_uri_forces_allow_update_metadata_false(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/item_by_uri", args={"uri": "apple_music://track/XXXXXXXX"})
+    assert res["success"]
+    assert fake_ma.calls[-1] == ("music/item_by_uri", {"uri": "apple_music://track/XXXXXXXX", "allow_update_metadata": False})
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/item_by_uri",
+                      args={"uri": "apple_music://track/XXXXXXXX", "allow_update_metadata": False})
+    assert res["success"] and fake_ma.calls[-1][1]["allow_update_metadata"] is False
+    n = len(fake_ma.calls)
+    for bad in (True, 1, "yes"):
+        res = await _call(ws, type="jukebox_kiosk/ma", command="music/item_by_uri",
+                          args={"uri": "apple_music://track/XXXXXXXX", "allow_update_metadata": bad})
+        assert not res["success"] and res["error"]["code"] == "invalid_args", bad
+    assert len(fake_ma.calls) == n
+
+
+async def test_allow_update_metadata_true_refused_everywhere(
+    hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa
+) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/genres/overview",
+                      args={"item_id": "1", "allow_update_metadata": True})
+    assert res["error"]["code"] == "invalid_args"
+    assert fake_ma.calls == []
+
+
+async def test_verified_followup_commands_forwarded(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    user, token = user_token
+    ws = await _ws(hass_ws_client, token)
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/genres/overview",
+                      args={"item_id": "6", "provider_instance_id_or_domain": "library", "limit": 25})
+    assert res["success"]
+    assert fake_ma.calls[-1] == ("music/genres/overview", {"item_id": "6", "provider_instance_id_or_domain": "library", "limit": 25})
+    for cmd in ("music/podcasts/library_items", "music/audiobooks/library_items"):
+        res = await _call(ws, type="jukebox_kiosk/ma", command=cmd, args={"limit": 500, "offset": 0, "summary": False})
+        assert res["success"], cmd
+        c, args = fake_ma.calls[-1]
+        assert c == cmd and args["summary"] is False and args["limit"] == 500
+        assert args["user"] == {"provider": "homeassistant", "user_id": user.id, "required": False}

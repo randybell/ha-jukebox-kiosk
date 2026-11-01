@@ -130,6 +130,9 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('L1 lyrics tab shows lyrics on the kiosk backend', ok, await ev(p, `${LY}?.dataset.status`));
   check('L2 the library track is never sent to get_track_lyrics; the queue\'s provider copy is (player_queues/get)',
     lyr.length >= 1 && lyr.every((t) => t.provider !== 'library' && !String(t.uri).startsWith('library://')) && m.some((x) => x.command === 'player_queues/get'), J(lyr.map((t) => t.uri)));
+  const byUri = m.filter((x) => x.command === 'music/item_by_uri').map((x) => x.args);
+  check('L3 music/item_by_uri never carries allow_update_metadata (the server forces False)',
+    byUri.length >= 1 && byUri.every((a) => !('allow_update_metadata' in a)), J(byUri));
   await p.close();
 }
 // ---------------- 5. limited capabilities hide controls ----------------

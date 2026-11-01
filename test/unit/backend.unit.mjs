@@ -192,7 +192,8 @@ async function lyricsRun(maAnswer, { feats = { lyrics: true, ma_commands: true }
   const s = new S.LyricsStore(); s.backend = k;
   s.follow(hass, playing(uri));
   for (let i = 0; i < 100 && ['loading', 'idle'].includes(s.state.status); i++) await tick(10);
-  return { s, cmds: log.filter((m) => m.type === 'jukebox_kiosk/ma').map((m) => m.command), lyr: log.filter((m) => m.command === 'metadata/get_track_lyrics').map((m) => m.args.track) };
+  return { s, cmds: log.filter((m) => m.type === 'jukebox_kiosk/ma').map((m) => m.command), lyr: log.filter((m) => m.command === 'metadata/get_track_lyrics').map((m) => m.args.track),
+    byUri: log.filter((m) => m.command === 'music/item_by_uri').map((m) => m.args) };
 }
 {
   const r = await lyricsRun((cmd) => {
@@ -209,7 +210,7 @@ async function lyricsRun(maAnswer, { feats = { lyrics: true, ma_commands: true }
     if (cmd === 'player_queues/get') return { queue_id: QID, current_item: { queue_item_id: 'q', media_item: provItem('A Different Song') } };
     if (cmd === 'metadata/get_track_lyrics') return ['', '[00:01.00]synced line'];
   }, { uri: 'library://track/2' });
-  check('Y2 queue item is another song → provider mapping via music/item_by_uri (TODO-VERIFY path), still no library track sent',
+  check('Y2 queue item is another song → provider mapping via music/item_by_uri (provider Track returned), still no library track sent',
     J(r.cmds) === J(['music/item_by_uri', 'player_queues/get', 'music/item_by_uri', 'metadata/get_track_lyrics']) && r.lyr[0]?.uri?.startsWith('apple_music--') && r.s.state.status === 'synced', J({ cmds: r.cmds, st: r.s.state.status }));
 }
 {
@@ -243,6 +244,38 @@ async function lyricsRun(maAnswer, { feats = { lyrics: true, ma_commands: true }
     if (cmd === 'metadata/get_track_lyrics') return ['provider line', null];
   }, { uri: 'apple_music--XXXXXXXX://track/PROVIDER_TRACK_ID' });
   check('Y6 a provider track goes straight to get_track_lyrics (no queue read)', J(r.cmds) === J(['music/item_by_uri', 'metadata/get_track_lyrics']) && r.s.state.status === 'plain', J(r.cmds));
+}
+{
+  // MA 2.10.9 caveat: item_by_uri on a provider uri of a track that IS in the library returns the library copy
+  const r = await lyricsRun((cmd) => {
+    if (cmd === 'music/item_by_uri') return libItem();
+    if (cmd === 'player_queues/get') return { queue_id: QID, current_item: { queue_item_id: 'q', media_item: provItem('A Different Song') } };
+    throw new Error('should not be called: ' + cmd);
+  }, { uri: 'library://track/7' });
+  check('Y7 provider-mapping lookup answers with the LIBRARY copy → get_track_lyrics never called, "No lyrics" (no direct LRCLIB path)',
+    J(r.cmds) === J(['music/item_by_uri', 'player_queues/get', 'music/item_by_uri']) && r.lyr.length === 0 && r.s.state.status === 'none'
+    && r.byUri[1]?.uri === 'apple_music--XXXXXXXX://track/PROVIDER_TRACK_ID', J({ cmds: r.cmds, st: r.s.state.status, u: r.byUri }));
+}
+{
+  // every item_by_uri the store sends, across the paths above: never allow_update_metadata
+  const runs = [
+    await lyricsRun((cmd, a) => { if (cmd === 'music/item_by_uri') return a.uri.startsWith('library://') ? libItem() : provItem(); if (cmd === 'player_queues/get') return { queue_id: QID, current_item: null }; if (cmd === 'metadata/get_track_lyrics') return ['x', null]; }, { uri: 'library://track/8' }),
+    await lyricsRun((cmd) => { if (cmd === 'music/item_by_uri') return libItem(); if (cmd === 'player_queues/get') return { queue_id: QID, current_item: null }; }, { uri: 'library://track/9' }),
+    await lyricsRun((cmd) => { if (cmd === 'music/item_by_uri') return provItem(); if (cmd === 'metadata/get_track_lyrics') return ['x', null]; }, { uri: 'apple_music--XXXXXXXX://track/OTHER_ID' }),
+  ];
+  const all = runs.flatMap((r) => r.byUri);
+  check('Y8 music/item_by_uri is never sent allow_update_metadata (lookup and provider-mapping fallback)',
+    all.length >= 5 && all.every((a) => !('allow_update_metadata' in a) && Object.keys(a).join() === 'uri'), J(all));
+}
+{
+  // a provider uri whose item_by_uri answer is the library copy (track in library) → provider copy path, never the library item
+  const r = await lyricsRun((cmd) => {
+    if (cmd === 'music/item_by_uri') return libItem();
+    if (cmd === 'player_queues/get') return { queue_id: QID, current_item: { queue_item_id: 'q', media_item: provItem() } };
+    if (cmd === 'metadata/get_track_lyrics') return ['provider line', null];
+  }, { uri: 'apple_music--XXXXXXXX://track/PROVIDER_TRACK_ID_2' });
+  check('Y9 provider uri answered with the library copy → the queue\'s provider copy is sent instead',
+    J(r.cmds) === J(['music/item_by_uri', 'player_queues/get', 'metadata/get_track_lyrics']) && r.lyr.length === 1 && r.lyr.every((t) => t.provider !== 'library') && r.s.state.status === 'plain', J({ cmds: r.cmds, st: r.s.state.status }));
 }
 
 console.log(`\n${total - failures}/${total} backend checks passed`);

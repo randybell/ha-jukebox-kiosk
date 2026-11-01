@@ -15,7 +15,10 @@ import { MassQueueBackend } from '../backend/mass-queue';
  * The service response is {response: X}; HA's callService wraps it again as {context, response: {response: X}}.
  * Kiosk backend: MA writes metadata to its DB when get_track_lyrics gets a *library* track without lyrics, so the server
  * refuses library tracks. The store then asks for the provider copy: the queue's current_item.media_item (live-checked on
- * MA 2.10.9), else music/item_by_uri on the item's first provider mapping. No provider copy = 'none'.
+ * MA 2.10.9), else music/item_by_uri on the item's provider mappings. music/item_by_uri is read-only only with
+ * allow_update_metadata=False (MA's default; the card never sends the flag and the server forces it False), and for a
+ * track that is in the library it returns the LIBRARY copy (provider 'library'), which is never passed on to
+ * get_track_lyrics. The card has no direct LRCLIB path (it never contacts LRCLIB), so no provider copy = 'none'.
  *
  * Caching: in-memory LRU (50, shared by every card on the page) and localStorage (100 entries). Found lyrics live 30 days,
  * "not found" 24 hours, errors are never stored (60 s in-memory back-off). Requests for the same key share one promise.
@@ -254,11 +257,13 @@ export class LyricsStore {
         if (m && typeof m === 'object' && !isLibraryItem(m) && normKey(cleanName(m.name)) === normKey(cleanName(item?.name))) return m;
       } catch { /* fall through to the provider mapping */ }
     }
-    // TODO-VERIFY: music/item_by_uri on a provider uri returns the provider item without adding it to the library
+    // music/item_by_uri (read-only; never pass allow_update_metadata) on a provider uri. Checked on MA 2.10.9: it returns the
+    // full provider Track, unless the track is in the library, in which case it returns the LIBRARY copy. That copy must
+    // not reach get_track_lyrics (MA would write to the library), so it is skipped like no answer at all.
     for (const pm of Array.isArray(item?.provider_mappings) ? item.provider_mappings : []) {
       if (!pm?.item_id || !pm?.provider_instance || pm.available === false) continue;
       const it = await this.send('music/item_by_uri', { uri: `${pm.provider_instance}://track/${pm.item_id}` }).catch(() => undefined);
-      if (it && typeof it === 'object' && !isLibraryItem(it)) return it;
+      if (it && typeof it === 'object' && !Array.isArray(it) && !isLibraryItem(it)) return it;
     }
     return undefined;
   }
@@ -270,7 +275,7 @@ export class LyricsStore {
       if (track) {
         const tmd = track.metadata ?? {};
         ly = track !== item ? toLyrics(tmd.lyrics, tmd.lrc_lyrics) : null;
-        if (!ly) {
+        if (!ly && !(this.backend?.kind === 'kiosk' && isLibraryItem(track))) {
           const r = await this.send('metadata/get_track_lyrics', { track });
           const [plain, lrc] = Array.isArray(r) ? r : [r?.lyrics ?? r?.plain, r?.lrc_lyrics ?? r?.lrc];
           ly = toLyrics(plain, lrc);

@@ -70,14 +70,15 @@ The server enforces these on every command. Hiding a control in the card is a co
 
 **Not per user.** Music Assistant passes the Home Assistant user only on search, library listings and `play_media`. Recently played, favourites and recommendations are shared by everyone on the Music Assistant server.
 
-## Not verified yet (TODO-VERIFY)
+## Checked Music Assistant commands
 
-These Music Assistant commands are allowlisted, but their names or arguments haven't been confirmed against a live server. They are listed in `MA_COMMANDS` in `custom_components/jukebox_kiosk/const.py` with status `TODO-VERIFY`, and `jukebox_kiosk/capabilities` reports them in `todo_verify`. The card doesn't build features on them yet.
+No allowlisted command in `MA_COMMANDS` (`custom_components/jukebox_kiosk/const.py`) is still marked `TODO-VERIFY`. Each one is confirmed by the `music-assistant-client` signatures, by a live read, or by a read-only check against Music Assistant 2.10.9. `jukebox_kiosk/capabilities` therefore returns an empty `todo_verify` list. The last commands confirmed, all with read-only checks, were:
 
-- `music/genres/overview` (the provider argument name)
-- `music/podcasts/library_items`
-- `music/audiobooks/library_items`
-- Card: the lyrics fallback that uses `music/item_by_uri` on a provider URI to find the provider copy of a library track (`src/lyrics/store.ts`). The first choice, the queue's `current_item.media_item`, is confirmed.
+- **`music/genres/overview`** takes `item_id`, `provider_instance_id_or_domain` (default `library`) and `limit`, which is applied per row (default 25). It returns rows for Artists, Albums, Tracks and Playlists, whose ids are `genre_<type>`.
+- **`music/podcasts/library_items`** and **`music/audiobooks/library_items`** take `favorite`, `search`, `limit` (500), `offset` (0), `order_by` (`sort_name`), `provider`, `genre` and `played_only`. They also take the keyword-only arguments `summary` (default true), `collapse_collections` and `reachable_via`. Send `summary: false` when you need `fully_played` and `resume_position_ms`. Both commands pass the Home Assistant user to Music Assistant, like the other library listings.
+- **`music/item_by_uri`** is read-only only while `allow_update_metadata` is false, so the integration always sends `false`. It refuses any other value, and it refuses `allow_update_metadata: true` on every allowlisted command. For a track in your library, this command returns the library copy (provider `library`), even when you ask with a provider URI.
+
+**Lyrics.** On the kiosk backend the card never sends a library track to `metadata/get_track_lyrics`, because Music Assistant would write to its library. It uses the provider copy in the queue (`current_item.media_item`) instead. If that isn't there, it looks up each provider mapping with `music/item_by_uri`, without `allow_update_metadata`. If the lookup returns the library copy, the card skips it. The card doesn't fetch from LRCLIB directly, so when it finds no provider copy it shows "No lyrics found". The admin-only `jukebox_kiosk/raw` diagnostic command doesn't go through the allowlist.
 
 ## Configuration
 
