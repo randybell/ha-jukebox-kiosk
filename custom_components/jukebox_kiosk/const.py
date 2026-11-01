@@ -13,6 +13,8 @@ Status values:
                   server (2026-11-01): name and argument names; writes were NOT called.
   "TODO-VERIFY" - name and/or arguments not confirmed. Do not build card features on
                   these until a read-only check against a live server confirms them.
+                  (No command has this status at the moment; the read-only follow-up
+                  check of 2026-11-01 confirmed the last three.)
 """
 
 from __future__ import annotations
@@ -84,10 +86,19 @@ class MaCommand:
     # recents/favourites/recommendations are NOT per-user.
     impersonate: bool = False
     redact: str | None = None  # name of a response filter for non-admins
+    # Args always sent with these values, whatever the caller passed. A caller that
+    # passes a different value is refused (see forward()).
+    forced: tuple[tuple[str, object], ...] = ()
     note: str = ""
 
 
 TODO_VERIFY: Final = "TODO-VERIFY"
+
+_LIBRARY_ITEMS_ARGS: Final = (
+    "favorite, search, limit=500, offset=0, order_by='sort_name', provider, genre, played_only; "
+    "keyword-only summary=True, collapse_collections, reachable_via. summary=False returns full items "
+    "with fully_played / resume_position_ms"
+)
 
 R, P, Q, L, S = (
     PermClass.READ,
@@ -117,7 +128,13 @@ MA_COMMANDS: Final[dict[str, MaCommand]] = {
     ),
     "players/add_currently_playing_to_favorites": MaCommand(L, "client"),
     # --- music reads ---
-    "music/item_by_uri": MaCommand(R, "client"),
+    "music/item_by_uri": MaCommand(
+        R,
+        "checked",
+        forced=(("allow_update_metadata", False),),
+        note="uri; read-only only with allow_update_metadata=False (forced). Returns the full Track, "
+        "but the LIBRARY copy (provider 'library') when the track is in the library",
+    ),
     "music/search": MaCommand(R, "checked", impersonate=True, note="result has a genres key"),
     "music/browse": MaCommand(R, "checked", note="path; skip leading '..' entries"),
     "music/albums/album_tracks": MaCommand(R, "client"),
@@ -155,10 +172,15 @@ MA_COMMANDS: Final[dict[str, MaCommand]] = {
     "players/sleep_timer/clear": MaCommand(P, "checked", note="player_id; write not exercised"),
     "player_queues/set_playback_speed": MaCommand(P, "checked", note="queue_id, speed 0.5-3.0, queue_item_id; write not exercised"),
     "player_queues/save_as_playlist": MaCommand(L, "checked", note="queue_id, name; write not exercised"),
-    # --- still unverified ---
-    "music/genres/overview": MaCommand(R, TODO_VERIFY, note="seen in check; provider arg name not confirmed"),
-    "music/podcasts/library_items": MaCommand(R, TODO_VERIFY, impersonate=True, note="pattern from other types"),
-    "music/audiobooks/library_items": MaCommand(R, TODO_VERIFY, impersonate=True, note="pattern from other types"),
+    # --- confirmed by the read-only follow-up check (2026-11-01) ---
+    "music/genres/overview": MaCommand(
+        R,
+        "checked",
+        note="item_id, provider_instance_id_or_domain='library', limit=25 (per row). Returns folders "
+        "Artists/Albums/Tracks/Playlists (… radio/podcast/audiobook when present) with item_id genre_<type>",
+    ),
+    "music/podcasts/library_items": MaCommand(R, "checked", impersonate=True, note=_LIBRARY_ITEMS_ARGS),
+    "music/audiobooks/library_items": MaCommand(R, "checked", impersonate=True, note=_LIBRARY_ITEMS_ARGS),
 }
 
 # Never forwarded, even for admins via the generic proxy (admins can use
@@ -174,6 +196,11 @@ DENY_SUFFIXES: Final = ("/remove",)
 
 # Keys a caller may never set in forwarded args (we inject impersonation ourselves).
 RESERVED_ARG_KEYS: Final = frozenset({"user", "username", "message_id", "command"})
+
+# Args that make MA write to its library/DB when true. Refused as true on every
+# allowlisted command (MA defaults them to the safe value where it matters, and
+# item_by_uri forces False).
+NO_WRITE_ARG_KEYS: Final = frozenset({"allow_update_metadata"})
 
 # Arg keys that name MA players/queues; non-admin callers must be allowed to
 # control the matching HA media_player entity.

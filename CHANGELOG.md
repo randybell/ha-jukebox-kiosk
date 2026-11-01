@@ -10,6 +10,9 @@ The card moves into a Home Assistant integration, **Jukebox Kiosk** (`jukebox_ki
 - **Integration** `custom_components/jukebox_kiosk`: a config flow that picks the Music Assistant entry, guest permission options, and a `jukebox_kiosk/*` WebSocket API (`capabilities`, `ma` with an allowlist, `queue_items`, `item_tracks` with server-side paging, `unfavorite_current`, `subscribe_queue`). It serves and auto-loads the card, and removes old `/hacsfiles/ha-jukebox-kiosk-card/` resources with a Repairs issue.
 - **Card backends**: `backend: auto | kiosk | mass_queue | native`. On `kiosk`, the server's feature flags hide controls the user may not use.
 - Lyrics send Music Assistant the provider copy of the track, never a library item (asking for a library track writes to MA's database).
+- No allowlisted MA command is still `TODO-VERIFY`. The last three passed read-only checks against MA 2.10.9, and `capabilities.todo_verify` is empty. Confirmed: `music/genres/overview` (`item_id`, `provider_instance_id_or_domain`=`library`, `limit` per row), and `music/podcasts/library_items` / `music/audiobooks/library_items` (user impersonation; `summary: false` for resume fields). New feature flags: `genre_overview`, `podcast_library` and `audiobook_library`.
+- `music/item_by_uri` always gets `allow_update_metadata: false`. The allowlist refuses `allow_update_metadata: true` on every command, and nothing is sent to MA.
+- Lyrics fallback: when `music/item_by_uri` returns the library copy of a track that is in the library, the card skips it and never sends it to `get_track_lyrics`. With no provider copy, the card shows "No lyrics found", because it has no direct LRCLIB path.
 - Tests: `test/unit/backend.unit.mjs`, `test/kiosk.e2e.mjs` (against `dev/mock-kiosk.js`), and pytest for the integration.
 
 ### Changed

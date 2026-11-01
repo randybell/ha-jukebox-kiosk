@@ -25,6 +25,7 @@ from .const import (
     DOMAIN,
     LOGGER,
     MA_COMMANDS,
+    NO_WRITE_ARG_KEYS,
     PLAYER_ARG_KEYS,
     PLAYER_LIST_ARG_KEYS,
     QUEUE_EVENTS,
@@ -155,6 +156,12 @@ async def forward(
         raise KioskError("not_allowed", f"{command} is not allowlisted")
     if RESERVED_ARG_KEYS & args.keys():
         raise KioskError("invalid_args", "Reserved argument names are not allowed")
+    if any(args.get(k) for k in NO_WRITE_ARG_KEYS & args.keys()):
+        raise KioskError("invalid_args", "allow_update_metadata must be false (it lets MA write to the library)")
+    for key, value in spec.forced:
+        if key in args and args[key] != value:
+            raise KioskError("invalid_args", f"{key} is fixed to {value!r} for {command}")
+        args[key] = value
     if command == "metadata/get_track_lyrics":
         _guard_lyrics_track(args.get("track"))
     _entry_, policy, client = _context(hass)
@@ -230,6 +237,9 @@ async def ws_capabilities(hass: HomeAssistant, connection: websocket_api.ActiveC
                 "lyrics": has(PermClass.READ),
                 "track_lists": has(PermClass.READ),
                 "podcast_episodes": has(PermClass.READ),
+                "genre_overview": has(PermClass.READ),
+                "podcast_library": has(PermClass.READ),
+                "audiobook_library": has(PermClass.READ),
                 "unfavorite": has(PermClass.LIBRARY),
                 "library_write": has(PermClass.LIBRARY),
                 "speakers": has(PermClass.SPEAKERS),

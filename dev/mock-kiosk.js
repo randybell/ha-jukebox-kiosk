@@ -35,7 +35,10 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
       if (t.provider === 'library' || String(t.uri ?? '').startsWith('library://')) throw err('not_allowed', 'Library tracks are refused (MA would write metadata)');
       return sendCommand(command, args);
     }
-    if (command === 'music/item_by_uri' || command === 'music/search') return sendCommand(command, args);
+    // like const.py: allow_update_metadata may never be true, and item_by_uri always gets it forced to False
+    if (args && args.allow_update_metadata) throw err('invalid_args', 'allow_update_metadata must be false');
+    if (command === 'music/item_by_uri') return sendCommand(command, { ...args, allow_update_metadata: false });
+    if (command === 'music/search') return sendCommand(command, args);
     if (MUTATING.test(command) && !features.queue_edit && command !== 'player_queues/play_index') throw err('unauthorized', 'Unauthorized');
     if (command === 'player_queues/play_index' && !features.queue_play) throw err('unauthorized', 'Unauthorized');
     const r = await maApi.command(command, args);
