@@ -235,6 +235,50 @@ for (const kiosk of [false, true]) {
   await q.close();
 }
 
+// ---------------- Q60: the idle reset (screensaver) clears the scope / Library filters ----------------
+{
+  const SAVER = `__card.shadowRoot.querySelector('.saver.on')`;
+  const wake = async (p) => { await tap(p, `__card.shadowRoot.querySelector('.saver')`); await wait(p, `!__card.shadowRoot.querySelector('.saver')`); await sleep(150); };
+  // Search: scope to JJ Grey, then go idle
+  const p = await open('&tab=search&saver=0.1');
+  await scopeToJJ(p);
+  check('Q60-1 Search scoped to JJ Grey before idle', await ev(p, `!!${SV}.querySelector('.sc[data-scope="artist"]')`));
+  const idle = await wait(p, SAVER, 12000);
+  await wake(p);
+  check('Q60-2 screensaver came on; after waking the scope chip is gone (Clear filters gone too)', idle && !(await ev(p, `!!${SV}.querySelector('.sc[data-scope="artist"]')`))
+    && !(await ev(p, `!!${SV}.querySelector('[data-action="clear-filters"]')`)));
+  check('Q60-3 no scope chips left at all (artist or album)', await ev(p, `${SV}.querySelector('.sc') === null`));
+  await p.close();
+  // idle_clear_filters: false keeps it
+  const k = await open('&tab=search&saver=0.1', { idle_clear_filters: false });
+  await scopeToJJ(k);
+  const idle2 = await wait(k, SAVER, 12000);
+  await wake(k);
+  check('Q60-4 idle_clear_filters: false → the scope chip stays across the screensaver', idle2 && (await ev(k, `!!${SV}.querySelector('.sc[data-scope="artist"]')`)));
+  await k.close();
+  // Library: text filter, then idle
+  const b = await open('&tab=browse&saver=0.1');
+  await wait(b, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
+  await tap(b, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
+  await tap(b, `${BR}.querySelector('[data-act="filter"]')`);
+  await wait(b, `${KB}?.querySelector('[data-key="k-L"]')`);
+  for (const ch of 'LAN') await tap(b, `${KB}.querySelector('[data-key="k-${ch}"]')`);
+  await wait(b, `${BR}.querySelector('.sc[data-scope="text"]')`);
+  const idle3 = await wait(b, SAVER, 12000);
+  await wake(b);
+  check('Q60-5 Library text filter + keyboard cleared by the idle reset; full list back', idle3 && !(await ev(b, `!!${BR}.querySelector('.scope')`))
+    && !(await ev(b, `!!${BR}.querySelector('jb-keyboard')`)) && (await ev(b, `${BR}.querySelectorAll('.list .row').length`)) > 5);
+  // no filter set: an open page stays put (the reset only touches filters)
+  await tap(b, `${BR}.querySelector('.cats .fc[data-cat="album"]')`);
+  await wait(b, `${BR}.querySelector('.tile[data-type="album"]')`);
+  await tap(b, `${BR}.querySelector('.tile[data-type="album"]')`);
+  await wait(b, `!!${BR}.querySelector('jb-detail')`);
+  const idle4 = await wait(b, SAVER, 12000);
+  await wake(b);
+  check('Q60-6 no filter set: the idle reset leaves an open album page alone', idle4 && (await ev(b, `!!${BR}.querySelector('jb-detail')`)));
+  await b.close();
+}
+
 check('no page errors', pageErrors.length === 0, J(pageErrors.slice(0, 3)));
 await browser.close();
 console.log(`\n${total - failures}/${total} search-filter checks passed`);

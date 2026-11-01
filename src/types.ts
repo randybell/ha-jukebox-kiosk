@@ -121,6 +121,8 @@ export interface JukeboxCardConfig {
   /** v0.7 (default on): Search shows Music Assistant library matches first in each category, then provider results
    *  with library duplicates removed. false = MA's own order. */
   library_first?: boolean;
+  /** v0.7 (Q60): the screensaver (idle) also clears the Search scope chips and the Library filters (default true) */
+  idle_clear_filters?: boolean;
   /**
    * v0.7 (default off). Search categories shown as chips, in this order. Unset = 0.6 behaviour
    * (every type, chips only when results span several types). Genres need the kiosk backend.

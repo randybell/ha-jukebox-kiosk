@@ -458,6 +458,12 @@ export class JbBrowse extends LitElement {
     this._lq = ''; this._lart = null; this._lpool = null; this._lkb = false; this._stack = []; this._menu = null;
     this.ensure();
   }
+  /** Q60: idle reset: clear the Library filters (text and artist), only when one is set (browsing stays put otherwise) */
+  idleReset(): boolean {
+    if (!this._lq && !this._lart) return false;
+    this.clearFilters();
+    return true;
+  }
   /** The artist's library albums + tracks: the artist page (tracks, albums) plus get_library by name, cached per artist. */
   private loadLart() {
     const a = this._lart; if (!a || !this.hass) return;

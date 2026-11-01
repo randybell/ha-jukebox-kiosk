@@ -480,7 +480,13 @@ export class JukeboxCard extends LitElement {
     window.clearTimeout(this._idleTimer);
     const m = this._config?.screensaver_minutes ?? 10;
     if (!m || !this.isConnected) return;
-    this._idleTimer = window.setTimeout(() => { this._saver = 'on'; }, m * 60_000);
+    this._idleTimer = window.setTimeout(() => { this._saver = 'on'; this.idleReset(); }, m * 60_000);
+  }
+  /** Q60: the idle reset clears the Search scope and the Library filters (idle_clear_filters: false keeps them) */
+  idleReset() {
+    if (this._config?.idle_clear_filters === false) return;
+    (this.renderRoot.querySelector('jb-search') as any)?.idleReset?.();
+    (this.renderRoot.querySelector('jb-browse') as any)?.idleReset?.();
   }
   private onActivity = () => { if (!this._saver) this.armIdle(); };
   private wake = (e: Event) => {

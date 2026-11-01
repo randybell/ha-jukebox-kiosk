@@ -210,6 +210,12 @@ export class JbSearch extends LitElement {
     this.setScope(null);
     this._filter = this._cats ? defaultCategory(this.config, this._cats) : 'all';
   }
+  /** Q60: idle reset (the screensaver came on): drop the scope chips; false when there was nothing to clear */
+  idleReset(): boolean {
+    if (!this._scope) return false;
+    this.clearFilters();
+    return true;
+  }
   /** groups a scope can show (null = no scope) */
   private scopeGroups(): GroupKey[] | null {
     return !this._scope ? null : this._scope.album ? ['tracks'] : ['albums', 'tracks'];
