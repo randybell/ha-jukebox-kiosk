@@ -21,7 +21,7 @@ import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { pickBackend, createBackend, backendKey, type MaBackend } from './backend';
 import { defineElement } from './define';
 
-export const VERSION = '0.6.3';
+export const VERSION = '0.6.4';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'now', label: 'Now Playing', icon: 'disc' },
   { id: 'browse', label: 'Browse', icon: 'browse' },
@@ -51,6 +51,7 @@ function validateSpeakers(c: JukeboxCardConfig) {
   oneOf('grouping', ['admins', 'everyone', 'nobody']);
   oneOf('guest_access', ['volume', 'none']);
   oneOf('leader_drop', ['block', 'allow']);
+  if (!bool(c.confirm_drop)) throw new Error('jukebox-card: confirm_drop must be true or false.');
   if (!bool(c.large_buttons)) throw new Error('jukebox-card: large_buttons must be true or false.');
   if (c.grouping_users !== undefined && (!Array.isArray(c.grouping_users) || !c.grouping_users.every((u) => typeof u === 'string')))
     throw new Error('jukebox-card: grouping_users must be a list of user names or ids.');

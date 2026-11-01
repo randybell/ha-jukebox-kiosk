@@ -57,6 +57,7 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
         { name: 'grouping_users', selector: { text: {} } },
         { name: 'guest_access', selector: { select: { options: [{ value: 'volume', label: 'Volume and mute' }, { value: 'none', label: 'Read only' }], mode: 'dropdown' } } },
         { name: 'leader_drop', selector: { select: { options: [{ value: 'allow', label: 'Allow (MA re-forms the group on the other speakers after a short gap)' }, { value: 'block', label: 'Block (hand off with Move)' }], mode: 'dropdown' } } },
+        { name: 'confirm_drop', selector: { boolean: {} } },
         { name: 'presets', selector: { object: {} } },
         { name: 'quiet_start', selector: { time: {} } },
         { name: 'quiet_end', selector: { time: {} } },
@@ -107,6 +108,7 @@ export const LABELS: Record<string, string> = {
   grouping_users: 'Also allow these users (names or ids, comma separated)',
   guest_access: 'Everyone else',
   leader_drop: 'Dropping the speaker that leads a group',
+  confirm_drop: 'Ask before dropping or taking speakers (centred dialog; off = small status message)',
   presets: 'Room presets (YAML list: name, members, volumes, target)',
   quiet_start: 'Quiet hours from',
   quiet_end: 'Quiet hours until (same as from = all day)',
@@ -118,7 +120,7 @@ const hhmm = (t: unknown) => (typeof t === 'string' ? t.slice(0, 5) : undefined)
 /** defaults shown for unset options, never written back unless the user changes them */
 const SHOWN_DEFAULTS = {
   show_lyrics: true, lyrics_tab: true, screensaver_lyrics: true, lyrics_seek: true,
-  large_buttons: false, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow',
+  large_buttons: false, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
 };
 const roomEntity = (r: RoomConfig | string) => (typeof r === 'string' ? r : r.entity);
 

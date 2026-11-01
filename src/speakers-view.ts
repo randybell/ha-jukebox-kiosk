@@ -18,13 +18,23 @@ import { defineElement } from './define';
  * dynamic mode: pick the group the card plays on (Move = player_queues/transfer), join / drop / take speakers
  * (players/cmd/set_members), room presets. Grouping is a UI lock for allowed users only; guests get the mixer.
  * Changes are optimistic, time out, show a toast on failure and offer Undo for a few seconds.
+ * 0.6.4: every grouping message (progress, done + Undo, errors, takeover questions) is ONE small status chip in the top-right
+ * corner, under the header clock. No centred dialog unless `confirm_drop: true` (the 0.6.3 behaviour).
  */
 interface Ask { title: string; sub?: string; lines: string[]; ok: string; danger?: boolean; resolve: (ok: boolean) => void }
 export type { InlineRoomState as InlineRoom } from './speakers/model';
 import type { InlineRoomState as InlineRoom } from './speakers/model';
 interface Undo { label: string; run: () => Promise<void> }
+/** the top-right status chip: info (auto-hides ~4 s), busy (until replaced), error, ask (an action button + dismiss) */
+type ChipKind = 'info' | 'busy' | 'error' | 'ask';
+interface Chip { text: string; kind: ChipKind; act?: { label: string; run: () => void }; n: number }
 interface Pending<T> { v: T; t: number }
-const UNDO_MS = 5000;
+const UNDO_MS = 4000;
+const CHIP_MS = 4000;
+const ERROR_MS = 6000;
+const ASK_MS = 6000;
+const BUSY_MS = 15000;
+const ms = (k: string, d: number) => Number((window as any)[k] ?? d);
 const HOLD_MS = 4000;
 const REGROUP_MS = 15000;
 const VOL_THROTTLE_MS = 200;
@@ -32,7 +42,7 @@ const VOL_THROTTLE_MS = 200;
 export class JbSpeakers extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, store: { attribute: false }, open: { type: Boolean, reflect: true }, keep: { type: Boolean },
-    _ask: { state: true }, _toast: { state: true }, _undo: { state: true }, _busy: { state: true }, _tick: { state: true }, _regroup: { state: true },
+    _ask: { state: true }, _chip: { state: true }, _busy: { state: true }, _tick: { state: true }, _regroup: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
@@ -41,8 +51,10 @@ export class JbSpeakers extends LitElement {
   /** 0.6.3: Now Playing shows Drop/Add per room: keep the MA player list fresh (slower poll) while the panel is closed */
   keep = false;
   private _ask: Ask | null = null;
-  private _toast = '';
-  private _undo: Undo | null = null;
+  private _chip: Chip | null = null;
+  private _chipN = 0;
+  /** resolves a pending chip question (false when it times out, is dismissed or replaced) */
+  private _chipAsk?: (ok: boolean) => void;
   /** optimistic grouping: speaker (MA id) → 'in' | 'out', target entity → 'move' */
   private _busy = new Map<string, string>();
   private _tick = 0;
@@ -50,8 +62,7 @@ export class JbSpeakers extends LitElement {
   private _regroup: { group: string; old: string; until: number } | null = null;
   private _regroupTimer?: number;
   private _unsub?: () => void;
-  private _toastTimer?: number;
-  private _undoTimer?: number;
+  private _chipTimer?: number;
   private vol = new Map<string, Pending<number>>();
   private mute = new Map<string, Pending<boolean>>();
   private senders = new Map<string, ReturnType<typeof throttle<[number]>>>();
@@ -60,6 +71,8 @@ export class JbSpeakers extends LitElement {
 
   private get dynamic() { return this.config?.speaker_mode === 'dynamic'; }
   private get mayGroup() { return canGroup(this.config, this.hass?.user); }
+  /** 0.6.4: confirm_drop: true brings back the 0.6.3 centred confirms (drop the leader, last room → Pause, takeovers) */
+  private get modal() { return this.config?.confirm_drop === true; }
 
   protected willUpdate(ch: PropertyValues) {
     if (ch.has('open') || ch.has('store') || ch.has('keep') || ch.has('config')) {
@@ -99,7 +112,7 @@ export class JbSpeakers extends LitElement {
   }
   /** 0.6.3: 'Regrouping…' for Now Playing */
   inlineRegrouping() { return this.dynamic && !!this.store?.loaded && this.regrouping(this.ctx()); }
-  disconnectedCallback() { super.disconnectedCallback(); window.clearTimeout(this._regroupTimer); this.store?.stopPolling(); this._unsub?.(); this._unsub = undefined; }
+  disconnectedCallback() { super.disconnectedCallback(); window.clearTimeout(this._regroupTimer); window.clearTimeout(this._chipTimer); this.store?.stopPolling(); this._unsub?.(); this._unsub = undefined; }
   connectedCallback() { super.connectedCallback(); if (this.hasUpdated) this.requestUpdate('keep'); }
 
   /* ---------------- public: start confirmation (used by the card's start guard, panel open or not) ---------------- */
@@ -134,18 +147,36 @@ export class JbSpeakers extends LitElement {
     const t = targetsOf(this.config, this.hass).find((x) => targetMa(x.entity, this.hass, players) === id);
     return t?.name ?? players.get(id)?.name ?? id;
   }
-  private toast(t: string, ms = 3200) {
-    this._toast = t; window.clearTimeout(this._toastTimer);
-    this._toastTimer = window.setTimeout(() => (this._toast = ''), ms);
+  /** 0.6.4: show one status message in the top-right chip; it replaces whatever was there (a pending question answers no) */
+  private status(text: string, o: { kind?: ChipKind; undo?: Undo; act?: Chip['act']; ms?: number } = {}) {
+    const ask = this._chipAsk; this._chipAsk = undefined; ask?.(false);
+    window.clearTimeout(this._chipTimer);
+    const kind = o.kind ?? 'info';
+    const act = o.undo ? { label: 'Undo', run: () => void this.doUndo(o.undo!) } : o.act;
+    const n = ++this._chipN;
+    this._chip = { text, kind, act, n };
+    const t = o.ms ?? (kind === 'busy' ? BUSY_MS : kind === 'error' ? ms('__jbErrorMs', ERROR_MS) : kind === 'ask' ? ms('__jbAskMs', ASK_MS)
+      : o.undo ? ms('__jbUndoMs', UNDO_MS) : ms('__jbChipMs', CHIP_MS));
+    this._chipTimer = window.setTimeout(() => this.clearChip(n), t);
   }
-  private offerUndo(u: Undo | null) {
-    window.clearTimeout(this._undoTimer); this._undo = u;
-    if (u) this._undoTimer = window.setTimeout(() => (this._undo = null), Number((window as any).__jbUndoMs ?? UNDO_MS));
+  /** hide the chip (only if it still shows message n, when given) */
+  private clearChip(n?: number) {
+    if (n !== undefined && this._chip?.n !== n) return;
+    window.clearTimeout(this._chipTimer); this._chip = null;
+    const ask = this._chipAsk; this._chipAsk = undefined; ask?.(false);
   }
-  private async doUndo() {
-    const u = this._undo; this.offerUndo(null);
-    if (!u) return;
-    try { await u.run(); this.toast('Undone'); } catch (e) { this.toast(`Undo did not work: ${errText(e)}`); }
+  private toast(t: string) { this.status(t); }
+  private fail(t: string) { this.status(t, { kind: 'error' }); }
+  /** a non-modal question in the chip: true when its action is tapped before it hides */
+  private chipAsk(text: string, ok: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.status(text, { kind: 'ask', act: { label: ok, run: () => { const r = this._chipAsk; this._chipAsk = undefined; this.clearChip(); r?.(true); } } });
+      this._chipAsk = resolve;
+    });
+  }
+  private async doUndo(u: Undo) {
+    this.status('Undoing…', { kind: 'busy' });
+    try { await u.run(); this.toast('Undone'); } catch (e) { this.fail(`Undo did not work: ${errText(e)}`); }
   }
   private setBusy(k: string, v?: string) { const m = new Map(this._busy); if (v) m.set(k, v); else m.delete(k); this._busy = m; }
   private close = () => fire(this, 'jukebox-speakers', { open: false });
@@ -161,7 +192,7 @@ export class JbSpeakers extends LitElement {
   private mutedOf(id: string) { return this.held(this.mute, id, !!this.hass?.states[id]?.attributes?.is_volume_muted, (x, y) => x === y); }
   private cap() { return volumeCap(this.config, this.hass?.user); }
   private callVol(id: string, service: string, data: Record<string, any>) {
-    return this.hass!.callService('media_player', service, data, { entity_id: id }).catch(() => this.toast('That did not work. Check the speaker.'));
+    return this.hass!.callService('media_player', service, data, { entity_id: id }).catch(() => this.fail('That did not work. Check the speaker.'));
   }
   private sender(id: string) {
     let s = this.senders.get(id);
@@ -192,7 +223,10 @@ export class JbSpeakers extends LitElement {
   private async confirmTakeovers(title: string, list: Takeover[], players: Players, rooms: Room[], ok: string) {
     if (!list.length) return true;
     const danger = list.some((t) => t.kind === 'static' || t.kind === 'hijack' || t.last);
-    return this.ask({ title, lines: list.map((t) => takeoverText(t, (id) => this.nameOf(id, players, rooms))), ok, danger });
+    const lines = list.map((t) => takeoverText(t, (id) => this.nameOf(id, players, rooms)));
+    // 0.6.4: the question sits in the top-right chip (tap its button to go ahead); confirm_drop: true keeps the dialog
+    if (!this.modal) return this.chipAsk(lines.join(' '), ok);
+    return this.ask({ title, lines, ok, danger });
   }
   /** Join (or take) a speaker into the current target. */
   async join(room: Room) {
@@ -212,13 +246,10 @@ export class JbSpeakers extends LitElement {
       await this.store!.setMembers(x.tMa, [room.ma], []);
       const ok = await this.store!.waitFor((p) => membersOf(p.get(x.tMa!), p).includes(room.ma!), timeouts().join);
       if (!ok) throw new SpeakerError('timeout', `${room.name} did not join`);
-      this.toast(`${room.name} joined ${tName}`);
-      if (!staticStop) {
-        const s = room.ma, t = x.tMa;
-        this.offerUndo({ label: `${room.name} joined`, run: async () => { if (back) await this.store!.setMembers(back, [s], []); else await this.store!.setMembers(t, [], [s]); } });
-      } else this.offerUndo(null);
+      const s = room.ma, t = x.tMa;
+      this.status(`${room.name} joined ${tName}`, staticStop ? {} : { undo: { label: `${room.name} joined`, run: async () => { if (back) await this.store!.setMembers(back, [s], []); else await this.store!.setMembers(t, [], [s]); } } });
     } catch (e) {
-      this.toast(`Couldn't add ${room.name}: ${errText(e)}`, 4500);
+      this.fail(`Couldn't add ${room.name}: ${errText(e)}`);
       void this.store!.refresh();
     } finally { this.setBusy(room.ma); }
   }
@@ -232,25 +263,33 @@ export class JbSpeakers extends LitElement {
       // MA would stop and dissolve the group: offer Pause instead (the queue and the speaker stay on the group)
       const playing = this.hass?.states[x.c.entity!]?.state === 'playing';
       if (!playing) { this.toast(`${room.name} is the last speaker in ${tName}. Add another speaker first.`); return; }
-      if (await this.ask({ title: `${room.name} is the last speaker`, lines: [`${tName} needs at least one speaker. Pause ${tName} instead? Its queue stays; tap Play to go on.`], ok: 'Pause' }))
-        void this.hass!.callService('media_player', 'media_pause', {}, { entity_id: x.c.entity! }).then(() => this.toast(`${tName} paused`), () => this.toast('That did not work. Check the speaker.'));
+      // 0.6.4: no dialog. Dropping it would make MA stop and dissolve the group (the queue is not known to survive that and
+      // Undo could not bring it back), so the chip offers Pause instead: the room and the queue stay; Undo plays again.
+      const go = this.modal
+        ? await this.ask({ title: `${room.name} is the last speaker`, lines: [`${tName} needs at least one speaker. Pause ${tName} instead? Its queue stays; tap Play to go on.`], ok: 'Pause' })
+        : await this.chipAsk(`${room.name} is the last speaker in ${tName}`, 'Pause');
+      if (go) {
+        const e = x.c.entity!;
+        void this.hass!.callService('media_player', 'media_pause', {}, { entity_id: e }).then(
+          () => this.status(`${tName} paused`, { undo: { label: `${tName} paused`, run: async () => { await this.hass!.callService('media_player', 'media_play', {}, { entity_id: e }); } } }),
+          () => this.fail('That did not work. Check the speaker.'));
+      }
       return;
     }
-    if (why === 'leader') { this.toast(`${room.name} leads ${tName}. Use Move to hand off, or drop the other speakers.`, 4500); return; }
+    if (why === 'leader') { this.toast(`${room.name} leads ${tName}. Use Move to hand off, or drop the other speakers.`); return; }
     const isLeader = x.leader === room.ma;
-    if (isLeader && !(await this.ask({ title: `Drop ${room.name}?`, lines: [`${room.name} leads ${tName} now. Music Assistant hands ${tName} to the other speakers: they go quiet for a few seconds, then the queue plays on.`], ok: 'Drop' }))) return;
+    if (isLeader && this.modal && !(await this.ask({ title: `Drop ${room.name}?`, lines: [`${room.name} leads ${tName} now. Music Assistant hands ${tName} to the other speakers: they go quiet for a few seconds, then the queue plays on.`], ok: 'Drop' }))) return;
     this.setBusy(room.ma, 'out');
-    if (isLeader) this.startRegroup(x.tMa, room.ma);
+    if (isLeader) { this.startRegroup(x.tMa, room.ma); this.status('Regrouping…', { kind: 'busy' }); }
     try {
       await this.store!.setMembers(x.tMa, [], [room.ma]);
       const ok = await this.store!.waitFor((p) => !membersOf(p.get(x.tMa!), p).includes(room.ma!), timeouts().join);
       if (!ok) throw new SpeakerError('timeout', `${room.name} did not leave`);
-      this.toast(isLeader ? `${tName} restarts without ${room.name}` : `${room.name} left ${tName}`);
       const s = room.ma, t = x.tMa;
-      this.offerUndo({ label: `${room.name} left`, run: async () => { await this.store!.setMembers(t, [s], []); } });
+      this.status(isLeader && this._regroup ? `${room.name} left · regrouping…` : `${room.name} left`, { undo: { label: `${room.name} left`, run: async () => { await this.store!.setMembers(t, [s], []); } } });
     } catch (e) {
       if (isLeader) this.endRegroup();
-      this.toast(`Couldn't drop ${room.name}: ${errText(e)}`, 4500);
+      this.fail(`Couldn't drop ${room.name}: ${errText(e)}`);
       void this.store!.refresh();
     } finally { this.setBusy(room.ma); }
   }
@@ -281,7 +320,7 @@ export class JbSpeakers extends LitElement {
     const y = this.ctx();
     const dMa = targetMa(to.entity, this.hass, y.players);
     if (!y.active || !y.tMa) { fire(this, 'jukebox-target', { entity: to.entity }); if (!opts.quiet) this.toast(`Now on ${to.name}`); return true; }
-    if (!dMa) { this.toast(`${to.name} is not in Music Assistant`); return false; }
+    if (!dMa) { this.fail(`${to.name} is not in Music Assistant`); return false; }
     const st = this.startTakeovers(to.entity, y.players);
     const fromName = this.nameOf(y.tMa, y.players, y.rooms);
     if (!(await this.confirmTakeovers(`Move to ${to.name}?`, st.list, y.players, y.rooms, 'Move'))) return false;
@@ -291,16 +330,16 @@ export class JbSpeakers extends LitElement {
       await this.store!.transfer(y.tMa, dMa, true);
       const ok = await this.store!.waitFor((p) => isActive(p.get(dMa)), timeouts().move);
       if (!ok) throw new SpeakerError('timeout', `${to.name} did not start`);
-      if (!opts.quiet) this.toast(`Moved to ${to.name}`);
       const src = y.tMa;
       const lossy = st.list.some((t) => t.kind === 'static' || t.kind === 'hijack');
-      if (opts.undoable !== false && !lossy) this.offerUndo({ label: `Moved to ${to.name}`, run: async () => {
+      const undo = opts.undoable !== false && !lossy ? { label: `Moved to ${to.name}`, run: async () => {
         await this.store!.transfer(dMa, src, true); fire(this, 'jukebox-target', { entity: from });
-      } });
+      } } : undefined;
+      if (!opts.quiet) this.status(`Moved to ${to.name}`, { undo });
       return true;
     } catch (e) {
       fire(this, 'jukebox-target', { entity: from }); // revert
-      this.toast(`Couldn't move to ${to.name}: ${errText(e)}. Still on ${fromName}.`, 5000);
+      this.fail(`Couldn't move to ${to.name}: ${errText(e)}. Still on ${fromName}.`);
       void this.store!.refresh();
       return false;
     } finally { this.setBusy(to.entity); }
@@ -328,18 +367,17 @@ export class JbSpeakers extends LitElement {
           const ok = await this.store!.waitFor((pl) => { const m = membersOf(pl.get(x.tMa!), pl); return plan.add.every((s) => m.includes(s)) && plan.remove.every((s) => !m.includes(s)); }, timeouts().join);
           if (!ok) throw new SpeakerError('timeout', 'speakers did not follow');
         }
-        if (plan.kept.length) this.toast(`${p.name}: kept ${plan.kept.map((s) => this.nameOf(s, x.players, x.rooms)).join(', ')} (leads the group)`, 4500);
+        if (plan.kept.length) this.toast(`${p.name}: kept ${plan.kept.map((s) => this.nameOf(s, x.players, x.rooms)).join(', ')} (leads the group)`);
         else this.toast(`${p.name} ready`);
-      } else this.toast(`${p.name}: play something on ${dest.name} to start it`, 4500);
+      } else this.toast(`${p.name}: play something on ${dest.name} to start it`);
       const cap = this.cap();
       for (const [e, pct] of Object.entries(p.volumes ?? {})) {
         const v = capVol(Math.max(0, Math.min(100, pct)) / 100, cap);
         this.vol.set(e, { v, t: Date.now() });
         void this.callVol(e, 'volume_set', { volume_level: v });
       }
-      this.offerUndo(null);
     } catch (e) {
-      this.toast(`Couldn't apply ${p.name}: ${errText(e)}`, 4500);
+      this.fail(`Couldn't apply ${p.name}: ${errText(e)}`);
       void this.store?.refresh();
     } finally { this.setBusy('preset:' + p.name); }
   }
@@ -347,9 +385,8 @@ export class JbSpeakers extends LitElement {
   /* ---------------- render ---------------- */
   protected render() {
     if (!this.config) return nothing;
-    const ask = this.askTpl();
-    if (!this.open) return html`${ask}${this._undo ? html`<div class="undo solo" role="status"><span>${this._undo.label}</span>
-          <button class="ub" data-action="undo" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.doUndo()}>Undo</button></div>` : nothing}${this._toast ? html`<div class="toast solo" role="status">${this._toast}</div>` : nothing}`;
+    const ask = html`${this.askTpl()}${this.chipTpl()}`;
+    if (!this.open) return ask;
     const x = this.ctx();
     const user = this.hass?.user;
     const may = this.dynamic && this.mayGroup;
@@ -391,9 +428,6 @@ export class JbSpeakers extends LitElement {
             <div class="rooms">${x.rooms.map((r) => this.roomRow(r, x, grouping, vol, cap))}</div>
           </div>
         </div>
-        ${this._undo ? html`<div class="undo" role="status"><span>${this._undo.label}</span>
-          <button class="ub" data-action="undo" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.doUndo()}>Undo</button></div>` : nothing}
-        ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
       </section>${ask}`;
   }
   private statusLine(x: ReturnType<JbSpeakers['ctx']>) {
@@ -459,6 +493,18 @@ export class JbSpeakers extends LitElement {
       <span class="vv" data-v=${muted ? '–' : String(Math.round(v * 100))}></span>
     </div>`;
   }
+  /** 0.6.4: the one status chip, top-right under the header clock; only the chip itself takes taps */
+  private chipTpl() {
+    const c = this._chip;
+    if (!c) return nothing;
+    const act = c.act;
+    return html`<div class="st ${c.kind} ${c.text.length > 44 ? 'wrap' : ''}" data-kind=${c.kind} role=${c.kind === 'error' ? 'alert' : 'status'} aria-live=${c.kind === 'error' ? 'assertive' : 'polite'}>
+      ${c.kind === 'error' ? icon('alert', 'i xs si') : c.kind === 'busy' ? html`<i class="dot" aria-hidden="true"></i>` : nothing}
+      <span class="ct">${c.text}</span>
+      ${act ? html`<i class="sep" aria-hidden="true">·</i><button class="ca" data-action=${act.label === 'Undo' ? 'undo' : 'confirm'} tabindex="-1" @pointerdown=${noFocus} @click=${act.run}>${act.label}</button>` : nothing}
+      ${c.kind === 'ask' || c.kind === 'error' ? html`<button class="cx" data-action="cancel" aria-label="Dismiss" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.clearChip()}>${icon('close', 'i xs')}</button>` : nothing}
+    </div>`;
+  }
   private askTpl() {
     const a = this._ask;
     if (!a) return nothing;
@@ -476,7 +522,7 @@ export class JbSpeakers extends LitElement {
   static styles = [tokens, base, mediaStyles, css`
     :host { position: absolute; inset: 0; z-index: 30; pointer-events: none; container: spk / size; font-family: var(--_font-body); color: var(--_fg); }
     :host([open]) { pointer-events: auto; }
-    :host(:not([open])) .scrim, :host(:not([open])) .confirm, :host(:not([open])) .undo { pointer-events: auto; }
+    :host(:not([open])) .scrim, :host(:not([open])) .confirm, :host(:not([open])) .st { pointer-events: auto; }
     .scrim { position: absolute; inset: 0; }
     .sp-scrim { z-index: 1; background: #000000b0; }
     .sheet { position: absolute; z-index: 2; display: flex; flex-direction: column; background: #0b0b0bf7; border: 1px solid #ffffff2b; box-shadow: 0 -20px 60px #000c;
@@ -524,14 +570,27 @@ export class JbSpeakers extends LitElement {
     .act.take { border-style: dashed; }
     .act.blocked, .act.idle { color: var(--_inactive); border-color: var(--_divider); }
     .act:disabled { opacity: .4; }
-    .undo { position: absolute; left: 12px; right: 12px; bottom: 14px; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 18px; border-radius: 999px;
-      background: #1c1c1c; border: 1px solid #ffffff38; box-shadow: 0 10px 30px #000a; font-size: 14px; font-weight: 600; }
-    .undo span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ub { height: 40px; padding: 0 18px; border-radius: 999px; background: #fff; color: #000; font-weight: 800; font-size: 14px; }
-    .undo ~ .toast { bottom: 76px; }
-    .undo.solo { bottom: 96px; left: 50%; right: auto; transform: translateX(-50%); width: min(440px, calc(100% - 24px)); }
-    .undo.solo ~ .toast.solo { bottom: 158px; }
-    .toast.solo { position: absolute; z-index: 3; }
+    /* 0.6.4 status chip: top-right of the middle area, right under the header clock (never over it); it replaces the
+       0.6.3 centred toast and the bottom Undo bar. With the panel open it moves left of the panel's close button. */
+    .st { position: absolute; z-index: 12; top: 10px; right: var(--_pad); max-width: min(400px, calc(100% - 2 * var(--_pad))); min-height: 40px;
+      display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 14px; border-radius: 20px; pointer-events: auto;
+      background: #101010f2; color: #fff; border: 1px solid #ffffff42; box-shadow: 0 8px 24px #000b; font-size: 14px; font-weight: 600; line-height: 1.25;
+      animation: stin 160ms ease both; }
+    .st.info, .st.busy { padding-right: 14px; } .st.info:has(.ca), .st.busy:has(.ca) { padding-right: 4px; }
+    .st .ct { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 0; }
+    .st.wrap .ct { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+    .st .sep { font-style: normal; color: var(--_muted); margin: 0 -2px; }
+    .st .ca { position: relative; flex: none; height: 34px; padding: 0 14px; border-radius: 999px; background: #fff; color: #000; font-size: 14px; font-weight: 800; }
+    .st .ca::before, .st .cx::before { content: ""; position: absolute; inset: -6px -4px; }
+    .st .cx { position: relative; flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; color: var(--_muted); }
+    .st .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: stpulse 1s ease-in-out infinite alternate; }
+    .st.error { background: #fff; color: #000; border-color: #fff; }
+    .st.error .si { color: #000; flex: none; } .st.error .ca { background: #000; color: #fff; } .st.error .cx { color: #000000a0; }
+    @keyframes stin { from { opacity: 0; transform: translateY(-6px); } }
+    @keyframes stpulse { from { opacity: .35; } }
+    :host([open]) .st { right: 70px; top: 14px; max-width: min(360px, calc(100% - 70px - var(--_pad))); }
+    @container spk (max-width: 640px) { :host([open]) .st { right: var(--_pad); top: 10px; } }
+    @container spk (max-width: 640px) and (max-height: 560px) { :host([open]) .st { right: 70px; top: 6px; } }
     .confirm { z-index: 10; max-height: calc(100cqh - 24px); overflow-y: auto; }
     /* the panel only knows the card's own height (not the viewport): short cards get a full-height sheet and tighter rows */
     .sh { flex: none; }
@@ -559,8 +618,10 @@ export class JbSpeakers extends LitElement {
     :host([large]) .vr { grid-template-columns: 52px minmax(0, 1fr) auto; }
     :host([large]) .vn { font-size: 18px; } :host([large]) .vn small { font-size: 14px; }
     :host([large]) .vs { --jb-slider-h: 10px; --jb-slider-knob: 30px; --jb-slider-hit: 52px; }
-    :host([large]) .x { width: 60px; height: 60px; } :host([large]) .ub { height: 52px; font-size: 16px; }
-    @media (prefers-reduced-motion: reduce) { .chip:active { transform: none; } }
+    :host([large]) .x { width: 60px; height: 60px; }
+    :host([large]) .st { font-size: 16px; min-height: 48px; } :host([large]) .st .ca { height: 42px; font-size: 16px; padding: 0 18px; } :host([large]) .st .cx { width: 40px; height: 40px; }
+    :host([large][open]) .st { right: 84px; }
+    @media (prefers-reduced-motion: reduce) { .chip:active { transform: none; } .st, .st .dot { animation: none; } }
   `];
 }
 function errText(e: unknown) {

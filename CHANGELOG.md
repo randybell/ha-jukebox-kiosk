@@ -2,6 +2,21 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
+## 0.6.4 — unreleased
+
+### Changed
+- **No popup in the middle of the card when grouping speakers.** Dropping a room, including the room that leads the group (for example Garage from Everywhere), now happens on tap. There is no centred "Drop …?" dialog.
+- **One small status chip, top right.** Every grouping message ("Regrouping…", "Garage left", "Kitchen joined Indoor", "Moved to …") appears in one Black Frame chip under the header clock. It doesn't cover the clock or block taps elsewhere, hides after about 4 s, and a new message replaces the old one. It replaces the grouping toasts and the Undo bar. Undo stays in the chip while it shows. It is readable on a kiosk tablet, an iPad and a 390 px phone, and respects reduced motion.
+- **Errors use the chip in an error style** (inverted white with an alert icon, about 6 s, with ✕), for example "Couldn't drop Garage: …".
+- **The last room is non-modal.** Tapping the last room in a group shows "Garage is the last speaker in Everywhere · Pause" in the chip. Pause keeps the room and the queue, then "Everywhere paused · Undo" resumes. Ignoring the chip does nothing. Music Assistant stops and dissolves a group when its last speaker leaves, so the card still pauses instead of dropping.
+- **Taking a speaker from another group** asks in the chip ("Garage stops what it is playing. · Add") instead of a dialog.
+
+### Added
+- `confirm_drop` (default `false`). `true` restores the 0.6.3 centred dialogs for drop, takeover and last-room. Also in the editor.
+
+### Unchanged
+- `leader_drop` (`allow` / `block`) works as before. Dialogs that aren't about grouping (the Start guard, queue Undo, other toasts) are unchanged.
+
 ## 0.6.3 — 2026-11-01
 
 ### Added
