@@ -4,8 +4,12 @@
       "user": {
         "title": "Choose Music Assistant",
         "description": "Pick the Music Assistant server the Jukebox Card should use.",
-        "data": { "ma_entry_id": "Music Assistant" },
-        "data_description": { "ma_entry_id": "The Music Assistant integration entry to borrow the connection from." }
+        "data": {
+          "ma_entry_id": "Music Assistant"
+        },
+        "data_description": {
+          "ma_entry_id": "The Music Assistant integration entry to borrow the connection from."
+        }
       }
     },
     "abort": {
@@ -59,6 +63,10 @@
     "legacy_card_plugin_yaml": {
       "title": "Remove the old Jukebox Card resource",
       "description": "The Jukebox Card now ships inside the Jukebox Kiosk integration. Your dashboards use YAML resources, so remove the {count} old /hacsfiles/ha-jukebox-kiosk-card/ resource line(s) yourself, remove the old plugin in HACS, then restart Home Assistant."
+    },
+    "legacy_card_plugin_files": {
+      "title": "Remove the old Jukebox Card plugin",
+      "description": "The Jukebox Card now ships inside the Jukebox Kiosk integration and its old dashboard resources are gone, but the old \"Jukebox Card\" plugin is still installed in HACS. Open HACS, remove that plugin, then restart Home Assistant. This notice goes away once the plugin files are removed."
     }
   }
 }

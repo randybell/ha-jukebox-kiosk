@@ -61,3 +61,43 @@ async def test_yaml_mode_only_warns(hass: HomeAssistant) -> None:
 
 async def test_no_lovelace(hass: HomeAssistant) -> None:
     assert await frontend.async_cleanup_legacy_resources(hass) == 0
+
+
+async def test_issue_stays_while_plugin_files_remain(hass: HomeAssistant, tmp_path) -> None:
+    """After the restart that follows the automatic removal, the HACS files still need removing."""
+    hass.config.config_dir = str(tmp_path)
+    res = FakeResources(list(ITEMS))
+    hass.data["lovelace"] = SimpleNamespace(resource_mode="storage", resources=res)
+    plugin = tmp_path / "www" / "community" / "ha-jukebox-kiosk-card"
+    plugin.mkdir(parents=True)
+    (plugin / "jukebox-card.js").write_text("// placeholder")
+    assert await frontend.async_cleanup_legacy_resources(hass) == 1
+    # next start: no legacy resources left, but the plugin folder is still there
+    assert await frontend.async_cleanup_legacy_resources(hass) == 0
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, ISSUE_LEGACY_PLUGIN)
+    assert issue is not None and issue.translation_key == "legacy_card_plugin_files"
+    # the user removes the plugin in HACS: the issue clears on the next run
+    (plugin / "jukebox-card.js").unlink()
+    plugin.rmdir()
+    assert await frontend.async_cleanup_legacy_resources(hass) == 0
+    assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE_LEGACY_PLUGIN) is None
+
+
+async def test_plugin_files_without_lovelace(hass: HomeAssistant, tmp_path) -> None:
+    hass.config.config_dir = str(tmp_path)
+    (tmp_path / "www" / "community" / "ha-jukebox-kiosk-card").mkdir(parents=True)
+    assert await frontend.async_cleanup_legacy_resources(hass) == 0
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, ISSUE_LEGACY_PLUGIN)
+    assert issue is not None and issue.translation_key == "legacy_card_plugin_files"
+
+
+async def test_marketplace_local_community_path(hass: HomeAssistant) -> None:
+    """Home Assistant 2026.11 moves plugin resources to /local/community/; those are legacy too."""
+    res = FakeResources([
+        {"id": "m1", "url": "/local/community/ha-jukebox-kiosk-card/jukebox-card.js?hacstag=2", "type": "module"},
+        {"id": "m2", "url": "/local/community/other-card/other.js", "type": "module"},
+        {"id": "m3", "url": "/local/jukebox-card.js", "type": "module"},
+    ])
+    hass.data["lovelace"] = SimpleNamespace(resource_mode="storage", resources=res)
+    assert await frontend.async_cleanup_legacy_resources(hass) == 1
+    assert res.deleted == ["m1"]

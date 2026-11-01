@@ -45,7 +45,7 @@ Copy `custom_components/jukebox_kiosk/` (from the repository or the `jukebox_kio
 
 ### Coming from the old Jukebox Card plugin (0.5.x)
 
-The integration finds dashboard resources that still point at `/hacsfiles/ha-jukebox-kiosk-card/` and removes them, so the card doesn't load twice. It then raises a Repairs issue that asks you to remove the old **Jukebox Card** plugin in HACS. YAML-mode resources can't be edited automatically; the Repairs issue lists the line to delete. Card configs keep working as they are. `mass_queue_entry_id` is ignored unless you set `backend: mass_queue`.
+The integration finds dashboard resources that still point at `/hacsfiles/ha-jukebox-kiosk-card/` (or `/local/community/ha-jukebox-kiosk-card/`, where Home Assistant 2026.11's Marketplace serves plugins) and removes them, so the card doesn't load twice. It then raises a Repairs issue that asks you to remove the old **Jukebox Card** plugin in HACS or the Marketplace. The issue stays, also across restarts, until the old plugin files are gone. YAML-mode resources can't be edited automatically; the Repairs issue lists the line to delete. Card configs keep working as they are. `mass_queue_entry_id` is ignored unless you set `backend: mass_queue`.
 
 ## Backends
 
@@ -346,7 +346,7 @@ The visual editor covers entity, config entry, rooms (an entity list that keeps 
 ## Troubleshooting
 
 - **The card says "Custom element doesn't exist: jukebox-card".** Make sure Jukebox Kiosk is set up (not only installed), then reload the browser. Fully Kiosk may need **Clear cache**.
-- **The card loads twice, or shows the old version.** An old `/hacsfiles/ha-jukebox-kiosk-card/` resource is still there. See the Repairs issue, or delete it under **Settings → Dashboards → Resources**.
+- **The card loads twice, or shows the old version.** An old `/hacsfiles/ha-jukebox-kiosk-card/` (or `/local/community/ha-jukebox-kiosk-card/`) resource is still there. See the Repairs issue, or delete it under **Settings → Dashboards → Resources**.
 - **Queue icons, the heart or grouping are missing for one user.** That user is a guest without the matching class (see [Permissions](#permissions)).
 - **Lyrics say "Lyrics unavailable".** Music Assistant has no lyrics provider enabled, or the user lacks `read`. Music Assistant won't fetch lyrics for library tracks, so the card asks for the provider copy of the track.
 - **No album art.** The card never loads the player's absolute `entity_picture` (mixed content on https). It uses `entity_picture_local`, then a relative `entity_picture`, then an https queue image.

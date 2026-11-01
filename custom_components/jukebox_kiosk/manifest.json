@@ -1,6 +1,7 @@
 {
   "domain": "jukebox_kiosk",
   "name": "Jukebox Kiosk",
+  "categories": ["media_entertainment.music_radio_services"],
   "codeowners": ["@randybell"],
   "config_flow": true,
   "dependencies": ["frontend", "http", "music_assistant"],

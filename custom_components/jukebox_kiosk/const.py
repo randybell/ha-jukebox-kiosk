@@ -37,9 +37,13 @@ CONF_GUEST_CLASSES: Final = "guest_classes"
 CARD_FILENAME: Final = "jukebox-card.js"
 STATIC_URL_BASE: Final = "/jukebox_kiosk_static"
 CARD_URL: Final = f"{STATIC_URL_BASE}/{CARD_FILENAME}"
+# Home Assistant 2026.11 (HACS built in as the Marketplace) serves plugin resources from /local/community/
+# and keeps /hacsfiles/ working, so the old card can sit under either path.
 LEGACY_RESOURCE_MARKERS: Final = (
     "/hacsfiles/ha-jukebox-kiosk-card/",
     "/hacsfiles/ha-jukebox-card/",
+    "/local/community/ha-jukebox-kiosk-card/",
+    "/local/community/ha-jukebox-card/",
 )
 
 # Repairs issue ids
