@@ -29,6 +29,7 @@ async def test_flow_auto_picks_single_ma(hass: HomeAssistant, ma_entry: MockConf
     assert res["type"] is FlowResultType.CREATE_ENTRY
     assert res["data"] == {"ma_entry_id": MA_ENTRY_ID}
     assert res["options"]["non_admins_are_guests"] is True
+    assert res["options"]["guest_classes"] == ["read", "playback", "queue", "library"]
 
 
 async def test_flow_asks_when_two_ma(hass: HomeAssistant, ma_entry: MockConfigEntry) -> None:

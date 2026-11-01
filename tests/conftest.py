@@ -113,7 +113,7 @@ def ma_entry(hass: HomeAssistant, fake_ma: FakeMa) -> MockConfigEntry:
 def options() -> dict[str, Any]:
     """Default options."""
     return {CONF_GUEST_USERS: [], CONF_NON_ADMINS_ARE_GUESTS: True,
-            CONF_GUEST_CLASSES: ["read", "playback", "queue", "speakers"]}
+            CONF_GUEST_CLASSES: ["read", "playback", "queue", "library"]}
 
 
 @pytest.fixture

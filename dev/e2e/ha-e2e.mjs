@@ -223,19 +223,42 @@ if (shotsAt) {
   const backend = await ev(k, `window.__card?.dataset.backend`);
   const caps = await wsCall(k, { type: 'jukebox_kiosk/capabilities' });
   check('U1 kiosk user: the card loads on the kiosk backend', backend === 'kiosk', backend);
-  check('U2 kiosk user is a guest: classes exclude library and admin', caps.ok && caps.r.guest === true && !caps.r.classes.includes('library') && !caps.r.classes.includes('admin'), J({ classes: caps.r?.classes, guest: caps.r?.guest }));
+  check('U2 kiosk user is a guest with the default classes (read, playback, queue, library; no speakers, no admin)',
+    caps.ok && caps.r.guest === true && J(caps.r.classes) === J(['library', 'playback', 'queue', 'read']) && !caps.r.features.speakers && caps.r.features.unfavorite, J({ classes: caps.r?.classes, guest: caps.r?.guest }));
   const search = await wsCall(k, { type: 'jukebox_kiosk/ma', command: 'music/search', args: { search_query: 'tone', limit: 2 } });
   check('U3 kiosk user may search (read)', search.ok, J(search.e ?? ''));
   const lib = await wsCall(k, { type: 'jukebox_kiosk/ma', command: 'music/tracks/library_items', args: { limit: 1 } });
   const uri = lib.r?.[0]?.uri;
+  const wasFav = !!lib.r?.[0]?.favorite;
   const fav = await wsCall(k, { type: 'jukebox_kiosk/ma', command: 'music/favorites/add_item', args: { item: uri } });
-  check('U4 kiosk user denied a library write (favorites/add_item) server-side', !fav.ok && fav.e === 'unauthorized', J(fav));
-  const libAdd = await wsCall(k, { type: 'jukebox_kiosk/ma', command: 'music/library/add_item', args: { item: uri } });
-  check('U5 kiosk user denied music/library/add_item', !libAdd.ok && libAdd.e === 'unauthorized', J(libAdd));
+  check('U4 kiosk user may favourite (library class, favorites/add_item)', fav.ok, J(fav));
+  if (!wasFav) {
+    const rm = await wsCall(k, { type: 'jukebox_kiosk/ma', command: 'music/favorites/remove_item', args: { media_type: 'track', library_item_id: lib.r[0].item_id } });
+    check('U5 kiosk user may unfavourite (favorites/remove_item); favourite state restored', rm.ok, J(rm));
+  } else check('U5 kiosk user may unfavourite (skipped: the track was already a favourite, left as is)', true);
   const raw = await wsCall(k, { type: 'jukebox_kiosk/raw', command: 'players/all', args: {} });
   check('U6 kiosk user denied the admin raw command', !raw.ok && raw.e === 'unauthorized', J(raw));
   const unfav = await wsCall(k, { type: 'jukebox_kiosk/unfavorite_current', entity_id: ENT });
-  check('U7 kiosk user denied unfavorite_current (library class)', !unfav.ok && unfav.e === 'unauthorized', J(unfav));
+  check('U7 kiosk user passes the class check on unfavorite_current (library); any refusal is not "unauthorized"', unfav.ok || unfav.e !== 'unauthorized', J(unfav));
+  const players = ma('players/all');
+  const pid = (players ?? []).find((x) => /kitchen/i.test(x.display_name ?? x.name ?? ''))?.player_id ?? 'kitchen-test';
+  for (const [cmd, args] of [['players/cmd/set_members', { target_player: pid, player_ids_to_add: [] }], ['player_queues/transfer', { source_queue_id: pid, target_queue_id: pid }], ['players/cmd/stop', { player_id: pid }]]) {
+    const r = await wsCall(k, { type: 'jukebox_kiosk/ma', command: cmd, args });
+    check(`U11 kiosk user refused ${cmd} (no speakers class)`, !r.ok && r.e === 'unauthorized', J(r));
+  }
+  const vol0 = await ev(k, `window.__card.hass.states['${ENT}']?.attributes?.volume_level`);
+  const target = vol0 > 0.5 ? 0.31 : 0.62;
+  const vs = await ev(k, `window.__card.hass.callService('media_player', 'volume_set', { volume_level: ${target} }, { entity_id: '${ENT}' }).then(() => true, (e) => String(e?.code ?? e))`);
+  const volOk = await wait(k, `Math.abs((window.__card.hass.states['${ENT}']?.attributes?.volume_level ?? -1) - ${target}) < 0.02`, 10000);
+  check('U12 kiosk user: media_player.volume_set works without the speakers class', vs === true && volOk, J({ vs, vol0, now: await ev(k, `window.__card.hass.states['${ENT}']?.attributes?.volume_level`) }));
+  const mu = await ev(k, `window.__card.hass.callService('media_player', 'volume_mute', { is_volume_muted: true }, { entity_id: '${ENT}' }).then(() => true, (e) => String(e?.code ?? e))`);
+  const muted = await wait(k, `window.__card.hass.states['${ENT}']?.attributes?.is_volume_muted === true`, 10000);
+  const un = await ev(k, `window.__card.hass.callService('media_player', 'volume_mute', { is_volume_muted: false }, { entity_id: '${ENT}' }).then(() => true, (e) => String(e?.code ?? e))`);
+  check('U13 kiosk user: media_player.volume_mute on/off works', mu === true && muted && un === true, J({ mu, muted, un }));
+  if (vol0 !== undefined) await ev(k, `window.__card.hass.callService('media_player', 'volume_set', { volume_level: ${vol0} }, { entity_id: '${ENT}' })`);
+  await ev(k, `window.__card._spk = true`); await sleep(900);
+  const mix = await ev(k, `(() => { const r = ${C}.querySelector('jb-speakers')?.shadowRoot; return { mode: r?.querySelector('.sheet')?.dataset.mode, sliders: [...(r?.querySelectorAll('jb-slider') ?? [])].filter((s) => !s.disabled).length, acts: r?.querySelectorAll('.act').length ?? -1, chips: r?.querySelectorAll('[data-target]').length ?? -1 }; })()`);
+  check('U14 kiosk user: Speakers panel shows an enabled volume mixer and no grouping controls', mix.sliders >= 1 && mix.acts === 0 && mix.chips === 0, J(mix));
   const notListed = await wsCall(k, { type: 'jukebox_kiosk/ma', command: 'config/providers/remove', args: { instance_id: 'x' } });
   check('U8 a non-allowlisted MA command is refused', !notListed.ok && notListed.e === 'not_allowed', J(notListed));
   const q = await wsCall(k, { type: 'jukebox_kiosk/queue_items', entity_id: ENT, limit_before: 0, limit_after: 3 });

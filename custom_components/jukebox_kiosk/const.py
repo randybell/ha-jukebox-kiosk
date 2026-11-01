@@ -64,17 +64,21 @@ class PermClass(StrEnum):
     PLAYBACK = "playback"  # play/enqueue media, jump in queue
     QUEUE = "queue"  # reorder/remove/re-add queue items
     LIBRARY = "library"  # favourites, library and playlist writes
-    SPEAKERS = "speakers"  # grouping, transfer, stop
+    SPEAKERS = "speakers"  # MA grouping (set_members), transfer, stop. Volume/mute is not here: the card
+    # sends it as HA media_player services, which this integration does not gate.
     ADMIN = "admin"  # never granted to guests
 
 
 ALL_CLASSES: Final = frozenset(PermClass)
 GUEST_ASSIGNABLE: Final = frozenset(ALL_CLASSES - {PermClass.ADMIN})
+# Guests (by default every non-admin user, e.g. a kiosk login) may browse, play, edit the queue and
+# favourite/unfavourite, but not regroup speakers. Only used when an entry is created and as the fallback
+# for options that lack the key; a saved entry keeps the classes stored in its options.
 DEFAULT_GUEST_CLASSES: Final = (
     PermClass.READ,
     PermClass.PLAYBACK,
     PermClass.QUEUE,
-    PermClass.SPEAKERS,
+    PermClass.LIBRARY,
 )
 
 
