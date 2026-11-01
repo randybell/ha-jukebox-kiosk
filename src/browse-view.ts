@@ -33,7 +33,7 @@ const sortsFor = (type: string) => (type === 'radio' ? RADIO_SORTS : SORTS);
 /** Search used to find stations when the library has none (Radio Browser stations are not in the MA library until added). */
 const RADIO_FALLBACK_QUERY = 'radio';
 
-interface Page { items: MaItem[]; offset: number; done: boolean; loading: boolean; error: string; src?: Src }
+interface Page { items: MaItem[]; offset: number; done: boolean; loading: boolean; error: string; src?: Src; favs?: MaItem[] }
 /** Where the radio grid came from: the MA library, or a Radio Browser search because the library had no stations. */
 type Src = 'library' | 'search';
 
@@ -80,7 +80,8 @@ export class JbBrowse extends LitElement {
     return this.hass!.callService('music_assistant', 'get_library', { config_entry_id: this.config.config_entry_id, ...data }, undefined, false, true);
   }
 
-  /** One cheap get_library per type so empty categories (e.g. Radio with no radio provider) are hidden. */
+  /** One cheap get_library per type so empty categories (e.g. Radio with no radio provider) are hidden. Radio also counts a
+   *  one-result station search, only to decide whether the chip shows (the grid itself never lists search results). */
   private async probe() {
     this._avail = Object.fromEntries(CATS.map((c) => [c.type, null]));
     await Promise.all(CATS.map(async (c) => {
@@ -114,16 +115,19 @@ export class JbBrowse extends LitElement {
       const data: Record<string, any> = { media_type: type, limit: this.limit, offset, order_by: sort };
       if (fav) data.favorite = true;
       let items = libraryItems(await this.lib(data));
-      let src: Src = cur?.src ?? 'library';
-      // Radio: an empty "Popular" (play_count) page can mean nothing was played yet -> retry A–Z; an empty library -> Radio Browser search.
-      if (type === 'radio' && !offset && !items.length && !fav) {
-        if (sort !== 'name') items = libraryItems(await this.lib({ ...data, order_by: 'name' }));
-        if (!items.length) { items = await this.radioSearch(Math.min(100, this.limit)); src = 'search'; }
+      const src: Src = 'library';
+      // Radio "My stations" (0.6.1): favourite stations first, then the rest of the library stations (followed stations a
+      // provider syncs into the library are not favourites, so they must still show). No keyword-search fallback any more:
+      // a Radio Browser search for "radio" filled the grid with unrelated stations. An empty library gets a hint instead.
+      let favs = cur?.favs;
+      if (type === 'radio' && !offset && !fav) {
+        if (!items.length && sort !== 'name') items = libraryItems(await this.lib({ ...data, order_by: 'name' }));
+        favs = libraryItems(await this.lib({ media_type: 'radio', favorite: true, limit: this.limit, offset: 0, order_by: sort }));
       }
       const prev = this._pages[k]?.items ?? [];
       const seen = new Set(prev.map((i) => i.uri));
       this._pages = { ...this._pages, [k]: { items: [...prev, ...items.filter((i) => !seen.has(i.uri))], offset: offset + items.length,
-        done: src === 'search' || items.length < this.limit, loading: false, error: '', src } };
+        done: items.length < this.limit, loading: false, error: '', src, favs } };
     } catch (err) {
       console.warn('[jukebox-card] get_library failed', err);
       this._pages = { ...this._pages, [k]: { items: cur?.items ?? [], offset, done: true, loading: false, error: 'Library unavailable. Check Music Assistant.' } };
@@ -225,17 +229,33 @@ export class JbBrowse extends LitElement {
     </div>`;
   }
 
+  /** Radio "My stations": Favorites, then "More stations" (library stations that are not favourites); a hint when both are empty. */
+  private renderStations(pg: Page) {
+    const favs = pg.favs ?? [];
+    const fu = new Set(favs.map((i) => i.uri));
+    const rest = pg.items.filter((i) => !fu.has(i.uri));
+    if (!favs.length && !rest.length) return html`<div class="empty" data-empty="stations"><b>No stations yet</b>
+      <span>Find a station in Search and play it. Stations you add to favorites in Music Assistant appear here first.</span>
+      <button class="fc" data-act="search-stations" tabindex="-1" @pointerdown=${noFocus}
+        @click=${() => this.dispatchEvent(new CustomEvent('jukebox-nav', { detail: { tab: 'search' }, bubbles: true, composed: true }))}>${icon('search', 'i xs')}Search stations</button></div>`;
+    return html`${favs.length ? html`<h3 class="sec" data-sec="favorites">${icon('heart', 'i xs')}Favorites</h3>
+        <div class="grid radio" data-src="favorites">${favs.map((it) => this.tile(it, 'radio'))}</div>` : nothing}
+      ${rest.length ? html`<h3 class="sec" data-sec="more">${favs.length ? 'More stations' : 'Stations'}</h3>
+        <div class="grid radio" data-src="library">${rest.map((it) => this.tile(it, 'radio'))}</div>` : nothing}
+      ${pg.loading ? html`<div class="empty"><span>Loading more…</span></div>` : nothing}`;
+  }
+
   private renderGrid() {
     const pg = this._pages[this.key()];
     const cat = CATS.find((c) => c.type === this._cat)!;
     if (!pg || (pg.loading && !pg.items.length)) return html`<div class="empty"><span>Loading ${cat.label.toLowerCase()}…</span></div>`;
     if (pg.error && !pg.items.length) return html`<div class="empty"><b>Library unavailable</b><span>${pg.error}</span></div>`;
+    if (this._cat === 'radio' && !this._fav) return this.renderStations(pg);
     if (!pg.items.length) return html`<div class="empty"><b>No ${this._fav ? 'favorite ' : ''}${cat.label.toLowerCase()}</b>
       <span>${this._fav ? 'Tap the heart on Now Playing to add favorites.' : 'Nothing in the library yet.'}</span></div>`;
     return this._cat === 'track'
       ? html`<div class="list">${pg.items.map((it) => this.row(it))}</div>`
-      : html`${pg.src === 'search' ? html`<div class="note src" data-src="search">No stations in your library yet, showing Radio Browser results. Tap a station to play it.</div>` : nothing}
-        <div class="grid ${this._cat}" data-src=${pg.src ?? 'library'}>${pg.items.map((it) => this.tile(it, this._cat))}</div>
+      : html`<div class="grid ${this._cat}" data-src=${pg.src ?? 'library'}>${pg.items.map((it) => this.tile(it, this._cat))}</div>
         ${pg.loading ? html`<div class="empty"><span>Loading more…</span></div>` : nothing}`;
   }
 
@@ -300,6 +320,9 @@ export class JbBrowse extends LitElement {
     .du { font-size: 13px; color: var(--_muted); text-align: right; font-variant-numeric: tabular-nums; }
     .mo { width: 40px; height: 40px; display: grid; place-items: center; color: var(--_inactive); }
     .dv { flex: 1; min-height: 0; }
+    .sec { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--_muted); margin: 2px 0 -4px; }
+    .sec .i { width: 14px; height: 14px; color: var(--_active); }
+    .empty .fc { margin-top: 8px; }
     .note { font-size: 13px; color: var(--_muted); padding: 10px 12px; border-radius: 10px; border: 1px dashed #ffffff33; }
     @container np (max-width: 520px) {
       .bx { padding: 10px 12px 8px; gap: 10px; }
