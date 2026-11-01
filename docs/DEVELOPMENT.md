@@ -91,6 +91,34 @@ URL parameters:
 
 Every call is recorded in `window.__calls`, except read-only lyrics lookups (`mass_queue.send_command`), which go to `window.__lyricsLog`. `window.__setNowPlaying({artist, title, radio, uri, duration, position})` and `window.__playTrack(name, position)` change what is playing. `test/run.mjs` drives the card with real CDP mouse, touch and keyboard input and writes `test/shots/results.json`. The browser tests are hermetic (`test/intercept.mjs`): `/api/media_player_proxy/…` and https images are answered with a generated SVG, and any request to a plain-http host other than the dev server fails (test 16o checks that the card never asks the MA host directly).
 
+## Real Home Assistant e2e (throwaway env on a dev machine)
+
+`dev/e2e/` brings up a disposable Home Assistant plus Music Assistant with docker (host network) and drives the card in the real HA frontend. It never touches a production system. All state lives in `$E2E_DIR` (default `/tmp/jbe2e`); `secrets.env` holds random throwaway passwords and `*.token` the long-lived tokens (mode 0600).
+
+```bash
+sh dev/e2e/up.sh                       # MA 2.10.9 + HA 2026.10 + integration from this checkout + dashboard
+node dev/e2e/ha-e2e.mjs                # the checks below (puppeteer-core + /usr/bin/google-chrome, clock America/Chicago)
+node dev/e2e/ha-e2e.mjs --shots test/shots/v060-e2e   # same, plus screenshots at 1920x1080 and 390x844
+sh dev/e2e/down.sh                     # remove the containers, keep $E2E_DIR (--purge deletes it)
+```
+
+What `up.sh` does (each step is skipped when already done, so it is safe to re-run after a code change; it re-copies the integration and restarts HA):
+
+1. `make-media.sh`: 16 tagged sine-tone MP3s (2 artists x 2 albums x 4 tracks; ffmpeg) in `$E2E_DIR/media`.
+2. `jbe2e-ma` (`ghcr.io/music-assistant/server:2.10.9`, `:8095`), then `ma_setup.py`: first-run admin (`POST /setup`, or `POST /auth/login` later), onboarding complete, the `filesystem_local` provider on `/media` through the setup flow (`config/providers/setup` + `config/flows/submit`), the `snapcast` provider (built-in snapserver) and a library sync.
+3. Two snapclient containers (`--hostID kitchen-test` / `patio-test`, audio to `/dev/null`) are named "Kitchen Test" / "Patio Test" in MA (`ma_setup.py --name-players`) and become `media_player.kitchen_test` and `media_player.patio_test` in HA.
+4. `jbe2e-ha` (`ghcr.io/home-assistant/home-assistant:2026.10`, `:8123`, `TZ=America/Chicago`), then `ha_setup.py`: onboarding (admin `testadmin`, country US), a non-admin `kiosk` user, the `music_assistant` entry (token path, no cloud hop), an old-plugin Lovelace resource plus a stand-in `www/community/ha-jukebox-kiosk-card/` folder (`--legacy-resource`), the `jukebox_kiosk` entry and the dashboard `jukebox-e2e`. The MA entry id for the card config is read at runtime into `$E2E_DIR/ma_entry_id`; it is never committed.
+
+Helpers: `ha_ws.py TYPE [JSON] [--kiosk]` and `ma_ws.py COMMAND [JSON]` send one WebSocket command as the e2e admin (or kiosk user).
+
+`ha-e2e.mjs` checks (36): the card element is registered and renders (E1), `backend: auto` picks the kiosk backend (E2), no manual resource (E3), migration Repairs issue while the old plugin files remain, across restarts (R1), capabilities for admin (E4) and the kiosk user's denials, keyboard search through `music_assistant.search` (S1), Replace / Add to queue through `music_assistant.play_media` (P1, P2), Up next, Play next, Remove + Undo, Play now and queue push from an outside MA edit (Q0–Q5), Now Playing (N1), the Speakers sheet (K1), lyrics resolve to "No lyrics found" for local files and the library copy is never asked (L1, L2), `item_tracks` paging and the album detail (T1–T3), and the double load of the old card file next to the bundled one with no console errors (D1, D2).
+
+Other checks that need no HA: `node test/unit/define.unit.mjs` (element re-definition when HA swaps the custom element registry; part of `npm test`), `pytest tests/` from the `.venv` with `homeassistant` installed, and hassfest:
+
+```bash
+docker run --rm -v "$PWD/custom_components:/github/workspace/custom_components" ghcr.io/home-assistant/hassfest:latest
+```
+
 ## Repository, releases and HACS
 
 - `hacs.json`: `{"name": "Jukebox Kiosk", "homeassistant": "2026.10.0"}`, category **integration**.
