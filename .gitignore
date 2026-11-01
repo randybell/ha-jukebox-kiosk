@@ -1,7 +1,7 @@
 # dependencies
 node_modules/
 
-# build output (published as GitHub release assets by .github/workflows/release.yml)
+# old build output dir (the card now builds into custom_components/jukebox_kiosk/www/, which IS committed)
 dist/
 
 # generated test output (screenshots, results.json, perf.json); curated shots live in docs/
@@ -29,3 +29,4 @@ __pycache__/
 .pytest_cache/
 .venv*/
 node_modules/
+.dbg/
