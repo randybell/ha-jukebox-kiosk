@@ -10,6 +10,7 @@ import {
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem } from './types';
 import type { MaBackend, TrackListType } from './backend/types';
 import { MassQueueBackend } from './backend/mass-queue';
+import { defineElement } from './define';
 
 /** mass_queue `page` is 0..1000. A first page shorter than this is taken as the whole list (no "load more" call). */
 export const QUEUE_PAGE_MIN = 25;
@@ -391,4 +392,4 @@ export class JbDetail extends LitElement {
     }
   `];
 }
-if (!customElements.get('jb-detail')) customElements.define('jb-detail', JbDetail);
+defineElement('jb-detail', JbDetail);

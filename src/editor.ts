@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import type { HomeAssistant, JukeboxCardConfig, RoomConfig } from './types';
+import { defineElement } from './define';
 
 /**
  * Visual editor built on HA's <ha-form>. YAML remains the reference (see README).
@@ -195,4 +196,4 @@ export class JukeboxCardEditor extends LitElement {
   }
   static styles = css`p { padding: 8px 0; }`;
 }
-if (!customElements.get('jukebox-card-editor')) customElements.define('jukebox-card-editor', JukeboxCardEditor);
+defineElement('jukebox-card-editor', JukeboxCardEditor);

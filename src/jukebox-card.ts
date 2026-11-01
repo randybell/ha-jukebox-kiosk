@@ -18,6 +18,7 @@ import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, validPreset, val
 import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type BackdropMode } from './backdrop';
 import type { HomeAssistant, JukeboxCardConfig, TabId } from './types';
 import { pickBackend, createBackend, backendKey, type MaBackend } from './backend';
+import { defineElement } from './define';
 
 export const VERSION = '0.6.0';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
@@ -823,7 +824,7 @@ export class JukeboxCard extends LitElement {
     @media (max-width: 640px) { :host([data-fit=tiny]) .tab span { display: none; } }
   `];
 }
-if (!customElements.get('jukebox-card')) customElements.define('jukebox-card', JukeboxCard);
+defineElement('jukebox-card', JukeboxCard);
 
 (window as any).customCards = (window as any).customCards || [];
 if (!(window as any).customCards.some((c: any) => c.type === 'jukebox-card'))

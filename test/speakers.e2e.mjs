@@ -829,6 +829,20 @@ const allJoins = [];
   await p.close();
 }
 
+// ---------------- HA 2026.10: an ungrouped MA player reports group_members: [] ----------------
+{
+  const p = await open('');
+  await tap(p, `__card.shadowRoot.querySelector('.pill')`);
+  await wait(p, `${SPK}.hasAttribute('open')`, 3000);
+  const ent = await ev(p, `__card.config?.entity ?? __card._config.entity`);
+  const rooms = await ev(p, `${SR}.querySelectorAll('.rooms [data-room]').length`);
+  await ev(p, `(() => { const h = __card.hass, s = { ...h.states }; s['${ent}'] = { ...s['${ent}'], attributes: { ...s['${ent}'].attributes, group_members: [] } }; __card.hass = { ...h, states: s }; })()`);
+  await sleep(200);
+  const line = await ev(p, `${SR}.querySelector('.stl')?.textContent.trim()`);
+  check('Z1 group_members: [] on a configured-rooms target counts the rooms, not "0 speakers"', rooms > 0 && new RegExp(`· ${rooms} speakers?$`).test(line) && !/· 0 speakers/.test(line), J({ line, rooms }));
+  await p.close();
+}
+
 check('X1 Home Assistant media_player.join / unjoin never called (MA set_members only)', allJoins.length === 0, J(allJoins));
 
 await browser.close();
