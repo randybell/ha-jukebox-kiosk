@@ -96,12 +96,15 @@ const uuid = (s) => { const x = [0, 1, 2, 3].map((i) => h(s + i).toString(16).pa
 // Radio Browser station as MA returns it: tab/space-padded name, https logo or null
 const radio = (name, logo, played = 0) => ({ media_type: 'radio', uri: `radiobrowser://radio/${uuid(name)}`, name, version: '',
   image: logo === undefined ? `https://logos.radio.example/${h(name).toString(36)}.png` : logo, favorite: false, explicit: null, _added: h(name) % 1000, _played: played, _plays: played });
-const STATIONS = () => [
+// stations=fake: placeholder station names only (screenshots); radiofav=N: the first N library stations are favourites
+const FAKE_STATIONS = ['Mockingbird FM', 'Lakeside Jazz 101', 'Night Owl Radio', 'Placeholder Talk 7', 'Harbour Lights Classical', 'Static & Signal',
+  'Example City Hits', 'Fakeville Country 88', 'Sample Beats Radio', 'Testcard Oldies', 'Demo Drive 95.5', 'Lorem Ipsum Lounge'];
+const STATIONS = () => (params.get('stations') === 'fake' ? FAKE_STATIONS.map((n, i) => radio(n, undefined, 40 - i * 3)) : [
   ...realRadio.map((x, i) => ({ ...x, _added: 900 - i, _played: 50 - i, _plays: 50 - i })),
   radio('\tRadio Paradise - Main Mix', undefined, 80), radio(' \tJazz FM', undefined, 30), radio('Magic Radio\t', null, 12),
   radio('\t\tKEXP 90.3 FM', undefined, 64), radio('BBC Radio 6 Music', undefined, 71), radio('\tSomaFM Groove Salad', undefined, 44),
   radio('FIP Radio', null, 9), radio('\tAbsolute Classic Rock', undefined, 22), radio('NTS Radio 1 ', undefined, 5),
-];
+]).map((x, i) => (i < Number(params.get('radiofav') ?? 0) ? { ...x, favorite: true } : x));
 
 const CATALOG = {
   artists: [
@@ -153,7 +156,7 @@ const CATALOG = {
     playlist('Motown Classics', 'apple_music'), playlist('Eagles'), playlist('Long Drive'), playlist('Mellow Moods', 'library', true), playlist('Dinner Party'), playlist('Garage Workout', 'apple_music'),
     playlist('Chicago Blues Classics', 'apple_music'),
   ],
-  radio: RADIO ? [...STATIONS(), radio('\tWXRT Chicago 93.1 FM', undefined, 3)] : [],
+  radio: RADIO ? [...STATIONS(), ...(params.get('stations') === 'fake' ? [] : [radio('\tWXRT Chicago 93.1 FM', undefined, 3)])] : [],
   podcasts: PODS ? [{ media_type: 'podcast', uri: 'library://podcast/31', name: 'The Mockcast', version: '', image: art('The Mockcast'), favorite: false, explicit: null, _added: 5 },
     { media_type: 'podcast', uri: 'library://podcast/32', name: 'Chicago Stories', version: '', image: null, favorite: false, explicit: null, _added: 6 }] : [],
   audiobooks: PODS ? [{ media_type: 'audiobook', uri: 'library://audiobook/7', name: 'The Mock Chronicles', version: '', image: art('Mock Chronicles'), favorite: false, explicit: null,
