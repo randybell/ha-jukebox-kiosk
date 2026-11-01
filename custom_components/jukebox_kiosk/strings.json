@@ -1,0 +1,64 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Choose Music Assistant",
+        "description": "Pick the Music Assistant server the Jukebox Card should use.",
+        "data": { "ma_entry_id": "Music Assistant" },
+        "data_description": { "ma_entry_id": "The Music Assistant integration entry to borrow the connection from." }
+      }
+    },
+    "abort": {
+      "already_configured": "Jukebox Kiosk is already set up.",
+      "single_instance_allowed": "Jukebox Kiosk is already set up.",
+      "no_music_assistant": "Set up the Music Assistant integration first."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Guest permissions",
+        "description": "Admins can always do everything. Guests get only the permission classes chosen below.",
+        "data": {
+          "guest_users": "Guest users",
+          "non_admins_are_guests": "Treat every non-admin user as a guest",
+          "guest_classes": "What guests may do"
+        },
+        "data_description": {
+          "guest_users": "These users get guest rights, even if they are admins (handy for a kiosk login).",
+          "non_admins_are_guests": "When off, non-admin users get every permission class except admin.",
+          "guest_classes": "Read is needed to see the queue, search and lyrics."
+        }
+      }
+    }
+  },
+  "selector": {
+    "guest_classes": {
+      "options": {
+        "read": "Read: queue, search, browse, lyrics",
+        "playback": "Playback: play and add music",
+        "queue": "Queue: reorder, remove, undo",
+        "library": "Library: favourites and playlists",
+        "speakers": "Speakers: group, move and stop"
+      }
+    }
+  },
+  "issues": {
+    "ma_client_api_changed": {
+      "title": "Jukebox Kiosk cannot reach Music Assistant",
+      "description": "Home Assistant changed how other integrations reach the Music Assistant connection. Update Jukebox Kiosk, then restart Home Assistant."
+    },
+    "ma_entry_missing": {
+      "title": "Jukebox Kiosk lost its Music Assistant server",
+      "description": "The Music Assistant entry Jukebox Kiosk was set up with is gone. Delete Jukebox Kiosk and add it again."
+    },
+    "legacy_card_plugin_installed": {
+      "title": "Remove the old Jukebox Card plugin",
+      "description": "The Jukebox Card now ships inside the Jukebox Kiosk integration. {removed} of {count} old dashboard resources were removed automatically. Open HACS and remove the old \"Jukebox Card\" plugin, then refresh your browsers."
+    },
+    "legacy_card_plugin_yaml": {
+      "title": "Remove the old Jukebox Card resource",
+      "description": "The Jukebox Card now ships inside the Jukebox Kiosk integration. Your dashboards use YAML resources, so remove the {count} old /hacsfiles/ha-jukebox-kiosk-card/ resource line(s) yourself, remove the old plugin in HACS, then restart Home Assistant."
+    }
+  }
+}
