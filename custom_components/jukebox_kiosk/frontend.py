@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from pathlib import Path
 
 from homeassistant.components.frontend import add_extra_js_url, remove_extra_js_url
@@ -57,25 +59,46 @@ def _is_legacy(url: str) -> bool:
     return any(marker in url for marker in LEGACY_RESOURCE_MARKERS)
 
 
+LEGACY_PLUGIN_DIR = ("www", "community", "ha-jukebox-kiosk-card")
+
+
+def _legacy_files_present(hass: HomeAssistant) -> bool:
+    """True while the old HACS plugin folder is still on disk (runs in the executor)."""
+    return os.path.isdir(hass.config.path(*LEGACY_PLUGIN_DIR))
+
+
 async def async_cleanup_legacy_resources(hass: HomeAssistant) -> int:
     """Remove old HACS plugin Lovelace resources (storage mode only).
 
     Returns how many were removed. In YAML mode we cannot edit, so we raise a
     Repairs issue instead. The plugin files themselves are left for the user
-    to remove in HACS.
+    to remove in HACS; while they are still on disk the Repairs issue stays
+    (also after the restart that follows the automatic resource removal).
     """
+    items: list[dict] = []
+    mode = None
+    resources = None
     lovelace = hass.data.get("lovelace")
-    if lovelace is None:
-        return 0
-    resources = getattr(lovelace, "resources", None)
-    mode = getattr(lovelace, "resource_mode", None)
-    if resources is None:
-        return 0
-    if hasattr(resources, "async_get_info"):
-        await resources.async_get_info()  # forces storage load
-    items = [i for i in (resources.async_items() or []) if _is_legacy(str(i.get("url", "")))]
+    if lovelace is not None:
+        resources = getattr(lovelace, "resources", None)
+        mode = getattr(lovelace, "resource_mode", None)
+    if resources is not None:
+        if hasattr(resources, "async_get_info"):
+            await resources.async_get_info()  # forces storage load
+        items = [i for i in (resources.async_items() or []) if _is_legacy(str(i.get("url", "")))]
     if not items:
-        ir.async_delete_issue(hass, DOMAIN, ISSUE_LEGACY_PLUGIN)
+        if await hass.async_add_executor_job(_legacy_files_present, hass):
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                ISSUE_LEGACY_PLUGIN,
+                is_fixable=False,
+                is_persistent=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="legacy_card_plugin_files",
+            )
+        else:
+            ir.async_delete_issue(hass, DOMAIN, ISSUE_LEGACY_PLUGIN)
         return 0
     removed = 0
     if mode == "storage" and hasattr(resources, "async_delete_item"):
