@@ -20,8 +20,11 @@ import { MassQueueBackend } from '../backend/mass-queue';
  * track that is in the library it returns the LIBRARY copy (provider 'library'), which is never passed on to
  * get_track_lyrics. The card has no direct LRCLIB path (it never contacts LRCLIB), so no provider copy = 'none'.
  *
- * Caching: in-memory LRU (50, shared by every card on the page) and localStorage (100 entries). Found lyrics live 30 days,
- * "not found" 24 hours, errors are never stored (60 s in-memory back-off). Requests for the same key share one promise.
+ * Lyrics are fetched and displayed through Music Assistant only; the card never stores or redistributes lyric text.
+ * Caching: lyric text lives only in an in-memory LRU for the page session (50 entries, shared by every card on the page;
+ * gone on reload). localStorage (100 entries) only remembers "not found" markers (no text) for 24 hours, so a track
+ * without lyrics isn't looked up again on every reload. Errors are never stored (60 s in-memory back-off). Requests for
+ * the same key share one promise. The old v1 localStorage cache (which held lyric text) is deleted on load.
  */
 export type LyricsStatus = 'off' | 'idle' | 'loading' | 'synced' | 'plain' | 'none' | 'error';
 export interface TrackRef {
@@ -44,10 +47,10 @@ export interface LyricsState {
 }
 interface Entry { kind: 'synced' | 'plain' | 'none'; raw: string; at: number }
 
-export const LYRICS_LS_KEY = 'jukebox-card:lyrics:v1';
+export const LYRICS_LS_KEY = 'jukebox-card:lyrics:v2';
+const LYRICS_LS_LEGACY = 'jukebox-card:lyrics:v1'; // held lyric text before 0.6.0; removed on load
 const MEM_MAX = 50;
 const LS_MAX = 100;
-const RAW_MAX = 30_000;
 export const POS_TTL = 30 * 86_400_000;
 export const NEG_TTL = 86_400_000;
 const ERR_BACKOFF = 60_000;
@@ -111,6 +114,7 @@ export function mqResult(r: any): any {
 
 // ---------------- shared caches ----------------
 const MEM = new Map<string, Entry>();
+try { globalThis.localStorage?.removeItem(LYRICS_LS_LEGACY); } catch { /* private mode */ }
 const INFLIGHT = new Map<string, Promise<Entry>>();
 const ERRORS = new Map<string, { at: number; reason: string }>();
 export const LYRICS_STATS = { lookups: 0, calls: 0, memHits: 0, lsHits: 0, deduped: 0, errors: 0 };
@@ -119,30 +123,30 @@ const fresh = (e: Entry, now = Date.now()) => now - e.at < (e.kind === 'none' ? 
 function memGet(k: string) { const e = MEM.get(k); if (!e) return; MEM.delete(k); if (!fresh(e)) return; MEM.set(k, e); return e; }
 function memSet(k: string, e: Entry) { MEM.delete(k); MEM.set(k, e); while (MEM.size > MEM_MAX) MEM.delete(MEM.keys().next().value as string); }
 function lsRead(): Record<string, [Entry['kind'], string, number]> {
-  try { const o = JSON.parse(localStorage.getItem(LYRICS_LS_KEY) || '{}'); return o && typeof o === 'object' && o.v === 1 && o.items ? o.items : {}; } catch { return {}; }
+  try { const o = JSON.parse(localStorage.getItem(LYRICS_LS_KEY) || '{}'); return o && typeof o === 'object' && o.v === 2 && o.items ? o.items : {}; } catch { return {}; }
 }
 function lsGet(k: string): Entry | undefined {
   const x = lsRead()[k];
   if (!Array.isArray(x)) return;
-  const e: Entry = { kind: x[0], raw: String(x[1] ?? ''), at: Number(x[2]) || 0 };
-  return ['synced', 'plain', 'none'].includes(e.kind) && fresh(e) ? e : undefined;
+  const e: Entry = { kind: x[0], raw: '', at: Number(x[2]) || 0 };
+  return e.kind === 'none' && fresh(e) ? e : undefined; // only "not found" markers are persisted
 }
 function lsSet(k: string, e: Entry) {
-  if (e.raw.length > RAW_MAX) return;
+  if (e.kind !== 'none') return; // never persist lyric text
   try {
     const items = lsRead();
     delete items[k];
-    items[k] = [e.kind, e.raw, e.at];
+    items[k] = ['none', '', e.at];
     const now = Date.now();
-    const keep = Object.entries(items).filter(([, v]) => Array.isArray(v) && now - v[2] < (v[0] === 'none' ? NEG_TTL : POS_TTL))
+    const keep = Object.entries(items).filter(([, v]) => Array.isArray(v) && v[0] === 'none' && now - v[2] < NEG_TTL)
       .sort((a, b) => a[1][2] - b[1][2]).slice(-LS_MAX);
-    localStorage.setItem(LYRICS_LS_KEY, JSON.stringify({ v: 1, items: Object.fromEntries(keep) }));
+    localStorage.setItem(LYRICS_LS_KEY, JSON.stringify({ v: 2, items: Object.fromEntries(keep) }));
   } catch { /* quota / private mode: memory cache only */ }
 }
 /** Drop every cached result (tests, and the editor's "clear lyrics cache"). */
 export function clearLyricsCache() {
   MEM.clear(); ERRORS.clear();
-  try { localStorage.removeItem(LYRICS_LS_KEY); } catch { /* */ }
+  try { localStorage.removeItem(LYRICS_LS_KEY); localStorage.removeItem(LYRICS_LS_LEGACY); } catch { /* */ }
 }
 const toLines = (e: Entry) => (e.kind === 'synced' ? parseLrc(e.raw) : e.kind === 'plain' ? parsePlain(e.raw) : []);
 

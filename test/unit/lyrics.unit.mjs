@@ -126,15 +126,17 @@ const newStore = (hass) => { const s = new S.LyricsStore(); s.entryId = ENTRY; s
   s.follow(hass, playing('library://track/1'));
   check('S7 back to a cached track: synced immediately from memory, no call', s.state.status === 'synced' && s.state.via === 'cache' && hass.calls.length === 3);
 
-  // localStorage survives a reload (memory cleared)
-  const stored = JSON.parse(LS.get(S.LYRICS_LS_KEY));
-  check('S8 localStorage entry {v:1, items} keyed by uri', stored.v === 1 && stored.items['u:library://track/1']?.[0] === 'synced', Object.keys(stored.items).join());
+  // lyric text is never persisted: localStorage holds no found lyrics, and a reload fetches them through MA again
+  const allLs = [...LS.values()].join('\n');
+  check('S8 found lyrics are never written to localStorage (no lyric text stored)', !LS.get(S.LYRICS_LS_KEY) && !/Invented line/.test(allLs) && S.LYRICS_LS_KEY.endsWith(':v2'), allLs.slice(0, 200));
   const lsCopy = LS.get(S.LYRICS_LS_KEY);
-  S.clearLyricsCache(); LS.set(S.LYRICS_LS_KEY, lsCopy);
+  S.clearLyricsCache(); if (lsCopy) LS.set(S.LYRICS_LS_KEY, lsCopy);
   const before = S.LYRICS_STATS.lsHits;
   const s2 = newStore(hass);
+  const n9b = hass.calls.length;
   s2.follow(hass, playing('library://track/1'));
-  check('S9 after a reload: served from localStorage without a call', s2.state.status === 'synced' && hass.calls.length === 3 && S.LYRICS_STATS.lsHits === before + 1);
+  await waitFor(() => s2.state.status !== 'loading');
+  check('S9 after a reload: looked up through MA again (memory-only cache)', s2.state.status === 'synced' && hass.calls.length > n9b && S.LYRICS_STATS.lsHits === before);
 
   // dedupe: two cards, same new track, one request
   const s3 = newStore(hass), s4 = newStore(hass);
@@ -146,16 +148,18 @@ const newStore = (hass) => { const s = new S.LyricsStore(); s.entryId = ENTRY; s
 
   // negative TTL shorter than positive
   const items = JSON.parse(LS.get(S.LYRICS_LS_KEY)).items;
-  check('S12 negative results cached in localStorage too', items['u:library://track/9']?.[0] === 'none');
+  check('S12 "not found" markers (no text) are the only thing in localStorage', items['u:library://track/9']?.[0] === 'none' && Object.values(items).every((v) => v[0] === 'none' && v[1] === ''), J(items));
   check('S13 NEG_TTL (24 h) < POS_TTL (30 d)', S.NEG_TTL === 86_400_000 && S.POS_TTL === 30 * 86_400_000);
   const stale = JSON.parse(LS.get(S.LYRICS_LS_KEY));
   stale.items['u:library://track/9'][2] = Date.now() - S.NEG_TTL - 1000;   // 'none' older than 24 h
-  stale.items['u:library://track/1'][2] = Date.now() - S.NEG_TTL - 1000;   // 'synced' older than 24 h, younger than 30 d
+  stale.items['u:library://track/1'] = ['synced', 'Invented line one', Date.now()];   // a pre-0.6 style entry with text
   S.clearLyricsCache(); LS.set(S.LYRICS_LS_KEY, J(stale));
   const s5 = newStore(hass);
   const n14 = hass.calls.length;
   s5.follow(hass, playing('library://track/1'));
-  check('S14 a found result 25 h old is still served from cache', s5.state.status === 'synced' && hass.calls.length === n14);
+  check('S14 a stored entry with lyric text is ignored → fetched through MA', s5.state.status === 'loading' && S.LYRICS_STATS.lsHits === before);
+  await waitFor(() => s5.state.status !== 'loading');
+  check('S14b ... and the text entry is dropped on the next write', s5.state.status === 'synced' && hass.calls.length > n14);
   s5.follow(hass, playing('library://track/9'));
   check('S15 a "not found" result 25 h old has expired → looked up again', s5.state.status === 'loading');
   await waitFor(() => s5.state.status !== 'loading');
@@ -174,10 +178,10 @@ const newStore = (hass) => { const s = new S.LyricsStore(); s.entryId = ENTRY; s
   const cmds = hass.calls.map((c) => c.data.command);
   check('R1 radio: music/search {search_query "artist - title", media_types [track]} → best match → get_track_lyrics', J(cmds) === J(['music/search', 'metadata/get_track_lyrics']) && hass.calls[0].data.data.search_query === 'Radio Band - Radio Song' && J(hass.calls[0].data.data.media_types) === J(['track']) && hass.calls[1].data.data.track.uri === 'library://track/78', J(cmds));
   check('R2 radio result is synced, flagged radio with duration 0 (so never seekable)', s.state.status === 'synced' && s.state.track.radio === true && s.state.track.duration === 0 && s.state.via === 'search');
-  check('R3 radio cache key is artist|title', JSON.parse(LS.get(S.LYRICS_LS_KEY)).items['q:radio band|radio song']?.[0] === 'synced');
   s.follow(hass, { entity_id: 'media_player.x', state: 'playing', attributes: { media_title: 'Unknown Act - Nothing Similar', media_content_type: 'radio', media_content_id: 'library://radio/3' } });
   await waitFor(() => s.state.status !== 'loading');
   check('R4 radio with no close match → "none" without a lyrics call', s.state.status === 'none' && hass.calls.length === 3);
+  check('R3 radio cache key is artist|title (the "not found" marker)', JSON.parse(LS.get(S.LYRICS_LS_KEY)).items['q:unknown act|nothing similar']?.[0] === 'none');
   s.follow(hass, { entity_id: 'media_player.x', state: 'playing', attributes: { media_title: 'Station Jingle', media_content_type: 'radio', media_content_id: 'library://radio/3' } });
   check('R5 radio with only a station title (no artist) → "none" immediately, no call', s.state.status === 'none' && hass.calls.length === 3);
 }

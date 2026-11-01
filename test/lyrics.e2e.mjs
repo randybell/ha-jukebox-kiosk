@@ -18,7 +18,7 @@ const pageErrors = [];
 async function newPage(vp = { width: 1280, height: 800 }) {
   const pg = await browser.newPage();
   await hermetic(pg);
-  pg.on('pageerror', (e) => pageErrors.push(e.message));
+  pg.on('pageerror', (e) => pageErrors.push(e.message + (process.env.JB_STACK ? ' @ ' + pg.url() + ' ' + String(e.stack).split('\n').slice(0, 4).join(' / ') : '')));
   await pg.setViewport({ deviceScaleFactor: 1, ...vp });
   return pg;
 }
@@ -95,7 +95,10 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   check('O4 active toggle is white (Black Frame Mono)', /rgb\(255, 255, 255\)|rgba\(255, 255, 255, 1\)/.test(bg), bg);
   await pg.goto(`${ROOT}index.html?keeplyrics=1&latency=40&tab=now`); await pg.waitForFunction('window.__ready === true'); await sleep(300);
   check('O5 overlay choice survives a reload', await pg.evaluate((s) => !!eval(s).querySelector('jb-lyrics') && eval(s).querySelector('.ab.lyr').classList.contains('on'), SEL.now));
-  check('O6 reload: lyrics come from the localStorage cache — no new send_command', (await lyrCmds(pg)).length === 0 && (await status(pg, SEL.ovl)) === 'synced', J(await lyrCmds(pg)));
+  await pg.waitForFunction((s) => { try { return eval(s)?.dataset?.status === 'synced'; } catch { return false; } }, { timeout: 8000 }, SEL.ovl).catch(() => {});
+  const lsText = await pg.evaluate(() => Object.keys(localStorage).map((k) => localStorage.getItem(k)).join('\n'));
+  check('O6 reload: lyrics are fetched through MA again (never stored), and localStorage holds no lyric text',
+    (await lyrCmds(pg)).length >= 1 && (await status(pg, SEL.ovl)) === 'synced' && !/Placeholder line one|cardboard stars/.test(lsText), J({ c: await lyrCmds(pg), ls: lsText.slice(0, 120) }));
   await pg.close();
 }
 

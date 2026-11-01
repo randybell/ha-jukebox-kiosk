@@ -76,7 +76,7 @@ URL parameters:
 | `lyrfail=perm\|err` | lyrics lookups fail with a permission error / a generic error |
 | `lyrlat=ms` | lyrics reply latency (the live first lookup takes 8–33 s) |
 | `overlay=1\|0` | preset the art lyrics overlay toggle |
-| `keeplyrics=1` | with `fresh=1`, keep the lyrics cache |
+| `keeplyrics=1` | with `fresh=1`, keep the lyrics "not found" markers |
 | `admin=1`, `user=<name>`, `uid=<id>` | the HA user (default: a non-admin guest) |
 | `spk=dyn`, `target=<entity>`, `cfg=<json>` | dynamic speaker mode, the starting target, extra card config (merged last) |
 | `ma=split\|busy`, `grp=` / `xfer=fail\|slow\|timeout`, `gap=ms`, `malat=ms` | mock Music Assistant situations and failures (`dev/mock-ma.js`, log in `window.__maLog`) |

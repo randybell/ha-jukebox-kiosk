@@ -13,6 +13,7 @@ The card moves into a Home Assistant integration, **Jukebox Kiosk** (`jukebox_ki
 - No allowlisted MA command is still `TODO-VERIFY`. The last three passed read-only checks against MA 2.10.9, and `capabilities.todo_verify` is empty. Confirmed: `music/genres/overview` (`item_id`, `provider_instance_id_or_domain`=`library`, `limit` per row), and `music/podcasts/library_items` / `music/audiobooks/library_items` (user impersonation; `summary: false` for resume fields). New feature flags: `genre_overview`, `podcast_library` and `audiobook_library`.
 - `music/item_by_uri` always gets `allow_update_metadata: false`. The allowlist refuses `allow_update_metadata: true` on every command, and nothing is sent to MA.
 - Lyrics fallback: when `music/item_by_uri` returns the library copy of a track that is in the library, the card skips it and never sends it to `get_track_lyrics`. With no provider copy, the card shows "No lyrics found", because it has no direct LRCLIB path.
+- Lyrics are fetched and displayed through Music Assistant only, and never stored. Lyric text is no longer written to `localStorage`; only "not found" markers are kept (`jukebox-card:lyrics:v2`, 1 day), and the old v1 cache with lyric text is deleted on load.
 - Tests: `test/unit/backend.unit.mjs`, `test/kiosk.e2e.mjs` (against `dev/mock-kiosk.js`), and pytest for the integration.
 
 ### Changed
