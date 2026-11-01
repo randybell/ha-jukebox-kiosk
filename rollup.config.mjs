@@ -6,10 +6,10 @@ import thirdPartyNotices from './scripts/third-party-notices.mjs';
 
 const dev = process.env.ROLLUP_WATCH === 'true';
 const { version } = JSON.parse(readFileSync('./package.json', 'utf8'));
-const banner = `/*! Jukebox Card v${version} | MIT License | Copyright (c) 2026 Randy Bell | Includes Lit (BSD-3-Clause, Copyright Google LLC); see THIRD_PARTY_NOTICES.md */`;
+const banner = `/*! Jukebox Card v${version} (jukebox_kiosk) | MIT License | Copyright (c) 2026 Randy Bell | Includes Lit (BSD-3-Clause, Copyright Google LLC); see THIRD_PARTY_NOTICES.md */`;
 export default {
   input: 'src/jukebox-card.ts',
-  output: { file: 'dist/jukebox-card.js', format: 'es', sourcemap: false, inlineDynamicImports: true, banner },
+  output: { file: 'custom_components/jukebox_kiosk/www/jukebox-card.js', format: 'es', sourcemap: false, inlineDynamicImports: true, banner },
   plugins: [
     resolve(),
     typescript({ tsconfig: './tsconfig.json', outDir: undefined, noEmitOnError: true }),

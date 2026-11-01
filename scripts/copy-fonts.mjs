@@ -1,6 +1,6 @@
-// Copies the self-hosted OFL fonts next to the bundle: dist/fonts/*.woff2 (plus their OFL texts and the notices)
+// Copies the self-hosted OFL fonts next to the bundle: custom_components/jukebox_kiosk/www/fonts/*.woff2 (plus their OFL texts and the notices)
 import { mkdirSync, copyFileSync, existsSync } from 'node:fs';
-const out = 'dist/fonts';
+const out = 'custom_components/jukebox_kiosk/www/fonts';
 mkdirSync(out, { recursive: true });
 const files = [
   ['@fontsource/inter/files/inter-latin-400-normal.woff2', 'inter-400.woff2'],
@@ -18,6 +18,6 @@ for (const [src, dst] of files) {
 copyFileSync('node_modules/@fontsource/inter/LICENSE', `${out}/LICENSE-Inter.txt`);
 copyFileSync('node_modules/@fontsource/plus-jakarta-sans/LICENSE', `${out}/LICENSE-PlusJakartaSans.txt`);
 // Ship the third-party notices (written by the rollup build) inside jukebox-card-fonts.zip too.
-if (existsSync('dist/THIRD_PARTY_NOTICES.md')) copyFileSync('dist/THIRD_PARTY_NOTICES.md', `${out}/THIRD_PARTY_NOTICES.md`);
-else console.warn('dist/THIRD_PARTY_NOTICES.md missing; run rollup -c first');
+if (existsSync('custom_components/jukebox_kiosk/www/THIRD_PARTY_NOTICES.md')) copyFileSync('custom_components/jukebox_kiosk/www/THIRD_PARTY_NOTICES.md', `${out}/THIRD_PARTY_NOTICES.md`);
+else console.warn('custom_components/jukebox_kiosk/www/THIRD_PARTY_NOTICES.md missing; run rollup -c first');
 console.log('fonts copied to', out);
