@@ -4,7 +4,7 @@ import { icon } from './icons';
 import { providerLabel } from './providers';
 import { SearchEngine } from './search-engine';
 import {
-  imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, PressController, menuPos, menuTpl,
+  imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, menuPos, menuTpl,
   playMedia, playMessage, drillable, canRadio, rowActsTpl, foldedActions, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
 } from './shared';
 import './detail-view';
@@ -62,11 +62,15 @@ export class JbSearch extends LitElement {
     _stack: { state: true },
     _confirm: { state: true },
     _sel: { state: true },
+    _favs: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
   active = false;
   private _query = '';
+  /** Search radio heart (0.6.2): favourite state changed in this card, by uri (overrides the result's own flag). */
+  private _favs: Record<string, boolean> = {};
+  private _favBusy = new Set<string>();
   private _results: SearchResults | null = null;
   private _shownQuery = '';
   private _loading = false;
@@ -219,6 +223,41 @@ export class JbSearch extends LitElement {
     this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400);
   }
 
+  // ---------- radio heart (0.6.2) ----------
+  /** Only Search radio results, only through the kiosk integration, only with the library permission class. */
+  private canFav(g: GroupKey) { return g === 'radio' && !!this.config._backend?.caps.libraryWrite; }
+  private isFav(it: MaItem) { return this._favs[it.uri] ?? !!it.favorite; }
+  /** MA stores favourites on library items: a provider station is added to the library and marked favourite in one call.
+   *  Removing needs the library id, so it works for library results; a provider result that is already a favourite says so. */
+  private async toggleFav(it: MaItem) {
+    const be = this.config._backend;
+    if (!be?.caps.libraryWrite || this._favBusy.has(it.uri)) return;
+    const on = this.isFav(it);
+    const libId = it.provider === 'library' ? String(it.item_id ?? '') : (/^library:\/\/radio\/(.+)$/.exec(it.uri)?.[1] ?? '');
+    if (on && !libId) { this.toast(`${it.name} is in your favorites`); return; }
+    this._favBusy.add(it.uri);
+    this._favs = { ...this._favs, [it.uri]: !on };
+    try {
+      if (on) await be.send('music/favorites/remove_item', { media_type: 'radio', library_item_id: libId });
+      else await be.send('music/favorites/add_item', { item: it.uri });
+      this.toast(on ? `Removed ${it.name} from favorites` : `Added ${it.name} to favorites`);
+      this.engine.clearCache();
+      fire(this, 'jukebox-favorites-changed', { media_type: 'radio', uri: it.uri, favorite: !on });
+    } catch (e) {
+      console.warn('[jukebox-card] favorite failed', e);
+      this._favs = { ...this._favs, [it.uri]: on };
+      this.toast(on ? `Couldn't remove ${it.name} from favorites` : `Couldn't add ${it.name} to favorites`);
+    } finally {
+      this._favBusy.delete(it.uri);
+    }
+  }
+  private favTpl(it: MaItem) {
+    const on = this.isFav(it);
+    return html`<button class="ra-b fav ${on ? 'on' : ''}" data-act="fav" tabindex="-1" aria-pressed=${on ? 'true' : 'false'}
+      title=${on ? 'In favorites' : 'Add to favorites'} aria-label=${on ? `Remove ${it.name} from favorites` : `Add ${it.name} to favorites`}
+      @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); this.toggleFav(it); }}>${icon(on ? 'heart' : 'heartline')}</button>`;
+  }
+
   // ---------- taps, menus, detail stack ----------
   private root() { return this.renderRoot.querySelector('.sx') as HTMLElement; }
   private tap(it: MaItem, g: GroupKey) {
@@ -297,6 +336,7 @@ export class JbSearch extends LitElement {
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b>
         <small>${provTpl(it.uri, it.provider, it.media_type)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, g)}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
+      ${this.canFav(g) ? this.favTpl(it) : nothing}
       ${rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, g, a, el))}
     </div>`;
   }
@@ -377,6 +417,8 @@ export class JbSearch extends LitElement {
 
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
+    .ra-b.fav { flex: none; color: var(--_inactive); }
+    .ra-b.fav.on { color: var(--_active); }
     .sx {
       position: relative; z-index: 1; height: 100%; display: grid; gap: 12px; padding: 14px var(--_pad) 12px;
       grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;

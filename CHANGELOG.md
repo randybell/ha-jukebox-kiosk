@@ -2,6 +2,11 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
+## 0.6.2 — unreleased
+
+### Added
+- **Heart on Search radio results.** On the Jukebox Kiosk backend, each station in Search › Radio has a heart. Tap it to add the station to your Music Assistant favourites (`music/favorites/add_item` with the station's URI). Music Assistant adds a Radio Browser station to its library at the same time, so it then shows under **Favorites** in Browse › Radio (My stations), which reloads straight away. Tap a filled heart on a library station to remove it from favourites (`music/favorites/remove_item`). The heart shows only for users with the `library` permission class (capability `library_write`); the server checks that class on every write, as before. Search results of other types, Browse and the other card backends are unchanged.
+
 ## 0.6.1 — 2026-11-01
 
 ### Fixed

@@ -2,9 +2,9 @@
 // harness: ?kiosk=1 adds hass.config.components ['music_assistant', 'jukebox_kiosk'], hass.callWS and hass.connection.
 // kcaps=<json> overrides capability flags (e.g. {"queue_edit":false,"lyrics":false}); kfail=<type> makes that message type
 // throw. Every message is logged in window.__ws ({type, ...}). Placeholder ids only.
-//   jukebox_kiosk/capabilities, /ma {command,args}, /queue_items, /item_tracks, /unfavorite_current, /subscribe_queue
+//   jukebox_kiosk/capabilities, /ma {command,args} (music/favorites/* need kcaps library_write, like the library class), /queue_items, /item_tracks, /unfavorite_current, /subscribe_queue
 // The /ma allowlist mirrors const.py MA_COMMANDS; metadata/get_track_lyrics refuses library tracks like the server.
-const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search)|metadata\/get_track_lyrics)$/;
+const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item))|metadata\/get_track_lyrics)$/;
 const MUTATING = /^player_queues\/(play_index|move_item|delete_item|play_media|transfer)$/;
 const FEATURES = { queue: true, queue_play: true, queue_edit: true, undo: true, ma_commands: true, lyrics: true, track_lists: true,
   podcast_episodes: true, unfavorite: true, library_write: false, speakers: true, group_configs: true, queue_push: true };
@@ -39,6 +39,15 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
     if (args && args.allow_update_metadata) throw err('invalid_args', 'allow_update_metadata must be false');
     if (command === 'music/item_by_uri') return sendCommand(command, { ...args, allow_update_metadata: false });
     if (command === 'music/search') return sendCommand(command, args);
+    // Search radio heart (0.6.2). Like MA: a favourite always lives in the library, so a provider station is added to it.
+    if (command.startsWith('music/favorites/')) {
+      if (!features.library_write) throw err('unauthorized', 'Unauthorized');
+      const it = command.endsWith('add_item') ? byUri(String(args.item ?? '')) : byUri(`library://${args.media_type}/${args.library_item_id}`);
+      if (!it) throw err('not_found', 'Item not found');
+      if (command.endsWith('add_item')) { it.favorite = true; it._inlib = true; } else it.favorite = false;
+      commit();
+      return null;
+    }
     if (MUTATING.test(command) && !features.queue_edit && command !== 'player_queues/play_index') throw err('unauthorized', 'Unauthorized');
     if (command === 'player_queues/play_index' && !features.queue_play) throw err('unauthorized', 'Unauthorized');
     const r = await maApi.command(command, args);
