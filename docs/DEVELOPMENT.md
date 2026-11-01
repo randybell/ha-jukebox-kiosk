@@ -1,15 +1,25 @@
 # Development
 
-Maintainer notes for building, testing and releasing Jukebox Card. Install and configuration for Home Assistant are in the [README](../README.md).
+Maintainer notes for building, testing and releasing Jukebox Kiosk (the `jukebox_kiosk` integration and the bundled Jukebox Card). Install and configuration for Home Assistant are in the [README](../README.md).
 
-Nothing in this repository talks to a real Home Assistant server. Development and tests run against `dev/mock-hass.js`.
+Nothing in this repository talks to a real Home Assistant server. Card development and tests run against `dev/mock-hass.js`; integration tests run against `pytest-homeassistant-custom-component` with a mocked Music Assistant client.
+
+## Integration
+
+```bash
+python3.14 -m venv .venv && . .venv/bin/activate
+pip install -r requirements_test.txt
+pytest -q                          # tests/ (websocket API, permissions, client, frontend, setup)
+```
+
+Every Music Assistant command the integration forwards is in `MA_COMMANDS` in `custom_components/jukebox_kiosk/const.py`, with its permission class and a status (`client`, `live`, `checked`, `TODO-VERIFY`). Anything not in that table is refused.
 
 ## Build
 
 ```bash
 # lit 3, rollup 4, typescript 5.9 (TS 7 breaks @rollup/plugin-typescript), fontsource
 npm ci                # or npm install
-npm run build         # -> dist/jukebox-card.js (single ES module) + dist/fonts/*
+npm run build         # -> custom_components/jukebox_kiosk/www/jukebox-card.js (single ES module) + www/fonts/*
 npm run watch         # rebuild on change
 npm run typecheck     # tsc --noEmit
 ```
@@ -19,7 +29,8 @@ npm run typecheck     # tsc --noEmit
 ```bash
 python3 -m http.server 8765 --bind 127.0.0.1     # from the project root; the harness won't run from file://
 # open http://127.0.0.1:8765/dev/index.html?log=1
-npm test                                           # run.mjs (156 end-to-end checks) + lyrics unit tests (51) + lyrics end-to-end checks (84) + speakers unit tests (35) + speakers end-to-end checks (137) (puppeteer-core + /usr/bin/google-chrome; CHROME=... to override)
+npm test                                           # run.mjs + lyrics unit/e2e + speakers unit/e2e (mass_queue backend) + backend unit + kiosk e2e (puppeteer-core + /usr/bin/google-chrome; CHROME=... to override)
+npm run test:unit                                  # unit tests only (no server or browser)
 node test/shots-m2.mjs f1                          # every tab at 1920x1080, 1280x800, 820x1180 and 390x844 -> test/shots/m2/
 JB_SIZES=1920x1080 node test/shots-m2.mjs x1 '&backdrop=light'   # one size, one mode
 node test/shots-v040.mjs                           # lyrics surfaces, states and the editor at 1280x800, 1920x1080, 390x844 -> test/shots/v040/
@@ -71,6 +82,9 @@ URL parameters:
 | `ma=split\|busy`, `grp=` / `xfer=fail\|slow\|timeout`, `gap=ms`, `malat=ms` | mock Music Assistant situations and failures (`dev/mock-ma.js`, log in `window.__maLog`) |
 | `qbuf=1`, `qadd=fail`, `qitems=fail` | next track already buffered in MA; queue re-add / item lookup fails (Remove → Undo) |
 | `cfg=<json>` | merged into the card config |
+| `kiosk=1` | loads the Jukebox Kiosk integration mock (`dev/mock-kiosk.js`): `jukebox_kiosk` in `hass.config.components` and its WebSocket API on `callWS` / `connection.subscribeMessage`, so `backend: auto` picks `kiosk`. Every message is logged in `window.__ws`; `window.__kioskPush(entity)` sends a queue push, `window.__kioskSubs()` lists subscriptions |
+| `kcaps=<json>` | with `kiosk=1`, overrides the `features` returned by `jukebox_kiosk/capabilities` |
+| `kfail=<type>` | with `kiosk=1`, that `jukebox_kiosk/<type>` message fails |
 | `backdrop=auto\|full\|light\|static\|off` | sets the `backdrop` option |
 | `ha=toolbar\|kiosk\|masonry` | emulates a Home Assistant view around the card: fixed 56 px toolbar (`--header-height`), toolbar hidden (kiosk mode), or a masonry view with padding and a card above |
 | `sidebar=open\|narrow\|closed\|none` | with `ha=`, the HA sidebar width (256 px, 56 px, or none; default `narrow`) |
@@ -79,9 +93,9 @@ Every call is recorded in `window.__calls`, except read-only lyrics lookups (`ma
 
 ## Repository, releases and HACS
 
-- `hacs.json`: `{"name": "Jukebox Card", "filename": "jukebox-card.js", "render_readme": true}`. `filename` lets HACS find `jukebox-card.js` even though the repo is called `ha-jukebox-kiosk-card`.
-- `dist/` is **not committed**. `.github/workflows/release.yml` runs on a `v*` tag: `npm ci`, typecheck, build, then it attaches `dist/jukebox-card.js`, `dist/THIRD_PARTY_NOTICES.md` and `jukebox-card-fonts.zip` to a GitHub release. HACS installs from the latest release's assets.
-  - Why: committed build output makes every diff noisy, goes stale when someone forgets to rebuild, and is easy to mismatch with the source. A tag-built release always matches its tag, HACS lets users pick from the last 5 releases, and the repo stays small.
-  - To release: bump `version` in `package.json` (and `package-lock.json`) and `VERSION` in `src/jukebox-card.ts`, run `npm run build` so `THIRD_PARTY_NOTICES.md` is current, commit, then `git tag -a v0.4.2 -m 'Jukebox Card 0.4.2' && git push origin v0.4.2` (push only that tag).
+- `hacs.json`: `{"name": "Jukebox Kiosk", "homeassistant": "2026.10.0"}`, category **integration**.
+- The built card **is committed** in `custom_components/jukebox_kiosk/www/` (bundle, fonts, notices). HACS installs an integration from the tagged source, so the bundle has to be in the tree. `.github/workflows/release.yaml` runs on a `v*` tag: it checks that the tag matches `package.json` and `manifest.json`, runs pytest, the typecheck and the card unit tests, rebuilds, **fails if the committed bundle or notices differ from the rebuild**, then attaches `jukebox_kiosk.zip` to a GitHub release.
+  - To release: bump `version` in `package.json` (and `package-lock.json`), `custom_components/jukebox_kiosk/manifest.json` and `VERSION` in `src/jukebox-card.ts`, run `npm run build`, commit, then `git tag -a v0.6.0 -m 'Jukebox Kiosk 0.6.0' && git push origin v0.6.0` (push only that tag).
+- `.github/workflows/hassfest.yaml` and `hacs.yaml` validate the integration on every push and nightly.
 - `test/shots/` (generated by the tests and screenshot scripts) is git-ignored; the curated screenshots used in the README are in `docs/`.
-- License: MIT (`LICENSE`), Copyright (c) 2026 Randy Bell. The root `LICENSE` file is the standard MIT text only, so GitHub detects it. The bundled fonts are OFL (licence files ship in `dist/fonts/` and the fonts zip). Third-party licenses are in `THIRD_PARTY_NOTICES.md`, which ships with each release.
+- License: MIT (`LICENSE`), Copyright (c) 2026 Randy Bell. The bundled fonts are OFL (licence files ship in `www/fonts/`). Third-party licenses are in `THIRD_PARTY_NOTICES.md`.

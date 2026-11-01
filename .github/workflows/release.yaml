@@ -1,0 +1,71 @@
+name: Release
+
+# Push a tag like v0.6.0 to test, build and publish a GitHub release.
+# HACS installs custom_components/jukebox_kiosk from the tagged source, so the built card in
+# custom_components/jukebox_kiosk/www/ is committed; this job fails if it is stale.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+
+      - name: Check tag matches package.json and manifest.json
+        run: |
+          PKG="v$(node -p "require('./package.json').version")"
+          MAN="v$(node -p "require('./custom_components/jukebox_kiosk/manifest.json').version")"
+          if [ "$PKG" != "${GITHUB_REF_NAME}" ] || [ "$MAN" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json ${PKG} / manifest.json ${MAN}" >&2
+            exit 1
+          fi
+
+      - name: Install
+        run: |
+          npm ci
+          pip install -r requirements_test.txt
+
+      - name: Integration tests
+        run: pytest -q
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Card unit tests
+        run: npm run test:unit
+
+      - name: Build
+        run: npm run build
+
+      - name: Check the committed card bundle and notices are up to date
+        run: |
+          test -s custom_components/jukebox_kiosk/www/jukebox-card.js
+          test -s custom_components/jukebox_kiosk/www/THIRD_PARTY_NOTICES.md
+          test -s custom_components/jukebox_kiosk/www/fonts/THIRD_PARTY_NOTICES.md
+          git diff --exit-code -- custom_components/jukebox_kiosk/www THIRD_PARTY_NOTICES.md
+
+      - name: Zip the integration
+        run: cd custom_components/jukebox_kiosk && zip -r ../../jukebox_kiosk.zip . -x '__pycache__/*' '*/__pycache__/*'
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: jukebox_kiosk.zip
+          generate_release_notes: true

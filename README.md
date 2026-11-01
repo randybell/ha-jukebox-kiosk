@@ -1,66 +1,89 @@
-# Jukebox Card (`ha-jukebox-kiosk-card`) 0.5.0
+# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.6.0 — DRAFT
 
-This is a Lovelace custom card for a Home Assistant + Music Assistant jukebox kiosk. It uses the Black Frame Mono look: black header and footer, the album art blurred behind the centre, white active buttons and light-white inactive ones.
+> **Draft for 0.6.0.** This README covers the new integration and the card bundled in it. Sections marked *(legacy)* describe the `mass_queue` backend, which still works.
 
-**What it has:**
-- all five tabs: **Now Playing**, **Browse**, **Search**, **Queue** and **Lyrics**
-- lyrics from Music Assistant (synced or plain) on the art, a full-screen Stage, the Lyrics tab and the screensaver (see [Lyrics](#lyrics))
-- the screensaver
-- the card shell (header, rooms pill, clock, segmented tab bar with a queue badge; the active tab is a solid white segment)
-- backdrop performance modes for slow kiosk tablets (see [Backdrop and performance](#backdrop-and-performance))
-- automatic large-screen scaling (1920x1080 and up)
+Jukebox Kiosk is a Home Assistant integration that ships the **Jukebox Card**, a Lovelace card for a Home Assistant + Music Assistant jukebox kiosk. It also gives the card its own WebSocket API to Music Assistant, so the card no longer needs [mass_queue](https://github.com/droans/mass_queue).
 
-Search has no text input. You type on the on-screen keyboard, which works like the YouTube app on Android TV or a TouchTunes jukebox, and the results update on every keystroke.
+- **One install.** Setting up the integration serves the card from `/jukebox_kiosk_static/jukebox-card.js` and loads it on every dashboard. You don't add a resource, and you don't unzip fonts.
+- **Its own Music Assistant API.** The integration borrows the connection the official Music Assistant integration already holds and exposes it as `jukebox_kiosk/*` WebSocket commands. It forwards only an allowlist of Music Assistant commands, and every one is checked against the calling Home Assistant user (see [Permissions](#permissions)).
+- **Every card feature without mass_queue.** Queue reading and editing (Play now, Play next, Move, Remove with Undo), album/artist/playlist/podcast track lists with server-side paging, lyrics, speaker grouping and transfer, and removing favourites.
+- **Live queue.** The card subscribes to queue changes (`jukebox_kiosk/subscribe_queue`) instead of polling.
 
-The repository is `randybell/ha-jukebox-kiosk-card`. The card's element is `custom:jukebox-card`, and its file is `jukebox-card.js`.
-
-Version history is in [CHANGELOG.md](CHANGELOG.md). Building, tests and releases are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+The card's element is still `custom:jukebox-card`, so existing dashboards keep working. Version history is in [CHANGELOG.md](CHANGELOG.md), and building and tests are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Screenshots
 
-![Now Playing at 1920x1080](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk-card/main/docs/now-1920x1080.png)
+![Now Playing at 1920x1080](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-1920x1080.png)
 
-| Search (on-screen keyboard, results per keystroke) | Queue |
+| Search | Queue |
 |---|---|
-| ![Search](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk-card/main/docs/search-1920x1080.png) | ![Queue](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk-card/main/docs/queue-1920x1080.png) |
+| ![Search](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/search-1920x1080.png) | ![Queue](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-1920x1080.png) |
 | **Browse** | **Screensaver** |
-| ![Browse](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk-card/main/docs/browse-1920x1080.png) | ![Screensaver](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk-card/main/docs/screensaver-1920x1080.png) |
-| **Portrait tablet (820x1180)** | **Phone (390x844)** |
-| ![Portrait](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk-card/main/docs/now-820x1180.png) | ![Phone](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk-card/main/docs/search-390x844.png) |
-| **Browse > Radio (1280x800)** | **Album with durations (1280x800)** |
-| ![Radio](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk-card/main/docs/browse-radio-1280x800.png) | ![Album](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk-card/main/docs/browse-album-1280x800.png) |
+| ![Browse](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/browse-1920x1080.png) | ![Screensaver](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/screensaver-1920x1080.png) |
 
 ## Requirements
 
-- **Home Assistant** with a dashboard you can add a custom card to.
-- **[Music Assistant](https://music-assistant.io)**: a running Music Assistant server and the official **Music Assistant** integration in Home Assistant (`music_assistant`). Search, Browse, transport, volume and every `play_media` go through it.
-- **A player Music Assistant can play to**: any Music Assistant player. Group players such as `media_player.everywhere` work too.
-- **[mass_queue](https://github.com/droans/mass_queue)** (Music Assistant Queue Actions), installed from HACS: needed for track lists and lyrics. Set `mass_queue_entry_id` in the card config.
-
-Without mass_queue the card still works for search, the Browse grid, transport, volume, rooms and playing anything through `music_assistant`, but:
-- album and artist pages fall back to search ("matched by search") instead of the real track lists, and playlist pages show a note instead of their tracks (Play and Shuffle still work);
-- the Queue tab shows "Queue unavailable", because it reads and edits the queue with `mass_queue` actions (`get_queue_items` and friends);
-- lyrics show "Lyrics unavailable".
-- 0.5.0: the Speakers panel's dynamic mode (grouping, moving music, presets) and the queue row icons (Play now, Play next, Remove with Undo) are not available; the fixed-mode volume mixer still works.
+- **Home Assistant 2026.10.0** or newer.
+- **[Music Assistant](https://music-assistant.io)** 2.10 or newer, and the official **Music Assistant** integration (`music_assistant`) set up in Home Assistant. Jukebox Kiosk uses that integration's connection, so it has no server URL or token of its own.
+- **A Music Assistant player** to play to. Group players such as `media_player.everywhere` work too.
+- mass_queue is **not** needed. You can keep it installed: once Jukebox Kiosk is set up, the card uses mass_queue only if you set `backend: mass_queue`.
 
 ## Install
 
-Nothing in this repository is applied to your Home Assistant server by cloning it. A listing in the HACS default store is pending. Until then, add this as a custom repository, or copy the release files in by hand.
-
 ### HACS (custom repository)
 
-1. HACS → ⋮ → **Custom repositories** → `https://github.com/randybell/ha-jukebox-kiosk-card`, category **Dashboard**.
-2. Install **Jukebox Card**. HACS downloads all of the latest release's assets into `/config/www/community/ha-jukebox-kiosk-card/` and adds the resource `/hacsfiles/ha-jukebox-kiosk-card/jukebox-card.js`. The release is built by `.github/workflows/release.yml` when a `v*` tag is pushed (see [Development](docs/DEVELOPMENT.md)).
-3. **Fonts.** HACS does not unzip `jukebox-card-fonts.zip`. The card loads Inter and Plus Jakarta Sans from a `fonts/` folder next to `jukebox-card.js`, or from `font_base` if that option is set. Unzip the archive so the woff2 files are in `/config/www/community/ha-jukebox-kiosk-card/fonts/`. If that folder is missing and `font_base` is not set, the card falls back to system fonts.
+1. HACS → ⋮ → **Custom repositories** → `https://github.com/randybell/ha-jukebox-kiosk`, category **Integration**.
+2. Install **Jukebox Kiosk**, then restart Home Assistant.
+3. **Settings → Devices & services → Add integration → Jukebox Kiosk**, then choose your Music Assistant entry.
+4. Add `type: custom:jukebox-card` to a dashboard (see [Configuration](#configuration)).
 
 ### Manual
 
-1. Download `jukebox-card.js` and `jukebox-card-fonts.zip` from a release (or run `npm run build`). Put `jukebox-card.js` in `/config/www/jukebox/` and unzip the fonts archive into `/config/www/jukebox/fonts/`.
-2. Add the resource under **Settings → Dashboards → ⋮ → Resources**: URL `/local/jukebox/jukebox-card.js?v=0.5.0`, type **JavaScript module**.
-   - Change `?v=` on every update, or Fully Kiosk will keep the old file.
-   - Fonts are found in `fonts/` next to the `.js` automatically. Set `font_base` if they live somewhere else. `font_base: false`, or a missing `fonts/` folder, uses system fonts.
+Copy `custom_components/jukebox_kiosk/` (from the repository or the `jukebox_kiosk.zip` release asset) into `/config/custom_components/`, restart, then follow steps 3–4.
+
+### Coming from the old Jukebox Card plugin (0.5.x)
+
+The integration finds dashboard resources that still point at `/hacsfiles/ha-jukebox-kiosk-card/` and removes them, so the card doesn't load twice. It then raises a Repairs issue that asks you to remove the old **Jukebox Card** plugin in HACS. YAML-mode resources can't be edited automatically; the Repairs issue lists the line to delete. Card configs keep working as they are. `mass_queue_entry_id` is ignored unless you set `backend: mass_queue`.
+
+## Backends
+
+The card talks to Music Assistant through one of three backends. Set `backend` in the card config. The resolved backend is shown on the element as `data-backend`.
+
+| `backend` | Uses | Notes |
+|---|---|---|
+| `auto` (default) | `kiosk` if `jukebox_kiosk` is loaded; otherwise `mass_queue` if `mass_queue_entry_id` is set or mass_queue is loaded (or the loaded integrations can't be read); otherwise `native` | The 0.5.x behaviour is kept when the integration isn't installed. |
+| `kiosk` | `jukebox_kiosk/*` WebSocket commands | Every feature. Controls the server doesn't allow for this user are hidden. |
+| `mass_queue` *(legacy)* | `mass_queue.*` services, as in 0.5.x | Needs `mass_queue_entry_id`. Kept for anyone not ready to install the integration. |
+| `native` | the official `music_assistant` services only | Search, Browse grid, transport, volume and playing music. No queue tab, track lists, lyrics or grouping. |
+
+On the kiosk backend the card asks `jukebox_kiosk/capabilities` once per connection and hides what the server reports as unavailable: queue icons (`queue_play`, `queue_edit`), Undo, the remove-favourite heart (`unfavorite`), the Speakers panel's grouping (`speakers`) and the Lyrics tab (`lyrics`).
+
+## Permissions
+
+Admins can do everything. In the integration's options (**Configure**) you choose:
+
+- **Guest users**: these users get guest rights even if they are admins. This is handy for a kiosk login.
+- **Treat every non-admin user as a guest**: when this is off, non-admins get every class except `admin`.
+- **What guests may do**: any of `read` (queue, search, browse, lyrics), `playback` (play and add music, jump in the queue), `queue` (reorder, remove, undo), `library` (favourites and playlists) and `speakers` (group, move and stop). The default is read, playback, queue and speakers.
+
+The server enforces these on every command. Hiding a control in the card is a convenience only; the card's own `grouping` option is still not a security boundary.
+
+**Not per user.** Music Assistant passes the Home Assistant user only on search, library listings and `play_media`. Recently played, favourites and recommendations are shared by everyone on the Music Assistant server.
+
+## Not verified yet (TODO-VERIFY)
+
+These Music Assistant commands are allowlisted, but their names or arguments haven't been confirmed against a live server. They are listed in `MA_COMMANDS` in `custom_components/jukebox_kiosk/const.py` with status `TODO-VERIFY`, and `jukebox_kiosk/capabilities` reports them in `todo_verify`. The card doesn't build features on them yet.
+
+- `music/genres/overview` (the provider argument name)
+- `music/podcasts/library_items`
+- `music/audiobooks/library_items`
+- Card: the lyrics fallback that uses `music/item_by_uri` on a provider URI to find the provider copy of a library track (`src/lyrics/store.ts`). The first choice, the queue's `current_item.media_item`, is confirmed.
 
 ## Configuration
+
+> The card reference below was written for 0.5.x. Wherever it names a `mass_queue.*` action, the kiosk backend sends the matching `jukebox_kiosk/*` command instead and behaves the same, except that the server pages track lists 100 at a time. `mass_queue_entry_id` applies only to `backend: mass_queue`.
+
+Add `backend: auto` (the default) or one of the values in [Backends](#backends).
 
 Add the card to a dashboard. A single **panel** view is the layout it is built for. Entity ids in the example are labeled `example:`. Keys you leave out use the defaults in [Options](#options); those defaults are unchanged.
 
@@ -156,7 +179,7 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
   - The card never joins or unjoins players.
 - **Layouts.** In landscape the art is on the left; in portrait it sits on top, with rooms in a three-column grid on tablets. Phone layout applies at ≤520 px.
 
-### Queue (mass_queue 0.10.4)
+### Queue
 
 - **Reading.** The queue comes from `mass_queue.get_queue_items {entity, limit_before: 1, limit_after: queue_limit (1–1000)}` with `return_response`. It refreshes when the tab opens, when the track, state or shuffle changes, and after every action.
 - **Layout.** The previous track is dimmed. "Now playing" is the highlighted white row, then a numbered "Up next" list. "+ N more in Music Assistant" appears when the queue is longer than the list.
@@ -284,7 +307,8 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `config_entry_id` | (required) | MA config entry for `music_assistant.search` / `get_library` |
 | `rooms` | `[]` | `[{name, entity, icon?}]`, or bare entity ids (the name then comes from `friendly_name`). Each room gets its own volume slider |
 | `favorite_entity` | `button.everywhere_favorite_current_song` | Pressed by the heart (button, input_button or script). `''` hides the heart |
-| `mass_queue_entry_id` | — | mass_queue (Music Assistant Queue Actions) config entry, used for `mass_queue.get_album_tracks / get_artist_tracks / get_playlist_tracks` and for lyrics (`mass_queue.send_command`). The 0.3.0 name `queue_config_entry_id` is still accepted, and the visual editor rewrites it to the new key |
+| `backend` | `auto` | `auto`, `kiosk`, `mass_queue` or `native` (see [Backends](#backends)) |
+| `mass_queue_entry_id` | — | *(legacy, `backend: mass_queue` only)* mass_queue (Music Assistant Queue Actions) config entry, used for `mass_queue.get_album_tracks / get_artist_tracks / get_playlist_tracks` and for lyrics (`mass_queue.send_command`). The 0.3.0 name `queue_config_entry_id` is still accepted, and the visual editor rewrites it to the new key |
 | `screensaver_minutes` | `10` (0–1440) | Idle minutes before the screensaver. `0` turns it off. The editor offers Off, 1, 5, 10, 15, 30, 60 and Custom; any 0–1440 value from YAML still loads |
 | `browse_limit` | `60` (1–500) | Items per Browse page (infinite scroll pages by `offset`) |
 | `queue_limit` | `200` (1–1000) | Upcoming items requested from `get_queue_items` (`limit_after`); out-of-range values are clamped |
@@ -315,36 +339,30 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 
 The visual editor covers entity, config entry, rooms (an entity list that keeps existing names), favorite entity and mass_queue entry; a **Display** section (screensaver presets Off / 1 / 5 / 10 / 15 / 30 / 60 min plus Custom, screensaver lyrics, default tab, backdrop, accent); a **Lyrics** section (lyrics, Lyrics tab, long-press seek, offset); and an Advanced section (browse limit and the rest). Options you leave at their defaults are not written to YAML, and existing 0.3.x configs load unchanged.
 
+
 ## Troubleshooting
 
-- **Custom fonts do not load after a HACS install.** HACS puts every release asset in `/config/www/community/ha-jukebox-kiosk-card/`, including `jukebox-card-fonts.zip`, and does not unzip it. Unzip that archive into a `fonts/` folder next to `jukebox-card.js`, or set `font_base` to the folder that holds the woff2 files. With neither, the card uses system fonts.
-- **The Queue tab says "Queue unavailable".** [mass_queue](https://github.com/droans/mass_queue) is not installed, or the player entity is not a Music Assistant player.
-- **Lyrics say "Lyrics unavailable", or album and artist pages say "matched by search".** Set `mass_queue_entry_id` to the mass_queue config entry (not the Music Assistant one). A permission note means this Home Assistant user may not be allowed to run `mass_queue.send_command`. Playlist pages need the same entry to list tracks. Play and Shuffle still work without it.
-- **The Speakers panel will not group or move playback, and the queue row icons are missing.** Dynamic mode and those icons need `mass_queue_entry_id`. Fixed mode is a volume mixer and still works without it. `grouping` only hides controls in this card; it is not a security boundary.
-- **No album art.** The card does not load the player's absolute `entity_picture` (`http://<ma-host>:8095/imageproxy`), because that is mixed content on an https dashboard. It uses `entity_picture_local`, then a relative `entity_picture`, then an https queue image.
-- **Typing or volume drags stutter on a kiosk tablet.** Set `backdrop` to `light`, `static` or `off`. `auto` already chooses `light` when `navigator.hardwareConcurrency` is 4 or less, `navigator.deviceMemory` is 2 or less, or the browser asks for reduced motion. The resolved mode is on the element: `data-backdrop` and `data-backdrop-why`.
-- **A manual install still shows the old card.** Change the `?v=` on the resource URL so the browser and Fully Kiosk fetch the new file. The HACS `/hacsfiles/` URL is not cached that way.
-- **The card is taller or shorter than the space under the toolbar.** By default it measures from its top edge to the bottom of the window (minimum 320 px). Set `height` (for example `700px`) to override that. Full screen and kiosk mode with the toolbar hidden still fill the screen.
+- **The card says "Custom element doesn't exist: jukebox-card".** Make sure Jukebox Kiosk is set up (not only installed), then reload the browser. Fully Kiosk may need **Clear cache**.
+- **The card loads twice, or shows the old version.** An old `/hacsfiles/ha-jukebox-kiosk-card/` resource is still there. See the Repairs issue, or delete it under **Settings → Dashboards → Resources**.
+- **Queue icons, the heart or grouping are missing for one user.** That user is a guest without the matching class (see [Permissions](#permissions)).
+- **Lyrics say "Lyrics unavailable".** Music Assistant has no lyrics provider enabled, or the user lacks `read`. Music Assistant won't fetch lyrics for library tracks, so the card asks for the provider copy of the track.
+- **No album art.** The card never loads the player's absolute `entity_picture` (mixed content on https). It uses `entity_picture_local`, then a relative `entity_picture`, then an https queue image.
+- **Typing or volume drags stutter on a kiosk tablet.** Set `backdrop` to `light`, `static` or `off`.
+- *(legacy)* **On `backend: mass_queue` the Queue tab says "Queue unavailable".** mass_queue isn't installed, or `mass_queue_entry_id` is wrong. It must be the mass_queue entry, not the Music Assistant one.
 
 ## License
 
 [MIT License](LICENSE). Copyright (c) 2026 Randy Bell.
 
-The bundled fonts (Inter and Plus Jakarta Sans) are not under that MIT license. They are SIL Open Font License 1.1. Each family's `LICENSE-*.txt` ships next to the font files, in `jukebox-card-fonts.zip` and in `fonts/` after you unzip it. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists the bundled packages and the fonts with their full license texts.
+The bundled fonts (Inter and Plus Jakarta Sans) are SIL Open Font License 1.1, not MIT. Their `LICENSE-*.txt` files ship in `custom_components/jukebox_kiosk/www/fonts/`. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists everything bundled, with full license texts.
 
 ### Credits
 
-This card is a front end; the real work is done by these projects:
-
-- **[mass_queue](https://github.com/droans/mass_queue)** (Music Assistant Queue Actions) by [droans](https://github.com/droans), MIT: the queue, the album, artist and playlist track lists, and the lyrics lookups all go through its actions.
-- **[Music Assistant](https://music-assistant.io)** ([GitHub](https://github.com/music-assistant)): the music library, players, search and metadata, through the official [Home Assistant integration](https://www.home-assistant.io/integrations/music_assistant/).
-- **[Home Assistant](https://www.home-assistant.io)**: the dashboard the card runs in.
-- **Lyrics**: [LRCLIB](https://lrclib.net) and [Genius](https://genius.com) are lyrics providers in Music Assistant ([metadata providers](https://www.music-assistant.io/metadata/)). Music Assistant fetches the lyrics; the card never contacts LRCLIB or Genius, and only displays what Music Assistant returns. Lyrics remain the copyright of their owners.
-- **[Lit](https://lit.dev)** ([GitHub](https://github.com/lit/lit)) by Google LLC, BSD-3-Clause: bundled into `jukebox-card.js`.
-- **Fonts** (SIL Open Font License 1.1), self-hosted from the [Fontsource](https://fontsource.org) packages:
-  - [Inter](https://rsms.me/inter/) by Rasmus Andersson and The Inter Project Authors ([GitHub](https://github.com/rsms/inter));
-  - [Plus Jakarta Sans](https://github.com/tokotype/PlusJakartaSans) by Gumpita Rahayu (Tokotype) and The Plus Jakarta Sans Project Authors.
-
-**Third-party notices.** [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) lists every package bundled into `jukebox-card.js` and every shipped font, with its version, license and full license text. It ships with every release, both as a release asset and inside `jukebox-card-fonts.zip`, and the minified bundle keeps Lit's license comments. `npm run build` regenerates it.
+- **[Music Assistant](https://music-assistant.io)** ([GitHub](https://github.com/music-assistant)) does the real work: library, players, search, queue and metadata. Jukebox Kiosk talks to it through the official [Home Assistant integration](https://www.home-assistant.io/integrations/music_assistant/) and [music-assistant-client](https://github.com/music-assistant/client).
+- **[Home Assistant](https://www.home-assistant.io)**: the platform and dashboard.
+- **Lyrics**: [LRCLIB](https://lrclib.net) (and optionally [Genius](https://genius.com)) are Music Assistant metadata providers. Music Assistant fetches the lyrics, and neither the integration nor the card contacts them. Lyrics remain the copyright of their owners.
+- **Inspiration**: [mass_queue](https://github.com/droans/mass_queue) (Music Assistant Queue Actions) by [droans](https://github.com/droans), which powered the card up to 0.5.x and shaped this API, and **Kiosk MA Cards**. No code from either is included.
+- **[Lit](https://lit.dev)** by Google LLC, BSD-3-Clause, is bundled into `jukebox-card.js`.
+- **Fonts** (OFL-1.1, via [Fontsource](https://fontsource.org)): [Inter](https://rsms.me/inter/) by Rasmus Andersson and The Inter Project Authors, and [Plus Jakarta Sans](https://github.com/tokotype/PlusJakartaSans) by Tokotype and The Plus Jakarta Sans Project Authors.
 
 This project is not affiliated with or endorsed by Music Assistant, Home Assistant, WiiM, Apple or Genius. All trademarks belong to their owners.
