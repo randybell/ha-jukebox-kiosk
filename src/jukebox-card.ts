@@ -19,6 +19,7 @@ import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type 
 import type { HomeAssistant, JukeboxCardConfig, TabId } from './types';
 import { pickBackend, createBackend, backendKey, type MaBackend } from './backend';
 import { defineElement } from './define';
+import { libraryTabLabel } from './library-home';
 
 export const VERSION = '0.6.0';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
@@ -276,7 +277,7 @@ export class JukeboxCard extends LitElement {
   /** visible tabs: Lyrics only when lyrics are on and its tab is not turned off */
   private tabs() {
     const c = this._config, caps = this.backend?.caps;
-    return TABS.filter((t) => t.id !== 'lyrics' || (c?.show_lyrics !== false && c?.lyrics_tab !== false
+    return TABS.map((t) => (t.id === 'browse' ? { ...t, label: libraryTabLabel(c) } : t)).filter((t) => t.id !== 'lyrics' || (c?.show_lyrics !== false && c?.lyrics_tab !== false
       // kiosk: hidden when the server says this user may not read lyrics; other backends keep the tab and its setup hint
       && !(this.backend?.kind === 'kiosk' && caps && !caps.lyrics)));
   }
@@ -473,7 +474,12 @@ export class JukeboxCard extends LitElement {
     this._tab = ids[i]; this._spk = false;
     this.updateComplete.then(() => (this.renderRoot.querySelector(`.tab[data-tab="${ids[i]}"]`) as HTMLElement | null)?.focus());
   };
-  private onNav = (e: CustomEvent) => { const t = e.detail?.tab; if (this.tabs().some((x) => x.id === t)) this._tab = t; };
+  private onNav = (e: CustomEvent) => {
+    const t = e.detail?.tab; if (!this.tabs().some((x) => x.id === t)) return;
+    this._tab = t;
+    // v0.7 Library home: the Search tile (and Genres) open Search ready to type, optionally on a category chip
+    if (t === 'search' && e.detail?.focus) this.updateComplete.then(() => (this.renderRoot.querySelector('jb-search') as any)?.focusSearch?.(e.detail?.category));
+  };
 
   // ---------- Stage (full-screen art + lyrics) ----------
   private onStage = (e: CustomEvent) => { if (e.detail?.open === false) this.closeStage(); else this.openStage(); };
@@ -659,7 +665,7 @@ export class JukeboxCard extends LitElement {
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
           ${tabs.map((t) => html`<button class="tab ${this._tab === t.id ? 'active' : ''}" role="tab" tabindex=${this._tab === t.id ? '0' : '-1'} data-tab=${t.id}
               aria-selected=${this._tab === t.id ? 'true' : 'false'}
-              @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
+              @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { if (t.id === 'browse' && this._tab === 'browse') (this.renderRoot.querySelector('jb-browse') as any)?.goHome?.(); this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
                 ? html`<em class="badge">${this._qcount > 99 ? '99+' : this._qcount}</em>` : nothing}</button>`)}
         </nav>
         ${this._stage ? this.renderStage() : nothing}

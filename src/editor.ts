@@ -4,6 +4,7 @@ import { defineElement } from './define';
 import { CATEGORIES, DEFAULT_CATEGORIES } from './search-categories';
 import { LIBRARY_ROWS, DEFAULT_ROWS, rowName } from './discover';
 import { RADIO_MODES, MODE_LABEL } from './radio-browse';
+import { TILES, configuredTiles } from './library-home';
 
 /**
  * Visual editor built on HA's <ha-form>. YAML remains the reference (see README).
@@ -96,6 +97,16 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
         { name: 'discover', selector: { select: { multiple: true, reorder: true, mode: 'list', custom_value: true, options: discoverOptions(c.discover) } } },
         { name: 'radio_browse', selector: { select: { multiple: true, reorder: true, mode: 'list', options: RADIO_MODES.map((m) => ({ value: m, label: MODE_LABEL[m] })) } } },
         { name: 'radio_country', selector: { text: {} } },
+        { name: 'radio_favorites_only', selector: { boolean: {} } },
+      ],
+    },
+    {
+      // v0.7 Library home (default off). Tile labels set in YAML ({tile, label}) are kept when the list is edited here.
+      type: 'expandable', name: 'library', title: 'Library', icon: 'mdi:view-grid-outline', flatten: true,
+      schema: [
+        { name: 'library_home', selector: { boolean: {} } },
+        { name: 'library_tiles', selector: { select: { multiple: true, reorder: true, mode: 'list', options: TILES.map((t) => ({ value: t.id, label: t.optIn ? `${t.label} (optional)` : t.label })) } } },
+        { name: 'library_label', selector: { text: {} } },
       ],
     },
   ];
@@ -136,13 +147,17 @@ export const LABELS: Record<string, string> = {
   discover: 'Discover rows on Browse (none = off; needs the Jukebox Kiosk backend)',
   radio_browse: 'Radio: "Stations by" (none = off; Radio Browser provider)',
   radio_country: 'Radio country code (e.g. us; empty = Home Assistant\'s country)',
+  radio_favorites_only: 'Radio: show favourite stations only (otherwise favourites first, then other library stations)',
+  library_home: 'Library home: the Browse tab becomes "Library" with big shortcut tiles',
+  library_tiles: 'Library tiles (in this order; Search opens the Search tab)',
+  library_label: 'Library tab name (empty = Library)',
 };
 const QUIET_KEYS = ['quiet_start', 'quiet_end', 'quiet_max', 'quiet_applies'] as const;
 const hhmm = (t: unknown) => (typeof t === 'string' ? t.slice(0, 5) : undefined);
 /** defaults shown for unset options, never written back unless the user changes them */
 const SHOWN_DEFAULTS = {
   show_lyrics: true, lyrics_tab: true, screensaver_lyrics: true, lyrics_seek: true, show_autoplay: false,
-  large_buttons: false, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'block',
+  large_buttons: false, radio_favorites_only: false, library_home: false, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'block',
 };
 const roomEntity = (r: RoomConfig | string) => (typeof r === 'string' ? r : r.entity);
 
@@ -202,6 +217,17 @@ export class JukeboxCardEditor extends LitElement {
       if (!Array.isArray(v.radio_browse) || !v.radio_browse.length) delete v.radio_browse;
       else if (prevC?.radio_browse === true && sameList(v.radio_browse, RADIO_MODES)) v.radio_browse = true;
     }
+    if ('library_tiles' in v) {
+      // ids from the form; entries that had a YAML label keep it; the shown defaults are not written back
+      const prevL = new Map((Array.isArray(prevC?.library_tiles) ? prevC.library_tiles : []).filter((x: any) => x && typeof x === 'object').map((x: any) => [x.tile, x] as const));
+      if (!Array.isArray(v.library_tiles) || !v.library_tiles.length) delete v.library_tiles;
+      else {
+        const ids = [...new Set((v.library_tiles as string[]).map(String))];
+        if (prevC?.library_tiles === undefined && sameList(ids, configuredTiles(prevC ?? {}).map((t) => t.id))) delete v.library_tiles;
+        else v.library_tiles = ids.map((id) => prevL.get(id) ?? id);
+      }
+    }
+    if (v.library_label !== undefined && !String(v.library_label ?? '').trim()) delete v.library_label;
     // kept while typing; the card ignores anything but two letters (then HA's country is used)
     if (v.radio_country !== undefined) { const cc = String(v.radio_country ?? '').trim(); if (!cc) delete v.radio_country; else v.radio_country = /^[a-z]{2}$/i.test(cc) ? cc.toLowerCase() : cc; }
     if (v.lyrics_offset_ms !== undefined) {
@@ -228,6 +254,7 @@ export class JukeboxCardEditor extends LitElement {
     out.search_categories = Array.isArray(c.search_categories) ? c.search_categories : [...DEFAULT_CATEGORIES];
     out.search_default_category = c.search_default_category ?? 'all';
     out.discover = c.discover === true ? [...DEFAULT_ROWS] : Array.isArray(c.discover) ? c.discover : [];
+    out.library_tiles = configuredTiles(c).map((t) => t.id);
     out.radio_browse = c.radio_browse === true ? [...RADIO_MODES] : Array.isArray(c.radio_browse) ? c.radio_browse : [];
     return out;
   }

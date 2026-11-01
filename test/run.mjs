@@ -640,16 +640,40 @@ await page.keyboard.press('Escape');
   check('16p no request ever goes to the absolute LAN entity_picture host', !pg.__img.some((u) => u.includes('192.168.')), pg.__img.filter((u) => u.includes('192.168.')).join(','));
 
   // 16q-w: radio
+  // 0.6.1: Radio never lists a keyword search; an empty library shows a hint with a Search shortcut
   await open(pg, '&latency=20&tab=browse&radio=1');
   await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});
   n = await ncalls(pg);
   await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="radio"]')`); await sleep(700);
   cs = await pcalls(n);
-  let g = await pg.evaluate((b) => { const r = eval(b).shadowRoot; return { src: r.querySelector('.grid')?.dataset.src, note: !!r.querySelector('.note.src'), sort: r.querySelector('[data-action="sort"], .sort')?.textContent?.trim() ?? '',
-    tiles: [...r.querySelectorAll('.tile')].map((t) => ({ name: t.querySelector('b').textContent, pv: t.querySelector('.pv')?.textContent.trim(), img: t.querySelector('img')?.getAttribute('src') ?? '', uri: t.dataset.uri })) }; }, BR);
-  const libCalls = cs.filter((c) => c.s === 'get_library' && c.data.media_type === 'radio'), srch = cs.filter((c) => c.s === 'search');
-  check('16q Browse > Radio shown when only search has stations (probe falls back to search)', g.tiles.length >= 10, `tiles=${g.tiles.length}`);
-  check('16r empty library radio (Popular, then A–Z) → music_assistant.search media_type [radio] fallback', libCalls.length >= 1 && libCalls[0].data.order_by === 'play_count_desc' && srch.some((c) => [c.data.media_type].flat().join() === 'radio' && c.rr) && g.src === 'search' && g.note, `${libCalls.map((c) => c.data.order_by)} ${JSON.stringify(srch[0]?.data)} src=${g.src}`);
+  let g = await pg.evaluate((b) => { const r = eval(b).shadowRoot; return { tiles: r.querySelectorAll('.tile').length, hint: !!r.querySelector('.empty[data-empty="stations"]'), btn: !!r.querySelector('[data-act="search-stations"]'), note: !!r.querySelector('.note.src') }; }, BR);
+  let libCalls = cs.filter((c) => c.s === 'get_library' && c.data.media_type === 'radio'), srch = cs.filter((c) => c.s === 'search');
+  check('16q Browse > Radio still shown when only search has stations (probe)', !!(await pg.evaluate((b) => eval(b).shadowRoot.querySelector('[data-cat="radio"]'), BR)));
+  check('16r empty library radio → "No stations yet" hint + Search shortcut, no music_assistant.search, no junk grid', g.tiles === 0 && g.hint && g.btn && !g.note && srch.length === 0
+    && libCalls[0]?.data.order_by === 'play_count_desc' && libCalls.some((c) => c.data.favorite === true), `${JSON.stringify(g)} ${libCalls.map((c) => c.data.order_by + (c.data.favorite ? '+fav' : ''))} search=${srch.length}`);
+  await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-act="search-stations"]')`); await sleep(300);
+  check('16r2 "Search stations" opens the Search tab', await pg.evaluate(() => __card.shadowRoot.querySelector('.tab.active')?.dataset.tab === 'search'));
+  // favourites first, then the other library stations (a provider may sync followed stations into the library without favorite)
+  await open(pg, '&latency=20&tab=browse&radio=lib&radiofav=3');
+  await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});
+  await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="radio"]')`); await sleep(700);
+  g = await pg.evaluate((b) => { const r = eval(b).shadowRoot; const names = (s) => [...r.querySelectorAll(`.grid[data-src="${s}"] .tile b`)].map((x) => x.textContent);
+    return { secs: [...r.querySelectorAll('.sec')].map((x) => x.dataset.sec), fav: names('favorites'), more: names('library') }; }, BR);
+  check('16r3 My stations: Favorites section first (3), then More stations without repeats', g.secs.join() === 'favorites,more' && g.fav.length === 3 && g.more.length > 0 && !g.more.some((x) => g.fav.includes(x)), JSON.stringify({ secs: g.secs, fav: g.fav, more: g.more.length }));
+  await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="favorites"]')`); await sleep(500);
+  g = await pg.evaluate((b) => ({ secs: eval(b).shadowRoot.querySelectorAll('.sec').length, tiles: eval(b).shadowRoot.querySelectorAll('.tile').length }), BR);
+  check('16r4 Favorites chip on → favourites only', g.secs === 0 && g.tiles === 3, JSON.stringify(g));
+  // radio_favorites_only (v0.7, default false): My stations lists favourites only
+  await open(pg, '&latency=20&tab=browse&radio=lib&radiofav=3&cfg=' + encodeURIComponent(JSON.stringify({ radio_favorites_only: true })));
+  await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});
+  await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="radio"]')`); await sleep(700);
+  g = await pg.evaluate((b) => { const r = eval(b).shadowRoot; return { secs: [...r.querySelectorAll('.sec')].map((x) => x.dataset.sec), tiles: r.querySelectorAll('.tile').length }; }, BR);
+  check('16r5 radio_favorites_only: My stations = the 3 favourites, no "More stations"', !g.secs.includes('more') && g.tiles === 3, JSON.stringify(g));
+  // the station tile checks below run on library stations
+  await open(pg, '&latency=20&tab=browse&radio=lib');
+  await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});
+  await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="radio"]')`); await sleep(700);
+  g = await pg.evaluate((b) => { const r = eval(b).shadowRoot; return { tiles: [...r.querySelectorAll('.tile')].map((t) => ({ name: t.querySelector('b').textContent, pv: t.querySelector('.pv')?.textContent.trim(), img: t.querySelector('img')?.getAttribute('src') ?? '', uri: t.dataset.uri })) }; }, BR);
   check('16s station names trimmed (leading tabs/spaces), badged "Radio"', g.tiles.every((t) => t.name === t.name.trim() && !/\t/.test(t.name) && t.pv === 'Radio') && g.tiles.some((t) => t.name === 'Arrow Classic Rock') && g.tiles.some((t) => t.name === 'ROCKANTENNE Alternative (mp3)'), g.tiles.map((t) => JSON.stringify(t.name)).join(','));
   const hr = g.tiles.find((t) => t.name === 'Hard Rock Radio FM');
   await sleep(500);
@@ -661,7 +685,7 @@ await page.keyboard.press('Escape');
   const stSheet = await pg.evaluate((b) => [...eval(b).shadowRoot.querySelectorAll('.menu .mi')].map((e) => e.dataset.action), BR);
   check('16zc tap a station → sheet with Play now + Cancel only, nothing played yet', pr.length === 0 && stSheet.join() === 'play,cancel', `${stSheet} calls=${pr.length}`);
   pr = await pq(() => clickEl(pg, `${BR}.shadowRoot.querySelector('.menu .mi[data-action="play"]')`));
-  check('16u station Play now → play_media {radiobrowser://radio/<uuid>, media_type radio} on everywhere, no radio_mode', pr.length === 1 && pr[0].s === 'play_media' && tgt(pr[0]) === EV && /^radiobrowser:\/\/radio\/[0-9a-f-]{36}$/.test(pr[0].data.media_id) && pr[0].data.media_type === 'radio' && !('radio_mode' in pr[0].data), JSON.stringify(pr));
+  check('16u station Play now → play_media {library://radio/<id>, media_type radio} on everywhere, no radio_mode', pr.length === 1 && pr[0].s === 'play_media' && tgt(pr[0]) === EV && /^library:\/\/radio\/\w+$/.test(pr[0].data.media_id) && pr[0].data.media_type === 'radio' && !('radio_mode' in pr[0].data), JSON.stringify(pr));
   await pg.evaluate(() => { __card.shadowRoot.querySelector('[data-tab="now"]').click(); }); await sleep(500);
   a = await artState();
   check('16v Now Playing shows the station (title trimmed) with its art', /Arrow Classic Rock/.test(await pg.evaluate(() => __card.shadowRoot.querySelector('jb-now').shadowRoot.textContent)) && !!a.now, a.now.slice(0, 40));

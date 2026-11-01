@@ -252,6 +252,58 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
     && !(await ev(c, `!!${NV}.querySelector('.tb[aria-label*="Autoplay"]')`)), String(await ev(c, `${NV}.querySelector('.upn')?.textContent?.replace(/\\s+/g, ' ')`)));
   await c.close();
 }
+// ---------------- 7. Library home prototype, flag library_home ----------------
+{
+  const p = await open('&tab=browse');
+  await wait(p, `${BR}.querySelectorAll('.tile').length > 0`);
+  check('LH1 flag off: tab says Browse, chip row, no tile grid', (await ev(p, `__card.shadowRoot.querySelector('.tab[data-tab="browse"] span').textContent`)) === 'Browse'
+    && !(await ev(p, `!!${BR}.querySelector('.home')`)) && (await ev(p, `${BR}.querySelectorAll('.cats .fc').length`)) > 0);
+  await p.close();
+  const LH = { library_home: true };
+  const q = await open('&tab=browse', LH);
+  await wait(q, `${BR}.querySelectorAll('.lt').length > 0`);
+  const tiles = await ev(q, `[...${BR}.querySelectorAll('.lt')].map((b) => b.dataset.tile)`);
+  check('LH2 on: tab "Library", grid of Playlists/Artists/Albums/Radio/Search, no chip row', (await ev(q, `__card.shadowRoot.querySelector('.tab[data-tab="browse"] span').textContent`)) === 'Library'
+    && J(tiles) === J(['playlist', 'artist', 'album', 'radio', 'search']) && !(await ev(q, `!!${BR}.querySelector('.cats .fc[data-cat]')`)), J(tiles));
+  const sz = await ev(q, `(() => { const b = ${BR}.querySelector('.lt').getBoundingClientRect(); return [b.width, b.height]; })()`);
+  check('LH3 tiles are big touch targets (≥ 160 px tall)', sz[0] >= 200 && sz[1] >= 160, J(sz));
+  await tap(q, `${BR}.querySelector('.lt[data-tile="album"]')`);
+  await wait(q, `${BR}.querySelectorAll('.tile').length > 0`);
+  check('LH4 a tile opens its list with a back button and its title', (await ev(q, `${BR}.querySelector('.lt-title')?.textContent`)) === 'Albums'
+    && (await ev(q, `!!${BR}.querySelector('[data-act="home"]')`)) && !(await ev(q, `!!${BR}.querySelector('.home')`)));
+  await tap(q, `${BR}.querySelector('[data-act="home"]')`);
+  check('LH5 back returns to the grid', await wait(q, `!!${BR}.querySelector('.home')`));
+  await tap(q, `${BR}.querySelector('.lt[data-tile="artist"]')`);
+  await wait(q, `!!${BR}.querySelector('[data-act="home"]')`);
+  await tap(q, `__card.shadowRoot.querySelector('.tab[data-tab="browse"]')`);
+  check('LH6 tapping the Library tab again goes back to the grid', await wait(q, `!!${BR}.querySelector('.home')`));
+  await tap(q, `${BR}.querySelector('.lt[data-tile="radio"]')`);
+  const empty = await wait(q, `/No stations yet/.test(${BR}.querySelector('.empty')?.textContent ?? '')`);
+  check('LH7 Radio tile opens My stations (empty library → the favourites hint, no search fallback)', empty && (await maOf(q, 'music/search')).length === 0);
+  await tap(q, `${BR}.querySelector('[data-act="home"]')`);
+  await tap(q, `${BR}.querySelector('.lt[data-tile="search"]')`);
+  check('LH8 Search tile opens the Search tab with the keyboard up', (await wait(q, `__card.shadowRoot.querySelector('.tab.active')?.dataset.tab === 'search'`))
+    && !(await ev(q, `${SV}.querySelector('.sx').classList.contains('kb-hidden')`)));
+  await q.close();
+  const r = await open('&tab=browse', { ...LH, library_label: 'Music', search_categories: ALL.search_categories, discover: true,
+    library_tiles: ['discover', { tile: 'playlist', label: 'Mixes' }, 'genre', 'podcast', 'search'] });
+  await wait(r, `${BR}.querySelectorAll('.lt').length > 0`);
+  const t2 = await ev(r, `[...${BR}.querySelectorAll('.lt')].map((b) => b.dataset.tile + ':' + b.querySelector('.ltl').textContent)`);
+  check('LH9 configured order, custom labels, custom tab name; Discover is a tile, not a takeover', J(t2) === J(['discover:Discover', 'playlist:Mixes', 'genre:Genres', 'podcast:Podcasts', 'search:Search'])
+    && (await ev(r, `__card.shadowRoot.querySelector('.tab[data-tab="browse"] span').textContent`)) === 'Music', J(t2));
+  await tap(r, `${BR}.querySelector('.lt[data-tile="discover"]')`);
+  check('LH10 Discover tile opens the Discover rows', await wait(r, `${BR}.querySelectorAll('.drow, [data-row]').length > 0`));
+  await tap(r, `${BR}.querySelector('[data-act="home"]')`);
+  await tap(r, `${BR}.querySelector('.lt[data-tile="genre"]')`);
+  check('LH11 Genres tile opens Search on the Genres category', await wait(r, `__card.shadowRoot.querySelector('.tab.active')?.dataset.tab === 'search'`)
+    && (await wait(r, `${SV}.querySelector('.cats .fc.on')?.dataset.cat === 'genres'`)));
+  await r.close();
+  const g = await open('&tab=browse&nolib=1', { ...LH, library_tiles: ['playlist', 'artist', 'album', 'radio', 'track', 'search'] });
+  await wait(g, `${BR}.querySelectorAll('.lt').length > 0 && [...${BR}.querySelectorAll('.lt')].length < 3`, 4000);
+  const gt = await ev(g, `[...${BR}.querySelectorAll('.lt')].map((b) => b.dataset.tile)`);
+  check('LH12 guest without library reads: only the Search tile', J(gt) === J(['search']), J(gt));
+  await g.close();
+}
 check('no page errors', pageErrors.length === 0, J(pageErrors.slice(0, 3)));
 await browser.close();
 console.log(`\n${total - failures}/${total} v0.7 checks passed`);

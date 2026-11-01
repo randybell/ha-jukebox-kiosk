@@ -128,6 +128,14 @@ export interface JukeboxCardConfig {
   radio_country?: string;
   /** v0.7 (default off): a Discover category first in Browse with these recommendation rows, in this order. true = the default rows. */
   discover?: boolean | string[];
+  /** v0.7 (default false): Browse › Radio "My stations" lists favourite stations only (otherwise favourites first, then the other library stations). */
+  radio_favorites_only?: boolean;
+  /** v0.7 (default off): the Browse tab becomes "Library" and opens on a grid of shortcut tiles. */
+  library_home?: boolean;
+  /** v0.7: Library tiles in order; an id or {tile, label}. Unset = playlist, artist, album, radio, search (+ discover when `discover` is set). */
+  library_tiles?: Array<LibraryTileId | { tile: LibraryTileId; label?: string }>;
+  /** v0.7: the Library tab's name with `library_home` (default "Library"). */
+  library_label?: string;
   /** Clock and title */
   title?: string;
   /** fixed (default): always play on `entity`, the Speakers panel is a volume mixer. dynamic: pick the target, group and move. */
@@ -176,3 +184,5 @@ export type GroupKey = 'artists' | 'albums' | 'tracks' | 'playlists' | 'radio' |
 export type SearchCategory = 'tracks' | 'artists' | 'albums' | 'playlists' | 'radio' | 'podcasts' | 'audiobooks' | 'genres';
 export type RadioBrowseMode = 'popular' | 'country' | 'language' | 'tag';
 export type SearchResults = Partial<Record<GroupKey, MaItem[]>>;
+/** v0.7 Library home tile ids */
+export type LibraryTileId = 'playlist' | 'artist' | 'album' | 'radio' | 'search' | 'track' | 'podcast' | 'audiobook' | 'genre' | 'discover';

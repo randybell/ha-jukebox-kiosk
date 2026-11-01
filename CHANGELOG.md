@@ -2,6 +2,11 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
+## 0.6.1 — unreleased
+
+### Fixed
+- **Browse > Radio no longer lists keyword-search junk.** 0.6.0 fell back to `music_assistant.search` for the word "radio" when the library had no stations, which filled the grid with unrelated stations. Radio now shows **My stations**: favourite stations first, then the other stations in your Music Assistant library under **More stations**. Stations a provider adds to the library without marking them favourite still appear. With no library stations, Radio shows "No stations yet" and a **Search stations** button that opens Search.
+
 ## 0.6.0 — 2026-11-01
 
 The card moves into a Home Assistant integration, **Jukebox Kiosk** (`jukebox_kiosk`), and no longer needs mass_queue. The repository becomes `randybell/ha-jukebox-kiosk` (HACS category integration).

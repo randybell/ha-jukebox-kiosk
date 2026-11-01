@@ -9,7 +9,7 @@ const OUT = new URL('../tmp/unit-v070/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const bundle = await rollup({
   onwarn: (w, def) => { if (w.code !== 'THIS_IS_UNDEFINED') def(w); },
-  input: ['src/search-categories.ts', 'src/genres.ts', 'src/radio-browse.ts', 'src/discover.ts', 'src/backend/index.ts', 'src/editor.ts'],
+  input: ['src/search-categories.ts', 'src/genres.ts', 'src/radio-browse.ts', 'src/discover.ts', 'src/backend/index.ts', 'src/editor.ts', 'src/library-home.ts'],
   plugins: [resolve({ exportConditions: ['node'] }), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })],
 });
 await bundle.write({ dir: OUT, format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name]-[hash].mjs' });
@@ -28,6 +28,7 @@ const B = await import(OUT + 'index.mjs');
 // src/define.ts registers through window.customElements; in node, lit's DOM shim puts customElements on globalThis
 globalThis.window ??= globalThis;
 const Ed = await import(OUT + 'editor.mjs');
+const L = await import(OUT + 'library-home.mjs');
 
 let failures = 0, total = 0;
 function check(name, ok, info = '') { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); }
@@ -197,6 +198,41 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
   check('A6 mass_queue / native backends never offer autoplay', mq.ext.autoplay === false && typeof mq.setAutoplay !== 'function');
   check('A7 editor: show_autoplay listed, labelled, default off',
     Ed.editorSchema({}).flatMap((x) => x.schema ?? [x]).some((x) => x.name === 'show_autoplay') && /Autoplay/.test(Ed.LABELS.show_autoplay ?? ''));
+}
+
+// ---------------- v0.7 Library home + radio_favorites_only ----------------
+{
+  const ids = (c) => L.configuredTiles(c).map((t) => t.id);
+  check('LH1 off by default: tab stays "Browse"', !L.libraryHomeOn({}) && L.libraryTabLabel({}) === 'Browse' && L.libraryTabLabel({ library_label: 'Music' }) === 'Browse');
+  check('LH2 on: "Library", or library_label', L.libraryTabLabel({ library_home: true }) === 'Library' && L.libraryTabLabel({ library_home: true, library_label: ' Music ' }) === 'Music'
+    && L.libraryTabLabel({ library_home: true, library_label: '  ' }) === 'Library');
+  check('LH3 default tiles: Playlists, Artists, Albums, Radio, Search (optional ones hidden)', J(ids({})) === J(['playlist', 'artist', 'album', 'radio', 'search']));
+  check('LH4 migration: a 0.7 discover list adds the Discover tile', J(ids({ discover: true })) === J(['playlist', 'artist', 'album', 'radio', 'search', 'discover'])
+    && J(ids({ discover: [] })) === J(ids({})));
+  const t5 = L.configuredTiles({ library_tiles: ['radio', { tile: 'playlist', label: 'Mixes' }, 'bogus', 'radio', { tile: 'nope' }, 'genre'] });
+  check('LH5 configured order + labels kept; unknown and repeated tiles dropped', J(t5) === J([{ id: 'radio', label: 'Radio' }, { id: 'playlist', label: 'Mixes' }, { id: 'genre', label: 'Genres' }]), J(t5));
+  const all = { library_tiles: L.TILE_IDS };
+  const guest = L.visibleTiles(all, { playlist: false, artist: false, album: false, track: false, radio: false, podcast: false, audiobook: false }, { genres: false, discover: false }).map((t) => t.id);
+  check('LH6 guest without library reads: only Search is left', J(guest) === J(['search']), J(guest));
+  const v7 = L.visibleTiles(all, { playlist: true, artist: null, album: true, track: true, radio: false, podcast: false, audiobook: true }, { genres: true, discover: true }, true).map((t) => t.id);
+  check('LH7 still-probing shown; empty types hidden; Radio kept by Stations by…; Genres/Discover follow the backend',
+    J(v7) === J(['playlist', 'artist', 'album', 'radio', 'search', 'track', 'audiobook', 'genre', 'discover']), J(v7));
+  check('LH8 every tile has an icon that exists', L.TILES.every((t) => typeof t.icon === 'string' && t.icon.length));
+  const names = Ed.editorSchema({}).flatMap((x) => x.schema ?? [x]).map((x) => x.name);
+  check('LH9 editor: library_home / library_tiles / library_label / radio_favorites_only listed and labelled',
+    ['library_home', 'library_tiles', 'library_label', 'radio_favorites_only'].every((n) => names.includes(n) && Ed.LABELS[n]));
+  const ed = (cfg) => { const e = new Ed.JukeboxCardEditor(); e.setConfig(cfg); return e; };
+  const base = { type: 'custom:jukebox-card', entity: 'media_player.placeholder', config_entry_id: 'PLACEHOLDER' };
+  const e1 = ed(base), f1 = e1.formData();
+  check('LH10 editor shows the default tiles and writes nothing until changed; flags default off',
+    J(f1.library_tiles) === J(['playlist', 'artist', 'album', 'radio', 'search']) && !('library_tiles' in e1.toConfig(f1))
+    && f1.library_home === false && f1.radio_favorites_only === false, J(f1.library_tiles));
+  const c11 = e1.toConfig({ ...f1, library_tiles: ['radio', 'search', 'radio'] });
+  check('LH11 reorder / hide writes the id list (deduped)', J(c11.library_tiles) === J(['radio', 'search']), J(c11.library_tiles));
+  const e12 = ed({ ...base, library_tiles: [{ tile: 'playlist', label: 'Mixes' }, 'radio'] });
+  const c12 = e12.toConfig({ ...e12.formData(), library_tiles: ['radio', 'playlist', 'podcast'] });
+  check('LH12 YAML labels survive editing in the visual editor', J(c12.library_tiles) === J(['radio', { tile: 'playlist', label: 'Mixes' }, 'podcast']), J(c12.library_tiles));
+  check('LH13 empty label removed; empty tile list removed', !('library_label' in e1.toConfig({ ...f1, library_label: ' ' })) && !('library_tiles' in e1.toConfig({ ...f1, library_tiles: [] })));
 }
 
 console.log(`\n${total - failures}/${total} v0.7 unit checks passed`);

@@ -372,6 +372,11 @@ export class JbSearch extends LitElement {
     return menuTpl(m.pos, { item: m.item, sub: this.sub(m.item, m.group) || providerLabel(m.item.uri) }, m.actions, () => this.closeMenu());
   }
 
+  /** v0.7 Library home: open ready to type (on-screen keyboard shown), optionally on a category chip such as genre. */
+  focusSearch(cat?: string) {
+    this._kbHidden = false;
+    if (cat && GROUPS.some((g) => g.key === cat) && (!this._cats || this._cats.includes(cat as SearchCategory))) this._filter = cat as GroupKey;
+  }
   render() {
     const r = this._results;
     const count = r ? this.count(r) : 0;
