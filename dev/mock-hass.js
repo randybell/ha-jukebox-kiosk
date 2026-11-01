@@ -30,6 +30,7 @@
 // HA media_player.join / unjoin throw (their ids don't match MA's speakers; the card must use MA set_members).
 
 import { createMa } from './mock-ma.js';
+import { createKiosk } from './mock-kiosk.js';
 
 const params = new URLSearchParams(location.search);
 export const mock = (window.__mock = {
@@ -507,8 +508,10 @@ window.__playTrack = (name, position = 60) => {
 };
 
 const USER = { ...(params.get('uid') ? { id: params.get('uid') } : {}), name: params.get('user') ?? 'Kiosk', is_admin: params.get('admin') === '1' };
+// kiosk=1: the jukebox_kiosk integration is loaded (dev/mock-kiosk.js); the card's backend: auto then picks it
+const kiosk = params.get('kiosk') === '1' ? createKiosk({ params, maApi: ma, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit: () => commit(), sleep }) : null;
 function makeHass() {
-  return { states: { ...states }, user: USER, locale: { language: 'en-US' }, language: 'en-US', callService };
+  return { states: { ...states }, user: USER, locale: { language: 'en-US' }, language: 'en-US', callService, ...(kiosk ? kiosk.extras : {}) };
 }
 export let hass = makeHass();
 window.__hass = hass;
