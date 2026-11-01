@@ -1,4 +1,4 @@
-// v0.7 screenshots (Discover, radio "Stations by…", search categories, genre detail) at 1920x1080 and 390x844, plus a
+// v0.7 screenshots (Discover, radio "Stations by…", search categories, genre detail, Library home + editor) at 1920x1080 and 390x844, plus a
 // compare sheet. Usage: (serve the project root) JB_ROOT=http://127.0.0.1:8797/dev/ node test/shots-v070.mjs
 // Output: test/shots/v070-design/*.png (git-ignored). All data is the placeholder mock (dev/mock-v07.js).
 import puppeteer from 'puppeteer-core';
@@ -29,7 +29,7 @@ async function open(q, cfg, vp) {
   await hermetic(pg);
   pg.on('pageerror', (e) => errors.push(e.message));
   await pg.setViewport({ deviceScaleFactor: 1, ...vp });
-  await pg.goto(`${ROOT}index.html?fresh=1&latency=30&kiosk=1&pods=1&radio=1${q}&cfg=${encodeURIComponent(J(cfg))}`);
+  await pg.goto(`${ROOT}index.html?fresh=1&latency=30&kiosk=1&pods=1${/[?&]radio=/.test(q) ? '' : '&radio=1'}${q}&cfg=${encodeURIComponent(J(cfg))}`);
   await pg.waitForFunction('window.__ready === true');
   await sleep(400);
   return pg;
@@ -72,6 +72,41 @@ for (const vp of VPS) {
   await wait(pg, `!!${SD}?.querySelector('.list.sec[data-sec]')`);
   await shot(pg, '7-genre-detail', vp, 'Genre detail (never plays on tap)');
   await pg.close();
+  // Library home (library_home), placeholder station names (stations=fake)
+  const LH = { library_home: true };
+  pg = await open('&tab=browse', LH, vp);
+  await wait(pg, `${BR}.querySelectorAll('.lt').length === 5`);
+  await shot(pg, '8-library-home', vp, 'Library home (library_home: true): default tiles');
+  await pg.close();
+  pg = await open('&tab=browse&radio=lib&stations=fake&radiofav=3', LH, vp);
+  await wait(pg, `${BR}.querySelectorAll('.lt').length === 5`);
+  await tap(pg, `${BR}.querySelector('.lt[data-tile="radio"]')`);
+  await wait(pg, `${BR}.querySelectorAll('.sec').length === 2`);
+  await shot(pg, '9-library-radio-tile', vp, 'Library → Radio tile: My stations, favourites first, back to the grid');
+  await pg.close();
+  pg = await open('&tab=browse', LH, vp);
+  await wait(pg, `${BR}.querySelectorAll('.lt').length === 5`);
+  await tap(pg, `${BR}.querySelector('.lt[data-tile="radio"]')`);
+  await wait(pg, `/No stations yet/.test(${BR}.querySelector('.empty')?.textContent ?? '')`);
+  await shot(pg, '10-library-radio-empty', vp, 'Library → Radio with no stations: the favourites hint');
+  await pg.close();
+  pg = await open('&tab=browse&backdrop=light', { ...ALL, ...LH, library_tiles: ['playlist', 'artist', 'album', 'radio', 'search', 'track', 'podcast', 'audiobook', 'genre', 'discover'] }, vp);
+  await wait(pg, `${BR}.querySelectorAll('.lt').length === 10`);
+  await shot(pg, '11-library-all-tiles-blur', vp, 'Library: all ten tiles (optional ones on), light blur backdrop');
+  await pg.close();
+}
+// the visual editor's Library section (dev harness stub ha-form; HA's real form looks different)
+{
+  const vp = { width: 1920, height: 1080 };
+  const pg = await browser.newPage();
+  await hermetic(pg);
+  pg.on('pageerror', (e) => errors.push(e.message));
+  await pg.setViewport({ deviceScaleFactor: 1, ...vp });
+  await pg.goto(`${ROOT}editor.html?cfg=${encodeURIComponent(J({ type: 'custom:jukebox-card', entity: 'media_player.placeholder', config_entry_id: 'MA_ENTRY_PLACEHOLDER', library_home: true, library_tiles: ['playlist', 'artist', 'album', 'radio', 'search', 'genre'] }))}`);
+  await pg.waitForFunction('window.__ready === true');
+  await pg.evaluate(() => { const f = __editor.shadowRoot.querySelector('ha-form'); f.querySelectorAll('details').forEach((d) => (d.open = d.dataset.section === 'library')); f.querySelector('details[data-section="library"]').scrollIntoView({ block: 'start' }); });
+  await shot(pg, '12-library-editor', vp, 'Visual editor: Library section (ordered tiles, label; dev stub form)');
+  await pg.close();
 }
 
 // compare sheet: desktop and phone side by side per scene
@@ -86,7 +121,7 @@ await sheet.setViewport({ width: 1480, height: 900 });
 await sheet.setContent(`<html><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui,sans-serif;padding:24px">
 <style>h1{font-size:26px;margin:0 0 6px}p{opacity:.6;margin:0 0 20px;font-weight:400}section{margin:0 0 28px}h2{font-size:16px;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:0 0 10px}
 .r{display:flex;gap:20px;align-items:flex-start}img{border:1px solid #ffffff33;border-radius:10px}.d{width:1080px}.m{width:281px}</style>
-<h1>Jukebox card v0.7 — Discover &amp; Search (design branch)</h1><p>1920x1080 (scaled) and 390x844 · placeholder mock data · every v0.7 feature is behind a config flag, off by default</p>${rows}</body></html>`, { waitUntil: 'load' });
+<h1>Jukebox card v0.7 — Discover, Search &amp; Library home (design branch)</h1><p>1920x1080 (scaled) and 390x844 · placeholder mock data · every v0.7 feature is behind a config flag, off by default</p>${rows}</body></html>`, { waitUntil: 'load' });
 const cf = `${OUT}compare-sheet.png`;
 await sheet.screenshot({ path: cf, fullPage: true }); files.push(cf);
 await browser.close();

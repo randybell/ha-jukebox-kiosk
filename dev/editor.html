@@ -37,6 +37,23 @@
         const sel = s.selector ?? {};
         let input;
         if (sel.boolean) { input = Object.assign(document.createElement('input'), { type: 'checkbox', checked: !!v }); input.onchange = () => this.emit(s.name, input.checked); row.classList.add('bool'); }
+        else if (sel.select?.multiple) {
+          // ordered multi-select (HA's list mode with reorder): checked items in order, then the rest; ↑ ↓ move
+          const opts = sel.select.options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o));
+          const on = Array.isArray(v) ? v : [];
+          const order = [...on.map((x) => opts.find((o) => o.value === x)).filter(Boolean), ...opts.filter((o) => !on.includes(o.value))];
+          const ul = document.createElement('div'); ul.className = 'ms';
+          order.forEach((o) => {
+            const li = document.createElement('div'); li.className = 'mi' + (on.includes(o.value) ? ' on' : ''); li.dataset.value = o.value;
+            const cb = Object.assign(document.createElement('input'), { type: 'checkbox', checked: on.includes(o.value) });
+            cb.onchange = () => this.emit(s.name, cb.checked ? [...on, o.value] : on.filter((x) => x !== o.value));
+            const mv = (d) => { const i = on.indexOf(o.value), j = i + d; if (i < 0 || j < 0 || j >= on.length) return; const n = [...on]; [n[i], n[j]] = [n[j], n[i]]; this.emit(s.name, n); };
+            const up = Object.assign(document.createElement('button'), { type: 'button', textContent: '↑', className: 'mv' }); up.onclick = (e) => { e.preventDefault(); mv(-1); };
+            const dn = Object.assign(document.createElement('button'), { type: 'button', textContent: '↓', className: 'mv' }); dn.onclick = (e) => { e.preventDefault(); mv(1); };
+            li.append(cb, Object.assign(document.createElement('span'), { textContent: o.label }), up, dn); ul.append(li);
+          });
+          row.classList.add('multi'); row.append(ul); input = null;
+        }
         else if (sel.select) {
           const selEl = input = document.createElement('select');
           for (const o of sel.select.options) { const opt = typeof o === 'string' ? { value: o, label: o } : o; input.append(Object.assign(document.createElement('option'), { value: opt.value, textContent: opt.label })); }
@@ -56,7 +73,10 @@
         st.textContent = `.f{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #2a2a2a}
           .f span{flex:1} input,select{background:#222;color:#eee;border:1px solid #444;border-radius:6px;padding:6px;font:inherit;max-width:240px}
           details{border:1px solid #333;border-radius:10px;padding:4px 12px;margin:10px 0;background:#181818} summary{font-weight:700;padding:8px 0;cursor:pointer}
-          .custom{width:70px;margin-left:6px}`;
+          .custom{width:70px;margin-left:6px}
+          .f.multi{flex-direction:column;align-items:stretch} .ms{display:flex;flex-direction:column;gap:4px}
+          .mi{display:flex;align-items:center;gap:8px;padding:4px 8px;border:1px solid #333;border-radius:8px;opacity:.55} .mi.on{opacity:1;border-color:#555}
+          .mi span{flex:1} .mv{background:#222;color:#eee;border:1px solid #444;border-radius:6px;width:30px;height:28px}`;
         this.append(st);
         for (const s of this._schema) {
           if (s.type === 'expandable') {
