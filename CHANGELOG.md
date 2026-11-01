@@ -2,7 +2,7 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
-## 0.6.4 — unreleased
+## 0.6.4 — 2026-11-01
 
 ### Changed
 - **No popup in the middle of the card when grouping speakers.** Dropping a room, including the room that leads the group (for example Garage from Everywhere), now happens on tap. There is no centred "Drop …?" dialog.
