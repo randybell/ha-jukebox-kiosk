@@ -238,6 +238,14 @@ QUEUE_EVENTS: Final = ("queue_updated", "queue_items_updated")
 # QUEUES_CONTROL (same as move_item/delete_item). The legacy name is an alias in 2.10.9 and the only name before it.
 AUTOPLAY_COMMAND: Final = "player_queues/autoplay"
 AUTOPLAY_LEGACY_COMMAND: Final = "player_queues/dont_stop_the_music"
+# Autoplay style (MA 2.10.9 per-queue config, controllers/config/queues.py). Read with config/player_queues/get_entries
+# + get_value (scope CONFIG_PLAYERS_READ), written with config/player_queues/save (CONFIG_PLAYERS_WRITE, which MA's
+# Home Assistant service user holds). Only these two keys are ever written, only for the queue of an entity the user
+# may control, and only with the values below; none of these commands is in MA_COMMANDS.
+AUTOPLAY_MODE_KEY: Final = "autoplay_mode"
+AUTOPLAY_PLAYLIST_KEY: Final = "autoplay_playlist"
+AUTOPLAY_MODES: Final = ("auto", "similar", "library", "playlist")
+AUTOPLAY_MODE_GLOBAL: Final = "global"  # per-queue value meaning "follow MA's global Autoplay setting"
 
 
 def is_denied(command: str) -> bool:

@@ -62,6 +62,12 @@ class FakeMa:
         self.subs: list[tuple[Any, Any, Any]] = []
         self.autoplay_key = "autoplay_enabled"  # older MA: "dont_stop_the_music_enabled"; None: no field
         self.autoplay_error: str | None = None  # raised by player_queues/autoplay when set
+        # per-queue Autoplay style config (MA 2.10.9 config/player_queues/*); None = MA without the setting
+        self.ap_mode: str | None = "global"
+        self.ap_playlist: str | None = None
+        self.ap_core = {"autoplay_mode": "auto", "autoplay_playlist": None}
+        self.similar_available = True
+        self.ap_playlists = [("library://playlist/1", "Sunday Morning Mix"), ("library://playlist/2", "Kitchen Dance Party")]
 
     async def send_command(self, command: str, require_schema: int | None = None, **kwargs: Any) -> Any:
         self.calls.append((command, kwargs))
@@ -71,6 +77,21 @@ class FakeMa:
             if self.autoplay_key:
                 q[self.autoplay_key] = True
             return q
+        if command == "config/player_queues/get_entries":
+            if self.ap_mode is None:
+                return [{"key": "crossfade", "options": []}]
+            modes = [{"title": m, "value": m, "disabled": m == "similar" and not self.similar_available}
+                     for m in ("global", "auto", "similar", "library", "playlist")]
+            pls = [{"title": n, "value": u} for u, n in self.ap_playlists]
+            return [{"key": "autoplay_mode", "options": modes}, {"key": "autoplay_playlist", "options": pls}]
+        if command == "config/player_queues/get_value":
+            return {"autoplay_mode": self.ap_mode, "autoplay_playlist": self.ap_playlist}[kwargs["key"]]
+        if command == "config/core/get_value":
+            return self.ap_core[kwargs["key"]]
+        if command == "config/player_queues/save":
+            self.ap_mode = kwargs["values"].get("autoplay_mode", self.ap_mode)
+            self.ap_playlist = kwargs["values"].get("autoplay_playlist", self.ap_playlist)
+            return None
         if command == "player_queues/autoplay" and self.autoplay_error:
             raise RuntimeError(self.autoplay_error)
         if command == "player_queues/items":
