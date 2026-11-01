@@ -97,7 +97,7 @@ const allJoins = [];
   // group-config read (config/players/get) are not counted here
   const page_ma = (p) => p.evaluate(() => window.__maLog.map((x) => x.command).filter((c) => c !== 'player_queues/get' && c !== 'config/players/get'));
   const a = await seq(null);
-  const b = await seq({ speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'block', large_buttons: false });
+  const b = await seq({ speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', large_buttons: false });
   check('R1 default config = fixed mode: no Music Assistant players/* calls at all (not even players/all)', a.m.length === 0, J(a.m));
   const writes = (c) => c.filter((x) => !/^get_/.test(x.service));
   check('R2 default config makes the same (write) calls as an explicit fixed config', J(writes(a.c)) === J(writes(b.c)) && writes(a.c).length >= 3, J(writes(a.c).map((x) => x.service)) + ' vs ' + J(writes(b.c).map((x) => x.service)));
@@ -222,20 +222,36 @@ const allJoins = [];
   await wait(p, `${row(GAR)}.classList.contains('out') && !window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_garage')`);
   const sm2 = (await ma(p, 'players/cmd/set_members')).at(-1);
   check('M12 Undo → set_members(Indoor, remove Garage)', J(sm2?.data.player_ids_to_remove) === J(['wiim_mock_garage']), J(sm2));
-  // leader drop is blocked by default
-  await wait(p, `${act(LIV)}?.dataset.act === 'blocked'`);
-  const nSm = (await ma(p, 'players/cmd/set_members')).length;
-  check('M13 leader (Living Room) shows "Leader" (blocked) by default', (await ev(p, `${act(LIV)}.textContent.trim()`)) === 'Leader');
+  // 0.6.3: the leader can be dropped by default (MA re-forms the group on the next room) and re-added
+  await wait(p, `${act(LIV)}?.dataset.act === 'drop'`);
+  check('M13 leader (Living Room) shows "Drop" by default (0.6.3)', (await ev(p, `${act(LIV)}.textContent.trim()`)) === 'Drop' && (await ev(p, `${row(LIV)}.querySelector('.where').textContent`)) === 'Leads the group');
   await tap(p, act(LIV));
-  check('M14 tapping it explains (Move to hand off) and sends nothing', /leads Indoor/.test(await toast(p)) && (await ma(p, 'players/cmd/set_members')).length === nSm, await toast(p));
-  // drop kitchen, then living is the last speaker
+  const askL = await askLines(p);
+  await confirm(p);
+  await wait(p, `${row(LIV)}.classList.contains('out') && !window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_living')`);
+  const smL = (await ma(p, 'players/cmd/set_members')).at(-1);
+  check('M14 Drop leader → confirm (gap explained) → set_members(Indoor, remove Living), no stop',
+    /quiet for a few seconds/.test(askL.join(' ')) && smL?.data.target_player === 'syncgroup_mock_indoor' && J(smL?.data.player_ids_to_remove) === J(['wiim_mock_living'])
+    && !(await maCmds(p)).includes('players/cmd/stop'), J({ askL, smL }));
+  await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state === 'playing' && ${act(LIV)}?.dataset.act === 'join'`);
+  await tap(p, act(LIV));
+  await wait(p, `!!${SR}.querySelector('.sp-ask')`, 800) && (await confirm(p));
+  await wait(p, `${row(LIV)}.classList.contains('in')`);
+  const smR = (await ma(p, 'players/cmd/set_members')).at(-1);
+  check('M15 re-add the dropped leader → set_members(Indoor, add Living)', J(smR?.data.player_ids_to_add) === J(['wiim_mock_living']) && J(await maMembers(p, 'syncgroup_mock_indoor')) === J(['wiim_mock_kitchen', 'wiim_mock_living']), J(smR));
+  // drop the new leader (Kitchen): Living is the last speaker
+  await wait(p, `${act(KIT)}?.dataset.act === 'drop'`);
   await tap(p, act(KIT));
   await wait(p, `!!${SR}.querySelector('.sp-ask')`, 800) && (await confirm(p));
-  await wait(p, `${row(KIT)}.classList.contains('out') && ${act(LIV)}?.textContent.trim() === 'Last'`);
-  const sm3 = (await ma(p, 'players/cmd/set_members')).at(-1);
-  check('M15 Drop Kitchen → set_members(Indoor, remove Kitchen)', J(sm3?.data.player_ids_to_remove) === J(['wiim_mock_kitchen']), J(sm3));
+  await wait(p, `${row(KIT)}.classList.contains('out') && ${act(LIV)}?.textContent.trim() === 'Last'`, 6000);
+  const nSm = (await ma(p, 'players/cmd/set_members')).length;
+  await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state === 'playing'`);
   await tap(p, act(LIV));
-  check('M16 the last speaker cannot be dropped (toast says pause instead)', /last speaker/.test(await toast(p)), await toast(p));
+  await wait(p, `!!${SR}.querySelector('.sp-ask')`, 1500);
+  const lastT = await askTitle(p);
+  await confirm(p, false);
+  check('M16 the last speaker cannot be dropped: it offers Pause instead, sends nothing',
+    /last speaker/.test(lastT) && (await ma(p, 'players/cmd/set_members')).length === nSm && (await ev(p, `${act(LIV)}.getAttribute('aria-disabled')`)) === 'true', J({ lastT }));
   // preset: Dinner (same target) → re-adds Kitchen and sets capped volumes
   const v0 = (await calls(p)).length;
   await tap(p, `${SR}.querySelector('[data-preset="Dinner"]')`);
@@ -826,6 +842,80 @@ const allJoins = [];
   await openPanel(p); await waitLoaded(p);
   const pr = await ev(p, `[...${SR}.querySelectorAll('[data-preset]')].map((c) => c.dataset.preset)`);
   check('LV5 MA group config unreadable → the card presets only (no "<Group> default" chips), panel otherwise works', J(pr) === J(['Dinner', 'Whole house']), J(pr));
+  await p.close();
+}
+
+// ---------------- 0.6.3: live shape — Everywhere is a DYNAMIC MA sync group, Garage leads, HA lists no group_members ----------------
+{
+  const GSM = 'syncgroup_everywhere', GW = 'wiim_mock_garage';
+  const pillTxt = (p) => ev(p, `__card.shadowRoot.querySelector('.pill')?.textContent.replace(/\\s+/g,' ').trim()`);
+  const p = await open('&spk=dyn&admin=1&every=dyn');
+  const gm0 = await ev(p, `window.__hass.states['${EVERY}'].attributes.group_members`);
+  await wait(p, `/3 speakers/.test(__card.shadowRoot.querySelector('.pill')?.textContent ?? '')`, 3000);
+  const pl0 = await pillTxt(p);
+  check('V1 pill: "3 speakers" while Everywhere plays although HA reports group_members: [] (was "idle")', J(gm0) === '[]' && /· 3 speakers/.test(pl0) && !/idle/.test(pl0), J({ gm0, pl0 }));
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${act(GAR)}?.dataset.act === 'drop'`, 3000);
+  const gw = await ev(p, `${row(GAR)}.querySelector('.where').textContent`);
+  check('V2 the leader (Garage) offers Drop by default, not a greyed "Leader"', gw === 'Leads the group' && (await ev(p, `${act(GAR)}.textContent.trim()`)) === 'Drop'
+    && (await ev(p, `${act(GAR)}.getAttribute('aria-disabled')`)) === 'false', gw);
+  const n0 = (await ma(p, 'players/cmd/set_members')).length;
+  await tap(p, act(GAR));
+  await confirm(p);
+  const rg = await wait(p, `${SR}.querySelector('.stl')?.textContent.includes('Regrouping…')`, 1500);
+  await wait(p, `${row(GAR)}.classList.contains('out') && !window.__ma.G.${GSM}.members.includes('${GW}')`, 4000);
+  const sm = (await ma(p, 'players/cmd/set_members')).slice(n0);
+  check('V3 Drop Garage (leader) → one players/cmd/set_members on the sync group (remove Garage); no stop, no HA unjoin',
+    sm.length === 1 && sm[0].data.target_player === GSM && J(sm[0].data.player_ids_to_remove) === J([GW]) && J(sm[0].data.player_ids_to_add) === '[]'
+    && !(await maCmds(p)).includes('players/cmd/stop') && (await joins(p)).length === 0, J(sm));
+  await wait(p, `window.__hass.states['${EVERY}'].state === 'playing' && ${act(GAR)}?.dataset.act === 'join'`, 4000);
+  const evs = await events(p);
+  check('V4 MA re-forms Everywhere on Living Room + Kitchen ("Regrouping…"), Garage is offered Join',
+    rg && evs.some((e) => /reform/.test(J(e))) && J(await maMembers(p, GSM)) === J(['wiim_mock_living', 'wiim_mock_kitchen']) && (await ev(p, `${act(GAR)}.dataset.act`)) === 'join', J({ rg, evs }));
+  await wait(p, `/2 speakers/.test(__card.shadowRoot.querySelector('.pill')?.textContent ?? '')`, 3000);
+  check('V4b pill counts 2 speakers after the drop', /· 2 speakers/.test(await pillTxt(p)), await pillTxt(p));
+  await tap(p, act(GAR));
+  await wait(p, `!!${SR}.querySelector('.sp-ask')`, 800) && (await confirm(p));
+  await wait(p, `${row(GAR)}.classList.contains('in')`, 4000);
+  const sm2 = (await ma(p, 'players/cmd/set_members')).at(-1);
+  check('V5 re-add Garage → set_members(sync group, add Garage), Garage back in', sm2?.data.target_player === GSM && J(sm2?.data.player_ids_to_add) === J([GW])
+    && (await maMembers(p, GSM)).includes(GW), J(sm2));
+  await wait(p, `/3 speakers/.test(__card.shadowRoot.querySelector('.pill')?.textContent ?? '')`, 3000);
+  check('V6 pill back to 3 speakers; Garage row "In this group" with Drop', /· 3 speakers/.test(await pillTxt(p)) && (await ev(p, `${act(GAR)}.dataset.act`)) === 'drop', await pillTxt(p));
+  allJoins.push(...(await joins(p)));
+  await p.close();
+}
+{
+  // leader_drop: block is still available (opt-in)
+  const p = await open(`&spk=dyn&admin=1&every=dyn&cfg=${encodeURIComponent(J({ leader_drop: 'block' }))}`);
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${act(GAR)}?.dataset.act === 'blocked'`, 3000);
+  const n = (await ma(p, 'players/cmd/set_members')).length;
+  const lbl = await ev(p, `${act(GAR)}.textContent.trim()`);
+  await tap(p, act(GAR));
+  check('V7 leader_drop: block (opt-in) keeps "Leader" greyed; tapping explains and sends nothing', lbl === 'Leader' && /leads Everywhere/.test(await toast(p)) && (await ma(p, 'players/cmd/set_members')).length === n, J({ lbl, t: await toast(p) }));
+  await p.close();
+}
+{
+  // idle dynamic group: Join is shown greyed with a hint instead of hidden
+  const p = await open('&spk=dyn&admin=1&every=dyn&idle=1');
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${act(GAR)}?.dataset.act === 'idle'`, 3000);
+  const a = await ev(p, `[...${SR}.querySelectorAll('.rooms .act')].map((b) => b.dataset.act + ':' + b.getAttribute('aria-disabled'))`);
+  await tap(p, act(GAR));
+  check('V8 idle Everywhere: every room shows a greyed Join; tapping says start playback first, sends nothing',
+    a.length === 3 && a.every((x) => x === 'idle:true') && /Start playback/.test(await toast(p)) && (await ma(p, 'players/cmd/set_members')).length === 0, J({ a, t: await toast(p) }));
+  await p.close();
+}
+{
+  // a remembered target HA no longer has: forgotten once with a notice (was a silent fallback)
+  const p = await open(`&spk=dyn&admin=1&target=media_player.old_group&cfg=${encodeURIComponent(J({ targets: [] }))}`);
+  await wait(p, `!!__card.shadowRoot.querySelector('.lost')`, 3000);
+  const lost = await ev(p, `__card.shadowRoot.querySelector('.lost')?.textContent ?? ''`);
+  const ls = await p.evaluate(() => localStorage.getItem('jukebox-card:target:v1'));
+  const ent = await target(p);
+  const pl = await ev(p, `__card.shadowRoot.querySelector('.pill .pn')?.textContent`);
+  check('V9 stale saved target: cleared, back on Everywhere, one notice names it', ls === null && ent === EVERY && pl === 'Everywhere' && /old group.*not found/i.test(lost), J({ ls, ent, pl, lost }));
   await p.close();
 }
 
