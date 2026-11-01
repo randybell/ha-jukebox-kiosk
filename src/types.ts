@@ -88,6 +88,9 @@ export interface JukeboxCardConfig {
   lyrics_tab?: boolean;
   /** Lyrics lines on the screensaver. Default true (when show_lyrics is on). */
   screensaver_lyrics?: boolean;
+  /** Autoplay (MA "don't stop the music") toggle in the Queue header plus an indicator on Now Playing.
+   *  Needs the Jukebox Kiosk integration (0.7+) and permission class queue. Default false. */
+  show_autoplay?: boolean;
   /** Long-press a synced line to seek there. Default true. */
   lyrics_seek?: boolean;
   /** Shift synced lyrics: positive shows lines sooner. Default 500 (HA reports whole seconds). -5000..5000. */

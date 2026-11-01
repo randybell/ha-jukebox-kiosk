@@ -363,3 +363,71 @@ async def test_v07_browse_admin_any_path(
         res = await _call(ws, type="jukebox_kiosk/ma", command="music/browse", args=args)
         assert res["success"], args
         assert fake_ma.calls[-1] == ("music/browse", args)
+
+
+# ---- Autoplay ("Don't stop the music"), MA 2.10.9 player_queues/autoplay
+
+
+async def test_capabilities_autoplay_follows_queue_class(hass: HomeAssistant, hass_ws_client: Any, user_token: Any) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    r = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
+    assert r["features"]["autoplay"] is True
+    assert "player_queues/autoplay" not in r["commands"] and "player_queues/dont_stop_the_music" not in r["commands"]
+
+
+async def test_queue_items_autoplay_state(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    r = (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
+    assert r["autoplay"] is True and r["dynamic"] is False and r["queue_id"] == SYNCGROUP
+    fake_ma.autoplay_key = "dont_stop_the_music_enabled"
+    assert (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]["autoplay"] is True
+    fake_ma.autoplay_key = None
+    assert "autoplay" not in (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
+
+
+async def test_set_autoplay_targets_entity_queue(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay", entity_id=ENTITY_G, enabled=True)
+    assert res["success"], res
+    assert res["result"] == {"queue_id": SYNCGROUP, "autoplay": True}
+    assert fake_ma.calls == [("player_queues/autoplay", {"queue_id": SYNCGROUP, "autoplay_enabled": True})]
+
+
+async def test_set_autoplay_legacy_alias_fallback(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    fake_ma.autoplay_error = "Invalid command: player_queues/autoplay"
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay", entity_id=ENTITY_A, enabled=False)
+    assert res["success"], res
+    assert [c for c, _ in fake_ma.calls] == ["player_queues/autoplay", "player_queues/dont_stop_the_music"]
+    assert fake_ma.calls[-1][1] == {"queue_id": PLAYER_A, "dont_stop_the_music_enabled": False}
+
+
+async def test_set_autoplay_other_errors_not_retried(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    fake_ma.autoplay_error = "boom"
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay", entity_id=ENTITY_A, enabled=True)
+    assert res["error"]["code"] == "ma_error"
+    assert [c for c, _ in fake_ma.calls] == ["player_queues/autoplay"]
+
+
+async def test_set_autoplay_needs_bool(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay", entity_id=ENTITY_A, enabled="yes")
+    assert not res["success"] and fake_ma.calls == []
+
+
+async def test_autoplay_not_forwarded_by_ma(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    for cmd in ("player_queues/autoplay", "player_queues/dont_stop_the_music"):
+        res = await _call(ws, type="jukebox_kiosk/ma", command=cmd, args={"queue_id": PLAYER_B, "autoplay_enabled": True})
+        assert res["error"]["code"] == "not_allowed", cmd
+    assert fake_ma.calls == []
+
+
+@pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["read", "playback"]}])
+async def test_set_autoplay_needs_queue_class(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    assert (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]["features"]["autoplay"] is False
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay", entity_id=ENTITY_G, enabled=True)
+    assert res["error"]["code"] == "unauthorized"
+    assert fake_ma.calls == []

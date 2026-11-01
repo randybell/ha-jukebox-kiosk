@@ -28,7 +28,7 @@ export class MassQueueBackend implements MaBackend {
       send: has, queue: true, queuePlay: true, queueEdit: true, undo: has, queueBuffer: has,
       trackLists: has, podcastEpisodes: has, lyrics: has, speakers: has, unfavorite: true, queuePush: false,
     };
-    this.ext = { genres: has, radioBrowse: has, discover: has, resume: has };
+    this.ext = { genres: has, radioBrowse: has, discover: has, resume: has, autoplay: false };
   }
   onChange(fn: () => void) { return this.em.on(fn); }
   private get hass() { const h = this.hassRef(); if (!h) throw new BackendError('failed', 'no hass'); return h; }

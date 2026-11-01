@@ -53,7 +53,7 @@ check('C8 labels', C.categoryLabel('audiobooks') === 'Audiobooks' && C.categoryL
 // ---------------- kiosk ext caps ----------------
 check('E1 extFromServer: missing features → all off', J(B.extFromServer(undefined)) === J(B.NO_EXT) && J(B.extFromServer({})) === J(B.NO_EXT));
 check('E2 extFromServer reads genres / radio_browse / discover / resume (booleans only)',
-  J(B.extFromServer({ genres: true, radio_browse: true, discover: 'yes', resume: false })) === J({ genres: true, radioBrowse: true, discover: false, resume: false }));
+  J(B.extFromServer({ genres: true, radio_browse: true, discover: 'yes', resume: false })) === J({ genres: true, radioBrowse: true, discover: false, resume: false, autoplay: false }));
 check('E3 genres falls back to genre_overview', B.extFromServer({ genre_overview: true }).genres === true && B.extFromServer({ genre_overview: true, genres: false }).genres === false);
 
 // ---------------- genres ----------------
@@ -166,6 +166,37 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
   check('ED7 a half-typed country is kept while typing; empty removes it', e1.toConfig({ ...f1, radio_country: 'u' }).radio_country === 'u' && !('radio_country' in e1.toConfig({ ...f1, radio_country: '' })));
   const o = Ed.discoverOptions(['mock_stream--X:stations_for_you']);
   check('ED8 Discover options: library rows + custom provider rows from the config', o.length === D.LIBRARY_ROWS.length + 1 && /Stations for you \(mock_stream--X\)/.test(o.at(-1).label), o.at(-1).label);
+}
+
+// ---------------- Autoplay ("don't stop the music") prototype ----------------
+{
+  check('A1 extFromServer reads autoplay (boolean only), off when missing',
+    B.extFromServer({ autoplay: true }).autoplay === true && B.extFromServer({ autoplay: 'yes' }).autoplay === false && B.NO_EXT.autoplay === false);
+  const log = [];
+  const ENT = 'media_player.kiosk_room';
+  const answers = {
+    capabilities: () => ({ features: { autoplay: true } }),
+    queue_items: () => ({ items: [], queue_id: 'QUEUE_ID_PLACEHOLDER', autoplay: true, dynamic: false }),
+    set_autoplay: (m) => ({ queue_id: 'QUEUE_ID_PLACEHOLDER', autoplay: m.enabled }),
+  };
+  const hass = { states: { [ENT]: { entity_id: ENT, state: 'playing', attributes: {} } }, config: { components: ['jukebox_kiosk'] },
+    callWS: async (m) => { log.push(m); const f = answers[String(m.type).replace(/^jukebox_kiosk\//, '')]; if (!f) throw Object.assign(new Error('unknown'), { code: 'unknown_command' }); return f(m); } };
+  const k = new B.KioskBackend(() => hass);
+  await k.ready;
+  check('A2 kiosk ext.autoplay from capabilities', k.ext.autoplay === true);
+  const w = await k.queueWindow(ENT, 5);
+  check('A3 queueWindow maps autoplay + dynamic', w.autoplay === true && w.dynamic === false, J({ a: w.autoplay, d: w.dynamic }));
+  answers.queue_items = () => ({ items: [] });
+  const w2 = await k.queueWindow(ENT, 5);
+  check('A4 older server: autoplay / dynamic stay undefined (pill hidden)', w2.autoplay === undefined && w2.dynamic === undefined);
+  await k.setAutoplay(ENT, false);
+  const m = log.at(-1);
+  check('A5 setAutoplay sends jukebox_kiosk/set_autoplay {entity_id, enabled} (never a raw ma command)',
+    m.type === 'jukebox_kiosk/set_autoplay' && m.entity_id === ENT && m.enabled === false && !log.some((x) => x.type === 'jukebox_kiosk/ma'), J(m));
+  const mq = new B.MassQueueBackend(() => hass, 'MASS_QUEUE_ENTRY_PLACEHOLDER');
+  check('A6 mass_queue / native backends never offer autoplay', mq.ext.autoplay === false && typeof mq.setAutoplay !== 'function');
+  check('A7 editor: show_autoplay listed, labelled, default off',
+    Ed.editorSchema({}).flatMap((x) => x.schema ?? [x]).some((x) => x.name === 'show_autoplay') && /Autoplay/.test(Ed.LABELS.show_autoplay ?? ''));
 }
 
 console.log(`\n${total - failures}/${total} v0.7 unit checks passed`);

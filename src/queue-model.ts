@@ -26,6 +26,10 @@ export interface QueueSnapshot {
   /** MA index_in_buffer (player_queues/get through send_command). Live MA 2.10.9: it is set by MA, not current + 1: it can be
    *  current + 1 (next track handed to the player) or equal to current (right after play_index). */
   bufferIndex?: number;
+  /** MA Autoplay state for this queue (kiosk backend only), undefined when unknown */
+  autoplay?: boolean;
+  /** MA queue is_dynamic: autoplay does not apply */
+  dynamic?: boolean;
   loading: boolean;
   error: string;
   at: number;
@@ -118,12 +122,24 @@ export class QueueModel {
       this.set({
         items, current, loading: false, error: '', at: Date.now(),
         total: w.total, currentIndex: w.currentIndex, queueId, bufferIndex: w.bufferIndex,
+        autoplay: w.autoplay, dynamic: w.dynamic,
       });
     } catch (err) {
       if (seq !== this.seq) return;
       console.warn('[jukebox-card] queue refresh failed', err);
       this.set({ loading: false, error: be.kind === 'mass_queue' ? 'Queue unavailable. Is mass_queue installed?' : 'Queue unavailable. Check Music Assistant.' });
     }
+  }
+
+  /** Optimistic Autoplay toggle; rolls back and rethrows on failure. */
+  async setAutoplay(enabled: boolean) {
+    const be = this.backend;
+    if (!be?.setAutoplay) throw new BackendError('unsupported', 'Autoplay is not available');
+    const prev = this.snap.autoplay;
+    this.set({ autoplay: enabled });
+    try { await be.setAutoplay(this.entity, enabled); }
+    catch (err) { this.set({ autoplay: prev }); throw err; }
+    finally { this.refreshSoon(800); }
   }
 
   private async act(service: QueueAction | string, id: string, optimistic: (items: QueueItem[], i: number) => { items: QueueItem[]; current: number } | void,

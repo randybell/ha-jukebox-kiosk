@@ -222,6 +222,36 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('D12 phone: compact tiles, rows scroll sideways, no page overflow', w < 130 && ov, String(w));
   await m.close();
 }
+// ---------------- 6. Autoplay ("don't stop the music") prototype, flag show_autoplay ----------------
+{
+  const QV = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
+  const NV = `__card.shadowRoot.querySelector('jb-now').shadowRoot`;
+  const AP = encodeURIComponent(J({ autoplay: true }));
+  // flag off (default): no pill even when the server supports it
+  const a = await open('&tab=queue&kcaps=' + AP);
+  await wait(a, `${QV}.querySelectorAll('.qr').length > 0`);
+  check('AP1 default (show_autoplay off): no Autoplay pill', !(await ev(a, `!!${QV}.querySelector('.ap')`)));
+  await a.close();
+  // flag on, server without autoplay: still hidden
+  const b = await open('&tab=queue', { show_autoplay: true });
+  await wait(b, `${QV}.querySelectorAll('.qr').length > 0`);
+  check('AP2 show_autoplay on but server lacks it: hidden', !(await ev(b, `!!${QV}.querySelector('.ap')`)));
+  await b.close();
+  // flag on + server: pill off -> tap -> on, set_autoplay sent for the card's entity; Now Playing shows the indicator
+  const c = await open('&tab=queue&kcaps=' + AP, { show_autoplay: true });
+  const shown = await wait(c, `${QV}.querySelector('.ap')`);
+  check('AP3 pill shown, off, aria-pressed=false', shown && (await ev(c, `${QV}.querySelector('.ap').getAttribute('aria-pressed')`)) === 'false');
+  await tap(c, `${QV}.querySelector('.ap')`);
+  await wait(c, `${QV}.querySelector('.ap.on')`);
+  const sent = await c.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay').map((m) => ({ e: m.entity_id, on: m.enabled })));
+  check('AP4 tap → jukebox_kiosk/set_autoplay {enabled: true}, pill on, no raw ma command',
+    sent.length === 1 && sent[0].on === true && /^media_player\./.test(sent[0].e) && (await maOf(c, 'player_queues/autoplay')).length === 0, J(sent));
+  await tap(c, `__card.shadowRoot.querySelector('.tab[data-tab="now"]')`);
+  const ind = await wait(c, `/Autoplay/.test(${NV}.querySelector('.upn')?.textContent ?? '')`);
+  check('AP5 Now Playing: "Up next · Autoplay" indicator only (no 7th transport button)', ind
+    && !(await ev(c, `!!${NV}.querySelector('.tb[aria-label*="Autoplay"]')`)), String(await ev(c, `${NV}.querySelector('.upn')?.textContent?.replace(/\\s+/g, ' ')`)));
+  await c.close();
+}
 check('no page errors', pageErrors.length === 0, J(pageErrors.slice(0, 3)));
 await browser.close();
 console.log(`\n${total - failures}/${total} v0.7 checks passed`);

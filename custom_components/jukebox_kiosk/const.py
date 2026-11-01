@@ -233,6 +233,11 @@ PLAYER_ARG_KEYS: Final = (
 PLAYER_LIST_ARG_KEYS: Final = ("player_ids_to_add", "player_ids_to_remove")
 
 QUEUE_EVENTS: Final = ("queue_updated", "queue_items_updated")
+# MA Autoplay (called "Don't stop the music" before MA 2.10). Sent only by jukebox_kiosk/set_autoplay, for the queue of an
+# entity the user may control; not in MA_COMMANDS, so `ma` callers can't name an arbitrary queue_id. Both need MA scope
+# QUEUES_CONTROL (same as move_item/delete_item). The legacy name is an alias in 2.10.9 and the only name before it.
+AUTOPLAY_COMMAND: Final = "player_queues/autoplay"
+AUTOPLAY_LEGACY_COMMAND: Final = "player_queues/dont_stop_the_music"
 
 
 def is_denied(command: str) -> bool:

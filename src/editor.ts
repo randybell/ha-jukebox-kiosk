@@ -57,6 +57,7 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
         { name: 'backdrop', selector: { select: { options: ['auto', 'full', 'light', 'static', 'off'], mode: 'dropdown' } } },
         { name: 'accent', selector: { select: { options: ['mono', 'fixed', 'art'], mode: 'dropdown' } } },
         { name: 'large_buttons', selector: { boolean: {} } },
+        { name: 'show_autoplay', selector: { boolean: {} } },
       ],
     },
     {
@@ -115,6 +116,7 @@ export const LABELS: Record<string, string> = {
   default_tab: 'Start tab',
   show_lyrics: 'Lyrics (art overlay, Stage, tab, screensaver)',
   lyrics_tab: 'Lyrics tab',
+  show_autoplay: 'Autoplay toggle in the Queue (adds similar music when the queue runs out)',
   lyrics_seek: 'Long-press a synced line to jump there',
   lyrics_offset_ms: 'Synced lyrics offset (+ shows lines sooner)',
   large_buttons: 'Large buttons (bigger touch targets and text)',
@@ -139,7 +141,7 @@ const QUIET_KEYS = ['quiet_start', 'quiet_end', 'quiet_max', 'quiet_applies'] as
 const hhmm = (t: unknown) => (typeof t === 'string' ? t.slice(0, 5) : undefined);
 /** defaults shown for unset options, never written back unless the user changes them */
 const SHOWN_DEFAULTS = {
-  show_lyrics: true, lyrics_tab: true, screensaver_lyrics: true, lyrics_seek: true,
+  show_lyrics: true, lyrics_tab: true, screensaver_lyrics: true, lyrics_seek: true, show_autoplay: false,
   large_buttons: false, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'block',
 };
 const roomEntity = (r: RoomConfig | string) => (typeof r === 'string' ? r : r.entity);

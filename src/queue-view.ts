@@ -44,6 +44,18 @@ export class JbQueue extends LitElement {
     this._menu = null; this.press.release();
     try { await p; if (ok) this.toast(ok); } catch (e) { this.toast(e instanceof QueueBusy ? BUSY : 'Queue action failed'); }
   }
+  /** Autoplay pill: only with show_autoplay, a kiosk server that lists it, and a known state for this queue */
+  private autoplayTpl(s: QueueSnapshot | undefined) {
+    if (!this.config?.show_autoplay || !this.config._backend?.ext?.autoplay || typeof s?.autoplay !== 'boolean') return nothing;
+    const on = s.autoplay, dyn = !!s.dynamic;
+    return html`<button class="ap ${on ? 'on' : ''}" data-action="autoplay" tabindex="-1" aria-pressed=${on ? 'true' : 'false'} ?disabled=${dyn}
+      title=${dyn ? 'This queue already keeps playing' : on ? 'Autoplay is on: similar music is added when the queue runs out' : 'Autoplay is off'}
+      @pointerdown=${noFocus} @click=${() => this.toggleAutoplay(!on)}>${icon('autoplay', 'i xs')}Autoplay</button>`;
+  }
+  private async toggleAutoplay(on: boolean) {
+    try { await this.queue?.setAutoplay(on); this.toast(on ? 'Autoplay on' : 'Autoplay off'); }
+    catch { this.toast("Couldn't change Autoplay"); }
+  }
   /** Play now icon: confirm first (it stops the current song for everyone), then player_queues/play_index */
   private askPlayNow(it: QueueItem) {
     this._menu = null; this.press.release();
@@ -156,7 +168,7 @@ export class JbQueue extends LitElement {
     const nb = cur >= 0 ? Math.max(0, Math.min(next.length, (this.queue?.locked ?? cur) - cur)) : 0;
     return html`<div class="qx" @keydown=${this.onKey}>
       <div class="head"><h2>Queue</h2><span class="cnt">${remaining ? `${remaining} up next` : ''}</span>
-        ${s?.loading ? html`<span class="live busy"></span>` : nothing}</div>
+        ${s?.loading ? html`<span class="live busy"></span>` : nothing}${this.autoplayTpl(s)}</div>
       <div class="scroll panel" @scroll=${() => this.press.scrolled()}>
         ${s?.error ? html`<div class="empty"><b>Queue unavailable</b><span>${s.error}</span></div>`
           : !items.length ? html`<div class="empty"><b>${s?.loading || !s?.at ? 'Loading queue…' : 'The queue is empty'}</b><span>Add music from Search or Browse.</span></div>`
@@ -181,6 +193,10 @@ export class JbQueue extends LitElement {
     .head { display: flex; align-items: baseline; gap: 12px; }
     h2 { font-family: var(--_font-display); font-size: 28px; font-weight: 800; }
     .cnt { font-size: 14px; color: var(--_muted); }
+    .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
+      border: 1px solid var(--_divider); background: transparent; color: var(--_muted); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .ap.on { background: var(--_active); color: var(--_on-accent); border-color: transparent; }
+    .ap:disabled { opacity: .45; cursor: default; }
     .live { width: 7px; height: 7px; border-radius: 50%; background: #fff; align-self: center; animation: pulse 800ms ease-in-out infinite alternate; }
     @keyframes pulse { from { opacity: 1 } to { opacity: .35 } }
     .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 10px 12px 20px; display: flex; flex-direction: column; touch-action: pan-y; }

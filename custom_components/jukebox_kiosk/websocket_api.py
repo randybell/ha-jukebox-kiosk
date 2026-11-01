@@ -8,6 +8,7 @@ we can enforce per-command permission classes, and it does not write a
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +23,8 @@ from homeassistant.exceptions import HomeAssistantError, Unauthorized
 from . import format as fmt
 from .client import MaUnavailable, async_get_ma_client
 from .const import (
+    AUTOPLAY_COMMAND,
+    AUTOPLAY_LEGACY_COMMAND,
     DOMAIN,
     LOGGER,
     MA_COMMANDS,
@@ -255,6 +258,8 @@ async def ws_capabilities(hass: HomeAssistant, connection: websocket_api.ActiveC
                 "radio_browse": has(PermClass.READ),
                 "discover": has(PermClass.READ),
                 "resume": has(PermClass.READ),
+                # Autoplay ("Don't stop the music"): jukebox_kiosk/set_autoplay + queue_items.autoplay
+                "autoplay": has(PermClass.QUEUE),
             },
         },
     )
@@ -299,9 +304,16 @@ async def ws_queue_items(hass: HomeAssistant, connection: websocket_api.ActiveCo
     limit = (cur - offset) + 1 + msg["limit_after"]
     items = await _send(client, "player_queues/items", queue_id=queue_id, limit=limit, offset=offset) or []
     current_item = queue.get("current_item") or {}
+    extra: dict[str, Any] = {}
+    autoplay = _autoplay_state(queue)
+    if autoplay is not None:
+        extra["autoplay"] = autoplay
+    if isinstance(queue.get("is_dynamic"), bool):
+        extra["dynamic"] = queue["is_dynamic"]
     connection.send_result(
         msg["id"],
         {
+            **extra,
             "queue_id": queue_id,
             "current_index": current,
             "index_in_buffer": queue.get("index_in_buffer"),
@@ -311,6 +323,43 @@ async def ws_queue_items(hass: HomeAssistant, connection: websocket_api.ActiveCo
             "items": [fmt.format_queue_item(i) for i in items if isinstance(i, dict)],
         },
     )
+
+
+def _autoplay_state(queue: dict[str, Any]) -> bool | None:
+    """MA 2.10.9 `autoplay_enabled`; older servers only send `dont_stop_the_music_enabled`."""
+    for key in ("autoplay_enabled", "dont_stop_the_music_enabled"):
+        if isinstance(queue.get(key), bool):
+            return bool(queue[key])
+    return None
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/set_autoplay",
+        probatio.Required("entity_id"): str,
+        probatio.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+@_wrap
+async def ws_set_autoplay(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Turn MA Autoplay (formerly "Don't stop the music") on or off for the entity's active queue.
+
+    The queue always comes from an HA entity the user may control, never from the caller. MA 2.10.9 names the command
+    player_queues/autoplay; older servers only know player_queues/dont_stop_the_music (still an alias in 2.10.9)."""
+    _e, policy, client = _context(hass)
+    user = connection.user
+    check_class(user, policy, PermClass.QUEUE)
+    check_entity(user, msg["entity_id"], control=True)
+    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    enabled = msg["enabled"]
+    try:
+        await _send(client, AUTOPLAY_COMMAND, queue_id=queue_id, autoplay_enabled=enabled)
+    except KioskError as err:
+        if err.code != "ma_error" or not re.search(rf"invalid command:?\s*{re.escape(AUTOPLAY_COMMAND)}", str(err), re.I):
+            raise
+        await _send(client, AUTOPLAY_LEGACY_COMMAND, queue_id=queue_id, dont_stop_the_music_enabled=enabled)
+    connection.send_result(msg["id"], {"queue_id": queue_id, "autoplay": enabled})
 
 
 @websocket_api.websocket_command(
@@ -432,6 +481,7 @@ HANDLERS = (
     ws_capabilities,
     ws_ma,
     ws_queue_items,
+    ws_set_autoplay,
     ws_item_tracks,
     ws_unfavorite_current,
     ws_subscribe_queue,

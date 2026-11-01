@@ -60,12 +60,19 @@ class FakeMa:
         self.server_info = SimpleNamespace(schema_version=44)
         self.queue = [_qi(n) for n in range(10)]
         self.subs: list[tuple[Any, Any, Any]] = []
+        self.autoplay_key = "autoplay_enabled"  # older MA: "dont_stop_the_music_enabled"; None: no field
+        self.autoplay_error: str | None = None  # raised by player_queues/autoplay when set
 
     async def send_command(self, command: str, require_schema: int | None = None, **kwargs: Any) -> Any:
         self.calls.append((command, kwargs))
         if command == "player_queues/get":
-            return {"queue_id": kwargs["queue_id"], "current_index": 4, "index_in_buffer": 4,
-                    "items": len(self.queue), "current_item": self.queue[4]}
+            q = {"queue_id": kwargs["queue_id"], "current_index": 4, "index_in_buffer": 4,
+                 "items": len(self.queue), "current_item": self.queue[4], "is_dynamic": False}
+            if self.autoplay_key:
+                q[self.autoplay_key] = True
+            return q
+        if command == "player_queues/autoplay" and self.autoplay_error:
+            raise RuntimeError(self.autoplay_error)
         if command == "player_queues/items":
             o, lim = kwargs["offset"], kwargs["limit"]
             return self.queue[o : o + lim]

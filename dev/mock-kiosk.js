@@ -80,7 +80,15 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
         const cur = Math.max(0, Q.index), off = Math.max(0, cur - (msg.limit_before ?? 1));
         const lim = (cur - off) + 1 + (msg.limit_after ?? 100);
         return { queue_id: st(ent).attributes.active_queue, current_index: Q.index < 0 ? null : Q.index, index_in_buffer: Q.index < 0 ? null : bufOf(Q),
-          current_item_id: Q.items[Q.index]?.queue_item_id ?? null, total: Q.items.length, offset: off, items: Q.items.slice(off, off + lim).map(qPub) };
+          current_item_id: Q.items[Q.index]?.queue_item_id ?? null, total: Q.items.length, offset: off, items: Q.items.slice(off, off + lim).map(qPub),
+          ...(features.autoplay ? { autoplay: !!Q.autoplay, dynamic: false } : {}) };
+      }
+      case 'set_autoplay': {
+        if (!features.autoplay) throw err('unauthorized', 'Unauthorized');
+        const Q = QS[msg.entity_id];
+        if (!Q) throw err('not_found', `${msg.entity_id} is not a Music Assistant player`);
+        Q.autoplay = !!msg.enabled;
+        return { queue_id: st(msg.entity_id).attributes.active_queue, autoplay: Q.autoplay };
       }
       case 'item_tracks': {
         if (!features.track_lists) throw err('unauthorized', 'Unauthorized');

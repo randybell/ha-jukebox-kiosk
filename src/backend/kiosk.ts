@@ -30,7 +30,7 @@ export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
  */
 export function extFromServer(f: Record<string, unknown> | undefined): ExtCaps {
   const b = (k: string, d = false) => (f && typeof f[k] === 'boolean' ? (f[k] as boolean) : d);
-  return { genres: b('genres', b('genre_overview')), radioBrowse: b('radio_browse'), discover: b('discover'), resume: b('resume') };
+  return { genres: b('genres', b('genre_overview')), radioBrowse: b('radio_browse'), discover: b('discover'), resume: b('resume'), autoplay: b('autoplay') };
 }
 const code = (e: any): string => String(e?.code ?? '');
 
@@ -82,6 +82,8 @@ export class KioskBackend implements MaBackend {
       bufferIndex: typeof r?.index_in_buffer === 'number' ? r.index_in_buffer : undefined,
       total: typeof r?.total === 'number' ? r.total : undefined,
       currentItemId: r?.current_item_id != null ? String(r.current_item_id) : undefined,
+      autoplay: typeof r?.autoplay === 'boolean' ? r.autoplay : undefined,
+      dynamic: typeof r?.dynamic === 'boolean' ? r.dynamic : undefined,
     };
   }
   async queueAction(entity: string, action: QueueAction, queueItemId: string, queueId?: string) {
@@ -102,6 +104,9 @@ export class KioskBackend implements MaBackend {
   }
   unfavoriteCurrent(entity: string) {
     return this.ws({ type: 'unfavorite_current', entity_id: entity });
+  }
+  setAutoplay(entity: string, enabled: boolean) {
+    return this.ws({ type: 'set_autoplay', entity_id: entity, enabled });
   }
   async subscribeQueue(entity: string, cb: (ev: { event: string; queue_id?: string }) => void) {
     const conn = this.hass.connection;

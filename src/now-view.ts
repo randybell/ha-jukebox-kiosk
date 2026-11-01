@@ -238,6 +238,8 @@ export class JbNow extends LitElement {
     const up = this.queue?.upNext ?? [];
     const nextIt = up[0];
     const more = Math.max(0, (this.queue?.remaining ?? up.length) - 1);
+    // Autoplay indicator only (the toggle lives in the Queue header): flag on, server lists it, MA says it is on, queue not dynamic
+    const autoplay = !!this.config?.show_autoplay && !!this.config._backend?.ext?.autoplay && this._snap?.autoplay === true && !this._snap?.dynamic;
     const favOn = this.isFav();
     const showFav = (this.config.favorite_entity ?? 'button.everywhere_favorite_current_song') !== '';
     const tb = (cls: string, ic: string, label: string, fn: () => void, on?: boolean, dot = false, dis = false) =>
@@ -277,8 +279,10 @@ export class JbNow extends LitElement {
           ${showFav ? tb('fv', favOn ? 'heart' : 'heartline', favOn ? 'Remove from favorites' : 'Add to favorites', () => this.toggleFavorite(), favOn, false, idle) : nothing}
         </div>
         ${nextIt ? html`<button class="upn panel" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
-            <span class="eyebrow">Up next</span><b>${nextIt.media_title}</b>${provTpl(nextIt.media_content_id)}
-            <span class="more">${more ? `+ ${more} more` : ''}</span></button>` : nothing}
+            <span class="eyebrow">${autoplay ? 'Up next · Autoplay' : 'Up next'}</span><b>${nextIt.media_title}</b>${provTpl(nextIt.media_content_id)}
+            <span class="more">${more ? `+ ${more} more` : ''}</span></button>`
+          : autoplay && cur ? html`<button class="upn panel ap" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
+            <span class="eyebrow">Autoplay</span><b>Autoplay will add more when this ends</b></button>` : nothing}
         <div class="vol panel">
           ${this.volRow(this.eid, where, true)}
           ${rooms.length ? html`<div class="rooms">${rooms.map((r) => this.volRow(r.entity, r.name, false))}</div>` : nothing}

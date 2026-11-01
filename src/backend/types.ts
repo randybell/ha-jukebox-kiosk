@@ -51,8 +51,10 @@ export interface ExtCaps {
   discover: boolean;
   /** podcast / audiobook resume points (in_progress_items, resume_position_ms) */
   resume: boolean;
+  /** MA Autoplay ("don't stop the music") toggle: jukebox_kiosk/set_autoplay (permission class queue) */
+  autoplay: boolean;
 }
-export const NO_EXT: ExtCaps = { genres: false, radioBrowse: false, discover: false, resume: false };
+export const NO_EXT: ExtCaps = { genres: false, radioBrowse: false, discover: false, resume: false, autoplay: false };
 
 /** A queue window in the mass_queue get_queue_items row shape. */
 export interface QueueWindow {
@@ -62,6 +64,10 @@ export interface QueueWindow {
   bufferIndex?: number;
   total?: number;
   currentItemId?: string;
+  /** MA queue autoplay state (kiosk 0.7+ server), undefined when unknown */
+  autoplay?: boolean;
+  /** MA queue is_dynamic (radio/endless sources): autoplay does nothing there */
+  dynamic?: boolean;
 }
 export type QueueAction = 'play' | 'up' | 'down' | 'next' | 'remove';
 export type TrackListType = 'album' | 'artist' | 'playlist' | 'podcast';
@@ -91,6 +97,8 @@ export interface MaBackend {
   itemTracks(type: TrackListType, uri: string, page: number): Promise<TrackPage>;
   /** Remove the playing track from favorites. */
   unfavoriteCurrent(entity: string): Promise<unknown>;
+  /** Turn MA Autoplay on/off for the entity's queue (kiosk only). */
+  setAutoplay?(entity: string, enabled: boolean): Promise<unknown>;
   /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. */
   subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;
 }
