@@ -17,8 +17,9 @@ import { SpeakerStore } from './speakers/ma';
 import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, validPreset, validQuiet } from './speakers/model';
 import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type BackdropMode } from './backdrop';
 import type { HomeAssistant, JukeboxCardConfig, TabId } from './types';
+import { pickBackend, createBackend, backendKey, type MaBackend } from './backend';
 
-export const VERSION = '0.5.1';
+export const VERSION = '0.6.0';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'now', label: 'Now Playing', icon: 'disc' },
   { id: 'browse', label: 'Browse', icon: 'browse' },
@@ -44,6 +45,7 @@ function validateSpeakers(c: JukeboxCardConfig) {
     if (c[k] !== undefined && !vals.includes(c[k] as string)) throw new Error(`jukebox-card: ${String(k)} must be one of ${vals.join(', ')}.`);
   };
   oneOf('speaker_mode', ['fixed', 'dynamic']);
+  oneOf('backend', ['auto', 'kiosk', 'mass_queue', 'native']);
   oneOf('grouping', ['admins', 'everyone', 'nobody']);
   oneOf('guest_access', ['volume', 'none']);
   oneOf('leader_drop', ['block', 'allow']);
@@ -119,6 +121,11 @@ export class JukeboxCard extends LitElement {
   private _spk = false;
   /** Music Assistant players (dynamic mode only; fixed mode never calls it) */
   readonly speakers = new SpeakerStore();
+  /** Music Assistant backend (kiosk / mass_queue / native), shared by queue, lyrics, speakers and the views */
+  backend?: MaBackend;
+  private _bkey = '';
+  private _bunsub?: () => void;
+  private _push?: { key: string; off?: () => void };
 
   static getConfigElement() { return document.createElement('jukebox-card-editor'); }
   static getStubConfig(): Partial<JukeboxCardConfig> {
@@ -171,9 +178,7 @@ export class JukeboxCard extends LitElement {
     if (first && config.default_tab && this.tabs().some((t) => t.id === config.default_tab)) this._tab = config.default_tab;
     if (!this.tabs().some((t) => t.id === this._tab)) this._tab = 'now';
     this.lyrics.enabled = this._config.show_lyrics !== false;
-    this.lyrics.entryId = this._config.mass_queue_entry_id || (this._config as any).queue_config_entry_id || '';
-    this.speakers.entryId = this.lyrics.entryId;
-    this.queue.entryId = this.lyrics.entryId || undefined;
+    this.syncBackend(true);
     this.queue.readsBuffer = () => !!this._config && canJumpQueue(this._config, this.hass?.user);
     this.queue.entity = this._config.entity!;
     this.queue.limitAfter = this._config.queue_limit ?? 200;
@@ -181,6 +186,49 @@ export class JukeboxCard extends LitElement {
     this.applyBackdrop();
     this.armIdle();
   }
+  /**
+   * Pick and (re)create the backend when its identity changes: `backend` in the config, or auto (kiosk when the
+   * jukebox_kiosk integration is loaded, mass_queue when mass_queue_entry_id is set, else native). Auto is re-checked
+   * whenever hass changes, since hass.config.components arrives after setConfig.
+   */
+  private syncBackend(force = false) {
+    if (!this._base) return;
+    const kind = pickBackend(this._base, this.hass), key = backendKey(kind, this._base);
+    if (key !== this._bkey || !this.backend) {
+      this._bkey = key;
+      this._bunsub?.(); this.stopPush();
+      const be = createBackend(kind, this._base, () => this.hass);
+      this.backend = be;
+      this.queue.backend = be; this.lyrics.backend = be; this.speakers.backend = be;
+      this._bunsub = be.onChange(() => this.applyCaps());
+      force = true;
+    }
+    if (force) this.applyCaps(false);
+  }
+  /** caps changed (server answered, or a new backend): new config object so the views re-read the feature flags */
+  private applyCaps(refresh = true) {
+    if (!this._base) return;
+    this._base = { ...this._base, _backend: this.backend };
+    this._config = this.effective();
+    this.dataset.backend = this.backend?.kind ?? '';
+    if (this._tab !== 'now' && !this.tabs().some((t) => t.id === this._tab)) this._tab = 'now';
+    if (refresh && this.hass) this.queue.refreshSoon(0);
+    this.startPush();
+    this.requestUpdate();
+  }
+  /** kiosk: queue events pushed by the server (jukebox_kiosk/subscribe_queue) refresh the queue at once */
+  private startPush() {
+    const be = this.backend, ent = this._config?.entity;
+    if (!be?.subscribeQueue || !be.caps.queuePush || !ent || !this.isConnected || !this.hass?.connection) { this.stopPush(); return; }
+    const key = `${this._bkey}|${ent}`;
+    if (this._push?.key === key) return;
+    this.stopPush();
+    const p: { key: string; off?: () => void } = { key };
+    this._push = p;
+    be.subscribeQueue(ent, () => this.queue.refreshSoon()).then((off) => { if (this._push === p) p.off = off; else off(); })
+      .catch((e) => { console.warn('[jukebox-card] queue push unavailable', e); });
+  }
+  private stopPush() { this._push?.off?.(); this._push = undefined; }
   /** fixed mode: the config as given. dynamic: entity = the remembered target (when it is one of the targets) + start guard. */
   private effective(): JukeboxCardConfig {
     const b = this._base;
@@ -198,13 +246,14 @@ export class JukeboxCard extends LitElement {
     this._config = this.effective();
     this.queue.entity = this._config.entity!;
     this.queue.refreshSoon(0);
+    this.startPush();
   };
   private onSpeakers = (e: CustomEvent) => { this._spk = e.detail?.open !== false; };
   /** Start guard (dynamic mode): starting an idle group takes speakers from other groups: say which, and ask. */
   private guard = async (entity: string): Promise<boolean> => {
     const st = this.hass?.states[entity]?.state;
     if (st === 'playing' || st === 'paused') return true;
-    if (!this.speakers.entryId) return true;
+    if (!this.speakers.available) return true;
     const players = await this.speakers.refresh();
     await this.speakers.loadConfigs(); // the group's default speakers (config/players/get), when MA lets us read them
     const ma = targetMa(entity, this.hass, players);
@@ -224,7 +273,12 @@ export class JukeboxCard extends LitElement {
   };
 
   /** visible tabs: Lyrics only when lyrics are on and its tab is not turned off */
-  private tabs() { const c = this._config; return TABS.filter((t) => t.id !== 'lyrics' || (c?.show_lyrics !== false && c?.lyrics_tab !== false)); }
+  private tabs() {
+    const c = this._config, caps = this.backend?.caps;
+    return TABS.filter((t) => t.id !== 'lyrics' || (c?.show_lyrics !== false && c?.lyrics_tab !== false
+      // kiosk: hidden when the server says this user may not read lyrics; other backends keep the tab and its setup hint
+      && !(this.backend?.kind === 'kiosk' && caps && !caps.lyrics)));
+  }
   getCardSize() { return 12; }
   getGridOptions() { return { columns: 'full', rows: 'auto' }; }
 
@@ -270,6 +324,7 @@ export class JukeboxCard extends LitElement {
     window.clearInterval(this._clock); window.clearTimeout(this._idleTimer);
     this._qunsub?.();
     this._lunsub?.(); this._lunsub = undefined;
+    this.stopPush();
     this.removeEventListener('pointerdown', this.onActivity, { capture: true });
     this.removeEventListener('keydown', this.onActivity, { capture: true });
     this.removeEventListener('jukebox-played', this.onPlayed as EventListener);
@@ -499,9 +554,12 @@ export class JukeboxCard extends LitElement {
   };
 
   protected willUpdate(changed: PropertyValues) {
+    const old = changed.get('hass') as HomeAssistant | undefined;
+    // backend first: hass.config.components decides auto, and the stores below must not start on a stale backend
+    if (changed.has('hass') && this.hass && (!old || old.config !== this.hass.config || old.connection !== this.hass.connection)) this.syncBackend();
     if ((changed.has('hass') || changed.has('_config')) && this.hass && this._config) this.lyrics.follow(this.hass, this.hass.states[this._config.entity!]);
     if (changed.has('hass') && this.hass) {
-      const old = changed.get('hass') as HomeAssistant | undefined;
+      if (!this._push) this.startPush();
       this.queue.hass = this.hass;
       this.speakers.hass = this.hass;
       const id = this._config.entity!;

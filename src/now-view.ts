@@ -127,9 +127,11 @@ export class JbNow extends LitElement {
   toggleFavorite() {
     const btn = this.config.favorite_entity ?? 'button.everywhere_favorite_current_song';
     const fav = this.isFav();
+    const be = this.config._backend;
+    if (fav && be && !be.caps.unfavorite) { this.toast("Can't remove favorites here"); return; }
     this.flags.set('fav:' + (this.ent?.attributes?.media_content_id ?? ''), { v: !fav, t: Date.now() + 26000 }); this.requestUpdate();
     if (fav) {
-      this.hass!.callService('mass_queue', 'unfavorite_current_item', { entity: this.eid }).catch((e: any) => console.warn(e));
+      (be ? be.unfavoriteCurrent(this.eid) : this.hass!.callService('mass_queue', 'unfavorite_current_item', { entity: this.eid })).catch((e: any) => console.warn(e));
       this.toast('Removed from favorites');
     } else {
       this.call('button', 'press', {}, btn);

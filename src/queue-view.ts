@@ -54,6 +54,7 @@ export class JbQueue extends LitElement {
     this._menu = null; this.press.release();
     const r = this.queue?.removedInfo(it.queue_item_id);
     if (!r) return;
+    if (this.caps && !this.caps.undo) { this.run(this.queue!.removeRow(it.queue_item_id), `Removed ${it.media_title}`); return; }
     window.clearTimeout(this._undoTimer); this._toast = ''; this._undo = r;
     this._undoTimer = window.setTimeout(() => (this._undo = null), Number((window as any).__jbQueueUndoMs ?? 5000));
     try { await this.queue!.removeRow(it.queue_item_id); } catch (e) {
@@ -75,7 +76,14 @@ export class JbQueue extends LitElement {
     const root = this.renderRoot.querySelector('.qx') as HTMLElement;
     this._menu = { item: it, pos: menuPos(root, el, 5) };
   }
+  /** backend feature flags (undefined = 0.5.x behaviour: everything on) */
+  private get caps() { return this.config?._backend?.caps; }
+  private get edits() { return this.caps?.queueEdit ?? true; }
   private actions(it: QueueItem): MenuAction[] {
+    const all = this.actionsAll(it), edits = this.edits, play = this.caps?.queuePlay ?? true;
+    return all.filter((a) => (a.id === 'play' ? play : edits));
+  }
+  private actionsAll(it: QueueItem): MenuAction[] {
     const q = this.queue!; const id = it.queue_item_id;
     if (this.jumps()) {
       // the narrow-row action sheet: the same rules as the row icons (Play now asks first, Remove offers Undo)
@@ -102,7 +110,7 @@ export class JbQueue extends LitElement {
     ];
   }
 
-  private jumps() { return !!this.config && canJumpQueue(this.config, this.hass?.user); }
+  private jumps() { return !!this.config && (this.caps?.queuePlay ?? true) && canJumpQueue(this.config, this.hass?.user); }
   private row(it: QueueItem, kind: 'now' | 'next' | 'past', n: number, isFirstNext: boolean, isLast: boolean, jumps: boolean, buf = false) {
     const p = this.press.handlers(it.queue_item_id, it);
     const q = this.queue!;
@@ -123,7 +131,7 @@ export class JbQueue extends LitElement {
       ${artTpl(asArt(it), 'th')}
       <div class="rt"><b>${it.media_title}</b><small>${[it.media_artist, it.media_album_name].filter(Boolean).join(' · ')}</small></div>
       ${provTpl(it.media_content_id)}
-      ${kind === 'next' ? html`<span class="acts">
+      ${kind === 'next' && this.edits ? html`<span class="acts">
         ${playNow}${playNext}
         ${qa('up', buf ? 'Already loading' : 'Move up', () => q.up(it.queue_item_id), isFirstNext || buf, 'up')}
         ${qa('down', buf ? 'Already loading' : 'Move down', () => q.down(it.queue_item_id), isLast || buf, 'down')}

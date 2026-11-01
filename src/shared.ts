@@ -314,9 +314,10 @@ export function confirmTpl(c: ConfirmState | null, close: () => void) {
     </div>`;
 }
 
-/** Types that open a detail view on tap (podcasts only with mass_queue, which lists episodes). */
+/** Types that open a detail view on tap (podcasts only when the backend lists episodes: kiosk or mass_queue). */
 export const drillable = (type: string, config: JukeboxCardConfig) =>
-  type === 'artist' || type === 'album' || type === 'playlist' || (type === 'podcast' && !!(config.mass_queue_entry_id || config.queue_config_entry_id));
+  type === 'artist' || type === 'album' || type === 'playlist'
+  || (type === 'podcast' && (config._backend ? config._backend.caps.podcastEpisodes : !!(config.mass_queue_entry_id || config.queue_config_entry_id)));
 
 /* ---------------- shared CSS for art, tiles, rows, badges, menus, toasts ---------------- */
 export const mediaStyles = css`

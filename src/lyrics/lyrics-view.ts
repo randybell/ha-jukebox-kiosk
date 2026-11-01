@@ -269,8 +269,8 @@ export class JbLyrics extends LitElement {
     this.cur = synced ? indexAt(s.lines, this.position() + this.offset()) : -1;
     if (mode === 'saver') return this.renderSaver();
     const sub = s.status === 'error' && mode !== 'overlay'
-      ? (s.reason === 'config' ? html`<small>Set mass_queue_entry_id in the card options.</small>`
-        : html`${s.reason === 'permission' ? html`<small>This Home Assistant user may not be allowed to run mass_queue.send_command (an admin user may be needed).</small>` : nothing}<button class="retry" tabindex="-1" @click=${(e: Event) => { e.stopPropagation(); this.store?.retry(); }}>Try again</button>`)
+      ? (s.reason === 'config' ? html`<small>Lyrics need the Jukebox Kiosk integration (or mass_queue_entry_id in the card options).</small>`
+        : html`${s.reason === 'permission' ? html`<small>This Home Assistant user may not be allowed to read lyrics (check the Jukebox Kiosk permissions; mass_queue.send_command needs an admin).</small>` : nothing}<button class="retry" tabindex="-1" @click=${(e: Event) => { e.stopPropagation(); this.store?.retry(); }}>Try again</button>`)
       : s.status === 'none' && s.track?.radio && mode !== 'overlay' ? html`<small>${s.track.artist} · ${s.track.title}</small>` : nothing;
     let body: unknown;
     switch (s.status) {

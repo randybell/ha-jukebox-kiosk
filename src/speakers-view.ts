@@ -509,7 +509,7 @@ export class JbSpeakers extends LitElement {
   `];
 }
 function errText(e: unknown) {
-  if (e instanceof SpeakerError) return e.code === 'timeout' ? 'no answer in time' : e.code === 'config' ? 'mass_queue_entry_id is not set' : e.message.replace(/^.*?:\s*/, '') || 'failed';
+  if (e instanceof SpeakerError) return e.code === 'timeout' ? 'no answer in time' : e.code === 'config' ? 'speaker grouping needs the Jukebox Kiosk integration (or mass_queue_entry_id)' : e.message.replace(/^.*?:\s*/, '') || 'failed';
   return String((e as any)?.message ?? e);
 }
 if (!customElements.get('jb-speakers')) customElements.define('jb-speakers', JbSpeakers);

@@ -1,5 +1,7 @@
 import type { HomeAssistant } from './types';
-import { unwrap, cleanName, safeImage } from './shared';
+import { cleanName, safeImage } from './shared';
+import { BackendError, type MaBackend, type QueueAction } from './backend/types';
+import { MassQueueBackend } from './backend/mass-queue';
 
 /** One item from mass_queue.get_queue_items (v0.10.4: no duration). */
 export interface QueueItem {
@@ -51,7 +53,8 @@ export function lockedRow(current: number, currentIndex?: number, bufferIndex?: 
 export class QueueBusy extends Error { constructor(m = 'That track is already loading') { super(m); } }
 export const isBufferedError = (e: unknown) => /already (played|buffered|played\/buffered)|already loaded in (the )?buffer/i.test(String((e as any)?.message ?? e));
 /**
- * Shared queue state for Now Playing (Up next strip), the Queue tab and the tab badge.
+ * Shared queue state for Now Playing (Up next strip), the Queue tab and the tab badge. All MA access goes through the
+ * card's MaBackend (0.6.0); the mass_queue backend makes exactly the 0.5.x calls below.
  * Reads:  mass_queue.get_queue_items {entity, limit_before, limit_after}  (response only)
  *         music_assistant.get_queue  target entity                         (response only, keyed by entity_id)
  * Writes: mass_queue.play_queue_item / move_queue_item_up / _down / _next / remove_queue_item {entity, queue_item_id}
@@ -64,8 +67,11 @@ export class QueueModel {
   hass?: HomeAssistant;
   entity = 'media_player.everywhere';
   limitAfter = 200;
-  /** mass_queue config entry for send_command (config mass_queue_entry_id) */
-  entryId?: string;
+  /** the card's Music Assistant backend. Default: mass_queue without an entry (0.5.x behaviour with no mass_queue_entry_id). */
+  backend?: MaBackend = new MassQueueBackend(() => this.hass, '');
+  /** 0.5.x API, kept for tests and embedders: a mass_queue config entry id selects the mass_queue backend. */
+  set entryId(id: string | undefined) { this.backend = new MassQueueBackend(() => this.hass, id ?? ''); }
+  get entryId(): string | undefined { return this.backend instanceof MassQueueBackend ? this.backend.entryId || undefined : undefined; }
   private subs = new Set<(s: QueueSnapshot) => void>();
   private seq = 0;
   private timer?: number;
@@ -93,47 +99,34 @@ export class QueueModel {
     const hass = this.hass; if (!hass) return;
     const seq = ++this.seq;
     this.set({ loading: true });
-    const entity = this.entity;
-    const items$ = hass.callService('mass_queue', 'get_queue_items', { entity, limit_before: 1, limit_after: Number.isFinite(this.limitAfter) ? Math.max(1, Math.min(1000, Math.round(this.limitAfter))) : 200 }, undefined, false, true);
-    const q$ = hass.callService('music_assistant', 'get_queue', {}, { entity_id: entity }, false, true).catch(() => undefined);
+    const entity = this.entity, be = this.backend;
+    if (!be) return;
+    const limitAfter = Number.isFinite(this.limitAfter) ? Math.max(1, Math.min(1000, Math.round(this.limitAfter))) : 200;
     try {
-      const [ri, rq] = await Promise.all([items$, q$]);
+      // HA's get_queue has no index_in_buffer: backends read MA's queue (player_queues/get) when they can and this viewer gets row actions
+      const w = await be.queueWindow(entity, limitAfter, this.readsBuffer?.() ?? true);
       if (seq !== this.seq) return;
-      const raw = unwrap(ri, entity);
-      const items: QueueItem[] = (Array.isArray(raw) ? raw : []).filter((x: any) => x && x.queue_item_id != null)
+      const items: QueueItem[] = w.items.filter((x: any) => x && x.queue_item_id != null)
         .map((x: any) => ({ ...x, queue_item_id: String(x.queue_item_id), media_title: cleanName(x.media_title ?? x.name ?? ''), media_image: safeImage(x.media_image) || undefined }));
-      const q = unwrap(rq, entity) ?? {};
-      const curId = q?.current_item?.queue_item_id != null ? String(q.current_item.queue_item_id) : undefined;
-      let current = curId ? items.findIndex((i) => i.queue_item_id === curId) : -1;
+      let current = w.currentItemId ? items.findIndex((i) => i.queue_item_id === w.currentItemId) : -1;
       if (current < 0) {
         const cid = hass.states[entity]?.attributes?.media_content_id;
         if (cid) current = items.findIndex((i) => i.media_content_id === cid);
       }
-      if (current < 0 && items.length && q?.current_index != null) current = Math.min(q.current_index === 0 ? 0 : 1, items.length - 1); // offset = idx - limit_before(1), clamped at 0
-      const queueId = typeof q?.queue_id === 'string' && q.queue_id ? q.queue_id : (hass.states[entity]?.attributes?.active_queue as string | undefined) || undefined;
-      // HA's get_queue has no index_in_buffer: read MA's queue (player_queues/get) when the send_command path exists
-      let bufferIndex: number | undefined, currentIndex = typeof q?.current_index === 'number' ? q.current_index : undefined;
-      if (this.entryId && queueId && (this.readsBuffer?.() ?? true)) {
-        try {
-          const mq = unmq(await hass.callService('mass_queue', 'send_command', { config_entry_id: this.entryId, command: 'player_queues/get', data: { queue_id: queueId } }, undefined, false, true));
-          if (typeof mq?.index_in_buffer === 'number') bufferIndex = mq.index_in_buffer;
-          if (typeof mq?.current_index === 'number') currentIndex = mq.current_index;
-        } catch { /* older mass_queue / MA: rows before current + 1 stay the only lock */ }
-        if (seq !== this.seq) return;
-      }
+      if (current < 0 && items.length && w.currentIndex != null) current = Math.min(w.currentIndex === 0 ? 0 : 1, items.length - 1); // offset = idx - limit_before(1), clamped at 0
+      const queueId = w.queueId || (hass.states[entity]?.attributes?.active_queue as string | undefined) || undefined;
       this.set({
         items, current, loading: false, error: '', at: Date.now(),
-        total: typeof q?.items === 'number' ? q.items : undefined,
-        currentIndex, queueId, bufferIndex,
+        total: w.total, currentIndex: w.currentIndex, queueId, bufferIndex: w.bufferIndex,
       });
     } catch (err) {
       if (seq !== this.seq) return;
       console.warn('[jukebox-card] queue refresh failed', err);
-      this.set({ loading: false, error: 'Queue unavailable. Is mass_queue installed?' });
+      this.set({ loading: false, error: be.kind === 'mass_queue' ? 'Queue unavailable. Is mass_queue installed?' : 'Queue unavailable. Check Music Assistant.' });
     }
   }
 
-  private async act(service: string, id: string, optimistic: (items: QueueItem[], i: number) => { items: QueueItem[]; current: number } | void,
+  private async act(service: QueueAction | string, id: string, optimistic: (items: QueueItem[], i: number) => { items: QueueItem[]; current: number } | void,
     send?: () => Promise<unknown>) {
     const hass = this.hass; if (!hass) return;
     const i = this.snap.items.findIndex((x) => x.queue_item_id === id);
@@ -142,9 +135,13 @@ export class QueueModel {
       const r = optimistic(copy, i);
       if (r) this.set({ items: r.items, current: r.current });
     }
-    try { await (send ? send() : hass.callService('mass_queue', service, { entity: this.entity, queue_item_id: id })); }
+    try {
+      if (send) await send();
+      else if (this.backend) await this.backend.queueAction(this.entity, service as QueueAction, id, this.snap.queueId);
+      else throw new BackendError('config', 'no backend');
+    }
     catch (err) {
-      console.warn(`[jukebox-card] mass_queue.${service} failed`, err);
+      console.warn(`[jukebox-card] queue ${service} failed`, err);
       if (isBufferedError(err)) { void this.refresh(); throw new QueueBusy(); }
       throw err;
     }
@@ -157,17 +154,17 @@ export class QueueModel {
     const [it] = items.splice(from, 1); items.splice(to, 0, it);
     return { items, current: curId ? items.findIndex((x) => x.queue_item_id === curId) : cur };
   }
-  play(id: string) { return this.act('play_queue_item', id, (items, i) => ({ items, current: i })); }
-  up(id: string) { return this.act('move_queue_item_up', id, (items, i) => this.moveTo(items, i, i - 1)); }
-  down(id: string) { return this.act('move_queue_item_down', id, (items, i) => this.moveTo(items, i, i + 1)); }
-  next(id: string) { return this.act('move_queue_item_next', id, (items, i) => this.moveTo(items, i, this.locked + 1)); }
+  play(id: string) { return this.act('play', id, (items, i) => ({ items, current: i })); }
+  up(id: string) { return this.act('up', id, (items, i) => this.moveTo(items, i, i - 1)); }
+  down(id: string) { return this.act('down', id, (items, i) => this.moveTo(items, i, i + 1)); }
+  next(id: string) { return this.act('next', id, (items, i) => this.moveTo(items, i, this.locked + 1)); }
   /** true when MA owns this row (played, playing or in the player's buffer): no move / remove */
   isLocked(id: string) { const i = this.snap.items.findIndex((x) => x.queue_item_id === id); return i >= 0 && i <= this.locked; }
-  /** player_queues/* through mass_queue.send_command, or undefined when that path is not configured */
+  /** player_queues/* through the backend's raw MA commands, or undefined when the backend has none */
   private ma(command: string, data: Record<string, unknown>) {
-    const hass = this.hass, qid = this.snap.queueId;
-    if (!hass || !this.entryId || !qid) return undefined;
-    return () => hass.callService('mass_queue', 'send_command', { config_entry_id: this.entryId, command, data: { queue_id: qid, ...data } }, undefined, false, true);
+    const be = this.backend, qid = this.snap.queueId;
+    if (!this.hass || !be?.caps.send || !qid) return undefined;
+    return () => be.send(command, { queue_id: qid, ...data });
   }
   /** Row Play now: jump playback to this item (MA play_index takes an index or a queue_item_id; the id is window-proof). */
   playNow(id: string) {
@@ -184,7 +181,7 @@ export class QueueModel {
     return send ? this.act('player_queues/move_item', id, (items, j) => this.moveTo(items, j, lk + 1), send) : this.next(id);
   }
   remove(id: string) {
-    return this.act('remove_queue_item', id, (items, i) => {
+    return this.act('remove', id, (items, i) => {
       const cur = this.snap.current; items.splice(i, 1);
       return { items, current: i < cur ? cur - 1 : cur };
     });
@@ -220,11 +217,10 @@ export class QueueModel {
    * it was re-added but could not be put back in place; throws when it could not be re-added at all.
    */
   async undoRemove(r: RemovedRow): Promise<'ok' | 'end'> {
-    const hass = this.hass, qid = this.snap.queueId;
-    if (!hass || !this.entryId || !qid) throw new Error('Undo needs mass_queue_entry_id');
+    const be = this.backend, qid = this.snap.queueId;
+    if (!this.hass || !be?.caps.undo || !qid) throw new Error('Undo needs the Jukebox Kiosk integration or mass_queue_entry_id');
     if (!r.uri) throw new Error('No URI for this track');
-    const send = async (command: string, data: Record<string, unknown>) =>
-      unmq(await hass.callService('mass_queue', 'send_command', { config_entry_id: this.entryId, command, data: { queue_id: qid, ...data } }, undefined, false, true));
+    const send = (command: string, data: Record<string, unknown>) => be.send(command, { queue_id: qid, ...data });
     const known = new Set(this.snap.items.map((x) => x.queue_item_id));
     try {
       await send('player_queues/play_media', { media: r.uri, option: 'add' }); // a failure here throws: not re-added
@@ -246,8 +242,3 @@ export class QueueModel {
   }
 }
 export interface RemovedRow { id: string; title: string; uri?: string; prevId?: string; before: boolean }
-const unmq = (r: any): any => {
-  let d = r && typeof r === 'object' && 'response' in r ? r.response : r;
-  if (d && typeof d === 'object' && !Array.isArray(d) && Object.keys(d).length === 1 && 'response' in d) d = d.response;
-  return d;
-};
