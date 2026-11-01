@@ -235,5 +235,43 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
   check('LH13 empty label removed; empty tile list removed', !('library_label' in e1.toConfig({ ...f1, library_label: ' ' })) && !('library_tiles' in e1.toConfig({ ...f1, library_tiles: [] })));
 }
 
+// ---------------- Autoplay style (Q14) ----------------
+{
+  const log = [];
+  const answers = {
+    capabilities: () => ({ features: { autoplay: true, autoplay_mode: true } }),
+    autoplay_options: () => ({
+      mode: 'playlist', follows_default: false, playlist: { uri: 'library://playlist/1', name: 'Placeholder Mix' },
+      modes: [{ mode: 'auto' }, { mode: 'similar', available: false }, { mode: 'library' }, { mode: 'playlist' }, { mode: 'bogus' }, null],
+      playlists: [{ uri: 'library://playlist/1', name: 'Placeholder Mix' }, { uri: 'library://playlist/2' }, { name: 'no uri' }, null],
+    }),
+    set_autoplay_mode: () => ({}),
+  };
+  const hass = { states: {}, config: { components: ['music_assistant', 'jukebox_kiosk'] },
+    callWS: async (m) => { log.push(m); const f = answers[String(m.type).replace(/^jukebox_kiosk\//, '')]; if (!f) throw Object.assign(new Error('unknown'), { code: 'unknown_command' }); return f(m); } };
+  const k = new B.KioskBackend(() => hass); await k.ready;
+  check('AP1 extFromServer: autoplay_mode only when the server lists it (true booleans only)',
+    B.extFromServer({ autoplay_mode: true }).autoplayMode === true && B.extFromServer({ autoplay_mode: 'yes' }).autoplayMode === false
+    && B.extFromServer({}).autoplayMode === false && B.NO_EXT.autoplayMode === false);
+  const o = await k.autoplayOptions('media_player.placeholder');
+  check('AP2 autoplayOptions parses mode / playlist; unknown modes and playlists without uri dropped; available defaults true',
+    o.mode === 'playlist' && o.followsDefault === false && o.playlist?.name === 'Placeholder Mix'
+    && J(o.modes) === J([{ mode: 'auto', available: true }, { mode: 'similar', available: false }, { mode: 'library', available: true }, { mode: 'playlist', available: true }])
+    && J(o.playlists) === J([{ uri: 'library://playlist/1', name: 'Placeholder Mix' }, { uri: 'library://playlist/2', name: 'library://playlist/2' }]), J(o));
+  answers.autoplay_options = () => ({ mode: 'weird', follows_default: true });
+  const o2 = await k.autoplayOptions('media_player.placeholder');
+  check('AP3 garbage mode → auto; follows_default kept; missing lists → []',
+    o2.mode === 'auto' && o2.followsDefault === true && o2.playlist === null && o2.modes.length === 0 && o2.playlists.length === 0, J(o2));
+  log.length = 0;
+  await k.setAutoplayMode('media_player.placeholder', 'playlist', 'library://playlist/2');
+  await k.setAutoplayMode('media_player.placeholder', 'library', 'library://playlist/2');
+  check('AP4 setAutoplayMode sends playlist only for the playlist style',
+    J(log.map(({ type, ...r }) => [type.replace(/^jukebox_kiosk\//, ''), r])) === J([
+      ['set_autoplay_mode', { entity_id: 'media_player.placeholder', mode: 'playlist', playlist: 'library://playlist/2' }],
+      ['set_autoplay_mode', { entity_id: 'media_player.placeholder', mode: 'library' }]]), J(log));
+  const mq = new B.MassQueueBackend(() => hass, {});
+  check('AP5 mass_queue backend: no style picker', mq.ext.autoplayMode === false && typeof mq.autoplayOptions !== 'function');
+}
+
 console.log(`\n${total - failures}/${total} v0.7 unit checks passed`);
 process.exit(failures ? 1 : 0);
