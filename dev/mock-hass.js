@@ -42,6 +42,7 @@ export const mock = (window.__mock = {
 });
 window.__calls = [];
 window.__lyricsLog = [];
+window.__itemByUriLog = [];
 const REAL = params.get('real') === '1';
 const RADIO = params.get('radio') === '1' || params.get('radio') === 'lib';
 const RADIO_LIB = params.get('radio') === 'lib';
@@ -104,7 +105,9 @@ const STATIONS = () => (params.get('stations') === 'fake' ? FAKE_STATIONS.map((n
   radio('\tRadio Paradise - Main Mix', undefined, 80), radio(' \tJazz FM', undefined, 30), radio('Magic Radio\t', null, 12),
   radio('\t\tKEXP 90.3 FM', undefined, 64), radio('BBC Radio 6 Music', undefined, 71), radio('\tSomaFM Groove Salad', undefined, 44),
   radio('FIP Radio', null, 9), radio('\tAbsolute Classic Rock', undefined, 22), radio('NTS Radio 1 ', undefined, 5),
-]).map((x, i) => (i < Number(params.get('radiofav') ?? 0) ? { ...x, favorite: true } : x));
+]).map((x, i) => (i < Number(params.get('radiofav') ?? 0) ? { ...x, favorite: true } : x))
+  // radioinlib=N (v0.7 heart lookup): the first N stations are already library items (e.g. favourited elsewhere)
+  .map((x, i) => (i < Number(params.get('radioinlib') ?? 0) ? { ...x, _inlib: true } : x));
 
 const CATALOG = {
   artists: [
@@ -203,6 +206,10 @@ const libView = (it) => (it.uri.startsWith('library://') ? it : { ...it, uri: li
   artists: it.artists?.map((a) => ({ ...a, uri: A[a.name] ? libUri(A[a.name]) : a.uri })) });
 const byUri = (uri) => allItems().find((i) => i.uri === uri || i._lib === uri);
 
+// a station favourited through the Search heart is now a library item, so MA returns its library copy (uri, provider, item_id)
+const asLibRadio = (it) => (it.media_type === 'radio' && it._inlib ? { ...libView(it), provider: 'library', item_id: libUri(it).split('/').pop() } : it);
+// radiohit=provider (v0.7 heart lookup): search keeps returning the provider copy (radiobrowser://…) even for library stations
+const RADIO_HIT_PROVIDER = params.get('radiohit') === 'provider';
 function search(name, limit, types, by = '') {
   const q = name.trim().toLowerCase();
   const byOk = (it) => !by || (it.artists ?? []).some((a) => a.name.toLowerCase() === by.toLowerCase()) || it.name.toLowerCase() === by.toLowerCase();
@@ -211,8 +218,7 @@ function search(name, limit, types, by = '') {
   const score = (it) => (it.name.trim().toLowerCase().startsWith(q) ? 0 : it.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)) ? 1 : 2);
   const want = new Set((types ?? Object.keys(TYPE2KEY)).map((t) => TYPE2KEY[t]));
   const out = {};
-  // a station favourited through the Search heart is now a library item, so MA returns its library copy (uri, provider, item_id)
-  const asLib = (it) => (it.media_type === 'radio' && it._inlib ? { ...libView(it), provider: 'library', item_id: libUri(it).split('/').pop() } : it);
+  const asLib = RADIO_HIT_PROVIDER ? (it) => it : asLibRadio;
   for (const key of KEYS) out[key] = want.has(key) ? CATALOG[key].filter((it) => hay(it).includes(q) && byOk(it)).sort((a, b) => score(a) - score(b)).slice(0, limit).map(asLib).map(pub) : [];
   return out;
 }
@@ -512,6 +518,8 @@ function sendCommand(command, d) {
     case 'music/item_by_uri': {
       const t = byUri(d.uri) ?? [...libTracks, ...LONG_DRIVE].find((x) => x.uri === d.uri);
       if (!t) throw new Error(`MediaNotFoundError: ${d.uri}`);
+      // like MA's RadioController.get(): the library copy when the station is in the library, else the provider item
+      if (t.media_type === 'radio') { window.__itemByUriLog?.push(d.uri); return pub(asLibRadio(t)); }
       return maItem(t);
     }
     case 'metadata/get_track_lyrics': {

@@ -13,6 +13,7 @@ import type { KeyDetail } from './keyboard';
 import './keyboard';
 import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, SearchCategory, SearchResults } from './types';
 import { defineElement } from './define';
+import { resolveLibraryRadioId } from './radio-fav';
 import { categoriesOn, resolveCategories, serviceTypes, defaultCategory } from './search-categories';
 
 const GROUPS: Array<{ key: GroupKey; label: string; type: string }> = [
@@ -74,6 +75,8 @@ export class JbSearch extends LitElement {
   /** Search radio heart (0.6.2): favourite state changed in this card, by uri (overrides the result's own flag). */
   private _favs: Record<string, boolean> = {};
   private _favBusy = new Set<string>();
+  /** library ids found by the v0.7 heart lookup, per search-result uri */
+  private _favIds: Record<string, string> = {};
   private _results: SearchResults | null = null;
   private _shownQuery = '';
   private _loading = false;
@@ -254,23 +257,35 @@ export class JbSearch extends LitElement {
   private canFav(g: GroupKey) { return g === 'radio' && !!this.config._backend?.caps.libraryWrite; }
   private isFav(it: MaItem) { return this._favs[it.uri] ?? !!it.favorite; }
   /** MA stores favourites on library items: a provider station is added to the library and marked favourite in one call.
-   *  Removing needs the library id, so it works for library results; a provider result that is already a favourite says so. */
+   *  Removing needs the library id. v0.7: a provider result (e.g. a search hit that MA returned as the Radio Browser copy)
+   *  has its library id looked up first with music/item_by_uri (read class), so un-hearting works for it too. */
   private async toggleFav(it: MaItem) {
     const be = this.config._backend;
     if (!be?.caps.libraryWrite || this._favBusy.has(it.uri)) return;
     const on = this.isFav(it);
-    const libId = it.provider === 'library' ? String(it.item_id ?? '') : (/^library:\/\/radio\/(.+)$/.exec(it.uri)?.[1] ?? '');
-    if (on && !libId) { this.toast(`${it.name} is in your favorites`); return; }
     this._favBusy.add(it.uri);
     this._favs = { ...this._favs, [it.uri]: !on };
+    let stage: 'lookup' | 'write' = 'lookup';
     try {
-      if (on) await be.send('music/favorites/remove_item', { media_type: 'radio', library_item_id: libId });
-      else await be.send('music/favorites/add_item', { item: it.uri });
+      if (on) {
+        const libId = this._favIds[it.uri] || await resolveLibraryRadioId(it, (c, d) => be.send(c, d));
+        if (!libId) {
+          this._favs = { ...this._favs, [it.uri]: on };
+          this.toast(`${it.name} isn't in your library`);
+          return;
+        }
+        this._favIds[it.uri] = libId;
+        stage = 'write';
+        await be.send('music/favorites/remove_item', { media_type: 'radio', library_item_id: libId });
+      } else {
+        stage = 'write';
+        await be.send('music/favorites/add_item', { item: it.uri });
+      }
       this.toast(on ? `Removed ${it.name} from favorites` : `Added ${it.name} to favorites`);
       this.engine.clearCache();
       fire(this, 'jukebox-favorites-changed', { media_type: 'radio', uri: it.uri, favorite: !on });
     } catch (e) {
-      console.warn('[jukebox-card] favorite failed', e);
+      console.warn(`[jukebox-card] favorite ${stage} failed`, e);
       this._favs = { ...this._favs, [it.uri]: on };
       this.toast(on ? `Couldn't remove ${it.name} from favorites` : `Couldn't add ${it.name} to favorites`);
     } finally {

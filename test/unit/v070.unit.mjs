@@ -9,7 +9,7 @@ const OUT = new URL('../tmp/unit-v070/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const bundle = await rollup({
   onwarn: (w, def) => { if (w.code !== 'THIS_IS_UNDEFINED') def(w); },
-  input: ['src/search-categories.ts', 'src/genres.ts', 'src/radio-browse.ts', 'src/discover.ts', 'src/backend/index.ts', 'src/editor.ts', 'src/library-home.ts'],
+  input: ['src/search-categories.ts', 'src/genres.ts', 'src/radio-browse.ts', 'src/discover.ts', 'src/backend/index.ts', 'src/editor.ts', 'src/library-home.ts', 'src/radio-fav.ts'],
   plugins: [resolve({ exportConditions: ['node'] }), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })],
 });
 await bundle.write({ dir: OUT, format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name]-[hash].mjs' });
@@ -25,6 +25,7 @@ const G = await import(OUT + 'genres.mjs');
 const R = await import(OUT + 'radio-browse.mjs');
 const D = await import(OUT + 'discover.mjs');
 const B = await import(OUT + 'index.mjs');
+const RF = await import(OUT + 'radio-fav.mjs');
 // src/define.ts registers through window.customElements; in node, lit's DOM shim puts customElements on globalThis
 globalThis.window ??= globalThis;
 const Ed = await import(OUT + 'editor.mjs');
@@ -271,6 +272,29 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
       ['set_autoplay_mode', { entity_id: 'media_player.placeholder', mode: 'library' }]]), J(log));
   const mq = new B.MassQueueBackend(() => hass, {});
   check('AP5 mass_queue backend: no style picker', mq.ext.autoplayMode === false && typeof mq.autoplayOptions !== 'function');
+}
+
+// ---- v0.7 radio heart: library id lookup before removing (placeholder uris/ids only) ----
+{
+  const P = 'radiobrowser://radio/00000000-0000-0000-0000-000000000001';
+  check('HL1 libraryRadioId: library copy → item_id; library:// uri → id; provider item → ""',
+    RF.libraryRadioId({ provider: 'library', item_id: 12, uri: 'library://radio/12' }) === '12' && RF.libraryRadioId({ provider: 'radiobrowser', uri: 'library://radio/9' }) === '9'
+    && RF.libraryRadioId({ provider: 'radiobrowser', item_id: 'abc', uri: P }) === '' && RF.libraryRadioId(null) === '' && RF.libraryRadioId({ provider: 'library', item_id: '' , uri: P }) === '');
+  const calls = [];
+  const send = (answer) => async (c, d) => { calls.push([c, d]); if (answer instanceof Error) throw answer; return answer; };
+  let id = await RF.resolveLibraryRadioId({ provider: 'library', item_id: '5', uri: 'library://radio/5' }, send(null));
+  check('HL2 a library item needs no lookup', id === '5' && calls.length === 0, JSON.stringify(calls));
+  id = await RF.resolveLibraryRadioId({ provider: 'radiobrowser', item_id: 'x', uri: P, media_type: 'radio' }, send({ media_type: 'radio', provider: 'library', item_id: '41', uri: 'library://radio/41' }));
+  check('HL3 provider item → one music/item_by_uri {uri} (no allow_update_metadata), library copy → its id',
+    id === '41' && calls.length === 1 && calls[0][0] === 'music/item_by_uri' && JSON.stringify(calls[0][1]) === JSON.stringify({ uri: P }), JSON.stringify(calls));
+  const a = await RF.resolveLibraryRadioId({ uri: P }, send({ media_type: 'radio', provider: 'radiobrowser', item_id: 'x', uri: P }));
+  const b = await RF.resolveLibraryRadioId({ uri: P }, send({ media_type: 'track', provider: 'library', item_id: '3', uri: 'library://track/3' }));
+  const c = await RF.resolveLibraryRadioId({ uri: P }, send(null));
+  const d = await RF.resolveLibraryRadioId({ name: 'no uri' }, send({ provider: 'library', item_id: '1' }));
+  check('HL4 not in the library (provider copy back), a non-radio answer, null, or no uri → ""', a === '' && b === '' && c === '' && d === '', JSON.stringify([a, b, c, d]));
+  let err = '';
+  try { await RF.resolveLibraryRadioId({ uri: P }, send(new Error('unavailable'))); } catch (e) { err = e.message; }
+  check('HL5 lookup errors propagate (the card reverts the heart and says so)', err === 'unavailable', err);
 }
 
 console.log(`\n${total - failures}/${total} v0.7 unit checks passed`);

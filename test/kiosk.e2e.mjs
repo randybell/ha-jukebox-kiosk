@@ -219,9 +219,15 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   let m = maOf(await ws(p, n));
   check('R3 heart → jukebox_kiosk/ma music/favorites/add_item {item: the station uri}; heart on; toast', m.length === 1 && m[0].command === 'music/favorites/add_item' && J(m[0].args) === J({ item: st })
     && (await ev(p, `${heart(st)}.getAttribute('aria-pressed')`)) === 'true' && /^Added .+ to favorites$/.test(await toast(p)), J({ m, t: await toast(p) }));
+  // v0.7 (design branch): the row still shows the provider copy; the heart looks up the library id first, then removes
   n = await nws(p);
-  await tapHeart(p, st); await sleep(150);
-  check('R4 a provider result already in favorites: no library id → says so, nothing sent', maOf(await ws(p, n)).length === 0 && /is in your favorites/.test(await toast(p)), await toast(p));
+  await tapHeart(p, st); await sleep(200);
+  m = maOf(await ws(p, n));
+  check('R4 (v0.7) provider result already in favorites → music/item_by_uri {uri}, then remove_item {radio, library id}; heart off',
+    m.length === 2 && m[0].command === 'music/item_by_uri' && J(m[0].args) === J({ uri: st })
+    && m[1].command === 'music/favorites/remove_item' && m[1].args.media_type === 'radio' && /^\d+$/.test(String(m[1].args.library_item_id))
+    && (await ev(p, `${heart(st)}.getAttribute('aria-pressed')`)) === 'false' && /^Removed .+ from favorites$/.test(await toast(p)), J({ m, t: await toast(p) }));
+  await tapHeart(p, st); await sleep(200); // favourite again for R5–R7
   // MA now returns the station's library copy: the heart is on and removes it
   await query(p, 'mockingbird');
   r = (await rows(p)).filter((x) => x.g === 'radio');
@@ -263,6 +269,61 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   await ev(p, `(${SV}.config._backend.send = () => Promise.reject(new Error('unauthorized')))`);
   await tapHeart(p, st2); await sleep(200);
   check('R8 refused → heart back off, "Couldn\'t add … to favorites"', (await ev(p, `${heart(st2)}.getAttribute('aria-pressed')`)) === 'false' && /^Couldn.t add .+ to favorites$/.test(await toast(p)), await toast(p));
+  await p.close();
+}
+// ---------------- 8. v0.7 heart lookup: un-heart a non-library (provider) search result ----------------
+{
+  const SV = `__card.shadowRoot.querySelector('jb-search')`;
+  const rows = (p) => ev(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].filter((r) => r.dataset.group === 'radio').map((r) => ({ uri: r.dataset.uri,
+    name: r.querySelector('.t, .name, .title')?.textContent?.trim() ?? r.textContent.trim().slice(0, 40), fav: r.querySelector('[data-act=fav]')?.getAttribute('aria-pressed') ?? null }))`);
+  const query = async (p, q) => { await ev(p, `${SV}.setQuery(${J(q)})`); await wait(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].some((r) => r.dataset.group === 'radio')`); await sleep(150); };
+  const toast = (p) => ev(p, `${SV}._toast`);
+  const heart = (uri) => `${SV}.shadowRoot.querySelector('.row[data-uri="${uri}"] [data-act=fav]')`;
+  const tapHeart = async (p, uri) => { await ev(p, `${heart(uri)}.scrollIntoView({ block: 'center' })`); await sleep(80); await tap(p, heart(uri)); };
+  const pressed = (p, uri) => ev(p, `${heart(uri)}.getAttribute('aria-pressed')`);
+  // station 1 (Mockingbird FM): favourite AND in the library; station 2: favourite on the provider only (not in the library).
+  // radiohit=provider: MA's search returns the radiobrowser:// copies, not the library copy.
+  const KQ = `&tab=search&radio=1&stations=fake&radiofav=2&radioinlib=1&radiohit=provider&kcaps=${encodeURIComponent(J({ library_write: true }))}`;
+  let p = await open(KQ);
+  await query(p, 'mockingbird');
+  let r = await rows(p);
+  const a = r.find((x) => x.uri.startsWith('radiobrowser://'));
+  check('H1 search returns the provider copy of a library favourite: heart on', !!a && a.fav === 'true' && r.every((x) => !x.uri.startsWith('library://')), J(r));
+  let n = await nws(p);
+  await tapHeart(p, a.uri); await sleep(250);
+  let m = maOf(await ws(p, n));
+  const libId = m[1]?.args?.library_item_id;
+  check('H2 un-heart → item_by_uri {uri: provider uri} (no allow_update_metadata; the server forces False) → remove_item {media_type radio, library_item_id from the lookup}; heart off; "Removed …"',
+    m.length === 2 && m[0].command === 'music/item_by_uri' && J(m[0].args) === J({ uri: a.uri }) && m[1].command === 'music/favorites/remove_item'
+    && m[1].args.media_type === 'radio' && /^\d+$/.test(String(libId)) && (await pressed(p, a.uri)) === 'false' && /^Removed .+ from favorites$/.test(await toast(p)),
+    J({ m, t: await toast(p) }));
+  await query(p, 'lakeside'); await query(p, 'mockingbird');
+  check('H3 the favourite is gone in MA: a fresh search shows the heart off', (await rows(p)).find((x) => x.uri === a.uri)?.fav === 'false', J(await rows(p)));
+  n = await nws(p);
+  await tapHeart(p, a.uri); await sleep(200);
+  await tapHeart(p, a.uri); await sleep(200);
+  m = maOf(await ws(p, n));
+  check('H4 heart again (add_item) then un-heart: the library id is remembered, no second lookup',
+    m.map((x) => x.command).join() === 'music/favorites/add_item,music/favorites/remove_item' && String(m[1].args.library_item_id) === String(libId) && (await pressed(p, a.uri)) === 'false', J(m));
+
+  // a provider favourite that is not in the library: nothing to remove in MA → heart stays on, says so, no remove sent
+  await query(p, 'lakeside');
+  const b = (await rows(p)).find((x) => x.fav === 'true');
+  n = await nws(p);
+  await tapHeart(p, b?.uri); await sleep(250);
+  m = maOf(await ws(p, n));
+  check('H5 not in the library → only item_by_uri, no remove_item; heart stays on; "… isn\'t in your library"',
+    !!b && m.length === 1 && m[0].command === 'music/item_by_uri' && (await pressed(p, b.uri)) === 'true' && /isn.t in your library$/.test(await toast(p)), J({ b, m, t: await toast(p) }));
+
+  // lookup refused (e.g. the server is down): heart back on, "Couldn't remove", no remove sent
+  await p.close();
+  p = await open(KQ); // fresh mock: station 1 is a library favourite again
+  await query(p, 'mockingbird');
+  await ev(p, `(() => { const be = ${SV}.config._backend, s0 = be.send.bind(be); be.send = (c, d) => (c === 'music/item_by_uri' ? Promise.reject(new Error('unavailable')) : s0(c, d)); })()`);
+  n = await nws(p);
+  await tapHeart(p, a.uri); await sleep(250);
+  check('H6 lookup fails → heart back on, "Couldn\'t remove … from favorites", nothing written',
+    (await pressed(p, a.uri)) === 'true' && /^Couldn.t remove .+ from favorites$/.test(await toast(p)) && maOf(await ws(p, n), 'music/favorites/remove_item').length === 0, await toast(p));
   await p.close();
 }
 check('no page errors', pageErrors.length === 0, J(pageErrors.slice(0, 3)));
