@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 
 const OUT = new URL('../tmp/unit-speakers/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
-const bundle = await rollup({ input: ['src/speakers/model.ts', 'src/queue-model.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
+const bundle = await rollup({ input: ['src/speakers/model.ts', 'src/queue-model.ts', 'src/speakers/ask-hold.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
 await bundle.write({ dir: OUT, format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name]-[hash].mjs' });
 await bundle.close();
 
@@ -21,6 +21,7 @@ const origWarn = console.warn; console.warn = () => {};
 
 const M = await import(OUT + 'model.mjs');
 const Q = await import(OUT + 'queue-model.mjs');
+const AH = await import(OUT + 'ask-hold.mjs');
 
 let failures = 0, total = 0;
 function check(name, ok, info = '') { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); }
@@ -301,5 +302,36 @@ check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.is
 }
 await tick(700); // let refreshSoon timers drain
 console.warn = origWarn;
+
+// ---------------- 0.6.5 (Q62): a pending chip question survives other status messages ----------------
+{
+  const h = new AH.AskHold();
+  const got = [];
+  h.ask((ok) => got.push(ok));
+  check('Q62-U1 a question is pending after ask()', h.pending && got.length === 0);
+  const shown = h.admit({ text: 'Kitchen joined Indoor' }, false, 1000);
+  check('Q62-U2 a non-question message while asking is held, not shown, and does not answer the question', shown === false && h.pending && got.length === 0 && h.waiting?.text === 'Kitchen joined Indoor');
+  h.admit({ text: 'refresh error' }, false, 1100);
+  check('Q62-U3 the latest held message wins', h.waiting?.text === 'refresh error' && got.length === 0);
+  check('Q62-U4 nothing is released while the question is still pending', h.release(() => 4000, 1200) === undefined && h.waiting?.text === 'refresh error');
+  h.answer(true);
+  check('Q62-U5 answer(true) resolves the question with yes, once', J(got) === '[true]' && !h.pending);
+  h.answer(false);
+  check('Q62-U6 a second answer is a no-op', J(got) === '[true]');
+  const r = h.release(() => 4000, 2100);
+  check('Q62-U7 after the answer the held message is released with its remaining time', r?.v.text === 'refresh error' && r.ms === 3000 && h.waiting === undefined, J(r));
+}
+{
+  const h = new AH.AskHold();
+  const a = [], b = [];
+  h.ask((ok) => a.push(ok));
+  const shown = h.admit({ text: 'Take Garage?' }, true);
+  h.ask((ok) => b.push(ok));
+  check('Q62-U8 a new question replaces the old one (the old one answers no)', shown === true && J(a) === '[false]' && h.pending && b.length === 0);
+  h.admit({ text: 'late' }, false, 0);
+  check('Q62-U9 a held message that went stale is dropped on release', (h.answer(false), h.release(() => 4000, 3800)) === undefined && J(b) === '[false]');
+  check('Q62-U10 with no question pending every message shows at once', new AH.AskHold().admit({ text: 'x' }, false) === true);
+}
+
 console.log(`\n${total - failures}/${total} speakers unit checks passed`);
 process.exit(failures ? 1 : 0);

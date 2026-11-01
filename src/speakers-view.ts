@@ -11,6 +11,7 @@ import {
   takeovers, takeoverText, dropBlock, planMembers, presetSpeakers, maPresets, type MaPlayer, type Players, type Room, type Takeover, type Target,
 } from './speakers/model';
 import { defineElement } from './define';
+import { AskHold } from './speakers/ask-hold';
 
 /**
  * Speakers panel (0.5.0). Opened from the header status.
@@ -29,12 +30,15 @@ interface Undo { label: string; run: () => Promise<void> }
 type ChipKind = 'info' | 'busy' | 'error' | 'ask';
 interface Chip { text: string; kind: ChipKind; act?: { label: string; run: () => void }; n: number }
 interface Pending<T> { v: T; t: number }
+interface StatusOpts { kind?: ChipKind; undo?: Undo; act?: Chip['act']; ms?: number }
 const UNDO_MS = 4000;
 const CHIP_MS = 4000;
 const ERROR_MS = 6000;
 const ASK_MS = 6000;
 const BUSY_MS = 15000;
 const ms = (k: string, d: number) => Number((window as any)[k] ?? d);
+const chipMs = (kind: ChipKind, undo: boolean) => kind === 'busy' ? BUSY_MS : kind === 'error' ? ms('__jbErrorMs', ERROR_MS) : kind === 'ask' ? ms('__jbAskMs', ASK_MS)
+  : undo ? ms('__jbUndoMs', UNDO_MS) : ms('__jbChipMs', CHIP_MS);
 const HOLD_MS = 4000;
 const REGROUP_MS = 15000;
 const VOL_THROTTLE_MS = 200;
@@ -53,8 +57,9 @@ export class JbSpeakers extends LitElement {
   private _ask: Ask | null = null;
   private _chip: Chip | null = null;
   private _chipN = 0;
-  /** resolves a pending chip question (false when it times out, is dismissed or replaced) */
-  private _chipAsk?: (ok: boolean) => void;
+  /** the pending chip question (false when it times out, is dismissed or replaced by another question) and any message
+   * that arrived while it waits (Q62) */
+  private _hold = new AskHold<{ text: string; o: StatusOpts }>();
   /** optimistic grouping: speaker (MA id) → 'in' | 'out', target entity → 'move' */
   private _busy = new Map<string, string>();
   private _tick = 0;
@@ -147,31 +152,37 @@ export class JbSpeakers extends LitElement {
     const t = targetsOf(this.config, this.hass).find((x) => targetMa(x.entity, this.hass, players) === id);
     return t?.name ?? players.get(id)?.name ?? id;
   }
-  /** 0.6.4: show one status message in the top-right chip; it replaces whatever was there (a pending question answers no) */
-  private status(text: string, o: { kind?: ChipKind; undo?: Undo; act?: Chip['act']; ms?: number } = {}) {
-    const ask = this._chipAsk; this._chipAsk = undefined; ask?.(false);
-    window.clearTimeout(this._chipTimer);
+  /** 0.6.4: show one status message in the top-right chip; it replaces whatever was there.
+   * 0.6.5 (Q62): a pending question is only replaced by another question. Any other message that lands meanwhile (a late
+   * "X joined · Undo" from an earlier change, a refresh error, …) waits and shows once the question is answered or times out;
+   * before, it answered the question with "no". */
+  private status(text: string, o: StatusOpts = {}) {
     const kind = o.kind ?? 'info';
+    if (!this._hold.admit({ text, o }, kind === 'ask')) return;
+    window.clearTimeout(this._chipTimer);
     const act = o.undo ? { label: 'Undo', run: () => void this.doUndo(o.undo!) } : o.act;
     const n = ++this._chipN;
     this._chip = { text, kind, act, n };
-    const t = o.ms ?? (kind === 'busy' ? BUSY_MS : kind === 'error' ? ms('__jbErrorMs', ERROR_MS) : kind === 'ask' ? ms('__jbAskMs', ASK_MS)
-      : o.undo ? ms('__jbUndoMs', UNDO_MS) : ms('__jbChipMs', CHIP_MS));
+    const t = o.ms ?? chipMs(kind, !!o.undo);
     this._chipTimer = window.setTimeout(() => this.clearChip(n), t);
   }
   /** hide the chip (only if it still shows message n, when given) */
   private clearChip(n?: number) {
     if (n !== undefined && this._chip?.n !== n) return;
     window.clearTimeout(this._chipTimer); this._chip = null;
-    const ask = this._chipAsk; this._chipAsk = undefined; ask?.(false);
+    this._hold.answer(false);
+    const l = this._hold.release((v) => v.o.ms ?? chipMs(v.o.kind ?? 'info', !!v.o.undo));
+    if (l) this.status(l.v.text, { ...l.v.o, ms: l.ms });
   }
+  /** Q62 (tests): a question is waiting in the chip */
+  get asking() { return this._hold.pending; }
   private toast(t: string) { this.status(t); }
   private fail(t: string) { this.status(t, { kind: 'error' }); }
   /** a non-modal question in the chip: true when its action is tapped before it hides */
   private chipAsk(text: string, ok: string): Promise<boolean> {
     return new Promise((resolve) => {
-      this.status(text, { kind: 'ask', act: { label: ok, run: () => { const r = this._chipAsk; this._chipAsk = undefined; this.clearChip(); r?.(true); } } });
-      this._chipAsk = resolve;
+      this.status(text, { kind: 'ask', act: { label: ok, run: () => { this._hold.answer(true); this.clearChip(); } } });
+      this._hold.ask(resolve);
     });
   }
   private async doUndo(u: Undo) {

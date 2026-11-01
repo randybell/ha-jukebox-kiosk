@@ -347,8 +347,8 @@ const allJoins = [];
   await wait(p, `window.__ma.G.syncgroup_mock_outdoor.members.includes('wiim_mock_kitchen') && ${act(LIV)}?.dataset.act === 'take'`, 5000);
   await wait(p, `window.__hass.states['${IN}'].state === 'playing'`, 4000);
   await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.group_members?.length === 1`, 3000);
-  // wait for Kitchen's take to finish: its late "Kitchen joined Outdoor · Undo" status replaces (answers no to) a question
-  // asked in the meantime, which made S12 flaky (also on main 0.6.4)
+  // wait for Kitchen's take to finish (0.6.4: its late "Kitchen joined Outdoor · Undo" answered a question asked meanwhile
+  // with "no"; fixed in 0.6.5 / Q62, the race itself is covered by Q62-E5/E6 below)
   await wait(p, `!${row(KIT)}?.classList.contains('pending') && ${SR}.querySelector('.st .ct')?.textContent.includes('Kitchen joined')`, 5000);
   await tap(p, act(LIV));
   await wait(p, ASKQ);
@@ -1132,6 +1132,63 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
     check('C16 dismissing the chip question sends nothing', (await ma(p, 'players/cmd/set_members')).length === 0 && !(await chip(p)));
     await p.close();
   }
+}
+
+// ---------------- 0.6.5 (Q62): a pending chip question survives state updates and late status messages ----------------
+{
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}`, { width: 1280, height: 800 });
+  await p.evaluate(() => { window.__jbAskMs = 20000; });
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${act(GAR)}?.dataset.act === 'take'`, 4000);
+  const n0 = (await ma(p, 'players/cmd/set_members')).length;
+  await tap(p, act(GAR));
+  await wait(p, `!!${SR}.querySelector('.st.ask')`, 1500);
+  const q0 = (await chip(p))?.text;
+  // hass state pushes while the question waits (volume, position and a room's state), as Home Assistant sends them
+  for (let i = 0; i < 6; i++) {
+    await ev(p, `(() => { const h = __card.hass, s = { ...h.states };
+      for (const id of ['${LIV}', '${KIT}', '${GAR}', '${IN}']) if (s[id]) s[id] = { ...s[id], attributes: { ...s[id].attributes, volume_level: ${0.2 + i * 0.05}, media_position: ${10 + i} }, last_updated: new Date().toISOString() };
+      __card.hass = { ...h, states: s }; })()`);
+    await sleep(120);
+  }
+  const c1 = await chip(p);
+  check('Q62-E1 hass state updates while the chip asks: the question stays (same text, still asking), nothing sent',
+    c1?.kind === 'ask' && c1.text === q0 && (await ev(p, `${SPK}.asking`)) && (await ma(p, 'players/cmd/set_members')).length === n0, J({ q0, c1 }));
+  // a late status from an earlier change lands meanwhile (0.6.4: it replaced the chip and answered "no")
+  await ev(p, `${SPK}.status('Kitchen joined Indoor', { undo: { label: 'Kitchen joined', run: async () => {} } })`);
+  await sleep(150);
+  const c2 = await chip(p);
+  check('Q62-E2 a late "joined · Undo" message waits behind the question instead of answering it', c2?.kind === 'ask' && c2.text === q0 && (await ev(p, `${SPK}.asking`)), J(c2));
+  await confirm(p);
+  await wait(p, `window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_garage')`, 5000);
+  const sm = (await ma(p, 'players/cmd/set_members')).at(-1);
+  check('Q62-E3 answering yes after the updates still takes the speaker (set_members add Garage)', (await ma(p, 'players/cmd/set_members')).length > n0 && J(sm?.data.player_ids_to_add) === J(['wiim_mock_garage']), J(sm));
+  const seen = await wait(p, `[...${SR}.querySelectorAll('.st .ct')].some((x) => /Kitchen joined Indoor|Garage joined/.test(x.textContent))`, 3000);
+  check('Q62-E4 the held message (or the new result) shows after the answer', seen, J(await chip(p)));
+  await p.close();
+}
+{
+  // the real race (S12 before the test waited): take Kitchen, then ask about Living Room while Kitchen is still joining
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${OUT}`);
+  await p.evaluate(() => { window.__jbAskMs = 20000; });
+  await tap(p, `${NOW}.shadowRoot.querySelector('.pp')`);
+  await wait(p, ASKQ); await confirm(p);
+  await wait(p, `window.__hass.states['${OUT}'].state === 'playing'`);
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${act(KIT)}?.dataset.act === 'take' && ${act(LIV)}?.dataset.act === 'take'`, 4000);
+  await tap(p, act(KIT)); await confirm(p);
+  // straight away, while Kitchen's join is in flight
+  await tap(p, act(LIV));
+  const asked = await wait(p, `!!${SR}.querySelector('.st.ask')`, 2000);
+  // Kitchen's "joined" lands now
+  await wait(p, `!${row(KIT)}?.classList.contains('pending') && window.__ma.G.syncgroup_mock_outdoor.members.includes('wiim_mock_kitchen')`, 5000);
+  await sleep(400);
+  const c = await chip(p);
+  check('Q62-E5 the Living Room question survives Kitchen\'s late "joined" result (0.6.4 answered it "no")', asked && c?.kind === 'ask' && /Living Room/.test(c.text), J(c));
+  await confirm(p);
+  const ok = await wait(p, `window.__ma.G.syncgroup_mock_outdoor.members.includes('wiim_mock_living')`, 5000);
+  check('Q62-E6 confirming it then takes Living Room as well', ok, J(await maMembers(p, 'syncgroup_mock_outdoor')));
+  await p.close();
 }
 
 // ---------------- HA 2026.10: an ungrouped MA player reports group_members: [] ----------------
