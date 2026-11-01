@@ -483,8 +483,8 @@ export class JbBrowse extends LitElement {
   private filterTpl() {
     const a = this._lart, q = this._lq.trim();
     if (!this.filtersOn() || (!a && !q)) return nothing;
-    // while typing with only a text filter, the filter box already shows (and clears) it: the phone hides this row
-    return html`<div class="scope ${this._lkb && !a ? 'typing' : ''}" role="group" aria-label="Library filters">
+    // while typing, the filter box already shows (and clears) the text: the phone hides the text chip (and the row if that's all)
+    return html`<div class="scope ${this._lkb ? 'typing' : ''} ${a ? '' : 'textonly'}" role="group" aria-label="Library filters">
       ${a ? html`<button class="sc" data-scope="artist" tabindex="-1" aria-label=${`Remove filter Artist: ${a.name}`} @pointerdown=${noFocus}
         @click=${() => this.setArtistFilter(null)}><span class="scl">Artist:</span><b>${a.name}</b>${icon('close', 'i scx')}</button>` : nothing}
       ${q ? html`<button class="sc" data-scope="text" tabindex="-1" aria-label=${`Remove filter “${q}”`} @pointerdown=${noFocus}
@@ -724,7 +724,8 @@ export class JbBrowse extends LitElement {
       .fc.flt { padding: 0 12px; }
       .fc.flt .fl { display: none; }
       .lfq { height: 46px; font-size: 17px; }
-      .scope.typing { display: none; }
+      .scope.typing.textonly { display: none; }
+      .scope.typing .sc[data-scope="text"] { display: none; }
     }
     .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }

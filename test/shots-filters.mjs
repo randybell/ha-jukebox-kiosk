@@ -32,6 +32,10 @@ for (const vp of [{ width: 1920, height: 1080 }, { width: 390, height: 844 }]) {
   await wait(p, `${SV}.querySelector('.lsec[data-sec="providers"]')`);
   if (vp.width < 600) await tap(p, `${SV}.querySelector('.fc[data-group="tracks"], .chips [data-g="tracks"], [data-chip="tracks"]') ?? [...${SV}.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Tracks')`);
   await shot(p, 'e-library-first');
+  if (vp.width < 600) { // phone: scroll to where the library part ends and the provider results begin
+    await ev(p, `[...${SV}.querySelectorAll('.lsec[data-sec="providers"]')].at(-1).scrollIntoView({ block: 'center' })`);
+    await shot(p, 'e2-library-first-providers');
+  }
   // a) artist page with the scope action
   if (vp.width < 600) await tap(p, `[...${SV}.querySelectorAll('button')].find((b) => b.textContent.trim() === 'All')`);
   await tap(p, `${SV}.querySelector('.row[data-group="artists"][data-uri^="library://"] .rt')`);
