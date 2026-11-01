@@ -3,7 +3,8 @@ import { createV07 } from './mock-v07.js';
 // harness: ?kiosk=1 adds hass.config.components ['music_assistant', 'jukebox_kiosk'], hass.callWS and hass.connection.
 // kcaps=<json> overrides capability flags (e.g. {"queue_edit":false,"lyrics":false}); kfail=<type> makes that message type
 // throw. Every message is logged in window.__ws ({type, ...}). Placeholder ids only.
-//   jukebox_kiosk/capabilities, /ma {command,args}, /queue_items, /item_tracks, /unfavorite_current, /subscribe_queue
+//   jukebox_kiosk/capabilities, /ma {command,args}, /queue_items, /item_tracks, /unfavorite_current, /subscribe_queue,
+//   /set_autoplay, /autoplay_options, /set_autoplay_mode
 // The /ma allowlist mirrors const.py MA_COMMANDS; metadata/get_track_lyrics refuses library tracks like the server.
 const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks|in_progress_items)|metadata\/get_track_lyrics)$/;
 const V07 = /^music\/(browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks)$/;
@@ -13,6 +14,12 @@ const FEATURES = { queue: true, queue_play: true, queue_edit: true, undo: true, 
   // v0.7 (read class): genres, Radio Browser "Stations by…", Discover rows, resume positions
   genres: true, radio_browse: true, discover: true, resume: true };
 const err = (code, message) => Object.assign(new Error(message), { code });
+// Autoplay style (server: autoplay_options / set_autoplay_mode over MA config/player_queues/*). Fake playlist names only.
+// apsimilar=0: no provider can find similar tracks; apmode=<mode>[:<n>] pins a style (n = playlist index).
+const AP_PLAYLISTS = [['library://playlist/901', 'Sunday Morning Mix'], ['library://playlist/902', 'Kitchen Dance Party'],
+  ['library://playlist/903', 'Rainy Day Jazz'], ['library://playlist/904', 'Road Trip Singalong'], ['library://playlist/905', 'Quiet Focus']]
+  .map(([uri, name]) => ({ uri, name }));
+const AP_MODES = ['auto', 'similar', 'library', 'playlist'];
 
 export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit, sleep, catalog, user }) {
   const v07 = createV07({ params, catalog, sleep });
@@ -22,6 +29,17 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
   const kcaps = params.get('kcaps') ? JSON.parse(params.get('kcaps')) : {};
   const kfail = params.get('kfail') ?? '';
   const features = { ...FEATURES, ...kcaps };
+  const apSimilar = params.get('apsimilar') !== '0';
+  const [apM0, apN0] = (params.get('apmode') ?? '').split(':');
+  const apState = (Q) => (Q.ap ??= { mode: AP_MODES.includes(apM0) ? apM0 : 'global', playlist: apM0 === 'playlist' ? AP_PLAYLISTS[Number(apN0) || 0].uri : null });
+  const apOpts = (ent) => {
+    const Q = QS[ent];
+    if (!Q) throw err('not_found', `${ent} is not a Music Assistant player`);
+    const a = apState(Q), follows = a.mode === 'global';
+    const pl = AP_PLAYLISTS.find((p) => p.uri === a.playlist) ?? null;
+    return { queue_id: st(ent).attributes.active_queue, mode: follows ? 'auto' : a.mode, follows_default: follows, playlist: follows ? null : pl,
+      modes: AP_MODES.map((m) => ({ mode: m, available: m !== 'similar' || apSimilar })), playlists: AP_PLAYLISTS };
+  };
   const entOf = (qid) => Object.keys(QS).find((k) => st(k)?.attributes?.active_queue === qid);
   const push = (qid) => { for (const s of subs.values()) if (!qid || st(s.entity)?.attributes?.active_queue === qid) s.cb({ event: 'queue_updated', queue_id: qid }); };
   window.__kioskPush = (entity = 'media_player.everywhere') => push(st(entity)?.attributes?.active_queue);
@@ -89,6 +107,21 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
         if (!Q) throw err('not_found', `${msg.entity_id} is not a Music Assistant player`);
         Q.autoplay = !!msg.enabled;
         return { queue_id: st(msg.entity_id).attributes.active_queue, autoplay: Q.autoplay };
+      }
+      case 'autoplay_options': {
+        if (!features.autoplay_mode) throw err('unauthorized', 'Unauthorized');
+        return apOpts(msg.entity_id);
+      }
+      case 'set_autoplay_mode': {
+        if (!features.autoplay_mode) throw err('unauthorized', 'Unauthorized');
+        const o = apOpts(msg.entity_id), Q = QS[msg.entity_id];
+        if (!o.modes.some((m) => m.mode === msg.mode && m.available)) throw err('unsupported', `Autoplay style ${msg.mode} is not available`);
+        if (msg.mode === 'playlist' && !AP_PLAYLISTS.some((p) => p.uri === msg.playlist)) throw err('invalid_args', 'Only playlists in the library can be used');
+        if (msg.mode !== 'playlist' && msg.playlist) throw err('invalid_args', 'playlist is only used with the playlist style');
+        Q.ap = { mode: msg.mode, playlist: msg.mode === 'playlist' ? msg.playlist : apState(Q).playlist };
+        push(o.queue_id);
+        const pl = msg.mode === 'playlist' ? AP_PLAYLISTS.find((p) => p.uri === msg.playlist) : null;
+        return { queue_id: o.queue_id, mode: msg.mode, follows_default: false, playlist: pl };
       }
       case 'item_tracks': {
         if (!features.track_lists) throw err('unauthorized', 'Unauthorized');

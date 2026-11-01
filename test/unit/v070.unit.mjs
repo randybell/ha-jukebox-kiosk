@@ -54,7 +54,7 @@ check('C8 labels', C.categoryLabel('audiobooks') === 'Audiobooks' && C.categoryL
 // ---------------- kiosk ext caps ----------------
 check('E1 extFromServer: missing features → all off', J(B.extFromServer(undefined)) === J(B.NO_EXT) && J(B.extFromServer({})) === J(B.NO_EXT));
 check('E2 extFromServer reads genres / radio_browse / discover / resume (booleans only)',
-  J(B.extFromServer({ genres: true, radio_browse: true, discover: 'yes', resume: false })) === J({ genres: true, radioBrowse: true, discover: false, resume: false, autoplay: false }));
+  J(B.extFromServer({ genres: true, radio_browse: true, discover: 'yes', resume: false })) === J({ genres: true, radioBrowse: true, discover: false, resume: false, autoplay: false, autoplayMode: false }));
 check('E3 genres falls back to genre_overview', B.extFromServer({ genre_overview: true }).genres === true && B.extFromServer({ genre_overview: true, genres: false }).genres === false);
 
 // ---------------- genres ----------------

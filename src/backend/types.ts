@@ -53,8 +53,26 @@ export interface ExtCaps {
   resume: boolean;
   /** MA Autoplay ("don't stop the music") toggle: jukebox_kiosk/set_autoplay (permission class queue) */
   autoplay: boolean;
+  /** Autoplay style picker: jukebox_kiosk/autoplay_options + set_autoplay_mode (permission class queue) */
+  autoplayMode: boolean;
 }
-export const NO_EXT: ExtCaps = { genres: false, radioBrowse: false, discover: false, resume: false, autoplay: false };
+export const NO_EXT: ExtCaps = { genres: false, radioBrowse: false, discover: false, resume: false, autoplay: false, autoplayMode: false };
+
+/** Where MA Autoplay takes music from when the queue runs out (MA 2.10.9 per-queue `autoplay_mode`). */
+export type AutoplayMode = 'auto' | 'similar' | 'library' | 'playlist';
+export const AUTOPLAY_MODES: readonly AutoplayMode[] = ['auto', 'similar', 'library', 'playlist'];
+/** jukebox_kiosk/autoplay_options */
+export interface AutoplayOptions {
+  /** effective style (MA's global setting when follows_default) */
+  mode: AutoplayMode;
+  /** the queue has no own style and follows MA's global Autoplay setting */
+  followsDefault: boolean;
+  playlist: { uri: string; name: string } | null;
+  /** styles MA offers; available=false when no provider can do it (similar without a similar-tracks provider) */
+  modes: { mode: AutoplayMode; available: boolean }[];
+  /** library playlists for the playlist style */
+  playlists: { uri: string; name: string }[];
+}
 
 /** A queue window in the mass_queue get_queue_items row shape. */
 export interface QueueWindow {
@@ -99,6 +117,10 @@ export interface MaBackend {
   unfavoriteCurrent(entity: string): Promise<unknown>;
   /** Turn MA Autoplay on/off for the entity's queue (kiosk only). */
   setAutoplay?(entity: string, enabled: boolean): Promise<unknown>;
+  /** Autoplay style for the entity's queue (kiosk only). */
+  autoplayOptions?(entity: string): Promise<AutoplayOptions>;
+  /** Pin the Autoplay style for the entity's queue; playlist (a library playlist uri) only with mode playlist. */
+  setAutoplayMode?(entity: string, mode: AutoplayMode, playlist?: string): Promise<unknown>;
   /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. */
   subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;
 }

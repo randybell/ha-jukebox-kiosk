@@ -7,7 +7,7 @@
  *   jukebox_kiosk/unfavorite_current, jukebox_kiosk/subscribe_queue
  */
 import type { HomeAssistant } from '../types';
-import { BackendError, Emitter, NO_EXT, type Caps, type ExtCaps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
+import { AUTOPLAY_MODES, BackendError, Emitter, NO_EXT, type AutoplayMode, type AutoplayOptions, type Caps, type ExtCaps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
 
 export const KIOSK_DOMAIN = 'jukebox_kiosk';
 export const KIOSK_PAGE_SIZE = 100;
@@ -30,7 +30,7 @@ export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
  */
 export function extFromServer(f: Record<string, unknown> | undefined): ExtCaps {
   const b = (k: string, d = false) => (f && typeof f[k] === 'boolean' ? (f[k] as boolean) : d);
-  return { genres: b('genres', b('genre_overview')), radioBrowse: b('radio_browse'), discover: b('discover'), resume: b('resume'), autoplay: b('autoplay') };
+  return { genres: b('genres', b('genre_overview')), radioBrowse: b('radio_browse'), discover: b('discover'), resume: b('resume'), autoplay: b('autoplay'), autoplayMode: b('autoplay_mode') };
 }
 const code = (e: any): string => String(e?.code ?? '');
 
@@ -107,6 +107,21 @@ export class KioskBackend implements MaBackend {
   }
   setAutoplay(entity: string, enabled: boolean) {
     return this.ws({ type: 'set_autoplay', entity_id: entity, enabled });
+  }
+  async autoplayOptions(entity: string): Promise<AutoplayOptions> {
+    const r = await this.ws<any>({ type: 'autoplay_options', entity_id: entity });
+    const isMode = (m: unknown): m is AutoplayMode => AUTOPLAY_MODES.includes(m as AutoplayMode);
+    const pl = (p: any) => (p && typeof p.uri === 'string' ? { uri: p.uri, name: String(p.name || p.uri) } : null);
+    return {
+      mode: isMode(r?.mode) ? r.mode : 'auto',
+      followsDefault: !!r?.follows_default,
+      playlist: pl(r?.playlist),
+      modes: (Array.isArray(r?.modes) ? r.modes : []).filter((m: any) => isMode(m?.mode)).map((m: any) => ({ mode: m.mode, available: m.available !== false })),
+      playlists: (Array.isArray(r?.playlists) ? r.playlists : []).map(pl).filter(Boolean),
+    };
+  }
+  setAutoplayMode(entity: string, mode: AutoplayMode, playlist?: string) {
+    return this.ws({ type: 'set_autoplay_mode', entity_id: entity, mode, ...(mode === 'playlist' && playlist ? { playlist } : {}) });
   }
   async subscribeQueue(entity: string, cb: (ev: { event: string; queue_id?: string }) => void) {
     const conn = this.hass.connection;

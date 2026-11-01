@@ -251,6 +251,55 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('AP5 Now Playing: "Up next · Autoplay" indicator only (no 7th transport button)', ind
     && !(await ev(c, `!!${NV}.querySelector('.tb[aria-label*="Autoplay"]')`)), String(await ev(c, `${NV}.querySelector('.upn')?.textContent?.replace(/\\s+/g, ' ')`)));
   await c.close();
+  // Autoplay style picker (feature autoplay_mode): chevron opens the sheet, playlist chooser, saves via set_autoplay_mode
+  const noMode = await open('&tab=queue&kcaps=' + AP, { show_autoplay: true });
+  await wait(noMode, `${QV}.querySelector('.ap')`);
+  check('AP6 server without autoplay_mode: no chevron, pill unchanged', !(await ev(noMode, `!!${QV}.querySelector('[data-action="autoplay-mode"]')`)));
+  await noMode.close();
+  const APM = encodeURIComponent(J({ autoplay: true, autoplay_mode: true }));
+  const d = await open('&tab=queue&kcaps=' + APM, { show_autoplay: true });
+  await wait(d, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
+  await tap(d, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
+  await wait(d, `${QV}.querySelectorAll('.aps .apo').length > 0`);
+  const modes = await ev(d, `[...${QV}.querySelectorAll('.aps .apo')].map((b) => [b.dataset.mode, b.getAttribute('aria-checked'), b.querySelector('b').textContent])`);
+  check('AP7 sheet lists Automatic / Similar music / My library / A playlist, current (MA default → auto) checked, no write yet',
+    J(modes.map((m) => m[2])) === J(['Automatic', 'Similar music', 'My library', 'A playlist']) && modes[0][1] === 'true'
+    && /default/.test(await ev(d, `${QV}.querySelector('.aps-note').textContent`))
+    && (await d.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay_mode').length)) === 0, J(modes));
+  await tap(d, `${QV}.querySelector('.aps .apo[data-mode="library"]')`);
+  await wait(d, `!${QV}.querySelector('.aps')`);
+  let sm = await d.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay_mode').map((m) => ({ e: m.entity_id, mode: m.mode, pl: m.playlist ?? null })));
+  check('AP8 My library → set_autoplay_mode {mode: library}, sheet closes, toast', sm.length === 1 && sm[0].mode === 'library' && sm[0].pl === null
+    && /^media_player\./.test(sm[0].e) && /My library/.test(await ev(d, `${QV}.querySelector('.toast')?.textContent ?? ''`)), J(sm));
+  await tap(d, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
+  await wait(d, `${QV}.querySelector('.aps .apo[data-mode="library"][aria-checked="true"]')`);
+  await tap(d, `${QV}.querySelector('.aps .apo[data-mode="playlist"]')`);
+  const chooser = await wait(d, `${QV}.querySelectorAll('.aps .apo[data-playlist]').length === 5`);
+  check('AP9 A playlist → chooser of library playlists, nothing saved yet', chooser && (await ev(d, `${QV}.querySelector('#aps-t').textContent`)) === 'Choose a playlist'
+    && (await d.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay_mode').length)) === 1);
+  await tap(d, `${QV}.querySelectorAll('.aps .apo[data-playlist]')[2]`);
+  await wait(d, `!${QV}.querySelector('.aps')`);
+  sm = await d.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay_mode').map((m) => ({ mode: m.mode, pl: m.playlist ?? null })));
+  await tap(d, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
+  await wait(d, `${QV}.querySelector('.aps .apo[data-mode="playlist"][aria-checked="true"]')`);
+  check('AP10 playlist picked → {mode: playlist, playlist: uri}; reopening shows it checked with its name',
+    sm.length === 2 && sm[1].mode === 'playlist' && sm[1].pl === 'library://playlist/903'
+    && (await ev(d, `${QV}.querySelector('.aps .apo[data-mode="playlist"] small').textContent`)) === 'Rainy Day Jazz', J(sm));
+  await d.keyboard.press('Escape');
+  await tap(d, `${QV}.querySelector('.scrim')`).catch(() => undefined);
+  check('AP11 scrim / Escape closes the sheet', await wait(d, `!${QV}.querySelector('.aps')`));
+  await d.close();
+  // no provider for similar tracks: Similar music is hidden; long-press on the pill opens the sheet without toggling
+  const e = await open('&tab=queue&apsimilar=0&kcaps=' + APM, { show_autoplay: true }, { width: 390, height: 844, isMobile: true, hasTouch: true });
+  await wait(e, `${QV}.querySelector('.ap')`);
+  const r = await e.evaluate((x) => { const b = eval(x).getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; }, `${QV}.querySelector('.ap')`);
+  await e.mouse.move(r.x, r.y); await e.mouse.down(); await sleep(700); await e.mouse.up(); await sleep(150);
+  await wait(e, `${QV}.querySelectorAll('.aps .apo').length > 0`);
+  const m2 = await ev(e, `[...${QV}.querySelectorAll('.aps .apo')].map((b) => b.dataset.mode)`);
+  const bottom = await ev(e, `(() => { const b = ${QV}.querySelector('.aps').getBoundingClientRect(); return Math.round(innerHeight - b.bottom); })()`);
+  check('AP12 phone: long-press opens a bottom sheet, Similar music hidden when MA cannot do it, pill not toggled',
+    J(m2) === J(['auto', 'library', 'playlist']) && (await e.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay').length)) === 0 && bottom < 120, J([m2, bottom]));
+  await e.close();
 }
 // ---------------- 7. Library home prototype, flag library_home ----------------
 {

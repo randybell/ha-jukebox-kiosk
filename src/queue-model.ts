@@ -1,6 +1,6 @@
 import type { HomeAssistant } from './types';
 import { cleanName, safeImage } from './shared';
-import { BackendError, type MaBackend, type QueueAction } from './backend/types';
+import { BackendError, type AutoplayMode, type AutoplayOptions, type MaBackend, type QueueAction } from './backend/types';
 import { MassQueueBackend } from './backend/mass-queue';
 
 /** One item from mass_queue.get_queue_items (v0.10.4: no duration). */
@@ -140,6 +140,19 @@ export class QueueModel {
     try { await be.setAutoplay(this.entity, enabled); }
     catch (err) { this.set({ autoplay: prev }); throw err; }
     finally { this.refreshSoon(800); }
+  }
+
+  /** Autoplay style for this queue (kiosk only). */
+  async autoplayOptions(): Promise<AutoplayOptions> {
+    const be = this.backend;
+    if (!be?.autoplayOptions) throw new BackendError('unsupported', 'Autoplay style is not available');
+    return be.autoplayOptions(this.entity);
+  }
+  /** Pin the Autoplay style (not optimistic: the sheet shows a busy row until MA saved it). */
+  async setAutoplayMode(mode: AutoplayMode, playlist?: string) {
+    const be = this.backend;
+    if (!be?.setAutoplayMode) throw new BackendError('unsupported', 'Autoplay style is not available');
+    await be.setAutoplayMode(this.entity, mode, playlist);
   }
 
   private async act(service: QueueAction | string, id: string, optimistic: (items: QueueItem[], i: number) => { items: QueueItem[]; current: number } | void,
