@@ -9,17 +9,20 @@ import './lyrics/lyrics-view';
 import type { LyricsStore } from './lyrics/store';
 import type { QueueModel, QueueSnapshot } from './queue-model';
 import type { HassEntity, HomeAssistant, JukeboxCardConfig } from './types';
-import { volumeCap, canVolume, capVol } from './speakers/model';
+import { volumeCap, canVolume, capVol, roomElsewhere, inlineButton, inlineLine } from './speakers/model';
+export { roomElsewhere };
+import type { InlineRoom } from './speakers-view';
+
+/** the speakers panel (jb-speakers) as Now Playing uses it: per-room state and actions, same logic as the panel */
+export interface InlineSpeakers extends HTMLElement {
+  inline(entity: string): InlineRoom | undefined;
+  inlineAct(entity: string): void;
+  inlineRegrouping(): boolean;
+  onState(fn: () => void): () => void;
+}
 import { defineElement } from './define';
 
 const VOL_THROTTLE_MS = 200;
-/** dynamic mode: what a room plays when it is not part of the current target ('' when it is, or idle) */
-export function roomElsewhere(hass: HomeAssistant | undefined, target: string, room: string): string {
-  const r = hass?.states[room], t = hass?.states[target];
-  if (!r || !['playing', 'paused'].includes(r.state) || !r.attributes?.media_title) return '';
-  const inT = ['playing', 'paused', 'buffering'].includes(t?.state ?? '') && Array.isArray(t?.attributes?.group_members) && t!.attributes.group_members.includes(room);
-  return inT ? '' : `${r.state === 'paused' ? 'Paused: ' : ''}${r.attributes.media_title}`;
-}
 const HOLD_MS = 4000; // keep optimistic values this long unless the entity confirms sooner
 const REPEAT_NEXT: Record<string, string> = { off: 'all', all: 'one', one: 'off' };
 
@@ -27,7 +30,7 @@ interface Pending<T> { v: T; t: number }
 
 export class JbNow extends LitElement {
   static properties = {
-    hass: { attribute: false }, config: { attribute: false }, queue: { attribute: false }, active: { type: Boolean }, lyrics: { attribute: false },
+    hass: { attribute: false }, config: { attribute: false }, queue: { attribute: false }, active: { type: Boolean }, lyrics: { attribute: false }, spk: { attribute: false },
     _overlay: { state: true }, _tick: { state: true }, _snap: { state: true }, _toast: { state: true },
   };
   hass?: HomeAssistant;
@@ -35,6 +38,11 @@ export class JbNow extends LitElement {
   queue?: QueueModel;
   active = false;
   lyrics?: LyricsStore;
+  /** 0.6.3: set by the card when this user may change speakers in dynamic mode; undefined = volume only */
+  spk?: InlineSpeakers;
+  private _spkUnsub?: () => void;
+  /** last inline state key: re-render only when the room buttons would change */
+  private _spkKey = '';
   /** lyrics over the art, remembered per device */
   private _overlay = readOverlay();
   private _tick = 0;
@@ -56,9 +64,13 @@ export class JbNow extends LitElement {
     super.connectedCallback();
     this._timer = window.setInterval(() => { if (this.active && this.ent?.state === 'playing') this._tick++; }, 1000);
   }
-  disconnectedCallback() { super.disconnectedCallback(); window.clearInterval(this._timer); this._unsub?.(); this._unsub = undefined; }
+  disconnectedCallback() { super.disconnectedCallback(); window.clearInterval(this._timer); this._unsub?.(); this._unsub = undefined; this._spkUnsub?.(); this._spkUnsub = undefined; }
   protected willUpdate(ch: PropertyValues) {
     if (ch.has('queue')) { this._unsub?.(); this._unsub = this.queue?.subscribe((s) => (this._snap = s)) as any; }
+    if (ch.has('spk')) {
+      this._spkUnsub?.();
+      this._spkUnsub = this.spk?.onState(() => { const k = this.spkKey(); if (k !== this._spkKey) { this._spkKey = k; this.requestUpdate(); } }) as any;
+    }
   }
   /** Re-render only when an entity we draw changed. */
   protected shouldUpdate(ch: PropertyValues) {
@@ -183,6 +195,11 @@ export class JbNow extends LitElement {
     this.setVolLabel(id, v);
     this.sender(id)(v);
   }
+  private spkKey() {
+    const s = this.spk;
+    if (!s) return '';
+    return JSON.stringify([s.inlineRegrouping(), roomsOf(this.config, this.hass).map((r) => s.inline(r.entity) ?? null)]);
+  }
   private onVolChange(id: string, e: CustomEvent) {
     const v = capVol(e.detail.value, this.cap());
     this.vol.set(id, { v, t: Date.now() });
@@ -200,21 +217,30 @@ export class JbNow extends LitElement {
   }
 
   // ---------- render ----------
-  private volRow(id: string, name: string, main: boolean) {
+  private volRow(id: string, name: string, main: boolean, inl?: InlineRoom | null) {
     const st = this.hass?.states[id];
     const off = !st || st.state === 'unavailable' || st.state === 'off';
     const ro = !canVolume(this.config, this.hass?.user);
     const muted = this.mutedOf(id);
     const v = this.volOf(id);
     const ic = muted ? 'volmute' : main ? 'vol' : 'speaker';
-    const elsewhere = !main && this.config.speaker_mode === 'dynamic' ? roomElsewhere(this.hass, this.eid, id) : '';
-    return html`<div class="vr ${main ? 'main' : 'room'} ${muted ? 'muted' : ''} ${off ? 'off' : ''}" data-entity=${id}>
+    // with the speaker buttons (0.6.3) the room's line comes from MA (same text as the panel); otherwise from HA
+    const elsewhere = main || this.config.speaker_mode !== 'dynamic' ? '' : inl ? inlineLine(inl) : roomElsewhere(this.hass, this.eid, id);
+    const out = !!inl && !inl.inT;
+    const act = inl?.act;
+    const btn = inl ? inlineButton(inl, name) : undefined;
+    const add = !!btn?.add, actLabel = btn?.label ?? '';
+    return html`<div class="vr ${main ? 'main' : 'room'} ${muted ? 'muted' : ''} ${off ? 'off' : ''} ${out ? 'out' : ''} ${inl?.busy ? 'pending' : ''} ${main && this.spk ? 'has-spk' : ''} ${act ? 'has-act' : ''}" data-entity=${id}>
       <button class="vm" tabindex="-1" aria-label="${muted ? 'Unmute' : 'Mute'} ${name}" ?disabled=${off || ro}
         @pointerdown=${noFocus} @click=${() => this.toggleMute(id)}>${icon(ic)}</button>
       <span class="vn">${name}${off ? html` <i>offline</i>` : nothing}${elsewhere ? html`<small class="else">${elsewhere}</small>` : nothing}</span>
       <jb-slider class="vs" .value=${muted ? 0 : v} .max=${this.cap()} ?disabled=${off || ro} .label=${`${name} volume`}
         @jb-input=${(e: CustomEvent) => this.onVolInput(id, e)} @jb-change=${(e: CustomEvent) => this.onVolChange(id, e)}></jb-slider>
       <span class="vv" data-v=${muted ? '–' : String(Math.round(v * 100))}></span>
+      ${main && this.spk ? html`<button class="spkb" data-action="speakers" tabindex="-1" aria-haspopup="dialog" aria-label="Speakers: add or drop rooms"
+          @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-speakers', { open: true })}>${icon('group', 'i xs')}<span>Speakers</span></button>` : nothing}
+      ${act ? html`<button class="ra ${add ? 'add' : 'drop'} ${act.kind}" data-act=${act.kind} tabindex="-1" aria-label=${actLabel} title=${actLabel}
+          aria-disabled=${act.dis ? 'true' : 'false'} ?disabled=${!!inl!.busy} @pointerdown=${noFocus} @click=${() => this.spk?.inlineAct(id)}>${icon(add ? 'plus' : 'minus', 'i xs')}<span>${add ? 'Add' : 'Drop'}</span></button>` : nothing}
     </div>`;
   }
 
@@ -279,9 +305,9 @@ export class JbNow extends LitElement {
         ${nextIt ? html`<button class="upn panel" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
             <span class="eyebrow">Up next</span><b>${nextIt.media_title}</b>${provTpl(nextIt.media_content_id)}
             <span class="more">${more ? `+ ${more} more` : ''}</span></button>` : nothing}
-        <div class="vol panel">
+        <div class="vol panel ${this.spk ? 'acts' : ''}">
           ${this.volRow(this.eid, where, true)}
-          ${rooms.length ? html`<div class="rooms">${rooms.map((r) => this.volRow(r.entity, r.name, false))}</div>` : nothing}
+          ${rooms.length ? html`<div class="rooms">${rooms.map((r) => this.volRow(r.entity, r.name, false, this.spk?.inline(r.entity)))}</div>` : nothing}
         </div>
       </div>
       ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
@@ -349,18 +375,40 @@ export class JbNow extends LitElement {
     .vn i { font-style: normal; font-size: 11px; color: var(--_inactive); }
     .vv { font-size: 12px; color: var(--_muted); text-align: right; font-variant-numeric: tabular-nums; }
     .vr.off { opacity: .5; }
+    /* 0.6.3 speaker controls: a trailing column for Speakers (main row) and Drop/Add (rooms) */
+    .vol.acts .vr.main { grid-template-columns: 30px minmax(0, max-content) minmax(0, 1fr) 34px auto; }
+    .vol.acts .rooms .vr { grid-template-columns: 30px minmax(70px, 28%) minmax(0, 1fr) 34px 36px; }
+    .spkb { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
+      background: #ffffff14; border: 1px solid #ffffff24; color: var(--_fg); white-space: nowrap; }
+    .spkb:active { background: #ffffff2a; }
+    .ra { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 1px solid #ffffff2e; color: var(--_fg); background: #ffffff0d; justify-self: end; }
+    .ra span { display: none; }
+    .ra .i { width: 18px; height: 18px; }
+    .ra.add { background: var(--_active); border-color: transparent; color: var(--_on-active, #111); }
+    .ra.drop { color: var(--_fg); }
+    .ra[aria-disabled="true"] { opacity: .45; }
+    .ra.add[aria-disabled="true"] { background: #ffffff14; color: var(--_muted); }
+    .ra:disabled { opacity: .5; }
+    .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: .5; }
+    .vr.pending .ra { animation: jb-pulse 1s ease-in-out infinite; }
+    @keyframes jb-pulse { 50% { opacity: .35; } }
     .vn .else { display: block; font-size: 11px; font-weight: 500; color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* large_buttons */
     :host([large]) .tb { width: 68px; height: 68px; } :host([large]) .tb .i { width: 34px; height: 34px; }
     :host([large]) .tb.pp { width: 96px; height: 96px; } :host([large]) .tb.pp .i { width: 44px; height: 44px; }
     :host([large]) .vr { min-height: 60px; } :host([large]) .vm { width: 48px; height: 48px; } :host([large]) .vm .i { width: 26px; height: 26px; }
     :host([large]) .vn { font-size: 17px; } :host([large]) .vs { --jb-slider-h: 10px; --jb-slider-knob: 30px; --jb-slider-hit: 52px; }
+    :host([large]) .ra { width: 48px; height: 48px; } :host([large]) .spkb { height: 48px; font-size: 16px; padding: 0 16px; }
+    :host([large]) .vol.acts .rooms .vr { grid-template-columns: 48px minmax(70px, 28%) minmax(0, 1fr) 34px 48px; }
     :host([large]) .ab { width: 52px; height: 52px; } :host([large]) .upn { height: 56px; } :host([large]) .upn b { font-size: 16px; }
     .vr.muted .vs { opacity: .45; }
     @container vol (min-width: 600px) {
       .rooms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 20px; padding-top: 8px; }
       .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 30px; grid-template-areas: "m n n" "s s v"; row-gap: 0; min-height: 0; padding-bottom: 4px; }
       .rooms .vm { grid-area: m; } .rooms .vn { grid-area: n; } .rooms .vs { grid-area: s; } .rooms .vv { grid-area: v; }
+      .vol.acts .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 34px; grid-template-areas: "m n a" "s s v"; }
+      :host([large]) .vol.acts .rooms .vr { grid-template-columns: 48px minmax(0, 1fr) 48px; }
+      .rooms .ra { grid-area: a; }
     }
     @container np (orientation: portrait) and (min-width: 521px) { .nw { align-content: center; } }
     /* landscape: art left, info right */
@@ -389,6 +437,11 @@ export class JbNow extends LitElement {
       .vol { padding: 4px 12px; }
       .vr { grid-template-columns: 28px 86px minmax(0, 1fr) 30px; min-height: 48px; }
       .vn { font-size: 14px; }
+      /* phone: name + Speakers on top, the group slider below; rooms keep one line with a round Drop/Add */
+      .vol.acts .vr.main { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "m n b" "s s v"; row-gap: 0; padding-top: 4px; }
+      .vol.acts .vr.main .vm { grid-area: m; } .vol.acts .vr.main .vn { grid-area: n; } .vol.acts .vr.main .vs { grid-area: s; }
+      .vol.acts .vr.main .vv { grid-area: v; } .vol.acts .vr.main .spkb { grid-area: b; }
+      .vol.acts .rooms .vr { grid-template-columns: 26px 88px minmax(0, 1fr) 26px 34px; gap: 6px; }
     }
   `];
 }

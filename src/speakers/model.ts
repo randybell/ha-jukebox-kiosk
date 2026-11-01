@@ -309,3 +309,36 @@ export function takeoverText(t: Takeover, nameOf: (id: string) => string): strin
       return `${s} leaves ${g}; ${g} keeps playing.`;
   }
 }
+
+/** dynamic mode: what a room plays when it is not part of the current target ('' when it is, or idle) */
+export function roomElsewhere(hass: HomeAssistant | undefined, target: string, room: string): string {
+  const r = hass?.states[room], t = hass?.states[target];
+  if (!r || !['playing', 'paused'].includes(r.state) || !r.attributes?.media_title) return '';
+  const on = ['playing', 'paused', 'buffering'].includes(t?.state ?? '');
+  const gm = t?.attributes?.group_members;
+  // HA 2026.10 leaves group_members [] on an MA sync group: a room playing the group's title is in it, not "elsewhere"
+  const inT = on && Array.isArray(gm) && (gm.includes(room) || (!gm.length && r.attributes.media_title === t!.attributes?.media_title));
+  return inT ? '' : `${r.state === 'paused' ? 'Paused: ' : ''}${r.attributes.media_title}`;
+}
+
+/** 0.6.3 Now Playing room state (from the speakers panel); kept here so it can be unit-tested */
+export interface InlineRoomState { inT: boolean; where: string; busy?: string; leader: boolean; act?: { label: string; kind: string; dis: boolean } }
+/** the line under a room name in Now Playing: '' for a plain member */
+export function inlineLine(r: InlineRoomState): string {
+  if (r.busy === 'in') return 'Joining…';
+  if (r.busy === 'out') return 'Leaving…';
+  if (r.inT) return r.leader ? 'Leads the group' : '';
+  return r.where;
+}
+/** the round Drop (−) / Add (+) button: undefined = no button */
+export function inlineButton(r: InlineRoomState, name: string): { add: boolean; label: string; dis: boolean } | undefined {
+  const a = r.act;
+  if (!a) return undefined;
+  const add = !r.inT;
+  const label = add ? (a.kind === 'take' ? `Add ${name} (${a.label.toLowerCase()})` : `Add ${name}`) : `Drop ${name}`;
+  return { add, label, dis: a.dis };
+}
+/** the header pill reads as a control: "Playing on: Everywhere · 3 speakers" */
+export function pillPrefix(state: string | undefined): string {
+  return state === 'playing' || state === 'buffering' ? 'Playing on:' : state === 'paused' ? 'Paused on:' : 'Speakers:';
+}

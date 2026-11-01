@@ -12,11 +12,12 @@ import { LyricsStore, type LyricsStatus } from './lyrics/store';
 import { QueueModel } from './queue-model';
 import { roomsOf, playerArt } from './shared';
 import './speakers-view';
+import './station-sheet';
 import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
-import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, validPreset, validQuiet, liveCount, membersOf } from './speakers/model';
+import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, validPreset, validQuiet, liveCount, membersOf, pillPrefix } from './speakers/model';
 import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type BackdropMode } from './backdrop';
-import type { HomeAssistant, JukeboxCardConfig, TabId } from './types';
+import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { pickBackend, createBackend, backendKey, type MaBackend } from './backend';
 import { defineElement } from './define';
 
@@ -28,7 +29,7 @@ const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'queue', label: 'Queue', icon: 'queue' },
   { id: 'lyrics', label: 'Lyrics', icon: 'lyrics' },
 ];
-const CHILDREN = ['jb-now', 'jb-browse', 'jb-search', 'jb-queue', 'jb-speakers'];
+const CHILDREN = ['jb-now', 'jb-browse', 'jb-search', 'jb-queue', 'jb-speakers', 'jb-station'];
 /** dynamic mode: the group this device plays on, remembered per device */
 const TARGET_KEY = 'jukebox-card:target:v1';
 const bool = (v: unknown) => v === undefined || typeof v === 'boolean';
@@ -83,6 +84,8 @@ export class JukeboxCard extends LitElement {
     _stage: { state: true },
     _stageUi: { state: true },
     _spk: { state: true },
+    _station: { state: true },
+    _spkEl: { state: true },
     _lost: { state: true },
   };
   hass?: HomeAssistant;
@@ -121,6 +124,10 @@ export class JukeboxCard extends LitElement {
   /** config with defaults, before the dynamic-mode target is applied (fixed mode: _config === _base) */
   private _base!: JukeboxCardConfig;
   private _spk = false;
+  /** station sheet (0.6.3): the station a tap opened, and the tab it was opened on (switching tabs closes it) */
+  private _station: { item: MaItem; tab: TabId } | null = null;
+  /** the speakers panel element, handed to Now Playing for its per-room Drop/Add buttons (0.6.3) */
+  private _spkEl?: HTMLElement;
   /** one-time notice: the saved speaker target is gone from HA */
   private _lost = '';
   private _lostTimer?: number;
@@ -258,6 +265,8 @@ export class JukeboxCard extends LitElement {
     this.startPush();
   };
   private onSpeakers = (e: CustomEvent) => { this._spk = e.detail?.open !== false; };
+  private onStation = (e: CustomEvent) => { if (e.detail?.item) this._station = { item: e.detail.item, tab: this._tab }; };
+  private onStationClose = () => { this._station = null; };
   /** Start guard (dynamic mode): starting an idle group takes speakers from other groups: say which, and ask. */
   private guard = async (entity: string): Promise<boolean> => {
     const st = this.hass?.states[entity]?.state;
@@ -308,6 +317,8 @@ export class JukeboxCard extends LitElement {
     this.addEventListener('jukebox-stage', this.onStage as EventListener);
     this.addEventListener('jukebox-target', this.onTarget as EventListener);
     this.addEventListener('jukebox-speakers', this.onSpeakers as EventListener);
+    this.addEventListener('jukebox-station', this.onStation as EventListener);
+    this.addEventListener('jukebox-station-close', this.onStationClose as EventListener);
     document.addEventListener('fullscreenchange', this.onFsChange);
     document.addEventListener('webkitfullscreenchange', this.onFsChange);
     window.addEventListener('keydown', this.onKey);
@@ -346,6 +357,8 @@ export class JukeboxCard extends LitElement {
     this.removeEventListener('jukebox-stage', this.onStage as EventListener);
     this.removeEventListener('jukebox-target', this.onTarget as EventListener);
     this.removeEventListener('jukebox-speakers', this.onSpeakers as EventListener);
+    this.removeEventListener('jukebox-station', this.onStation as EventListener);
+    this.removeEventListener('jukebox-station-close', this.onStationClose as EventListener);
     this.speakers.stopPolling();
     document.removeEventListener('fullscreenchange', this.onFsChange);
     document.removeEventListener('webkitfullscreenchange', this.onFsChange);
@@ -417,7 +430,10 @@ export class JukeboxCard extends LitElement {
     }
     this.updateScale();
   }
-  protected updated() { this.updateLight(); }
+  protected updated() {
+    this.updateLight();
+    if (!this._spkEl) { const el = this.renderRoot.querySelector('jb-speakers') as HTMLElement | null; if (el) this._spkEl = el; }
+  }
   /** Now-playing art for the backdrop and screensaver (see playerArt: never an absolute entity_picture). */
   private art() {
     const ent = this.hass?.states[this._config?.entity ?? 'media_player.everywhere'];
@@ -486,7 +502,11 @@ export class JukeboxCard extends LitElement {
     this.updateComplete.then(() => (this.renderRoot.querySelector(`.tab[data-tab="${ids[i]}"]`) as HTMLElement | null)?.focus());
   };
   /** Search radio heart (0.6.2): Browse > Radio reloads My stations next time it shows. */
-  private onFavs = (e: CustomEvent) => { (this.renderRoot.querySelector('jb-browse') as any)?.favoritesChanged?.(e.detail?.media_type); };
+  private onFavs = (e: CustomEvent) => {
+    (this.renderRoot.querySelector('jb-browse') as any)?.favoritesChanged?.(e.detail?.media_type);
+    // a heart in the station sheet also updates the Search row heart for that station
+    if (e.detail?.uri) (this.renderRoot.querySelector('jb-search') as any)?.favoriteChanged?.(e.detail.uri, !!e.detail.favorite);
+  };
   private onNav = (e: CustomEvent) => { const t = e.detail?.tab; if (this.tabs().some((x) => x.id === t)) this._tab = t; };
 
   // ---------- Stage (full-screen art + lyrics) ----------
@@ -522,7 +542,10 @@ export class JukeboxCard extends LitElement {
     // left fullscreen with Esc / the system gesture: close the Stage too
     if (!fs && this._stage && this._stageNative) { this._stageNative = false; this.closeStage(); }
   };
-  private onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && this._stage) { e.preventDefault(); this.closeStage(); } };
+  private onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && this._stage) { e.preventDefault(); this.closeStage(); }
+    else if (e.key === 'Escape' && this._station) { e.preventDefault(); this._station = null; }
+  };
   private showStageUi() {
     this._stageUi = true;
     window.clearTimeout(this._stageUiTimer);
@@ -681,6 +704,9 @@ export class JukeboxCard extends LitElement {
     const live = dyn ? this.pillCount() : 0;
     this._pn = live;
     const rooms = roomsOf(this._config, this.hass).length;
+    // 0.6.3: the pill reads as a control: "Playing on: Everywhere · 3 speakers"
+    const pre = pillPrefix(ent?.state);
+    const inlineSpk = dyn && canGroup(this._config, this.hass?.user);
     const bd = this._bd;
     const artStyle = pic && bd === 'full' ? `--_art:url("${pic.replace(/"/g, '%22')}")` : '';
     const view = (id: TabId, child: unknown) => html`<div class="view" data-view=${id} ?hidden=${this._tab !== id}>${child}</div>`;
@@ -689,24 +715,26 @@ export class JukeboxCard extends LitElement {
       <ha-card class="app bd-${bd} ${bd === 'full' ? '' : 'solid'} ${prefersReducedMotion() ? 'rm' : ''} ${c.large_buttons ? 'lg' : ''}" style="${c.height ? `--jb-height:${c.height}` : ''}">
         <header class="top">
           <div class="brand">${icon('disc', 'i brand-i')}<span>${c.title ?? 'Jukebox'}</span></div>
-          <button class="pill" title=${c.entity!} tabindex="-1" aria-label="Speakers: ${name}" aria-haspopup="dialog" @pointerdown=${(e: PointerEvent) => e.preventDefault()}
-            @click=${() => (this._spk = !this._spk)}>${icon('group', 'i xs')}<span class="pn">${name}</span>${dyn
+          <button class="pill" title=${c.entity!} tabindex="-1" aria-label="${pre} ${name}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk ? 'true' : 'false'}
+            @pointerdown=${(e: PointerEvent) => e.preventDefault()}
+            @click=${() => (this._spk = !this._spk)}>${icon('group', 'i xs')}<span class="pl">${pre}</span><span class="pn">${name}</span>${dyn
               ? html`<b>· ${!ent && this.hass ? 'not found' : ent?.state === 'buffering' ? 'regrouping…' : live ? `${live} speaker${live === 1 ? '' : 's'}` : 'idle'}</b>`
-              : rooms ? html`<b>· ${rooms} room${rooms === 1 ? '' : 's'} synced</b>` : nothing}</button>
+              : rooms ? html`<b>· ${rooms} room${rooms === 1 ? '' : 's'} synced</b>` : nothing}${icon('chev', 'i xs pc')}</button>
           ${this._lost ? html`<span class="lost" role="status">${this._lost}</span>` : nothing}
           <div class="spacer"></div>
           <div class="clock">${this.timeStr()}</div>
         </header>
         <main class="np ${pic ? 'has-art' : ''}" style=${artStyle}>
           ${bd === 'light' ? html`<canvas class="bdl" width="64" height="40" aria-hidden="true"></canvas>` : nothing}
-          ${view('now', html`<jb-now ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
+          ${view('now', html`<jb-now ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
           ${view('browse', html`<jb-browse ?large=${!!c.large_buttons} .hass=${h} .config=${c} ?active=${this._tab === 'browse'}></jb-browse>`)}
           ${view('search', html`<jb-search ?large=${!!c.large_buttons} .hass=${h} .config=${c} ?active=${this._tab === 'search'}></jb-search>`)}
           ${view('queue', html`<jb-queue ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'queue'}></jb-queue>`)}
           ${tabs.some((t) => t.id === 'lyrics') ? view('lyrics', html`<jb-lyrics mode="tab" .hass=${h} .config=${c} .store=${this.lyrics} .art=${pic}
             ?active=${this._tab === 'lyrics' && !this._saver && !this._stage}></jb-lyrics>`) : nothing}
           <!-- inside the middle: the fitted header and tab bar stay visible and tappable while the panel is open -->
-          <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?large=${!!c.large_buttons}></jb-speakers>
+          <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null} ?large=${!!c.large_buttons}></jb-station>
+          <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?keep=${inlineSpk && this._tab === 'now' && !this._saver} ?large=${!!c.large_buttons}></jb-speakers>
         </main>
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
           ${tabs.map((t) => html`<button class="tab ${this._tab === t.id ? 'active' : ''}" role="tab" tabindex=${this._tab === t.id ? '0' : '-1'} data-tab=${t.id}
@@ -738,6 +766,8 @@ export class JukeboxCard extends LitElement {
     .pill { white-space: nowrap; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: #ffffff0f;
       border: 1px solid #ffffff1a; font-size: 14px; font-weight: 600; }
     .pill b { font-weight: 500; color: var(--_muted); }
+    .pill .pl { font-weight: 500; color: var(--_muted); margin-right: -2px; }
+    .pill .pc { width: 14px; height: 14px; opacity: .7; margin-left: -2px; }
     .lost { margin-left: 10px; font-size: 13px; color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: #ffffff26; }
     .lg .pill { min-height: 52px; font-size: 17px; padding: 0 18px; }
@@ -850,8 +880,9 @@ export class JukeboxCard extends LitElement {
     .lg .tab { min-height: 80px; font-size: 17px; } .lg .tab .i { width: 34px; height: 34px; }
     @container np (max-width: 520px) { }
     @media (max-width: 960px) { .pill b { display: none; } }
+    @media (max-width: 800px) { .pill .pl { display: none; } }
     @media (max-width: 640px) {
-      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b { display: none; } .lg .pill { width: 56px; min-height: 56px; } .clock { font-size: 18px; } .top { min-height: 52px; padding-top: 10px; padding-bottom: 10px; }
+      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .lg .pill { width: 56px; min-height: 56px; } .clock { font-size: 18px; } .top { min-height: 52px; padding-top: 10px; padding-bottom: 10px; }
       .tabs { gap: 2px; padding-left: calc(var(--_pad) + 3px); padding-right: calc(var(--_pad) + 3px); }
       .tab { font-size: 12px; letter-spacing: 0; } .tab .i { width: 26px; height: 26px; }
       .tab span { white-space: normal; text-align: center; line-height: 1.1; }

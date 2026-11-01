@@ -919,6 +919,89 @@ const allJoins = [];
   await p.close();
 }
 
+// ---------------- 0.6.3: Now Playing speaker controls (Drop / Add per room, Speakers button, "Playing on:" pill) ----------------
+{
+  const GSM = 'syncgroup_everywhere', GW = 'wiim_mock_garage';
+  const nrow = (e) => `${NOW}.shadowRoot.querySelector('.vr[data-entity="${e}"]')`;
+  const ra = (e) => `${nrow(e)}?.querySelector('.ra')`;
+  const p = await open('&spk=dyn&admin=1&every=dyn', { width: 1920, height: 1080 });
+  await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 4000);
+  const btns = await ev(p, `[${[LIV, KIT, GAR].map((e) => `${ra(e)}?.getAttribute('aria-label')`).join(',')}]`);
+  const pill = await ev(p, `__card.shadowRoot.querySelector('.pill')?.textContent.replace(/\\s+/g,' ').trim()`);
+  check('N1 admin + dynamic: each Now Playing room row has a Drop button (aria "Drop <room>"), the pill reads "Playing on: Everywhere · 3 speakers"',
+    J(btns) === J(['Drop Living Room', 'Drop Kitchen', 'Drop Garage']) && /^Playing on:\s*Everywhere\s*· 3 speakers$/.test(pill)
+    && /^Playing on: Everywhere/.test(await ev(p, `__card.shadowRoot.querySelector('.pill').getAttribute('aria-label')`)) && !(await ev(p, `${SPK}.open`)), J({ btns, pill }));
+  const sb = await ev(p, `!!${NOW}.shadowRoot.querySelector('.vr.main [data-action="speakers"]')`);
+  const gw = await ev(p, `${nrow(GAR)}.querySelector('.else')?.textContent ?? ''`);
+  const lw = await ev(p, `${nrow(LIV)}.querySelector('.else')?.textContent ?? ''`);
+  check('N2 the group row has a Speakers button; Garage says "Leads the group", members show no "elsewhere" title', sb && gw === 'Leads the group' && lw === '', J({ sb, gw, lw }));
+  const n0 = (await ma(p, 'players/cmd/set_members')).length;
+  await tap(p, ra(GAR));
+  await confirm(p);
+  await wait(p, `${nrow(GAR)}?.classList.contains('out') && ${ra(GAR)}?.dataset.act === 'join'`, 5000);
+  const sm = (await ma(p, 'players/cmd/set_members')).slice(n0);
+  const lbl = await ev(p, `${ra(GAR)}.getAttribute('aria-label')`);
+  check('N3 Drop Garage from Now Playing → confirm → one set_members(remove Garage); Garage greyed with "Add Garage", panel stays closed',
+    sm.length === 1 && sm[0].data.target_player === GSM && J(sm[0].data.player_ids_to_remove) === J([GW]) && lbl === 'Add Garage' && !(await ev(p, `${SPK}.open`)), J({ sm, lbl }));
+  const undo = await ev(p, `!!${SR}.querySelector('.undo.solo [data-action="undo"]')`);
+  check('N4 the Undo bar shows with the panel closed', undo);
+  await tap(p, ra(GAR));
+  await wait(p, `!!${SR}.querySelector('.sp-ask')`, 800) && (await confirm(p));
+  await wait(p, `${nrow(GAR)} && !${nrow(GAR)}.classList.contains('out') && ${ra(GAR)}?.dataset.act === 'drop'`, 5000);
+  const sm2 = (await ma(p, 'players/cmd/set_members')).at(-1);
+  check('N5 Add Garage from Now Playing → set_members(add Garage); back in with Drop', sm2?.data.target_player === GSM && J(sm2?.data.player_ids_to_add) === J([GW]) && (await maMembers(p, GSM)).includes(GW), J(sm2));
+  // drop Kitchen and Living Room: Garage becomes the last speaker → Pause offered, nothing sent
+  for (const e of [KIT, LIV]) {
+    await wait(p, `${ra(e)}?.dataset.act === 'drop' && !${nrow(e)}.classList.contains('pending')`, 5000);
+    await tap(p, ra(e)); if (await wait(p, `!!${SR}.querySelector('.sp-ask')`, 600)) await confirm(p);
+    await wait(p, `${ra(e)}?.dataset.act === 'join'`, 5000);
+  }
+  await wait(p, `${ra(GAR)}?.dataset.act === 'blocked' && window.__hass.states['${EVERY}'].state === 'playing' && !${SPK}.inlineRegrouping()`, 6000);
+  await sleep(300);
+  const n1 = (await ma(p, 'players/cmd/set_members')).length;
+  const dis = await ev(p, `${ra(GAR)}?.getAttribute('aria-disabled')`);
+  await tap(p, ra(GAR));
+  await wait(p, `!!${SR}.querySelector('.sp-ask')`, 1500);
+  const at = await ev(p, `${SR}.querySelector('.sp-ask')?.textContent ?? ''`);
+  check('N6 the last room: its Drop is greyed, tapping offers Pause (same as the panel), sends nothing',
+    dis === 'true' && /last speaker/.test(at) && /Pause/.test(at) && (await ma(p, 'players/cmd/set_members')).length === n1, J({ dis, at, t: await toast(p), s: await st(p, EVERY) }));
+  if (at) await confirm(p, false);
+  await tap(p, `${NOW}.shadowRoot.querySelector('[data-action="speakers"]')`);
+  check('N7 the Speakers button opens the speakers panel', await wait(p, `${SPK}.open && !!${SR}.querySelector('section.sheet')`, 2000));
+  allJoins.push(...(await joins(p)));
+  await p.close();
+}
+{
+  // idle: the buttons stay but are greyed, with the panel's hint
+  const nrow = (e) => `${NOW}.shadowRoot.querySelector('.vr[data-entity="${e}"]')`;
+  const p = await open('&spk=dyn&admin=1&every=dyn&idle=1');
+  await wait(p, `${nrow(GAR)}?.querySelector('.ra')?.dataset.act === 'idle'`, 4000);
+  const a = await ev(p, `[...${NOW}.shadowRoot.querySelectorAll('.rooms .ra')].map((b) => b.dataset.act + ':' + b.getAttribute('aria-disabled') + ':' + b.getAttribute('aria-label'))`);
+  await tap(p, `${nrow(GAR)}.querySelector('.ra')`);
+  const pill = await ev(p, `__card.shadowRoot.querySelector('.pill')?.textContent.replace(/\\s+/g,' ').trim()`);
+  check('N8 idle Everywhere: every room shows a greyed Add; tapping says start playback first, sends nothing; pill "Speakers: Everywhere · idle"',
+    a.length === 3 && a.every((x) => /^idle:true:Add /.test(x)) && /Start playback/.test(await toast(p)) && (await ma(p, 'players/cmd/set_members')).length === 0 && /^Speakers:\s*Everywhere\s*· idle$/.test(pill), J({ a, t: await toast(p), pill }));
+  await p.close();
+}
+for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping: nobody', `&spk=dyn&admin=1&every=dyn&cfg=${encodeURIComponent(J({ grouping: 'nobody' }))}`], ['fixed mode', '&admin=1']]) {
+  const p = await open(q, { width: 390, height: 844, isMobile: true, hasTouch: true });
+  await sleep(1200);
+  const n = await ev(p, `${NOW}.shadowRoot.querySelectorAll('.ra, .spkb').length`);
+  const sl = await ev(p, `${NOW}.shadowRoot.querySelectorAll('.vr jb-slider').length`);
+  const polling = await ev(p, `!!${SPK}.store?.timer`);
+  check(`N9 ${name}: Now Playing is volume only (no Drop/Add, no Speakers button), sliders stay, no background MA poll`, n === 0 && sl >= 1 && !polling, J({ n, sl, polling }));
+  await p.close();
+}
+{
+  // compact at 390x844: one-line room rows, buttons inside the card
+  const p = await open('&spk=dyn&admin=1&every=dyn', { width: 390, height: 844, isMobile: true, hasTouch: true });
+  await wait(p, `${NOW}.shadowRoot.querySelector('.vr[data-entity="${GAR}"] .ra')?.dataset.act === 'drop'`, 4000);
+  const r = await ev(p, `(() => { const s = ${NOW}.shadowRoot, v = s.querySelector('.vol').getBoundingClientRect();
+    return { rows: [...s.querySelectorAll('.rooms .vr')].map((x) => Math.round(x.getBoundingClientRect().height)), inside: [...s.querySelectorAll('.ra, .spkb')].every((b) => { const q = b.getBoundingClientRect(); return q.width >= 30 && q.left >= v.left && q.right <= v.right + 0.5; }) }; })()`);
+  check('N10 390x844: room rows stay one line (≤ 56px) and every button fits inside the volume card', r.rows.length === 3 && r.rows.every((h) => h <= 56) && r.inside, J(r));
+  await p.close();
+}
+
 // ---------------- HA 2026.10: an ungrouped MA player reports group_members: [] ----------------
 {
   const p = await open('');

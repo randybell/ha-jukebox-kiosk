@@ -274,6 +274,31 @@ check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.is
     J(M.maPresets(new Map(), lp, lrooms, tg, lh, own)) === J(own)
       && M.maPresets(cf, lp, lrooms, tg, lh, [{ name: 'X', members: ['media_player.b', 'media_player.a'], target: 'media_player.inside' }]).length === 1);
 }
+
+// ---------------- 0.6.3: Now Playing speaker controls ----------------
+{
+  const R = (o) => ({ inT: true, where: 'In this group', leader: false, ...o });
+  check('U49 inlineButton: member → "Drop <room>"; out → "Add <room>"; held elsewhere → "Add <room> (take from …)"; no act → no button',
+    J(M.inlineButton(R({ act: { label: 'Drop', kind: 'drop', dis: false } }), 'Garage')) === J({ add: false, label: 'Drop Garage', dis: false })
+    && J(M.inlineButton(R({ inT: false, act: { label: 'Join', kind: 'join', dis: false } }), 'Garage')) === J({ add: true, label: 'Add Garage', dis: false })
+    && M.inlineButton(R({ inT: false, act: { label: 'Take from Outdoor', kind: 'take', dis: false } }), 'Garage').label === 'Add Garage (take from outdoor)'
+    && M.inlineButton(R({}), 'Garage') === undefined);
+  check('U50 inlineButton: last / blocked leader and idle stay visible but disabled (the tap explains)',
+    M.inlineButton(R({ act: { label: 'Last', kind: 'blocked', dis: true } }), 'Garage').dis === true
+    && J(M.inlineButton(R({ inT: false, act: { label: 'Join', kind: 'idle', dis: true } }), 'Garage')) === J({ add: true, label: 'Add Garage', dis: true }));
+  check('U51 inlineLine: plain member → "", leader → "Leads the group", busy → Joining…/Leaving…, out → where',
+    M.inlineLine(R({})) === '' && M.inlineLine(R({ leader: true })) === 'Leads the group' && M.inlineLine(R({ busy: 'in' })) === 'Joining…'
+    && M.inlineLine(R({ busy: 'out' })) === 'Leaving…' && M.inlineLine(R({ inT: false, where: 'Playing alone · Blue Hour' })) === 'Playing alone · Blue Hour');
+  check('U52 pillPrefix: playing/buffering → "Playing on:", paused → "Paused on:", else "Speakers:"',
+    M.pillPrefix('playing') === 'Playing on:' && M.pillPrefix('buffering') === 'Playing on:' && M.pillPrefix('paused') === 'Paused on:' && M.pillPrefix('idle') === 'Speakers:' && M.pillPrefix(undefined) === 'Speakers:');
+  const H = (gm, rt = 'So What') => ({ states: {
+    'media_player.everywhere': { state: 'playing', attributes: { group_members: gm, media_title: 'So What' } },
+    'media_player.garage': { state: 'playing', attributes: { media_title: rt } } } });
+  check('U53 roomElsewhere: HA group_members [] on a playing sync group + same title → in the group (""), different title → that title; listed → ""',
+    M.roomElsewhere(H([]), 'media_player.everywhere', 'media_player.garage') === '' && M.roomElsewhere(H([], 'Blue Hour'), 'media_player.everywhere', 'media_player.garage') === 'Blue Hour'
+    && M.roomElsewhere(H(['media_player.garage'], 'Blue Hour'), 'media_player.everywhere', 'media_player.garage') === ''
+    && M.roomElsewhere(H(['media_player.kitchen'], 'Blue Hour'), 'media_player.everywhere', 'media_player.garage') === 'Blue Hour');
+}
 await tick(700); // let refreshSoon timers drain
 console.warn = origWarn;
 console.log(`\n${total - failures}/${total} speakers unit checks passed`);
