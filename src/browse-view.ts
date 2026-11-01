@@ -18,6 +18,7 @@ import {
 } from './discover';
 import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, type TileId } from './library-home';
 import { loadDetail } from './detail-view';
+import { FavController, heartTpl, heartType } from './heart';
 import { PoolCache, libraryFiltered, normText, type ScopePool } from './search-scope';
 import type { KeyDetail } from './keyboard';
 import './keyboard';
@@ -115,6 +116,7 @@ export class JbBrowse extends LitElement {
   private lpools = new PoolCache();
   private _lqTimer?: number;
   /** Tap never plays: artists / albums / playlists (and podcasts with mass_queue) open their detail, everything else a sheet. */
+  private hearts = new FavController(this);
   private press = new PressController<{ it: MaItem; type: string }>(this, (p, el) => this.tap(p.it, p.type, el), (p, el) => this.openMenu(p.it, p.type, el));
 
   protected shouldUpdate(ch: PropertyValues) { return !(ch.size === 1 && ch.has('hass')); }
@@ -565,18 +567,32 @@ export class JbBrowse extends LitElement {
       <div class="tw">${artTpl(it, circ ? 'big circ' : 'big')}${provTpl(it.uri, it.provider, it.media_type ?? type)}
         ${drillable(type, this.config) ? html`<button class="mo open" tabindex="-1" aria-label="Open ${it.name}" @pointerdown=${noFocus}
           @click=${() => this.openDetail(it, type)}>${icon('open')}</button>` : nothing}
+        ${this.tileHeart(it, type)}
         ${rf ? html`<span class="rp" role="progressbar" aria-label="Listened" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(rf * 100)}><i style="width:${(rf * 100).toFixed(1)}%"></i></span>` : nothing}</div>
       <b>${it.name}</b>${this.sub(it, type) ? html`<small>${this.sub(it, type)}</small>` : nothing}
     </div>`;
   }
+  // ---------- hearts (v0.7) ----------
+  private async toggleFav(it: MaItem, type: string) {
+    const t = heartType(this.config, type, it);
+    if (!t) return;
+    const msg = await this.hearts.toggle(it, t);
+    if (msg) this.toast(msg);
+  }
+  /** tile corner heart (top left; the provider badge is bottom left, Open top right) */
+  private tileHeart(it: MaItem, type: string) {
+    return heartType(this.config, type, it) ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type), 'tfav') : nothing;
+  }
   private row(it: MaItem, n?: number) {
     const p = this.press.handlers(it.uri, { it, type: 'track' });
-    return html`<div class="row ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type="track"
+    const fav = !!heartType(this.config, 'track', it);
+    return html`<div class="row ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type="track"
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       ${n !== undefined ? html`<span class="n">${n}</span>` : artTpl(it, 'th')}
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b><small>${this.sub(it, 'track')}</small></div>
       ${provTpl(it.uri, it.provider)}<span class="du">${fmtDur(it.duration)}</span>
+      ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, 'track'), 'mo fav') : nothing}
       <button class="mo" tabindex="-1" aria-label="More options for ${it.name}" @pointerdown=${noFocus}
         @click=${(e: MouseEvent) => this.openMenu(it, 'track', (e.currentTarget as HTMLElement).closest('.row') as HTMLElement)}>${icon('more')}</button>
     </div>`;
@@ -756,6 +772,12 @@ export class JbBrowse extends LitElement {
     .tile.artist .tw .pv { left: 50%; transform: translateX(-50%); bottom: 2px; }
     .tw .open { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #000000a0; color: #fff; }
     .tw .open .i { width: 20px; height: 20px; }
+    .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #000000a0; color: #ffffffb3; }
+    .tw .tfav.on { color: var(--_active); }
+    .tw .tfav .i { width: 20px; height: 20px; }
+    :host([large]) .tw .tfav { width: 42px; height: 42px; } :host([large]) .tw .tfav .i { width: 24px; height: 24px; }
+    .mo.fav.on { color: var(--_active); }
+    .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto 44px 40px 40px; }
     .tile b { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
     .tile.artist b { text-align: center; }
     .tile small { font-size: 12px; color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -808,7 +830,7 @@ export class JbBrowse extends LitElement {
       .home { grid-template-columns: 1fr 1fr; gap: 12px; } .lt { min-height: 132px; padding: 16px; border-radius: 18px; }
       .lti svg { width: 38px; height: 38px; } .ltl { font-size: 21px; } .lts { font-size: 13px; } .lt-title { font-size: 18px; }
       .tw .pv { font-size: 9px; left: 5px; bottom: 5px; }
-      .row { grid-template-columns: 40px minmax(0, 1fr) auto 40px; gap: 8px; } .row .pv { display: none; } .row .du { font-size: 12px; } .th { width: 40px; height: 40px; }
+      .row { grid-template-columns: 40px minmax(0, 1fr) auto 40px; gap: 8px; } .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto 40px 40px; } .row .pv { display: none; } .row .du { font-size: 12px; } .th { width: 40px; height: 40px; }
     }
   `];
 }

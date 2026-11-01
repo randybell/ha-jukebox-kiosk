@@ -11,6 +11,7 @@ import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem } from './types'
 import type { MaBackend, TrackListType } from './backend/types';
 import { MassQueueBackend } from './backend/mass-queue';
 import { defineElement } from './define';
+import { FavController, heartTpl, heartType } from './heart';
 import { genreId, parseGenreOverview, genreMeta, GENRE_ROW_LIMIT, GENRE_TRACK_PAGE, type GenreSection } from './genres';
 
 /** mass_queue `page` is 0..1000. A first page shorter than this is taken as the whole list (no "load more" call). */
@@ -178,6 +179,7 @@ export class JbDetail extends LitElement {
   private _toastTimer?: number;
   private _confirm: ConfirmState | null = null;
   private _sel = '';
+  private hearts = new FavController(this);
   private press = new PressController<{ it: MaItem; type: string; key: string }>(this, (p) => this.tap(p.it, p.type, p.key), (p) => this.tap(p.it, p.type, p.key));
 
   get data(): DetailData | undefined { return this.entry?.data; }
@@ -307,17 +309,27 @@ export class JbDetail extends LitElement {
     if (type === 'playlist') return it.owner ?? '';
     return artistNames(it);
   }
+  // ---------- hearts (v0.7): page header (album / artist / playlist / podcast) and every row ----------
+  private async toggleFav(it: MaItem, type: string) {
+    const t = heartType(this.config, type, it);
+    if (!t) return;
+    const msg = await this.hearts.toggle(it, t);
+    if (msg) this.toast(msg);
+  }
+  private heart(it: MaItem, type: string) { return heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type)); }
   /** Album row inside an artist: tap opens the album; icons queue / replace / radio the whole album. */
   private albumRow(it: MaItem) {
     const key = 'al|' + it.uri;
     const p = this.press.handlers(key, { it, type: 'album', key });
-    return html`<div class="row drill ${this.press.held === key ? 'held' : ''}" data-uri=${it.uri} data-type="album" aria-label="Open ${it.name}"
+    const fav = !!heartType(this.config, 'album', it);
+    return html`<div class="row drill ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''}" data-uri=${it.uri} data-type="album" aria-label="Open ${it.name}"
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       ${artTpl(it, 'th')}
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b>
         <small>${provTpl(it.uri, it.provider, 'album')}<span class="st">${['Album', (it as any).year].filter(Boolean).join(' · ')}</span></small></div>
       <span class="du"></span>
+      ${fav ? this.heart(it, 'album') : nothing}
       ${rowActsTpl(it, canRadio('album', it), (a, el) => this.rowAct(it, 'album', a, el))}
     </div>`;
   }
@@ -328,13 +340,15 @@ export class JbDetail extends LitElement {
     const p = this.press.handlers(key, { it, type, key });
     const sub = type === 'radio' ? 'Radio station' : type === 'album' ? ['Album', artistNames(it)].filter(Boolean).join(' · ')
       : type === 'playlist' ? ['Playlist', it.owner].filter(Boolean).join(' · ') : type === 'artist' ? 'Artist' : artistNames(it) || ONE[type] || type;
-    return html`<div class="row ${drill ? 'drill' : ''} ${this.press.held === key ? 'held' : ''} ${this._sel === key ? 'sel' : ''}" data-uri=${it.uri} data-type=${type}
+    const fav = !!heartType(this.config, type, it);
+    return html`<div class="row ${drill ? 'drill' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''} ${this._sel === key ? 'sel' : ''}" data-uri=${it.uri} data-type=${type}
         aria-label=${drill ? `Open ${it.name}` : it.name}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       ${artTpl(it, type === 'artist' ? 'th circ' : 'th')}
       <div class="rt"><b>${it.name}</b><small>${provTpl(it.uri, it.provider, type)}<span class="st">${sub}</span></small></div>
       <span class="du"></span>
+      ${fav ? this.heart(it, type) : nothing}
       ${rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, type, a, el))}
     </div>`;
   }
@@ -342,13 +356,15 @@ export class JbDetail extends LitElement {
     const type = it.media_type === 'podcast_episode' ? 'podcast_episode' : 'track';
     const key = `${i}|${it.uri}`;
     const p = this.press.handlers(key, { it, type, key });
-    return html`<div class="row ${this.press.held === key ? 'held' : ''} ${this._sel === key ? 'sel' : ''}" data-uri=${it.uri} data-type=${type}
+    const fav = !!heartType(this.config, type, it);
+    return html`<div class="row ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''} ${this._sel === key ? 'sel' : ''}" data-uri=${it.uri} data-type=${type}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       ${n !== undefined ? html`<span class="n">${n}</span>` : artTpl(it, 'th')}
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b>
         <small>${provTpl(it.uri, it.provider)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, 'track')}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
+      ${fav ? this.heart(it, type) : nothing}
       ${rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, type, a, el))}
     </div>`;
   }
@@ -395,6 +411,7 @@ export class JbDetail extends LitElement {
               ${type === 'genre' ? nothing : html`<div class="da">
                 ${btn('play', 'play', 'Play', 'pbtn')}${btn('shuffle', 'shuffle', 'Shuffle')}${btn('add', 'qadd', 'Add to queue')}
                 ${canRadio(type, it) ? btn('radio', 'tower', 'Start radio') : nothing}
+                ${heartType(this.config, type, it) ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type), 'sbtn hfav') : nothing}
                 ${this.scopeTpl(it, type, d)}
               </div>`}</div>
           </div>
@@ -446,6 +463,8 @@ export class JbDetail extends LitElement {
     .dt small { color: var(--_muted); font-size: 15px; }
     .meta { font-size: 13px !important; font-variant-numeric: tabular-nums; }
     .da { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .sbtn.hfav { padding: 0; aspect-ratio: 1; justify-content: center; color: var(--_inactive); }
+    .sbtn.hfav.on { color: var(--_active); border-color: currentColor; }
     .pbtn, .sbtn { display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border-radius: 999px; font-weight: 700; }
     .pbtn { background: var(--_active); color: var(--_on-accent); }
     .sbtn { border: 1px solid #ffffff40; color: #fff; }

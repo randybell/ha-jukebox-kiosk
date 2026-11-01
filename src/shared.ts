@@ -169,7 +169,7 @@ export class PressController<T> implements ReactiveController {
     return {
       down: (e: PointerEvent) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-        if ((e.target as HTMLElement).closest('.mo, .qa, .ra, .ra-b')) return;
+        if ((e.target as HTMLElement).closest('.mo, .qa, .ra, .ra-b, [data-act="fav"]')) return;
         e.preventDefault();
         const el = e.currentTarget as HTMLElement;
         this.cancel();
@@ -369,6 +369,10 @@ export const mediaStyles = css`
   .ra-b:active { background: #ffffff26; }
   .ra-b .i { width: 24px; height: 24px; }
   .ra-more { display: none; }
+  /* hearts (0.6.2 radio, v0.7 every row): one more column */
+  .ra-b.fav { flex: none; color: var(--_inactive); }
+  .ra-b.fav.on { color: var(--_active); }
+  .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto; }
   @container np (max-width: 520px) {
     .row { grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 8px; }
     .row .du { display: none; }
@@ -376,6 +380,8 @@ export const mediaStyles = css`
     .ar.th { width: 40px; height: 40px; }
     .ra-b { width: 44px; height: 44px; }
     .ra-b .i { width: 22px; height: 22px; }
+    .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: 6px; }
+    .row.hasfav .ra-b { width: 40px; }
   }
   @container rows (max-width: 330px) {
     .ra-b.x2 { display: none; }

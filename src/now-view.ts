@@ -21,6 +21,7 @@ export interface InlineSpeakers extends HTMLElement {
   onState(fn: () => void): () => void;
 }
 import { defineElement } from './define';
+import { FavController } from './heart';
 
 const VOL_THROTTLE_MS = 200;
 const HOLD_MS = 4000; // keep optimistic values this long unless the entity confirms sooner
@@ -53,6 +54,7 @@ export class JbNow extends LitElement {
   private _unsub?: () => void;
   private vol = new Map<string, Pending<number>>();
   private mute = new Map<string, Pending<boolean>>();
+  private hearts = new FavController(this);
   private flags = new Map<string, Pending<any>>(); // shuffle / repeat / state / favorite
   private seek?: Pending<number> & { upd?: string };
   private senders = new Map<string, ReturnType<typeof throttle<[number]>>>();
@@ -135,14 +137,20 @@ export class JbNow extends LitElement {
   }
   private isFav() {
     const cur = this._snap && this._snap.current >= 0 ? this._snap.items[this._snap.current] : undefined;
-    return this.flag('fav:' + (this.ent?.attributes?.media_content_id ?? ''), !!cur?.favorite);
+    const uri = String(this.ent?.attributes?.media_content_id ?? '');
+    // v0.7 hearts: a heart on this track elsewhere (Search, Library, an album page) shows here too
+    const base = uri && this.config._favs ? this.config._favs.isFav({ uri, favorite: !!cur?.favorite }) : !!cur?.favorite;
+    return this.flag('fav:' + uri, base);
   }
   toggleFavorite() {
     const btn = this.config.favorite_entity ?? 'button.everywhere_favorite_current_song';
     const fav = this.isFav();
     const be = this.config._backend;
     if (fav && be && !be.caps.unfavorite) { this.toast("Can't remove favorites here"); return; }
-    this.flags.set('fav:' + (this.ent?.attributes?.media_content_id ?? ''), { v: !fav, t: Date.now() + 26000 }); this.requestUpdate();
+    const uri = String(this.ent?.attributes?.media_content_id ?? '');
+    this.flags.set('fav:' + uri, { v: !fav, t: Date.now() + 26000 }); this.requestUpdate();
+    // ...and the other way round: rows showing this track follow the Now Playing heart (same MA favourite)
+    if (uri.includes('://')) fire(this, 'jukebox-favorites-changed', { media_type: 'track', uri, favorite: !fav });
     if (fav) {
       (be ? be.unfavoriteCurrent(this.eid) : this.hass!.callService('mass_queue', 'unfavorite_current_item', { entity: this.eid })).catch((e: any) => console.warn(e));
       this.toast('Removed from favorites');

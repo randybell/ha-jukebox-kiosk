@@ -11,6 +11,7 @@ import { mediaStyles, noFocus, artTpl, fire, playMedia, playMessage } from './sh
 import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
 import { defineElement } from './define';
 import { stationInfo, toggleRadioFavorite } from './radio-fav';
+import { FavController } from './heart';
 
 export class JbStation extends LitElement {
   static properties = {
@@ -32,6 +33,7 @@ export class JbStation extends LitElement {
   private _req = 0;
   /** library id found by a heart lookup for the open station */
   private _libId = '';
+  private hearts = new FavController(this);
 
   willUpdate(ch: PropertyValues) {
     if (ch.has('item')) {
@@ -52,7 +54,13 @@ export class JbStation extends LitElement {
     } catch (e) { console.debug('[jukebox-card] station details unavailable', e); }
   }
   private canFav() { return !!this.config?._backend?.caps.libraryWrite; }
-  private isFav() { return this._fav ?? !!(this._detail?.favorite ?? this.item?.favorite); }
+  /** shared hearts store (v0.7): a heart here shows on the Search row, Library tile and Now Playing at once */
+  private isFav() {
+    const it = this.item;
+    const own = !!(this._detail?.favorite ?? it?.favorite);
+    if (this._fav != null) return this._fav;
+    return it?.uri && this.config?._favs ? this.config._favs.isFav({ uri: it.uri, favorite: own }) : own;
+  }
   private close() { fire(this, 'jukebox-station-close'); }
   private toast(t: string) {
     this._toast = t; window.clearTimeout(this._toastTimer);
@@ -68,6 +76,8 @@ export class JbStation extends LitElement {
       const r = await toggleRadioFavorite(this._detail ?? it, on, (c, d) => be.send(c, d), this._libId);
       if (r.result === 'notlib') { this._fav = on; this.toast(`${it.name} isn't in your library`); return; }
       if (r.libId) this._libId = r.libId;
+      this._fav = null;
+      this.config?._favs?.set(it.uri, !on, r.libId);
       this.toast(on ? `Removed ${it.name} from favorites` : `Added ${it.name} to favorites`);
       fire(this, 'jukebox-favorites-changed', { media_type: 'radio', uri: it.uri, favorite: !on });
     } catch (e) {

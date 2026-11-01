@@ -75,7 +75,8 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
       if (!features.library_write) throw err('unauthorized', 'Unauthorized');
       const it = command.endsWith('add_item') ? byUri(String(args.item ?? '')) : byUri(`library://${args.media_type}/${args.library_item_id}`);
       if (!it) throw err('not_found', 'Item not found');
-      if (command.endsWith('add_item')) { it.favorite = true; it._inlib = true; } else it.favorite = false;
+      if (command.endsWith('add_item')) { it.favorite = true; it._inlib = true; delete it._nolib; } else it.favorite = false;
+      window.__favLog?.push([command.split('/').pop(), command.endsWith('add_item') ? String(args.item) : `${args.media_type}/${args.library_item_id}`]);
       commit();
       return null;
     }

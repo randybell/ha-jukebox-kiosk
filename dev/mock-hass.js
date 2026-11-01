@@ -551,7 +551,16 @@ function sendCommand(command, d) {
       if (!t) throw new Error(`MediaNotFoundError: ${d.uri}`);
       // like MA's RadioController.get(): the library copy when the station is in the library, else the provider item
       if (t.media_type === 'radio') { window.__itemByUriLog?.push(d.uri); return pub({ ...asLibRadio(t), ...stationDetail(t) }); }
-      return maItem(t);
+      window.__itemByUriLog?.push(d.uri);
+      // v0.7 hearts: like MA's controllers, the library copy (library uri + library item_id) when the item is in the library
+      const inLib = t.uri.startsWith('library://') || t._inlib || (t._lib && !t._nolib);
+      if (!t.media_type || t.media_type === 'track') {
+        const m = maItem(t);
+        if (inLib) return { ...m, uri: libUri(t), item_id: libUri(t).split('/').pop() };
+        return { ...m, provider: t.provider ?? t.uri.split('://')[0], item_id: t.uri.split('/').pop() };
+      }
+      return inLib ? pub({ ...libView(t), provider: 'library', item_id: libUri(t).split('/').pop() })
+        : pub({ ...t, provider: t.provider ?? t.uri.split('://')[0], item_id: t.uri.split('/').pop() });
     }
     case 'metadata/get_track_lyrics': {
       if (!d.track || typeof d.track !== 'object') throw new Error('track required');

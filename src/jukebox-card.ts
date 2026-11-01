@@ -21,6 +21,7 @@ import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { pickBackend, createBackend, backendKey, type MaBackend } from './backend';
 import { defineElement } from './define';
 import { libraryTabLabel } from './library-home';
+import { FavStore } from './favorites';
 
 export const VERSION = '0.6.4';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
@@ -137,6 +138,8 @@ export class JukeboxCard extends LitElement {
   private _pn = -1;
   /** Music Assistant players (dynamic mode only; fixed mode never calls it) */
   readonly speakers = new SpeakerStore();
+  /** v0.7 hearts: one favourites store for every view (passed down as config._favs) */
+  readonly favs = new FavStore();
   /** Music Assistant backend (kiosk / mass_queue / native), shared by queue, lyrics, speakers and the views */
   backend?: MaBackend;
   private _bkey = '';
@@ -188,7 +191,7 @@ export class JukeboxCard extends LitElement {
     const first = !this._config;
     this._base = {
       entity: 'media_player.everywhere', accent: 'mono', limit: 8,
-      favorite_entity: 'button.everywhere_favorite_current_song', screensaver_minutes: 10, ...config,
+      favorite_entity: 'button.everywhere_favorite_current_song', screensaver_minutes: 10, ...config, _favs: this.favs,
     };
     this._config = this.effective();
     if (first && config.default_tab && this.tabs().some((t) => t.id === config.default_tab)) this._tab = config.default_tab;
@@ -509,8 +512,9 @@ export class JukeboxCard extends LitElement {
     this._tab = ids[i]; this._spk = false;
     this.updateComplete.then(() => (this.renderRoot.querySelector(`.tab[data-tab="${ids[i]}"]`) as HTMLElement | null)?.focus());
   };
-  /** Search radio heart (0.6.2): Browse > Radio reloads My stations next time it shows. */
+  /** A heart anywhere (0.6.2 radio, v0.7 every item): the shared store shows it everywhere; Library reloads that list next time. */
   private onFavs = (e: CustomEvent) => {
+    if (e.detail?.uri && typeof e.detail.favorite === 'boolean') this.favs.set(e.detail.uri, e.detail.favorite);
     (this.renderRoot.querySelector('jb-browse') as any)?.favoritesChanged?.(e.detail?.media_type);
     // a heart in the station sheet also updates the Search row heart for that station
     if (e.detail?.uri) (this.renderRoot.querySelector('jb-search') as any)?.favoriteChanged?.(e.detail.uri, !!e.detail.favorite);

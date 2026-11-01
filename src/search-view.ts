@@ -15,7 +15,7 @@ import './keyboard';
 import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, SearchCategory, SearchResults } from './types';
 import { defineElement } from './define';
 import { categoriesOn, resolveCategories, serviceTypes, defaultCategory } from './search-categories';
-import { toggleRadioFavorite } from './radio-fav';
+import { FavController, heartTpl, heartType } from './heart';
 
 const GROUPS: Array<{ key: GroupKey; label: string; type: string }> = [
   { key: 'artists', label: 'Artists', type: 'artist' },
@@ -67,7 +67,6 @@ export class JbSearch extends LitElement {
     _stack: { state: true },
     _confirm: { state: true },
     _sel: { state: true },
-    _favs: { state: true },
     _scope: { state: true },
     _pool: { state: true },
     _poolErr: { state: true },
@@ -76,11 +75,6 @@ export class JbSearch extends LitElement {
   config!: JukeboxCardConfig;
   active = false;
   private _query = '';
-  /** Search radio heart (0.6.2): favourite state changed in this card, by uri (overrides the result's own flag). */
-  private _favs: Record<string, boolean> = {};
-  private _favBusy = new Set<string>();
-  /** library ids found by the heart lookup, per search-result uri */
-  private _favIds: Record<string, string> = {};
   private _results: SearchResults | null = null;
   private _shownQuery = '';
   private _loading = false;
@@ -100,6 +94,7 @@ export class JbSearch extends LitElement {
   private _resScroll = 0;
   private _kbBefore = false;
   /** A row tap never plays: artists / albums / playlists (podcasts with mass_queue) open a detail, anything else is highlighted. */
+  private hearts = new FavController(this);
   private press = new PressController<{ it: MaItem; g: GroupKey }>(this, (p) => this.tap(p.it, p.g), (p) => this.tap(p.it, p.g));
   private _chipTimer?: number;
   private _chipFired = false;
@@ -320,50 +315,23 @@ export class JbSearch extends LitElement {
     this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400);
   }
 
-  // ---------- radio heart (0.6.2) ----------
-  /** Only Search radio results, only through the kiosk integration, only with the library permission class. */
-  private canFav(g: GroupKey) { return g === 'radio' && !!this.config._backend?.caps.libraryWrite; }
-  private isFav(it: MaItem) { return this._favs[it.uri] ?? !!it.favorite; }
-  /** MA stores favourites on library items: a provider station is added to the library and marked favourite in one call.
-   *  Removing needs the library id: a provider result has it looked up first with music/item_by_uri (read class, ported from
-   *  the design branch), so un-hearting works for it too. Shared with the station sheet (radio-fav.ts). */
-  private async toggleFav(it: MaItem) {
-    const be = this.config._backend;
-    if (!be?.caps.libraryWrite || this._favBusy.has(it.uri)) return;
-    const on = this.isFav(it);
-    this._favBusy.add(it.uri);
-    this._favs = { ...this._favs, [it.uri]: !on };
-    try {
-      const r = await toggleRadioFavorite(it, on, (c, d) => be.send(c, d), this._favIds[it.uri]);
-      if (r.result === 'notlib') {
-        this._favs = { ...this._favs, [it.uri]: on };
-        this.toast(`${it.name} isn't in your library`);
-        return;
-      }
-      if (r.libId) this._favIds[it.uri] = r.libId;
-      this.toast(on ? `Removed ${it.name} from favorites` : `Added ${it.name} to favorites`);
-      this.engine.clearCache();
-      fire(this, 'jukebox-favorites-changed', { media_type: 'radio', uri: it.uri, favorite: !on });
-    } catch (e) {
-      console.warn('[jukebox-card] favorite failed', e);
-      this._favs = { ...this._favs, [it.uri]: on };
-      this.toast(on ? `Couldn't remove ${it.name} from favorites` : `Couldn't add ${it.name} to favorites`);
-    } finally {
-      this._favBusy.delete(it.uri);
-    }
+  // ---------- hearts (0.6.2 radio rows; v0.7 every result row but genres) ----------
+  /** Only through the kiosk integration with the library permission class; `hearts: false` keeps the 0.6.2 radio-only heart. */
+  private canFav(it: MaItem, g: GroupKey) { return heartType(this.config, this.mediaType(it, g), it); }
+  /** MA stores favourites on library items: a provider result is added to the library and marked favourite in one call.
+   *  Removing needs the library id: a provider result has it looked up first with music/item_by_uri (read class), so
+   *  un-hearting works for it too. The store is shared with Library, detail pages, the station sheet and Now Playing. */
+  private async toggleFav(it: MaItem, g: GroupKey) {
+    const t = this.canFav(it, g);
+    if (!t) return;
+    const msg = await this.hearts.toggle(it, t);
+    if (msg) this.toast(msg);
   }
-  /** A heart elsewhere (the station sheet) changed a station's favourite: show it on the row, drop cached results. */
+  /** A heart elsewhere changed an item's favourite: the shared store already shows it; drop cached results. */
   favoriteChanged(uri: string, favorite: boolean) {
-    if (this._favs[uri] === favorite) return;
-    this._favs = { ...this._favs, [uri]: favorite };
+    this.config._favs?.set(uri, favorite);
     this.engine.clearCache();
     this.requestUpdate();
-  }
-  private favTpl(it: MaItem) {
-    const on = this.isFav(it);
-    return html`<button class="ra-b fav ${on ? 'on' : ''}" data-act="fav" tabindex="-1" aria-pressed=${on ? 'true' : 'false'}
-      title=${on ? 'In favorites' : 'Add to favorites'} aria-label=${on ? `Remove ${it.name} from favorites` : `Add ${it.name} to favorites`}
-      @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); this.toggleFav(it); }}>${icon(on ? 'heart' : 'heartline')}</button>`;
   }
 
   // ---------- taps, menus, detail stack ----------
@@ -372,7 +340,7 @@ export class JbSearch extends LitElement {
     const type = this.mediaType(it, g);
     if (drillable(type, this.config)) { this.openDetail(it, type); return; }
     // a station opens the station sheet (details, heart, Play); a tap never plays (0.6.3)
-    if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.isFav(it) } }); return; }
+    if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.hearts.isFav(it) } }); return; }
     this._sel = this._sel === it.uri ? '' : it.uri;
   }
   /** Row icons. Add / Play next run at once; Replace queue and Start radio (enqueue replace) ask first. */
@@ -471,7 +439,7 @@ export class JbSearch extends LitElement {
     const type = this.mediaType(it, g);
     const drill = drillable(type, this.config);
     const p = this.press.handlers(it.uri, { it, g });
-    const fav = this.canFav(g);
+    const fav = this.canFav(it, g);
     return html`<div class="row ${drill ? 'drill' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''} ${this._sel === it.uri ? 'sel' : ''}"
         data-uri=${it.uri} data-group=${g} data-type=${type} aria-label=${drill ? `Open ${it.name}` : it.name}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
@@ -480,7 +448,7 @@ export class JbSearch extends LitElement {
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b>
         <small>${provTpl(it.uri, it.provider, it.media_type)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, g)}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
-      ${fav ? this.favTpl(it) : nothing}
+      ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, g)) : nothing}
       ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, g, a, el))}
     </div>`;
   }
@@ -619,14 +587,6 @@ export class JbSearch extends LitElement {
 
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
-    .ra-b.fav { flex: none; color: var(--_inactive); }
-    .ra-b.fav.on { color: var(--_active); }
-    /* a radio row with the heart has one more column (0.6.2) */
-    .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto; }
-    @container np (max-width: 520px) {
-      .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: 6px; }
-      .row.hasfav .ra-b { width: 40px; }
-    }
     .sx {
       position: relative; z-index: 1; height: 100%; display: grid; gap: 12px; padding: 14px var(--_pad) 12px;
       grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
