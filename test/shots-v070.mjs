@@ -29,7 +29,7 @@ async function open(q, cfg, vp) {
   await hermetic(pg);
   pg.on('pageerror', (e) => errors.push(e.message));
   await pg.setViewport({ deviceScaleFactor: 1, ...vp });
-  await pg.goto(`${ROOT}index.html?fresh=1&latency=30&kiosk=1&pods=1${/[?&]radio=/.test(q) ? '' : '&radio=1'}${q}&cfg=${encodeURIComponent(J(cfg))}`);
+  await pg.goto(`${ROOT}index.html?fresh=1&latency=30&kiosk=1&pods=1&names=fake&stations=fake${/[?&]radio=/.test(q) ? '' : '&radio=1'}${q}&cfg=${encodeURIComponent(J(cfg))}`);
   await pg.waitForFunction('window.__ready === true');
   await sleep(400);
   return pg;
@@ -94,6 +94,22 @@ for (const vp of VPS) {
   await wait(pg, `${BR}.querySelectorAll('.lt').length === 10`);
   await shot(pg, '11-library-all-tiles-blur', vp, 'Library: all ten tiles (optional ones on), light blur backdrop');
   await pg.close();
+  // Autoplay style (Q14): Queue header pill + chevron → style sheet → playlist chooser
+  {
+    const QV = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
+    pg = await open('&tab=queue&kcaps=' + encodeURIComponent(J({ autoplay: true, autoplay_mode: true })), { show_autoplay: true }, vp);
+    await wait(pg, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
+    await tap(pg, `${QV}.querySelector('.ap')`);
+    await wait(pg, `${QV}.querySelector('.ap.on')`);
+    await shot(pg, '13-autoplay-pill', vp, 'Queue header: Autoplay pill on, style chevron (show_autoplay + server autoplay_mode)');
+    await tap(pg, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
+    await wait(pg, `${QV}.querySelectorAll('.aps .apo').length > 0`);
+    await shot(pg, '14-autoplay-style-sheet', vp, 'Autoplay style sheet: Automatic / Similar music / My library / A playlist');
+    await tap(pg, `${QV}.querySelector('.aps .apo[data-mode="playlist"]')`);
+    await wait(pg, `${QV}.querySelectorAll('.aps .apo[data-playlist]').length > 0`);
+    await shot(pg, '15-autoplay-playlist-chooser', vp, 'Autoplay style: choose a library playlist');
+    await pg.close();
+  }
 }
 // the visual editor's Library section (dev harness stub ha-form; HA's real form looks different)
 {

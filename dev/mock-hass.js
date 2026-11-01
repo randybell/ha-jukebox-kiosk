@@ -162,8 +162,38 @@ const CATALOG = {
   audiobooks: PODS ? [{ media_type: 'audiobook', uri: 'library://audiobook/7', name: 'The Mock Chronicles', version: '', image: art('Mock Chronicles'), favorite: false, explicit: null,
     authors: ['A. N. Author'], _added: 4 }] : [],
 };
+// names=fake: every artist / album / track / playlist name that is not already a placeholder becomes an invented one
+// (deterministic, for screenshots). Ids and uris are kept so drill-downs and fixtures still line up.
+if (params.get('names') === 'fake') {
+  const ADJ = ['Velvet', 'Paper', 'Copper', 'Silver', 'Hollow', 'Golden', 'Quiet', 'Neon', 'Amber', 'Cobalt', 'Willow', 'Marble', 'Saffron', 'Indigo', 'Juniper', 'Lantern', 'Harbor', 'Meadow'];
+  const NOUN = ['Lanterns', 'Foxes', 'Orchard', 'Tides', 'Satellites', 'Kites', 'Rivers', 'Echoes', 'Comets', 'Pines', 'Harbors', 'Sparrows', 'Atlas', 'Gardens', 'Signals', 'Postcards', 'Islands', 'Embers'];
+  const SONG = ['Morning', 'Window', 'Highway', 'Letters', 'Summer', 'Lights', 'Rain', 'Dancing', 'Shadows', 'Waves', 'Sunday', 'Static', 'Paper', 'Horizon', 'Little', 'Blue', 'Slow', 'City'];
+  const SONG2 = ['Song', 'Avenue', 'Weather', 'Parade', 'Signal', 'Garden', 'Machine', 'Postcard', 'Lullaby', 'Daydream', 'Tide', 'Echo', 'Hours', 'Motel', 'Theory', 'Glow', 'Drive', 'Bells'];
+  const keep = (n) => /mock|placeholder|lorem|ipsum|various artists/i.test(n);
+  const used = new Set(), memo = new Map();
+  const make = (kind, n, a, b, fmt) => {
+    const key = kind + '|' + n; if (memo.has(key)) return memo.get(key);
+    if (keep(n)) { memo.set(key, n); return n; }
+    let i = h(key), out;
+    do { out = fmt(a[i % a.length], b[(i >>> 5) % b.length]); i += 7; } while (used.has(out));
+    used.add(out); memo.set(key, out); return out;
+  };
+  const fa = (n) => make('artist', n, ADJ, NOUN, (x, y) => `The ${x} ${y}`);
+  const fl = (n) => make('album', n, ADJ, SONG2, (x, y) => `${x} ${y}`);
+  const ft = (n) => make('track', n, SONG, SONG2, (x, y) => `${x} ${y}`);
+  const fp = (n) => make('playlist', n, SONG, SONG2, (x, y) => `${x} ${y} Mix`);
+  for (const [k, v] of Object.entries(A)) { const n = fa(k); if (n !== k) { v.name = n; v.image = art(n); A[n] = v; delete A[k]; } }
+  for (const it of CATALOG.artists) if (!A[it.name]) { it.name = fa(it.name); it.image = art(it.name); }
+  for (const it of [...CATALOG.albums, ...CATALOG.tracks, ...CATALOG.playlists]) it._orig = it.name;
+  for (const it of CATALOG.albums) { it.name = fl(it.name); it.image = art(it.name); it.artists = it.artists.map((x) => ({ ...x, name: fa(x.name) })); }
+  for (const it of CATALOG.tracks) {
+    it.name = ft(it.name); it.artists = it.artists.map((x) => ({ ...x, name: fa(x.name) }));
+    const al = fl(it.album.name); it.album = { ...it.album, name: al, image: art(al) }; it.image = art(al);
+  }
+  for (const it of CATALOG.playlists) { it.name = fp(it.name); it.image = art(it.name); }
+}
 // the real export's ids, so drill-down into "Hotel California" serves the real mass_queue response (9 tracks with durations)
-CATALOG.albums.find((x) => x.name === 'Hotel California').uri = 'library://album/1448';
+CATALOG.albums.find((x) => (x._orig ?? x.name) === 'Hotel California').uri = 'library://album/1448';
 const KEYS = ['artists', 'albums', 'tracks', 'playlists', 'radio', 'audiobooks', 'podcasts'];
 const TYPE2KEY = { artist: 'artists', album: 'albums', track: 'tracks', playlist: 'playlists', radio: 'radio', audiobook: 'audiobooks', podcast: 'podcasts' };
 const pub = (it) => JSON.parse(JSON.stringify(it, (k, v) => (k.startsWith('_') ? undefined : v)));
@@ -211,7 +241,7 @@ const qItem = (t) => ({ queue_item_id: `${(++qn).toString(16).padStart(4, '0')}a
 const libTracks = CATALOG.tracks;
 const startList = ['So What', 'Teardrop', 'Dreams', 'Get Lucky', 'Hotel California', 'La Femme d\'Argent', 'Come Together', 'Instant Crush', 'The Chain', 'Angel', 'Porcelain', 'Rolling in the Deep', 'Yellow', 'Three Little Birds'];
 export const Q = (window.__queue = {
-  items: params.get('idle') === '1' ? [] : [libTracks.find((t) => t.name === 'Mockingbird Lane'), ...startList.map((n) => libTracks.find((t) => t.name === n))].map(qItem),
+  items: params.get('idle') === '1' ? [] : [libTracks.find((t) => t.name === 'Mockingbird Lane'), ...startList.map((n) => libTracks.find((t) => (t._orig ?? t.name) === n))].map(qItem),
   index: params.get('idle') === '1' ? -1 : 1,
 });
 /** one queue per MA group entity (Everywhere's is Q / window.__queue; mock-ma adds Indoor and Outdoor) */
@@ -275,7 +305,7 @@ const tracksFor = (it) => {
   if (it.media_type === 'track') return [it];
   if (it.media_type === 'album') return libTracks.filter((t) => t.album?.name === it.name);
   if (it.media_type === 'artist') return libTracks.filter((t) => t.artists.some((a) => a.name === it.name));
-  if (it.media_type === 'playlist' && it.name === 'Long Drive') return LONG_DRIVE;
+  if (it.media_type === 'playlist' && (it._orig ?? it.name) === 'Long Drive') return LONG_DRIVE;
   if (it.media_type === 'playlist') return libTracks.filter((_, i) => (h(it.name) + i) % 4 === 0).slice(0, 12);
   if (it.media_type === 'radio') return [it];
   return [];
@@ -468,7 +498,7 @@ const LYRICS_TABLE = {
 window.__lyricsCalls = () => window.__lyricsLog;
 /** sanitized MA item_by_uri shape: placeholder ids, provider apple_music--XXXXXXXX */
 function maItem(t) {
-  const lyr = LYRNONE ? undefined : LYRICS_TABLE[t.name];
+  const lyr = LYRNONE ? undefined : LYRICS_TABLE[t._orig ?? t.name];
   return { item_id: String(h(t.uri) % 100000), provider: 'library', name: t.name, version: t.version ?? '', duration: t._duration ?? 0, media_type: 'track', uri: t.uri,
     artists: (t.artists ?? []).map((a) => ({ ...a, item_id: String(h(a.name) % 9000), provider: 'library' })), album: t.album ?? null, favorite: !!t.favorite,
     provider_mappings: [{ item_id: 'XXXXXXXX', provider_domain: 'apple_music', provider_instance: 'apple_music--XXXXXXXX', available: true }],
