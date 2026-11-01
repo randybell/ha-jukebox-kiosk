@@ -31,7 +31,7 @@
     if (params.get('log') === '1') document.body.classList.add('log');
     if (params.get('fresh') === '1') localStorage.removeItem('jukebox-card:recents:v1');
     // lyrics: fresh=1 also empties the lyrics cache unless keeplyrics=1; overlay=1|0 presets the per-device art overlay toggle
-    if (params.get('fresh') === '1' && params.get('keeplyrics') !== '1') localStorage.removeItem('jukebox-card:lyrics:v1');
+    if (params.get('fresh') === '1' && params.get('keeplyrics') !== '1') { localStorage.removeItem('jukebox-card:lyrics:v1'); localStorage.removeItem('jukebox-card:lyrics:v2'); }
     if (params.has('overlay')) localStorage.setItem('jukebox-card:lyrics-overlay:v1', params.get('overlay') === '1' ? '1' : '0');
     // cfg=<json>: extra card options (e.g. {"lyrics_tab":false}), merged last
     const extra = params.get('cfg') ? JSON.parse(params.get('cfg')) : {};
