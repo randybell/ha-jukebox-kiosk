@@ -27,6 +27,7 @@
 // Speakers (0.5.0): dev/mock-ma.js adds media_player.indoor / media_player.outdoor (dynamic MA groups, each with its own queue)
 // and the players/*, player_queues/* and config/players/* send_command calls (logged in __maLog; writes also in __calls). See mock-ma.js for params.
 // admin=1 (the user is an admin), user=<name>, uid=<user id>. nolib=1: get_library is refused (a guest without library reads).
+// jjgrey=1: the v0.7 search-filters artist (JJ Grey, library + Apple Music, one duplicate track) and look-alikes.
 // HA media_player.join / unjoin throw (their ids don't match MA's speakers; the card must use MA set_members).
 
 import { createMa } from './mock-ma.js';
@@ -209,6 +210,24 @@ if (params.get('names') === 'fake') {
 }
 // the real export's ids, so drill-down into "Hotel California" serves the real mass_queue response (9 tracks with durations)
 CATALOG.albums.find((x) => (x._orig ?? x.name) === 'Hotel California').uri = 'library://album/1448';
+// jjgrey=1 (v0.7 search filters): a public artist name with invented albums/tracks, in the library and on Apple Music
+// ("Low Tide Lantern" is on both: the provider copy must be dropped), plus look-alike words by other artists
+if (params.get('jjgrey') === '1') {
+  const J = 'JJ Grey';
+  CATALOG.artists.push(artist(J, 'library', true), { media_type: 'artist', uri: 'apple_music://artist/JJ%20Grey', name: J, version: '', image: art(J), favorite: false, explicit: null, _added: 5 },
+    artist('Grey Harbor', 'apple_music'), artist('Lantern Choir'));
+  A[J] = CATALOG.artists.find((x) => x.name === J && x.uri.startsWith('library://'));
+  CATALOG.albums.push(album('Porch Light', J, 'library', true), album('Swamp Radio', J), album('Gulf Coast Sessions', J, 'apple_music'),
+    album('Porch Light Blues', 'Grey Harbor', 'apple_music'));
+  CATALOG.tracks.push(
+    track('Low Tide Lantern', J, 'Porch Light', 245), track('Screen Door', J, 'Porch Light', 212), track('Cypress Morning', J, 'Porch Light', 301),
+    track('Bayou Static', J, 'Swamp Radio', 228), track('Lantern Swing', J, 'Swamp Radio', 199),
+    track('Low Tide Lantern', J, 'Porch Light', 245, 'apple_music'), track('Gulf Wind', J, 'Gulf Coast Sessions', 265, 'apple_music'),
+    track('Pelican Run', J, 'Gulf Coast Sessions', 233, 'apple_music'), track('Lantern on the Levee', J, 'Gulf Coast Sessions', 280, 'apple_music'),
+    track('Porch Light Blues', 'Grey Harbor', 'Porch Light Blues', 240, 'apple_music'), track('Lantern', 'Lantern Choir', 'Evensong', 190));
+  // the Apple Music-only items are not in the library: get_library leaves them out (search and the artist page still list them)
+  for (const k of ['artists', 'albums', 'tracks']) for (const it of CATALOG[k]) if (it.uri.startsWith('apple_music://')) it._nolib = true;
+}
 const KEYS = ['artists', 'albums', 'tracks', 'playlists', 'radio', 'audiobooks', 'podcasts'];
 const TYPE2KEY = { artist: 'artists', album: 'albums', track: 'tracks', playlist: 'playlists', radio: 'radio', audiobook: 'audiobooks', podcast: 'podcasts' };
 const pub = (it) => JSON.parse(JSON.stringify(it, (k, v) => (k.startsWith('_') ? undefined : v)));
@@ -222,7 +241,7 @@ const asLibRadio = (it) => (it.media_type === 'radio' && it._inlib ? { ...libVie
 // radiohit=provider (heart lookup): search keeps returning the provider copy (radiobrowser://…) even for library stations
 const RADIO_HIT_PROVIDER = params.get('radiohit') === 'provider';
 
-function search(name, limit, types, by = '') {
+function search(name, limit, types, by = '', libOnly = false) {
   const q = name.trim().toLowerCase();
   const byOk = (it) => !by || (it.artists ?? []).some((a) => a.name.toLowerCase() === by.toLowerCase()) || it.name.toLowerCase() === by.toLowerCase();
   // MA's Radio Browser search also matches tags/genre, so "radio" or "rock" finds stations without it in the name
@@ -231,7 +250,7 @@ function search(name, limit, types, by = '') {
   const want = new Set((types ?? Object.keys(TYPE2KEY)).map((t) => TYPE2KEY[t]));
   const out = {};
   const asLib = RADIO_HIT_PROVIDER ? (it) => it : asLibRadio;
-  for (const key of KEYS) out[key] = want.has(key) ? CATALOG[key].filter((it) => hay(it).includes(q) && byOk(it)).sort((a, b) => score(a) - score(b)).slice(0, limit).map(asLib).map(pub) : [];
+  for (const key of KEYS) out[key] = want.has(key) ? CATALOG[key].filter((it) => hay(it).includes(q) && byOk(it) && (!libOnly || it.uri.startsWith('library://') || it._inlib)).sort((a, b) => score(a) - score(b)).slice(0, limit).map(asLib).map(pub) : [];
   return out;
 }
 function library({ media_type, favorite, search: s, limit = 25, offset = 0, order_by = 'name' }) {
@@ -239,7 +258,7 @@ function library({ media_type, favorite, search: s, limit = 25, offset = 0, orde
   if (!key) throw new Error(`invalid media_type ${media_type}`);
   // Everything in the mock catalog is "in the library"; MA reports library items with library:// uris.
   // radio=1: stations are only in the library once favourited through the Search heart (0.6.2, kiosk mock)
-  let items = EMPTY ? [] : key === 'radio' && !RADIO_LIB ? CATALOG.radio.filter((i) => i._inlib).map(libView) : CATALOG[key].map(libView);
+  let items = EMPTY ? [] : key === 'radio' && !RADIO_LIB ? CATALOG.radio.filter((i) => i._inlib).map(libView) : CATALOG[key].filter((i) => !i._nolib).map(libView);
   if (favorite) items = items.filter((i) => i.favorite);
   if (s) items = items.filter((i) => i.name.toLowerCase().includes(String(s).toLowerCase()));
   const cmp = {
@@ -346,7 +365,7 @@ async function callService(domain, service, data = {}, target, notifyOnError, re
     const ms = delayFor(data.name ?? '');
     await sleep(ms);
     if (mock.fail) throw new Error('mock failure');
-    const response = realSample ? structuredClone(realSample) : search(data.name ?? '', data.limit ?? 5, data.media_type, data.artist ?? '');
+    const response = realSample ? structuredClone(realSample) : search(data.name ?? '', data.limit ?? 5, data.media_type, data.artist ?? '', !!data.library_only);
     call.ms = Math.round(ms); call.replyAt = Math.round(performance.now());
     return { context: ctx, response };
   }

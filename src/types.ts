@@ -115,6 +115,12 @@ export interface JukeboxCardConfig {
   slow_ms?: number;
   /** Search library only. Default false (all providers). */
   library_only?: boolean;
+  /** v0.7 search filters (default on): "Search in <artist>" on artist / album pages, scope chips + Clear filters in
+   *  Search, a text filter and artist filter in the Library. false = 0.6 behaviour. */
+  search_filters?: boolean;
+  /** v0.7 (default on): Search shows Music Assistant library matches first in each category, then provider results
+   *  with library duplicates removed. false = MA's own order. */
+  library_first?: boolean;
   /**
    * v0.7 (default off). Search categories shown as chips, in this order. Unset = 0.6 behaviour
    * (every type, chips only when results span several types). Genres need the kiosk backend.

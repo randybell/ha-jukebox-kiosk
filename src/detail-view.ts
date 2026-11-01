@@ -163,7 +163,7 @@ export async function loadDetail(hass: HomeAssistant, config: JukeboxCardConfig,
  */
 export class JbDetail extends LitElement {
   static properties = {
-    hass: { attribute: false }, config: { attribute: false }, entry: { attribute: false }, trail: { attribute: false },
+    hass: { attribute: false }, config: { attribute: false }, entry: { attribute: false }, trail: { attribute: false }, scopeLabel: { attribute: false },
     _menu: { state: true }, _toast: { state: true }, _confirm: { state: true }, _sel: { state: true },
   };
   hass?: HomeAssistant;
@@ -171,6 +171,8 @@ export class JbDetail extends LitElement {
   entry?: DetailEntry;
   /** names of the views below this one, for the "Search › Chicago" breadcrumb */
   trail: string[] = [];
+  /** v0.7 search filters: set by the host on artist / album pages; "Search in JJ Grey" emits jb-nav {op:'scope'} */
+  scopeLabel?: (it: MaItem, type: string) => string;
   private _menu: { item: MaItem; type: string; pos: MenuPos; actions: MenuAction[] } | null = null;
   private _toast = '';
   private _toastTimer?: number;
@@ -360,6 +362,12 @@ export class JbDetail extends LitElement {
     return `${n} · ${m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`}`;
   }
 
+  private scopeTpl(it: MaItem, type: string, d: DetailData) {
+    const label = (type === 'artist' || type === 'album') && this.scopeLabel ? this.scopeLabel(it, type) : '';
+    if (!label) return nothing;
+    return html`<button class="sbtn scope" data-action="scope" tabindex="-1" aria-label=${label} @pointerdown=${noFocus}
+      @click=${() => { this.closeMenu(); fire(this, 'jb-nav', { op: 'scope', item: it, type, data: d.loading ? undefined : d, trail: this.trail }); }}>${icon('search')}<span>${label}</span></button>`;
+  }
   render() {
     const e = this.entry;
     if (!e) return nothing;
@@ -387,6 +395,7 @@ export class JbDetail extends LitElement {
               ${type === 'genre' ? nothing : html`<div class="da">
                 ${btn('play', 'play', 'Play', 'pbtn')}${btn('shuffle', 'shuffle', 'Shuffle')}${btn('add', 'qadd', 'Add to queue')}
                 ${canRadio(type, it) ? btn('radio', 'tower', 'Start radio') : nothing}
+                ${this.scopeTpl(it, type, d)}
               </div>`}</div>
           </div>
           ${d.loading ? html`<div class="empty"><span>Loading…</span></div>` : nothing}
@@ -441,6 +450,8 @@ export class JbDetail extends LitElement {
     .pbtn { background: var(--_active); color: var(--_on-accent); }
     .sbtn { border: 1px solid #ffffff40; color: #fff; }
     .pbtn .i, .sbtn .i { width: 22px; height: 22px; }
+    .sbtn.scope { border-color: var(--_active); color: var(--_active); max-width: 100%; }
+    .sbtn.scope span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .note { font-size: 13px; color: var(--_muted); padding: 10px 12px; border-radius: 10px; border: 1px dashed #ffffff33; }
     .note.err { color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     .note .retry { height: 38px; }

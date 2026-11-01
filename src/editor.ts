@@ -94,6 +94,8 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
         { name: 'browse_limit', selector: { number: { min: 10, max: 500, mode: 'box' } } },
         // v0.7 (each hidden on the card when the backend can't do it)
         { name: 'search_categories', selector: { select: { multiple: true, reorder: true, mode: 'list', options: CATEGORIES.map((x) => ({ value: x.key, label: x.label })) } } },
+        { name: 'search_filters', selector: { boolean: {} } },
+        { name: 'library_first', selector: { boolean: {} } },
         { name: 'search_default_category', selector: { select: { mode: 'dropdown', options: [{ value: 'all', label: 'All' }, ...CATEGORIES.map((x) => ({ value: x.key, label: x.label }))] } } },
         { name: 'discover', selector: { select: { multiple: true, reorder: true, mode: 'list', custom_value: true, options: discoverOptions(c.discover) } } },
         { name: 'radio_browse', selector: { select: { multiple: true, reorder: true, mode: 'list', options: RADIO_MODES.map((m) => ({ value: m, label: MODE_LABEL[m] })) } } },
@@ -146,6 +148,8 @@ export const LABELS: Record<string, string> = {
   quiet_applies: 'Quiet hours apply to',
   search_categories: 'Search categories (shown as chips, in this order)',
   search_default_category: 'Search opens on',
+  search_filters: 'Filters: "Search in <artist>" on artist pages, Library filter button, Clear filters',
+  library_first: 'Search shows library matches first (provider copies of library items hidden)',
   discover: 'Discover rows on Browse (none = off; needs the Jukebox Kiosk backend)',
   radio_browse: 'Radio: "Stations by" (none = off; Radio Browser provider)',
   radio_country: 'Radio country code (e.g. us; empty = Home Assistant\'s country)',
@@ -157,9 +161,9 @@ export const LABELS: Record<string, string> = {
 const QUIET_KEYS = ['quiet_start', 'quiet_end', 'quiet_max', 'quiet_applies'] as const;
 const hhmm = (t: unknown) => (typeof t === 'string' ? t.slice(0, 5) : undefined);
 /** defaults shown for unset options, never written back unless the user changes them */
-const SHOWN_DEFAULTS = {
+export const SHOWN_DEFAULTS = {
   show_lyrics: true, lyrics_tab: true, screensaver_lyrics: true, lyrics_seek: true, show_autoplay: false,
-  large_buttons: false, radio_favorites_only: false, library_home: false, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
+  large_buttons: false, radio_favorites_only: false, library_home: false, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
 };
 const roomEntity = (r: RoomConfig | string) => (typeof r === 'string' ? r : r.entity);
 

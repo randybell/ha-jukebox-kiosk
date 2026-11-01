@@ -8,7 +8,8 @@ import {
   playMedia, playMessage, drillable, canRadio, rowActsTpl, foldedActions, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
 } from './shared';
 import './detail-view';
-import type { DetailEntry } from './detail-view';
+import { loadDetail, type DetailEntry } from './detail-view';
+import { PoolCache, scopedResults, libraryFirstAll, isLib, scopeKey, scopeName, type Scope, type ScopePool } from './search-scope';
 import type { KeyDetail } from './keyboard';
 import './keyboard';
 import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, SearchCategory, SearchResults } from './types';
@@ -67,6 +68,9 @@ export class JbSearch extends LitElement {
     _confirm: { state: true },
     _sel: { state: true },
     _favs: { state: true },
+    _scope: { state: true },
+    _pool: { state: true },
+    _poolErr: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
@@ -103,9 +107,16 @@ export class JbSearch extends LitElement {
   /** v0.7: configured search categories (null = 0.6 behaviour) */
   private _cats: SearchCategory[] | null = null;
   private _catsKey = '';
+  /** v0.7 search filters: artist (› album) scope; queries then search only inside it */
+  private _scope: Scope | null = null;
+  /** the scope's own items (artist page tracks + albums), for the empty-query list */
+  private _pool: ScopePool | null = null;
+  private _poolErr = '';
+  private pools = new PoolCache();
 
   engine = new SearchEngine({
     fetch: (q, limit) => this.fetchSearch(q, limit),
+    scope: () => scopeKey(this._scope),
     onResults: (q, res, info) => {
       this._seqShown = info.seq;
       this._results = res;
@@ -151,8 +162,59 @@ export class JbSearch extends LitElement {
   }
 
   // ---------- data ----------
+  private filtersOn() { return this.config?.search_filters !== false; }
+  private libFirstOn() { return this.config?.library_first !== false; }
   private async fetchSearch(name: string, limit: number): Promise<SearchResults> {
     if (!this.hass) throw new Error('hass not ready');
+    const scope = this._scope;
+    if (scope) return this.fetchScoped(scope, name, limit);
+    const out = await this.fetchGlobal(name, limit);
+    return this.libFirstOn() ? libraryFirstAll(out).results : out;
+  }
+  /** Scoped query: the artist's own items filtered here (instant once cached) + MA's search for the words with the
+   *  artist filter, kept only when the artist matches. Library first, provider copies of library items dropped. */
+  private async fetchScoped(scope: Scope, name: string, limit: number): Promise<SearchResults> {
+    const extra = scope.album || !scope.artist ? Promise.resolve({} as SearchResults)
+      : this.hass!.callService('music_assistant', 'search', {
+        config_entry_id: this.config.config_entry_id, name, limit, media_type: ['album', 'track'],
+        artist: scope.artist.name, library_only: this.config.library_only ?? false,
+      }, undefined, false, true).then(normaliseResponse).catch((e: unknown) => { console.warn('[jukebox-card] scoped search failed', e); return {} as SearchResults; });
+    const [pool, ex] = await Promise.all([this.poolFor(scope), extra]);
+    return scopedResults(scope, pool, name, ex, Math.max(limit, 50));
+  }
+  private poolFor(scope: Scope): Promise<ScopePool> {
+    const it = scope.album ?? scope.artist!;
+    const type = scope.album ? 'album' : 'artist';
+    return this.pools.get(scopeKey(scope), () => loadDetail(this.hass!, this.config, it, type).then((d) => {
+      if (d.error && !d.tracks.length && !d.albums.length) throw new Error(d.error);
+      return { albums: d.albums, tracks: d.tracks };
+    }));
+  }
+  /** Apply (or clear, with null) the scope; the current query re-runs inside it. */
+  setScope(scope: Scope | null) {
+    if (scopeKey(scope) === scopeKey(this._scope)) return;
+    this._scope = scope; this._pool = null; this._poolErr = '';
+    this._menu = null; this._confirm = null; this._sel = '';
+    if (scope) {
+      const k = scopeKey(scope);
+      this.poolFor(scope).then((p) => { if (scopeKey(this._scope) === k) this._pool = p; })
+        .catch((e) => { if (scopeKey(this._scope) === k) this._poolErr = `Couldn't load ${scopeName(scope)}. Check Music Assistant.`; console.warn('[jukebox-card] scope failed', e); });
+    }
+    const f = this.scopeGroups();
+    if (f && this._filter !== 'all' && !f.includes(this._filter)) this._filter = 'all';
+    if (this._query) { this._results = null; this.engine.query(this._query); }
+    fire(this, 'jukebox-search-scope', { scope: scope ? { artist: scope.artist?.name ?? '', album: scope.album?.name ?? '' } : null });
+  }
+  /** Clear filters: the scope and the category chip (the typed words stay). */
+  clearFilters() {
+    this.setScope(null);
+    this._filter = this._cats ? defaultCategory(this.config, this._cats) : 'all';
+  }
+  /** groups a scope can show (null = no scope) */
+  private scopeGroups(): GroupKey[] | null {
+    return !this._scope ? null : this._scope.album ? ['tracks'] : ['albums', 'tracks'];
+  }
+  private async fetchGlobal(name: string, limit: number): Promise<SearchResults> {
     const cats = this._cats;
     const types = cats ? serviceTypes(cats) : SEARCH_TYPES;
     const data: Record<string, any> = {
@@ -169,7 +231,7 @@ export class JbSearch extends LitElement {
         .then((g: any) => (Array.isArray(g?.genres) ? g.genres : []).filter((x: any) => x && x.uri && x.name).map(normItem))
         .catch((e: unknown) => { console.warn('[jukebox-card] genre search failed', e); return [] as MaItem[]; })
       : null;
-    const svc = types.length ? this.hass.callService('music_assistant', 'search', data, undefined, false, true).then(normaliseResponse) : Promise.resolve({} as SearchResults);
+    const svc = types.length ? this.hass!.callService('music_assistant', 'search', data, undefined, false, true).then(normaliseResponse) : Promise.resolve({} as SearchResults);
     const [out, g] = await Promise.all([svc, genres]);
     if (g) out.genres = g;
     return out;
@@ -202,7 +264,7 @@ export class JbSearch extends LitElement {
     if (path.some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)))) return;
     let handled = true;
     if (e.key === 'Backspace') this.setQuery(this._query.slice(0, -1));
-    else if (e.key === 'Escape') { if (this._confirm) this._confirm = null; else if (this._menu) this.closeMenu(); else if (this._stack.length) this.back(); else this.setQuery(''); }
+    else if (e.key === 'Escape') { if (this._confirm) this._confirm = null; else if (this._menu) this.closeMenu(); else if (this._stack.length) this.back(); else if (!this._query && this._scope) this.clearFilters(); else this.setQuery(''); }
     else if (e.key === 'Enter') this.openTop();
     else if (e.key.length === 1 && /[\p{L}\p{N}\p{P}\p{S} ]/u.test(e.key)) this.setQuery(this._query + e.key.toUpperCase());
     else handled = false;
@@ -350,7 +412,39 @@ export class JbSearch extends LitElement {
   }
   private onNav(e: CustomEvent) {
     e.stopPropagation();
-    if (e.detail.op === 'back') this.back(); else this.openDetail(e.detail.item, e.detail.type);
+    if (e.detail.op === 'back') this.back();
+    else if (e.detail.op === 'scope') this.scopeFromDetail(e.detail.item, e.detail.type, e.detail.data);
+    else this.openDetail(e.detail.item, e.detail.type);
+  }
+
+  /** "Search in JJ Grey" on an artist page (or "Search in <album>" on an album page): scope, back to an empty query. */
+  private scopeFromDetail(it: MaItem, type: string, data?: { albums: MaItem[]; tracks: MaItem[] }) {
+    let scope: Scope;
+    if (type === 'album') {
+      const parent = [...this._stack].reverse().find((x) => x.type === 'artist')?.item;
+      const a0 = it.artists?.[0];
+      scope = { artist: parent ?? (a0 ? { media_type: 'artist', uri: a0.uri ?? '', name: a0.name } : undefined), album: it };
+    } else scope = { artist: it };
+    if (data) this.pools.put(scopeKey(scope), { albums: data.albums ?? [], tracks: data.tracks ?? [] });
+    this.addRecent(this._shownQuery || this._query);
+    this._stack = [];
+    this._kbHidden = false;
+    this._query = '';
+    this.engine.query('');
+    this.setScope(scope);
+  }
+  private scopeLabel = (it: MaItem, type: string) => (!this.filtersOn() || (this._scope?.album && type === 'album' && this._scope.album.uri === it.uri)
+    || (type === 'artist' && !this._scope?.album && this._scope?.artist?.uri === it.uri) ? '' : `Search in ${it.name}`);
+  private scopeTpl() {
+    const s = this._scope; if (!s) return nothing;
+    const chip = (k: 'artist' | 'album', label: string, name: string) => html`<button class="sc" data-scope=${k} tabindex="-1"
+      aria-label=${`Remove filter ${label}: ${name}`} @pointerdown=${noFocus}
+      @click=${() => this.setScope(k === 'artist' || !s.artist ? null : { artist: s.artist })}><span class="scl">${label}:</span><b>${name}</b>${icon('close', 'i scx')}</button>`;
+    return html`<div class="scope" role="group" aria-label="Search filters">
+      ${s.artist ? chip('artist', 'Artist', s.artist.name) : nothing}
+      ${s.album ? chip('album', 'Album', s.album.name) : nothing}
+      <button class="fc clr" data-action="clear-filters" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.clearFilters()}>Clear filters</button>
+    </div>`;
   }
 
   // ---------- render ----------
@@ -389,12 +483,36 @@ export class JbSearch extends LitElement {
     return html`<div class="grp ${g.key}">
       <h3>${g.label}<em>${items.length}</em>${!full ? html`<button class="sa" tabindex="-1"
         @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => (this._filter = g.key)}>See all</button>` : nothing}</h3>
-      <div class="list">${items.map((it) => this.row(it, g.key))}</div>
+      <div class="list">${this.libRows(items, g.key)}</div>
     </div>`;
+  }
+  /** Library first: "In your library" rows, then "From your providers" (duplicates already removed) */
+  private libRows(items: MaItem[], g: GroupKey) {
+    const n = this.libFirstOn() && g !== 'genres' ? items.findIndex((x) => !isLib(x)) : -2;
+    if (n === -2 || n === 0) return items.map((it) => this.row(it, g));
+    const lib = n === -1 ? items : items.slice(0, n);
+    const rest = n === -1 ? [] : items.slice(n);
+    return html`<div class="lsec" data-sec="library">${icon('browse', 'i xs')}In your library</div>${lib.map((it) => this.row(it, g))}
+      ${rest.length ? html`<div class="lsec" data-sec="providers">${icon('search', 'i xs')}From your providers</div>${rest.map((it) => this.row(it, g))}` : nothing}`;
   }
 
   private renderResults() {
-    const r = this._results;
+    const sc = this._scope;
+    const r = sc && !this._query ? (this._pool ? scopedResults(sc, this._pool, '') : null) : this._results;
+    const name = scopeName(sc);
+    const clr = html`<button class="fc clr" data-action="clear-filters" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.clearFilters()}>Clear filters</button>`;
+    if (sc) {
+      if (this._poolErr && !this._query) return html`<div class="empty"><b>${this._poolErr}</b>${clr}</div>`;
+      if (!r) return html`<div class="empty"><span>${this._query ? 'Searching' : 'Loading'} ${name}…</span></div>`;
+      const f = this.effFilter();
+      const n = f === 'all' ? this.count(r) : r[f]?.length ?? 0;
+      if (!n) {
+        const what = f === 'all' ? 'matches' : GROUPS.find((x) => x.key === f)!.label.toLowerCase();
+        return html`<div class="empty scoped"><b>No ${what} in ${name}</b><span>${this._query ? html`for “${this._shownQuery || this._query}”. Try fewer letters, or clear the filter to search everything.` : 'Nothing found for this filter.'}</span>${clr}</div>`;
+      }
+      if (f !== 'all') return this.group(GROUPS.find((x) => x.key === f)!, r[f] ?? [], true);
+      return html`${(['albums', 'tracks'] as GroupKey[]).filter((k) => r[k]?.length).map((k) => this.group(GROUPS.find((x) => x.key === k)!, r[k]!, false))}`;
+    }
     if (!this._query && !r) {
       return html`<div class="empty"><b>Start typing</b><span>Results update on every key, across every music provider.</span></div>`;
     }
@@ -408,17 +526,24 @@ export class JbSearch extends LitElement {
     return html`${this.groups().filter((g) => r[g.key]?.length).map((g) => this.group(g, r[g.key]!, false))}`;
   }
 
+  /** the category in effect: a scope only has albums / tracks, so another chosen category shows All inside the scope */
+  private effFilter(): GroupKey | 'all' {
+    const f = this.scopeGroups();
+    return f && this._filter !== 'all' && !f.includes(this._filter) ? 'all' : this._filter;
+  }
   /** groups in display order: the configured category order, or 0.6's fixed order */
   private groups() {
     return this._cats ? this._cats.map((k) => GROUPS.find((g) => g.key === k)!).filter(Boolean) : GROUPS;
   }
   /** v0.7: the category chips are always shown (All + each configured category with its count) */
   private catChips(r: SearchResults | null) {
-    const keys: Array<GroupKey | 'all'> = ['all', ...this._cats!];
+    const sg = this.scopeGroups();
+    const keys: Array<GroupKey | 'all'> = ['all', ...this._cats!.filter((k) => !sg || sg.includes(k))];
+    const cur = this.effFilter();
     return html`<div class="filters cats" role="tablist" aria-label="Search categories">
       ${keys.map((k) => {
         const n = !r ? -1 : k === 'all' ? this.count(r) : r[k]?.length ?? 0;
-        return html`<button class="fc ${this._filter === k ? 'on' : ''} ${n === 0 ? 'zero' : ''}" role="tab" aria-selected=${this._filter === k ? 'true' : 'false'}
+        return html`<button class="fc ${cur === k ? 'on' : ''} ${n === 0 ? 'zero' : ''}" role="tab" aria-selected=${cur === k ? 'true' : 'false'}
           data-cat=${k} tabindex="-1" @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => (this._filter = k)}>${k === 'all' ? 'All' : GROUPS.find((g) => g.key === k)!.label}${n > 0 ? html`<em>${n}</em>` : nothing}</button>`;
       })}
     </div>`;
@@ -435,10 +560,14 @@ export class JbSearch extends LitElement {
     if (cat && GROUPS.some((g) => g.key === cat) && (!this._cats || this._cats.includes(cat as SearchCategory))) this._filter = cat as GroupKey;
   }
   render() {
-    const r = this._results;
+    const sc = this._scope;
+    const r = sc && !this._query ? (this._pool ? scopedResults(sc, this._pool, '') : null) : this._results;
     const count = r ? this.count(r) : 0;
     const present = r ? GROUPS.filter((g) => r[g.key]?.length) : [];
+    const name = scopeName(sc);
     const status = this._error ? this._error
+      : sc ? (!this._query ? (r ? `${count} in ${name} · type to search inside it` : `Loading ${name}…`)
+        : !r ? `Searching ${name}…` : count ? `${count} result${count === 1 ? '' : 's'} in ${name} for “${this._shownQuery}”` : `No matches in ${name}`)
       : !this._query ? 'Type to search all providers'
       : !r ? 'Searching…'
       : count ? `${count} result${count === 1 ? '' : 's'} for “${this._shownQuery}” · all providers`
@@ -449,24 +578,25 @@ export class JbSearch extends LitElement {
           <div class="qbar" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this._kbHidden = false; }}>
             ${icon('search', 'i qi')}
             <div class="q" role="searchbox" aria-label="Search music" aria-readonly="true" aria-live="polite" data-query=${this._query}>
-              ${this._query ? html`<span class="qt">${this._query}</span>` : html`<span class="ph">Search artists, songs, radio…</span>`}<i class="caret" aria-hidden="true"></i>
+              ${this._query ? html`<span class="qt">${this._query}</span>` : html`<span class="ph">${sc ? `Search in ${name}…` : 'Search artists, songs, radio…'}</span>`}<i class="caret" aria-hidden="true"></i>
             </div>
             ${this._query ? html`<button class="qx" tabindex="-1" aria-label="Clear search"
               @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => this.setQuery('')}>${icon('close')}</button>` : nothing}
             <span class="hair ${this._loading ? 'on' : ''}" aria-hidden="true"></span>
           </div>
+          ${this.scopeTpl()}
           <div class="qmeta" data-loading=${this._loading ? '1' : '0'}><span class="live ${this._loading ? 'busy' : ''}"></span>${status}</div>
         </div>
-        ${this._recents.length ? html`<div class="recents" aria-label="Recent searches"><span class="rl">${icon('history', 'i xs')}Recent</span>
+        ${this._recents.length && !sc ? html`<div class="recents" aria-label="Recent searches"><span class="rl">${icon('history', 'i xs')}Recent</span>
           ${this._recents.map((q) => html`<button class="chip" tabindex="-1"
               @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this._chipFired = false; this._chipTimer = window.setTimeout(() => { this._chipFired = true; this.removeRecent(q); }, 700); }}
               @pointerup=${() => window.clearTimeout(this._chipTimer)} @pointerleave=${() => window.clearTimeout(this._chipTimer)}
               @click=${() => { if (!this._chipFired) this.setQuery(q.toUpperCase()); }}>${q}</button>`)}
         </div>` : html`<div class="recents"></div>`}
-        <section class="res" aria-label="Search results" data-shown-query=${this._shownQuery} data-seq=${this._seqShown}>
-          ${this._stack.length ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${this._stack[this._stack.length - 1]}
-              .trail=${[`Search “${this._shownQuery || this._query}”`, ...this._stack.slice(0, -1).map((x) => x.item.name)]} @jb-nav=${this.onNav}></jb-detail>`
-          : html`${this._cats ? this.catChips(r) : present.length > 1 ? html`<div class="filters">
+        <section class="res" aria-label="Search results" data-shown-query=${this._shownQuery} data-seq=${this._seqShown} data-scope=${name}>
+          ${this._stack.length ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${this._stack[this._stack.length - 1]} .scopeLabel=${this.scopeLabel}
+              .trail=${[sc ? `Search in ${name}${this._query ? ` “${this._query}”` : ''}` : `Search “${this._shownQuery || this._query}”`, ...this._stack.slice(0, -1).map((x) => x.item.name)]} @jb-nav=${this.onNav}></jb-detail>`
+          : html`${this._cats ? this.catChips(r) : present.length > 1 && !sc ? html`<div class="filters">
             ${(['all', ...present.map((g) => g.key)] as Array<GroupKey | 'all'>).map((k) => html`<button class="fc ${this._filter === k ? 'on' : ''}" tabindex="-1"
               @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => (this._filter = k)}>${k === 'all' ? 'All' : GROUPS.find((g) => g.key === k)!.label}</button>`)}
           </div>` : nothing}
@@ -535,6 +665,17 @@ export class JbSearch extends LitElement {
     /* v0.7 category chips: count after the label, empty categories dimmed but still tappable */
     .fc em { font-style: normal; font-weight: 600; margin-left: 6px; opacity: .7; font-variant-numeric: tabular-nums; }
     .fc.zero:not(.on) { opacity: .45; }
+    /* v0.7 search filters: scope chips under the query, Clear filters, library-first section labels */
+    .scope { display: flex; align-items: center; gap: 8px; margin-top: 10px; min-width: 0; flex-wrap: wrap; }
+    .sc { display: inline-flex; align-items: center; gap: 6px; height: 44px; max-width: 100%; padding: 0 8px 0 16px; border-radius: 999px;
+      background: var(--_active); color: var(--_on-accent); font-size: 15px; font-weight: 600; min-width: 0; }
+    .sc .scl { opacity: .8; flex: none; }
+    .sc b { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .sc .scx { width: 28px; height: 28px; padding: 5px; border-radius: 50%; background: #0000001f; flex: none; }
+    .fc.clr { height: 44px; padding: 0 16px; font-size: 14px; color: #fff; border-color: #ffffff59; }
+    .empty .fc.clr { margin-top: 14px; }
+    .lsec { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--_inactive); }
+    .lsec[data-sec="providers"] { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ffffff1f; }
     .ar.gen { display: grid; place-items: center; background: #ffffff14; color: #fff; box-shadow: 0 0 0 1px #ffffff33; }
     .ar.gen .i { width: 22px; height: 22px; }
     .ra.go { width: 48px; height: 48px; display: grid; place-items: center; color: var(--_inactive); }
@@ -581,6 +722,9 @@ export class JbSearch extends LitElement {
       .kbd { --jb-kb-handle-h: 22px; --jb-kb-handle-label: none; }
       .scroll { padding: 10px; gap: 12px; }
       .fc { height: 30px; padding: 0 11px; font-size: 12px; }
+      .scope { margin-top: 8px; gap: 6px; }
+      .sc { height: 40px; font-size: 14px; padding-left: 13px; }
+      .fc.clr { height: 40px; padding: 0 13px; font-size: 13px; }
     }
     .sx.kb-hidden .res .scroll { padding-bottom: calc(10px + var(--jb-fab-space, 0px)); scroll-padding-bottom: var(--jb-fab-space, 0px); }
   `];

@@ -17,6 +17,10 @@ import {
   type DiscoverRow,
 } from './discover';
 import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, type TileId } from './library-home';
+import { loadDetail } from './detail-view';
+import { PoolCache, libraryFiltered, normText, type ScopePool } from './search-scope';
+import type { KeyDetail } from './keyboard';
+import './keyboard';
 
 export interface Cat { type: string; label: string; one: string }
 export const CATS: Cat[] = [
@@ -44,6 +48,8 @@ const SORTS = [
 ];
 /** Radio gets a "Popular" (most played) sort first; get_library has no popularity order, play_count_desc is the closest. */
 const RADIO_SORTS = [{ id: 'play_count_desc', label: 'Popular' }, ...SORTS];
+/** v0.7 Library filters: an artist scope lists that artist's albums and tracks only. */
+const LART_CATS = ['album', 'track'];
 const sortsFor = (type: string) => (type === 'radio' ? RADIO_SORTS : SORTS);
 /** Search used to find stations when the library has none (Radio Browser stations are not in the MA library until added). */
 const RADIO_FALLBACK_QUERY = 'radio';
@@ -63,6 +69,7 @@ export class JbBrowse extends LitElement {
     _cat: { state: true }, _fav: { state: true }, _sort: { state: true }, _pages: { state: true }, _avail: { state: true },
     _stack: { state: true }, _home: { state: true }, _menu: { state: true }, _toast: { state: true }, _confirm: { state: true },
     _rmode: { state: true }, _rtrail: { state: true }, _rb: { state: true }, _disc: { state: true }, _ditems: { state: true },
+    _lq: { state: true }, _lkb: { state: true }, _lart: { state: true }, _lpool: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
@@ -97,6 +104,16 @@ export class JbBrowse extends LitElement {
   private _dq: DiscoverRow[] = [];
   private _dbusy = 0;
   private _io?: IntersectionObserver;
+  // ---- v0.7 Library filters (search_filters) ----
+  /** text filter typed on the on-screen keyboard (get_library `search`) */
+  private _lq = '';
+  /** the filter keyboard is open */
+  private _lkb = false;
+  /** artist scope ("Artist: JJ Grey"): Albums / Tracks show only this artist's library items */
+  private _lart: MaItem | null = null;
+  private _lpool: { key: string; pool?: ScopePool; error: string } | null = null;
+  private lpools = new PoolCache();
+  private _lqTimer?: number;
   /** Tap never plays: artists / albums / playlists (and podcasts with mass_queue) open their detail, everything else a sheet. */
   private press = new PressController<{ it: MaItem; type: string }>(this, (p, el) => this.tap(p.it, p.type, el), (p, el) => this.openMenu(p.it, p.type, el));
 
@@ -137,7 +154,7 @@ export class JbBrowse extends LitElement {
   }
   private homeLabel() { return String(this.config?.library_label ?? '').trim() || 'Library'; }
   /** Back to the tile grid (the back button, or tapping the Library tab again). */
-  goHome() { this._home = true; this._stack = []; this._menu = null; }
+  goHome() { this._home = true; this._stack = []; this._menu = null; clearTimeout(this._lqTimer); this._lq = ''; this._lart = null; this._lpool = null; this._lkb = false; }
   /** Radio "Stations by…" modes (config order), [] when off or unsupported. */
   rmodes(): RadioBrowseMode[] { return this.be?.ext?.radioBrowse ? radioModes(this.config ?? {}) : []; }
   private discKey() { return this.discRows().join(','); }
@@ -152,7 +169,11 @@ export class JbBrowse extends LitElement {
   }
 
   private get limit() { return Math.max(1, Math.min(500, this.config.browse_limit ?? 60)); }
-  private key(type = this._cat, fav = this._fav, sort = this._sort) { return `${type}|${fav ? 1 : 0}|${sort}`; }
+  private key(type = this._cat, fav = this._fav, sort = this._sort, q = this.lq()) { return `${type}|${fav ? 1 : 0}|${sort}${q ? `|q=${q}` : ''}`; }
+  /** v0.7 Library filters are on (`search_filters`, default on). */
+  filtersOn() { return this.config?.search_filters !== false; }
+  /** the text filter as sent to get_library (trimmed; '' when filters are off) */
+  private lq() { return this.filtersOn() ? this._lq.trim() : ''; }
   private lib(data: Record<string, any>) {
     return this.hass!.callService('music_assistant', 'get_library', { config_entry_id: this.config.config_entry_id, ...data }, undefined, false, true);
   }
@@ -194,13 +215,15 @@ export class JbBrowse extends LitElement {
     try {
       const data: Record<string, any> = { media_type: type, limit: this.limit, offset, order_by: sort };
       if (fav) data.favorite = true;
+      const q = this.lq();
+      if (q) data.search = q;
       let items = libraryItems(await this.lib(data));
       const src: Src = 'library';
       // Radio "My stations" (0.6.1): favourite stations first, then the rest of the library stations (followed stations a
       // provider syncs into the library are not favourites, so they must still show). No keyword-search fallback any more:
       // a Radio Browser search for "radio" filled the grid with unrelated stations. An empty library gets a hint instead.
       let favs = cur?.favs;
-      if (type === 'radio' && !offset && !fav) {
+      if (type === 'radio' && !offset && !fav && !q) {
         if (!items.length && sort !== 'name') items = libraryItems(await this.lib({ ...data, order_by: 'name' }));
         favs = libraryItems(await this.lib({ media_type: 'radio', favorite: true, limit: this.limit, offset: 0, order_by: sort }));
       }
@@ -214,11 +237,13 @@ export class JbBrowse extends LitElement {
     }
   }
   private ensure() {
+    if (this._lart && this.filtersOn() && LART_CATS.includes(this._cat)) { this.loadLart(); return; }
     if (this._cat === DISCOVER_CAT.type) { if (!this._disc) this.loadDiscover(); return; }
     if (this._cat === 'radio' && this._rmode !== 'library') { if (!this._rb) this.loadRb(); return; }
     if (!this._pages[this.key()]) this.load(true);
   }
   private setCat(t: string) {
+    if (this._lart && !LART_CATS.includes(t)) this._lart = null;
     this._cat = t; this._stack = []; this._catTouched = true;
     if (!sortsFor(t).some((s) => s.id === this._sort)) this._sort = 'name';
     if (t === 'radio' && this._sort === 'name' && !this._sortTouched) this._sort = 'play_count_desc';
@@ -233,7 +258,7 @@ export class JbBrowse extends LitElement {
   private onScroll(e: Event) {
     this.press.scrolled();
     const el = e.target as HTMLElement;
-    if (!this._stack.length && el.scrollTop + el.clientHeight > el.scrollHeight - 400) this.load(true);
+    if (!this._stack.length && !this._lart && el.scrollTop + el.clientHeight > el.scrollHeight - 400) this.load(true);
   }
 
   // ---------- v0.7 radio "Stations by…" ----------
@@ -399,6 +424,98 @@ export class JbBrowse extends LitElement {
     this._menu = { item: it, type, pos: menuPos(this.root(), el, actions.length), actions };
   }
 
+  // ---------- v0.7 Library filters ----------
+  /** Text filter: the scoped grid filters at once; get_library (`search`) is asked after a short pause in typing. */
+  setFilterText(v: string) {
+    this._lq = v.slice(0, 60); this._stack = []; this._menu = null;
+    clearTimeout(this._lqTimer);
+    if (this._lart) return;
+    this._lqTimer = window.setTimeout(() => { this.ensure(); this.renderRoot.querySelector('.scroll')?.scrollTo({ top: 0 }); }, 250);
+  }
+  private onFilterKey = (e: CustomEvent<KeyDetail>) => {
+    e.stopPropagation();
+    const d = e.detail;
+    if (d.type === 'char') this.setFilterText(this._lq + d.value);
+    else if (d.type === 'backspace') this.setFilterText(this._lq.slice(0, -1));
+    else if (d.type === 'clear') this.setFilterText('');
+    else if (d.type === 'hide') this._lkb = false;
+  };
+  private toggleFilter() { this._lkb = !this._lkb; this._stack = []; this._menu = null; }
+  /** Artist scope from an artist page ("Filter by JJ Grey"): the grid switches to that artist's albums (tracks stay tracks). */
+  setArtistFilter(a: MaItem | null, seed?: ScopePool) {
+    this._menu = null; this._stack = [];
+    if (!a) { this._lart = null; this._lpool = null; this.ensure(); return; }
+    if (seed && (seed.albums.length || seed.tracks.length) && !this.lpools.has(a.uri)) this.lpools.put(a.uri, seed);
+    this._lart = a; this._lpool = null; this._home = false;
+    if (!LART_CATS.includes(this._cat)) this._cat = 'album';
+    if (!sortsFor(this._cat).some((s) => s.id === this._sort)) this._sort = 'name';
+    this.ensure();
+    this.renderRoot.querySelector('.scroll')?.scrollTo({ top: 0 });
+  }
+  /** Clear filters: artist scope and text filter go, the keyboard closes. */
+  clearFilters() {
+    clearTimeout(this._lqTimer);
+    this._lq = ''; this._lart = null; this._lpool = null; this._lkb = false; this._stack = []; this._menu = null;
+    this.ensure();
+  }
+  /** The artist's library albums + tracks: the artist page (tracks, albums) plus get_library by name, cached per artist. */
+  private loadLart() {
+    const a = this._lart; if (!a || !this.hass) return;
+    if (this._lpool?.key === a.uri) return;
+    this._lpool = { key: a.uri, error: '' };
+    const hass = this.hass, cfg = this.config;
+    const lib = (type: string) => this.lib({ media_type: type, search: a.name, limit: 100, offset: 0, order_by: 'name' }).then(libraryItems).catch(() => [] as MaItem[]);
+    this.lpools.get(a.uri, () => Promise.all([
+      loadDetail(hass, cfg, a, 'artist'), lib('album'), lib('track'),
+    ]).then(([d, al, tr]) => {
+      if (d.error && !d.tracks.length && !d.albums.length && !al.length && !tr.length) throw new Error(d.error);
+      return { albums: [...al, ...d.albums], tracks: [...tr, ...d.tracks] };
+    })).then((pool) => { if (this._lart?.uri === a.uri) this._lpool = { key: a.uri, pool, error: '' }; })
+      .catch((err) => {
+        console.warn('[jukebox-card] library filter failed', err);
+        if (this._lart?.uri === a.uri) this._lpool = { key: a.uri, error: `Couldn't load ${a.name}. Check Music Assistant.` };
+      });
+  }
+  private scopeLabel = (it: MaItem, type: string) => (this.filtersOn() && type === 'artist' && this._lart?.uri !== it.uri ? `Filter by ${it.name}` : '');
+  private clearBtn() {
+    return html`<button class="fc clr" data-action="clear-filters" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.clearFilters()}>Clear filters</button>`;
+  }
+  private filterTpl() {
+    const a = this._lart, q = this._lq.trim();
+    if (!this.filtersOn() || (!a && !q)) return nothing;
+    // while typing with only a text filter, the filter box already shows (and clears) it: the phone hides this row
+    return html`<div class="scope ${this._lkb && !a ? 'typing' : ''}" role="group" aria-label="Library filters">
+      ${a ? html`<button class="sc" data-scope="artist" tabindex="-1" aria-label=${`Remove filter Artist: ${a.name}`} @pointerdown=${noFocus}
+        @click=${() => this.setArtistFilter(null)}><span class="scl">Artist:</span><b>${a.name}</b>${icon('close', 'i scx')}</button>` : nothing}
+      ${q ? html`<button class="sc" data-scope="text" tabindex="-1" aria-label=${`Remove filter “${q}”`} @pointerdown=${noFocus}
+        @click=${() => { this.setFilterText(''); }}><span class="scl">Filter:</span><b>“${q}”</b>${icon('close', 'i scx')}</button>` : nothing}
+      ${this.clearBtn()}
+    </div>`;
+  }
+  private filterBox() {
+    if (!this._lkb || !this.filtersOn()) return nothing;
+    const what = catOf(this._cat).label.toLowerCase();
+    const ph = this._lart ? `Filter ${this._lart.name} ${what}…` : `Filter ${what}…`;
+    return html`<div class="lfq" data-act="filter-box">${icon('search', 'i xs')}
+      <span class="lfv ${this._lq ? '' : 'ph'}">${this._lq || ph}</span><i class="caret"></i>
+      ${this._lq ? html`<button class="lfx" tabindex="-1" aria-label="Clear filter text" @pointerdown=${noFocus} @click=${() => this.setFilterText('')}>${icon('close', 'i xs')}</button>` : nothing}
+    </div>`;
+  }
+  /** The artist-scoped grid (Albums / Tracks of one artist, library only, text filter applied locally). */
+  private renderLart() {
+    const a = this._lart!; const st = this._lpool;
+    const what = catOf(this._cat).label.toLowerCase();
+    if (st?.error) return html`<div class="empty scoped"><b>Couldn't load ${a.name}</b><span>${st.error}</span>${this.clearBtn()}</div>`;
+    if (!st?.pool) return html`<div class="empty"><span>Loading ${a.name}…</span></div>`;
+    const items = libraryFiltered(this._cat === 'album' ? st.pool.albums : st.pool.tracks,
+      { artist: a, q: this.lq(), fav: this._fav, sort: this._sort, type: this._cat });
+    if (!items.length) return html`<div class="empty scoped" data-empty="filters"><b>No ${this.lq() ? 'matches' : `${this._fav ? 'favorite ' : ''}${what}`} in ${a.name}</b>
+      <span>${this.lq() ? html`for “${this.lq()}” in your library ${what}` : `Nothing by ${a.name} in your library ${what}.`}</span>${this.clearBtn()}</div>`;
+    return this._cat === 'track'
+      ? html`<div class="list" data-scope="artist">${items.map((it) => this.row(it))}</div>`
+      : html`<div class="grid album" data-src="library" data-scope="artist">${items.map((it) => this.tile(it, 'album'))}</div>`;
+  }
+
   // ---------- drill-down (back stack) ----------
   /** Open a detail view on top of the current one (from the grid it starts the stack). Never plays. */
   openDetail(it: MaItem, type: string) {
@@ -419,7 +536,11 @@ export class JbBrowse extends LitElement {
   get detail(): JbDetail | null { return this.renderRoot.querySelector('jb-detail') as JbDetail | null; }
   private onNav(e: CustomEvent) {
     e.stopPropagation();
-    if (e.detail.op === 'back') this.back(); else this.openDetail(e.detail.item, e.detail.type);
+    if (e.detail.op === 'back') this.back();
+    else if (e.detail.op === 'scope') {
+      const d = e.detail.data;
+      this.setArtistFilter(e.detail.item, d && !d.loading ? { albums: d.albums ?? [], tracks: d.tracks ?? [] } : undefined);
+    } else this.openDetail(e.detail.item, e.detail.type);
   }
 
   // ---------- render ----------
@@ -477,17 +598,30 @@ export class JbBrowse extends LitElement {
   private renderGrid() {
     if (this._cat === DISCOVER_CAT.type) return this.renderDiscover();
     if (this._cat === 'radio' && this._rmode !== 'library') return this.renderRb();
+    if (this._lart && this.filtersOn() && LART_CATS.includes(this._cat)) return this.renderLart();
     const pg = this._pages[this.key()];
     const cat = catOf(this._cat);
+    const q = this.lq();
+    // typing: until get_library answers, the unfiltered page is narrowed here (no blank grid between keystrokes)
+    if (q && (!pg || (pg.loading && !pg.items.length))) {
+      const base = Object.entries(this._pages).find(([k]) => k === this.key(undefined, undefined, undefined, ''))?.[1];
+      const w = normText(q);
+      const hint = base?.items.filter((it) => normText(it.name).includes(w)) ?? [];
+      if (hint.length) return this.gridOf(hint, html`<div class="empty"><span>Filtering…</span></div>`);
+    }
+    if (q && pg && !pg.loading && !pg.error && !pg.items.length) return html`<div class="empty scoped" data-empty="filters"><b>No ${cat.label.toLowerCase()} match “${q}”</b>
+      <span>${this._fav ? 'Only favorites are shown. ' : ''}Try fewer letters.</span>${this.clearBtn()}</div>`;
     if (!pg || (pg.loading && !pg.items.length)) return html`<div class="empty"><span>Loading ${cat.label.toLowerCase()}…</span></div>`;
     if (pg.error && !pg.items.length) return html`<div class="empty"><b>Library unavailable</b><span>${pg.error}</span></div>`;
     if (this._cat === 'radio' && !this._fav) return this.renderStations(pg);
     if (!pg.items.length) return html`<div class="empty"><b>No ${this._fav ? 'favorite ' : ''}${cat.label.toLowerCase()}</b>
       <span>${this._fav ? 'Tap the heart on Now Playing to add favorites.' : 'Nothing in the library yet.'}</span></div>`;
+    return this.gridOf(pg.items, pg.loading && this._cat !== 'track' ? html`<div class="empty"><span>Loading more…</span></div>` : nothing, pg.src);
+  }
+  private gridOf(items: MaItem[], tail: unknown, src: Src = 'library') {
     return this._cat === 'track'
-      ? html`<div class="list">${pg.items.map((it) => this.row(it))}</div>`
-      : html`<div class="grid ${this._cat}" data-src=${pg.src ?? 'library'}>${pg.items.map((it) => this.tile(it, this._cat))}</div>
-        ${pg.loading ? html`<div class="empty"><span>Loading more…</span></div>` : nothing}`;
+      ? html`<div class="list">${items.map((it) => this.row(it))}</div>${tail}`
+      : html`<div class="grid ${this._cat}" data-src=${src}>${items.map((it) => this.tile(it, this._cat))}</div>${tail}`;
   }
 
   /** v0.7 Library home: big touch tiles, no backdrop-filter (light blur draws behind). */
@@ -502,20 +636,27 @@ export class JbBrowse extends LitElement {
   render() {
     const home = this.homeOn();
     if (home && this._home && !this._stack.length) return html`<div class="bx">${this.renderHome()}</div>`;
-    const cats = this.visibleCats();
+    const lart = this._lart && this.filtersOn() ? this._lart : null;
+    const cats = lart ? this.visibleCats().filter((c) => LART_CATS.includes(c.type)) : this.visibleCats();
     const sort = sortsFor(this._cat).find((s) => s.id === this._sort) ?? SORTS[0];
     const m = this._menu;
     const top = this._stack[this._stack.length - 1];
     const cat = catOf(this._cat);
     const modes = this._cat === 'radio' ? this.rmodes() : [];
     const libTools = this._cat !== DISCOVER_CAT.type && !(this._cat === 'radio' && this._rmode !== 'library');
-    const trail0 = this._cat === 'radio' && this._rmode !== 'library' ? `Radio · ${MODE_LABEL[this._rmode]}` : `Browse ${cat.label}`;
+    const trail0 = this._cat === 'radio' && this._rmode !== 'library' ? `Radio · ${MODE_LABEL[this._rmode]}`
+      : lart ? `${cat.label} · ${lart.name}` : `Browse ${cat.label}${this.lq() ? ` “${this.lq()}”` : ''}`;
+    const filt = libTools && this.filtersOn();
+    const catChips = html`<div class="cats">${cats.map((c) => html`<button class="fc ${this._cat === c.type && !top ? 'on' : ''}" data-cat=${c.type} tabindex="-1"
+          @pointerdown=${noFocus} @click=${() => this.setCat(c.type)}>${c.type === DISCOVER_CAT.type ? icon('compass', 'i xs') : nothing}${c.label}</button>`)}</div>`;
     return html`<div class="bx">
       <div class="bar">
         ${home ? html`<div class="cats lhead"><button class="fc back" data-act="home" tabindex="-1" aria-label="Back to Library" @pointerdown=${noFocus}
-          @click=${() => this.goHome()}>${icon('back', 'i xs')}${this.homeLabel()}</button><span class="lt-title">${configuredTiles(this.config).find((t) => t.id === this._cat)?.label ?? cat.label}</span></div>`
-        : html`<div class="cats">${cats.map((c) => html`<button class="fc ${this._cat === c.type && !top ? 'on' : ''}" data-cat=${c.type} tabindex="-1"
-          @pointerdown=${noFocus} @click=${() => this.setCat(c.type)}>${c.type === DISCOVER_CAT.type ? icon('compass', 'i xs') : nothing}${c.label}</button>`)}</div>`}
+          @click=${() => this.goHome()}>${icon('back', 'i xs')}${this.homeLabel()}</button>${lart ? catChips
+            : html`<span class="lt-title">${configuredTiles(this.config).find((t) => t.id === this._cat)?.label ?? cat.label}</span>`}</div>`
+        : catChips}
+        ${filt ? html`<button class="fc tog flt ${this._lkb || this.lq() ? 'on' : ''}" data-act="filter" tabindex="-1" aria-pressed=${this._lkb ? 'true' : 'false'}
+          aria-label="Filter this list" @pointerdown=${noFocus} @click=${() => this.toggleFilter()}>${icon('search', 'i xs')}<span class="fl">Filter</span></button>` : nothing}
         ${libTools ? html`<button class="fc tog ${this._fav ? 'on' : ''}" data-cat="favorites" tabindex="-1" aria-pressed=${this._fav ? 'true' : 'false'}
           @pointerdown=${noFocus} @click=${() => this.setFav()}>${icon(this._fav ? 'heart' : 'heartline', 'i xs')}Favorites</button>
         <button class="fc tog sort" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.cycleSort()}>${icon('sort', 'i xs')}${sort.label}</button>` : nothing}
@@ -524,11 +665,13 @@ export class JbBrowse extends LitElement {
         ${(['library', ...modes] as RMode[]).map((m) => html`<button class="fc sm ${this._rmode === m ? 'on' : ''}" role="tab" aria-selected=${this._rmode === m ? 'true' : 'false'}
           data-rmode=${m} tabindex="-1" @pointerdown=${noFocus} @click=${() => this.setRMode(m)}>${m === 'library' ? 'My stations' : MODE_LABEL[m]}</button>`)}
       </div>` : nothing}
-      ${top ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${top}
+      ${libTools && !top ? html`${this.filterBox()}${this.filterTpl()}` : nothing}
+      ${top ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${top} .scopeLabel=${this.scopeLabel}
           .trail=${[trail0, ...this._stack.slice(0, -1).map((x) => x.item.name)]} @jb-nav=${this.onNav}></jb-detail>`
         : html`<div class="scroll panel" @scroll=${this.onScroll}>${this.renderGrid()}</div>`}
       ${m ? menuTpl(m.pos, { item: m.item, sub: this.sub(m.item, m.type) || providerLabel(m.item.uri) }, m.actions,
         () => { this._menu = null; this.press.release(); }) : nothing}
+      ${filt && this._lkb && !top ? html`<jb-keyboard class="kbd" @jb-key=${this.onFilterKey}></jb-keyboard>` : nothing}
       ${confirmTpl(this._confirm, () => (this._confirm = null))}
       ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
     </div>`;
@@ -544,6 +687,30 @@ export class JbBrowse extends LitElement {
       color: var(--_inactive); border: 1px solid #ffffff33; background: #00000055; white-space: nowrap; }
     .fc.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
     .fc.tog { padding: 0 14px; font-size: 14px; }
+    /* v0.7 Library filters: chips (same as Search), the filter box and the on-screen keyboard under the grid */
+    .scope { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+    .sc { display: inline-flex; align-items: center; gap: 6px; height: 44px; max-width: 100%; padding: 0 8px 0 16px; border-radius: 999px;
+      background: var(--_active); color: var(--_on-accent); font-size: 15px; font-weight: 600; min-width: 0; }
+    .sc .scl { opacity: .8; flex: none; }
+    .sc b { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .sc .scx { width: 28px; height: 28px; padding: 5px; border-radius: 50%; background: #0000001f; flex: none; }
+    .fc.clr { height: 44px; padding: 0 16px; font-size: 14px; color: #fff; border-color: #ffffff59; }
+    .empty .fc.clr { margin-top: 14px; }
+    .lfq { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 8px 0 18px; border-radius: 16px; border: 1px solid #ffffff3d;
+      background: #00000066; font-size: 20px; font-weight: 700; min-width: 0; }
+    .lfq .lfv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .lfq .lfv.ph { color: var(--_inactive); font-weight: 500; }
+    .lfq .caret { width: 2px; height: 26px; background: var(--_active); flex: none; margin-left: -8px; }
+    .lfq .lfx { margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--_inactive); flex: none; }
+    .kbd { flex: none; width: 100%; max-width: 1100px; align-self: center; }
+    @media (max-width: 600px) {
+      .sc { height: 40px; font-size: 14px; padding-left: 13px; }
+      .fc.clr { height: 40px; padding: 0 13px; font-size: 13px; }
+      .fc.flt { padding: 0 12px; }
+      .fc.flt .fl { display: none; }
+      .lfq { height: 46px; font-size: 17px; }
+      .scope.typing { display: none; }
+    }
     .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     /* v0.7 Library home */

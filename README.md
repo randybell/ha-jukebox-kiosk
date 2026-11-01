@@ -331,6 +331,8 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `limit` | `8` (1–50) | Search results per type. 1-character queries always use 5 |
 | `default_tab` | `now` | `now`, `browse`, `search`, `queue` or `lyrics`. A tab that is turned off (or unknown) is ignored and Now Playing opens |
 | `library_only` | `false` | Search only the MA library |
+| `search_filters` | `true` | v0.7 filters. An artist page in Search offers **Search in JJ Grey** (an album page: **Search in** that album); the next searches stay inside it, shown as a removable chip (`Artist: JJ Grey ✕`) with **Clear filters**. Library gets a **Filter** button (type to narrow the list) and **Filter by** on artist pages (that artist's albums / tracks). `false` hides all of it |
+| `library_first` | `true` | Search lists your library matches first ("In your library"), then provider results ("From your providers") with copies of library items removed. Applies to scoped searches too. `false` keeps Music Assistant's order |
 | `slow_ms` | `800` | Search replies slower than this switch on in-flight limiting |
 | `accent` | `mono` | Only `mono` exists so far |
 | `font_base` | `fonts/` next to the `.js` | Location of the woff2 files. `false` uses system fonts |
