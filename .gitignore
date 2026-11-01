@@ -24,3 +24,8 @@ Thumbs.db
 .env
 .env.*
 test/tmp/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv*/
+node_modules/

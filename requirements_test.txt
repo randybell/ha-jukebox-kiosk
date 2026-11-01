@@ -1,0 +1,6 @@
+# Python 3.14 (HA 2026.10)
+pytest-homeassistant-custom-component==0.13.375
+music-assistant-client==1.5.1
+# imported by the core music_assistant integration during tests
+mutagen
+ha-ffmpeg

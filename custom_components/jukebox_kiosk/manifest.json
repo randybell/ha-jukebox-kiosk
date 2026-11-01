@@ -1,0 +1,14 @@
+{
+  "domain": "jukebox_kiosk",
+  "name": "Jukebox Kiosk",
+  "codeowners": ["@randybell"],
+  "config_flow": true,
+  "dependencies": ["frontend", "http", "music_assistant"],
+  "documentation": "https://github.com/randybell/ha-jukebox-kiosk",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/randybell/ha-jukebox-kiosk/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.6.0"
+}

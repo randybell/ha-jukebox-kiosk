@@ -1,0 +1,199 @@
+"""Constants for Jukebox Kiosk.
+
+The MA_COMMANDS table below is the single place that lists every Music Assistant
+command this integration will forward, the permission class a caller needs for it,
+and how sure we are that the command name and arguments are right.
+
+Status values:
+  "client"      - music-assistant-client 1.5.1 has a wrapper that sends this exact
+                  command name (checked in the client source).
+  "live"        - no client wrapper, but the Jukebox Card already sends it to a live
+                  MA 2.10.x server through mass_queue.send_command and it works.
+  "checked"     - confirmed by the read-only command check against a live MA 2.10.9
+                  server (2026-11-01): name and argument names; writes were NOT called.
+  "TODO-VERIFY" - name and/or arguments not confirmed. Do not build card features on
+                  these until a read-only check against a live server confirms them.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+import logging
+from typing import Final
+
+DOMAIN: Final = "jukebox_kiosk"
+MA_DOMAIN: Final = "music_assistant"
+LOGGER = logging.getLogger(__package__)
+
+CONF_MA_ENTRY_ID: Final = "ma_entry_id"
+CONF_GUEST_USERS: Final = "guest_users"
+CONF_NON_ADMINS_ARE_GUESTS: Final = "non_admins_are_guests"
+CONF_GUEST_CLASSES: Final = "guest_classes"
+
+# Frontend
+CARD_FILENAME: Final = "jukebox-card.js"
+STATIC_URL_BASE: Final = "/jukebox_kiosk_static"
+CARD_URL: Final = f"{STATIC_URL_BASE}/{CARD_FILENAME}"
+LEGACY_RESOURCE_MARKERS: Final = (
+    "/hacsfiles/ha-jukebox-kiosk-card/",
+    "/hacsfiles/ha-jukebox-card/",
+)
+
+# Repairs issue ids
+ISSUE_CLIENT_API: Final = "ma_client_api_changed"
+ISSUE_LEGACY_PLUGIN: Final = "legacy_card_plugin_installed"
+ISSUE_MA_ENTRY_MISSING: Final = "ma_entry_missing"
+
+# Track list paging (MA returns full lists; we slice server side)
+TRACK_PAGE_DEFAULT: Final = 100
+TRACK_PAGE_MAX: Final = 1000
+QUEUE_LIMIT_MAX: Final = 1000
+
+
+class PermClass(StrEnum):
+    """Permission classes. A command needs exactly one."""
+
+    READ = "read"  # browse, search, queue/lyrics reads
+    PLAYBACK = "playback"  # play/enqueue media, jump in queue
+    QUEUE = "queue"  # reorder/remove/re-add queue items
+    LIBRARY = "library"  # favourites, library and playlist writes
+    SPEAKERS = "speakers"  # grouping, transfer, stop
+    ADMIN = "admin"  # never granted to guests
+
+
+ALL_CLASSES: Final = frozenset(PermClass)
+GUEST_ASSIGNABLE: Final = frozenset(ALL_CLASSES - {PermClass.ADMIN})
+DEFAULT_GUEST_CLASSES: Final = (
+    PermClass.READ,
+    PermClass.PLAYBACK,
+    PermClass.QUEUE,
+    PermClass.SPEAKERS,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class MaCommand:
+    """One allowlisted Music Assistant command."""
+
+    perm: PermClass
+    status: str  # "client" | "live" | "checked" | "TODO-VERIFY"
+    # Pass the calling HA user to MA. MA only honours `user` on commands it marks
+    # allow_impersonation (search, item_by_name, verify_item_uri, play_media,
+    # <type>/library_items, get_collection) and silently ignores it elsewhere, so
+    # recents/favourites/recommendations are NOT per-user.
+    impersonate: bool = False
+    redact: str | None = None  # name of a response filter for non-admins
+    note: str = ""
+
+
+TODO_VERIFY: Final = "TODO-VERIFY"
+
+R, P, Q, L, S = (
+    PermClass.READ,
+    PermClass.PLAYBACK,
+    PermClass.QUEUE,
+    PermClass.LIBRARY,
+    PermClass.SPEAKERS,
+)
+
+# Single source of truth for forwarded commands. Anything not listed is refused.
+MA_COMMANDS: Final[dict[str, MaCommand]] = {
+    # --- queue (mass_queue parity) ---
+    "player_queues/get": MaCommand(R, "checked", note="`items` field is the queue length"),
+    "player_queues/items": MaCommand(R, "checked", note="plain slice: queue_id, limit, offset"),
+    "player_queues/get_active_queue": MaCommand(R, "client"),
+    "player_queues/play_index": MaCommand(P, "client"),
+    "player_queues/play_media": MaCommand(P, "client", impersonate=True),
+    "player_queues/move_item": MaCommand(Q, "client"),
+    "player_queues/delete_item": MaCommand(Q, "client"),
+    "player_queues/transfer": MaCommand(S, "client"),
+    # --- players / speakers ---
+    "players/all": MaCommand(R, "client"),
+    "players/cmd/set_members": MaCommand(S, "client"),
+    "players/cmd/stop": MaCommand(S, "client"),
+    "config/players/get": MaCommand(
+        R, "client", redact="group_config", note="non-admins only get group_members/dynamic_members"
+    ),
+    "players/add_currently_playing_to_favorites": MaCommand(L, "client"),
+    # --- music reads ---
+    "music/item_by_uri": MaCommand(R, "client"),
+    "music/search": MaCommand(R, "checked", impersonate=True, note="result has a genres key"),
+    "music/browse": MaCommand(R, "checked", note="path; skip leading '..' entries"),
+    "music/albums/album_tracks": MaCommand(R, "client"),
+    "music/artists/artist_tracks": MaCommand(R, "client"),
+    "music/playlists/playlist_tracks": MaCommand(R, "client"),
+    "music/podcasts/podcast_episodes": MaCommand(R, "client"),
+    "music/recently_played_items": MaCommand(R, "checked", note="returns ItemMappings; not per-user"),
+    "music/recommendations": MaCommand(R, "checked", note="rows have empty items"),
+    "music/in_progress_items": MaCommand(R, "checked", note="limit"),
+    "music/tracks/similar_tracks": MaCommand(R, "client"),
+    "music/tracks/library_items": MaCommand(R, "client", impersonate=True),
+    "music/albums/library_items": MaCommand(R, "client", impersonate=True),
+    "music/artists/library_items": MaCommand(R, "client", impersonate=True),
+    "music/playlists/library_items": MaCommand(R, "client", impersonate=True),
+    "metadata/get_track_lyrics": MaCommand(
+        R, "checked", redact=None, note="track=FULL provider Track -> [plain, lrc]; library tracks refused (MA would write metadata)"
+    ),
+    # --- library writes ---
+    "music/favorites/add_item": MaCommand(L, "checked", note="item: uri or item"),
+    "music/favorites/remove_item": MaCommand(L, "checked", note="media_type, library_item_id"),
+    "music/library/add_item": MaCommand(L, "checked", note="item, overwrite_existing"),
+    "music/mark_played": MaCommand(L, "client"),
+    "music/playlists/create_playlist": MaCommand(L, "client"),
+    "music/playlists/add_playlist_tracks": MaCommand(L, "checked", note="db_playlist_id, uris"),
+    "music/playlists/remove_playlist_tracks": MaCommand(L, "checked", note="db_playlist_id, positions_to_remove"),
+    # --- roadmap (MA web-app parity); names/args from the live check, card does not use yet ---
+    "music/recommendations/items": MaCommand(R, "checked", note="provider, item_id; rows from music/recommendations come back empty"),
+    "music/genres/library_items": MaCommand(R, "checked", impersonate=True),
+    "music/genres/count": MaCommand(R, "checked"),
+    "music/genres/get": MaCommand(R, "checked"),
+    "music/genres/tracks": MaCommand(R, "checked", note="item_id, limit, offset, order_by"),
+    "music/genres/albums": MaCommand(R, "checked"),
+    "players/sleep_timer/get": MaCommand(R, "checked"),
+    "players/sleep_timer/set": MaCommand(P, "checked", note="player_id, seconds; write not exercised"),
+    "players/sleep_timer/clear": MaCommand(P, "checked", note="player_id; write not exercised"),
+    "player_queues/set_playback_speed": MaCommand(P, "checked", note="queue_id, speed 0.5-3.0, queue_item_id; write not exercised"),
+    "player_queues/save_as_playlist": MaCommand(L, "checked", note="queue_id, name; write not exercised"),
+    # --- still unverified ---
+    "music/genres/overview": MaCommand(R, TODO_VERIFY, note="seen in check; provider arg name not confirmed"),
+    "music/podcasts/library_items": MaCommand(R, TODO_VERIFY, impersonate=True, note="pattern from other types"),
+    "music/audiobooks/library_items": MaCommand(R, TODO_VERIFY, impersonate=True, note="pattern from other types"),
+}
+
+# Never forwarded, even for admins via the generic proxy (admins can use
+# jukebox_kiosk/raw on purpose). Prefix match.
+DENY_PREFIXES: Final = (
+    "auth/",
+    "config/core/",
+    "config/providers/",
+    "players/remove",
+    "music/sync",
+)
+DENY_SUFFIXES: Final = ("/remove",)
+
+# Keys a caller may never set in forwarded args (we inject impersonation ourselves).
+RESERVED_ARG_KEYS: Final = frozenset({"user", "username", "message_id", "command"})
+
+# Arg keys that name MA players/queues; non-admin callers must be allowed to
+# control the matching HA media_player entity.
+PLAYER_ARG_KEYS: Final = (
+    "queue_id",
+    "player_id",
+    "target_player",
+    "source_queue_id",
+    "target_queue_id",
+)
+PLAYER_LIST_ARG_KEYS: Final = ("player_ids_to_add", "player_ids_to_remove")
+
+QUEUE_EVENTS: Final = ("queue_updated", "queue_items_updated")
+
+
+def is_denied(command: str) -> bool:
+    """Return True for commands that are never forwarded."""
+    return command.startswith(DENY_PREFIXES) or command.endswith(DENY_SUFFIXES)
+
+
+def todo_verify_commands() -> list[str]:
+    """Commands still marked TODO-VERIFY."""
+    return sorted(k for k, v in MA_COMMANDS.items() if v.status == TODO_VERIFY)
