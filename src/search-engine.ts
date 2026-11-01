@@ -50,6 +50,8 @@ export class SearchEngine {
   }
 
   setLimit(limit: number) { if (limit && limit !== this.o.limit) { this.o.limit = limit; this.cache.clear(); } }
+  /** Forget cached results (a favourite changed, so the next search should get MA's fresh copies). */
+  clearCache() { this.cache.clear(); }
   setSlowMs(ms: number) { if (ms) this.o.slowMs = ms; }
   get loading() { return this.inFlight > 0 || this.pending !== null; }
 
