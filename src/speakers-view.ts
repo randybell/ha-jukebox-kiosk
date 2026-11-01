@@ -10,6 +10,7 @@ import {
   mapRooms, targetMa, targetsOf, canGroup, canVolume, volumeCap, capVol, kindOf, isActive, membersOf, leaderOf, holderOf,
   takeovers, takeoverText, dropBlock, planMembers, presetSpeakers, maPresets, type MaPlayer, type Players, type Room, type Takeover, type Target,
 } from './speakers/model';
+import { defineElement } from './define';
 
 /**
  * Speakers panel (0.5.0). Opened from the header status.
@@ -352,7 +353,8 @@ export class JbSpeakers extends LitElement {
   private statusLine(x: ReturnType<JbSpeakers['ctx']>) {
     const e = this.hass?.states[x.c.entity!];
     const st = e?.state ?? 'unknown';
-    const n = this.dynamic && x.active ? x.members.length : (e?.attributes?.group_members as string[] | undefined)?.length ?? x.rooms.length;
+    // Home Assistant 2026.10 reports group_members: [] for an ungrouped Music Assistant player; that is the configured rooms, not 0.
+    const n = this.dynamic && x.active ? x.members.length : (e?.attributes?.group_members as string[] | undefined)?.length || x.rooms.length;
     const word = this.dynamic && this.regrouping(x) ? 'Regrouping…' : st === 'playing' ? 'Playing' : st === 'paused' ? 'Paused' : st === 'buffering' ? 'Regrouping…' : 'Idle';
     return `${word} · ${n} speaker${n === 1 ? '' : 's'}`;
   }
@@ -512,4 +514,4 @@ function errText(e: unknown) {
   if (e instanceof SpeakerError) return e.code === 'timeout' ? 'no answer in time' : e.code === 'config' ? 'speaker grouping needs the Jukebox Kiosk integration (or mass_queue_entry_id)' : e.message.replace(/^.*?:\s*/, '') || 'failed';
   return String((e as any)?.message ?? e);
 }
-if (!customElements.get('jb-speakers')) customElements.define('jb-speakers', JbSpeakers);
+defineElement('jb-speakers', JbSpeakers);

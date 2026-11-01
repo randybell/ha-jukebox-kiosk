@@ -1,6 +1,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
+import { defineElement } from './define';
 
 export type KeyDetail =
   | { type: 'char'; value: string }
@@ -174,4 +175,4 @@ export class JbKeyboard extends LitElement {
     `,
   ];
 }
-if (!customElements.get('jb-keyboard')) customElements.define('jb-keyboard', JbKeyboard);
+defineElement('jb-keyboard', JbKeyboard);

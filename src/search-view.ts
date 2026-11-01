@@ -12,6 +12,7 @@ import type { DetailEntry } from './detail-view';
 import type { KeyDetail } from './keyboard';
 import './keyboard';
 import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, SearchResults } from './types';
+import { defineElement } from './define';
 
 const GROUPS: Array<{ key: GroupKey; label: string; type: string }> = [
   { key: 'artists', label: 'Artists', type: 'artist' },
@@ -464,4 +465,4 @@ export class JbSearch extends LitElement {
     .sx.kb-hidden .res .scroll { padding-bottom: calc(10px + var(--jb-fab-space, 0px)); scroll-padding-bottom: var(--jb-fab-space, 0px); }
   `];
 }
-if (!customElements.get('jb-search')) customElements.define('jb-search', JbSearch);
+defineElement('jb-search', JbSearch);

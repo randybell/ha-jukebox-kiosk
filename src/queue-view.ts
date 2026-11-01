@@ -7,6 +7,7 @@ import { QueueBusy, type QueueItem, type QueueModel, type QueueSnapshot, type Re
 /** MA refused or ignored a change on a played / buffered track (live 2.10.9: 500 "<n> is already played/buffered", delete ignored) */
 const BUSY = 'That track is already loading';
 import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
+import { defineElement } from './define';
 
 const asArt = (q: QueueItem) => ({ name: q.media_title || '?', image: q.media_image });
 
@@ -227,4 +228,4 @@ export class JbQueue extends LitElement {
     }
   `];
 }
-if (!customElements.get('jb-queue')) customElements.define('jb-queue', JbQueue);
+defineElement('jb-queue', JbQueue);

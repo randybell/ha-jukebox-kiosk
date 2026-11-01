@@ -1,4 +1,5 @@
 import { LitElement, html, css } from 'lit';
+import { defineElement } from './define';
 
 /**
  * Touch slider without any <input>, so nothing can take focus or raise the OS keyboard.
@@ -71,7 +72,7 @@ export class JbSlider extends LitElement {
     .k.on { box-shadow: var(--_thumb-ring, 0 0 0 4px #ffffff2e), 0 2px 8px #0008; }
   `;
 }
-if (!customElements.get('jb-slider')) customElements.define('jb-slider', JbSlider);
+defineElement('jb-slider', JbSlider);
 
 /** Leading + trailing throttle. `flush` sends the pending value now (used on release). */
 export function throttle<A extends any[]>(fn: (...a: A) => void, ms: number) {

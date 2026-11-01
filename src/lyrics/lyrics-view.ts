@@ -5,6 +5,7 @@ import { fmtTime, prefersReducedMotionSafe } from './util';
 import { indexAt, positionOf } from './lrc';
 import type { LyricsState, LyricsStore } from './store';
 import type { HassEntity, HomeAssistant, JukeboxCardConfig } from '../types';
+import { defineElement } from '../define';
 
 export type LyricsMode = 'overlay' | 'tab' | 'stage' | 'saver';
 /** HA media_player SEEK feature bit */
@@ -381,4 +382,4 @@ export class JbLyrics extends LitElement {
     @media (prefers-reduced-motion: reduce) { .ln, .m-saver .col { transition: none; animation: none; } }
   `];
 }
-if (!customElements.get('jb-lyrics')) customElements.define('jb-lyrics', JbLyrics);
+defineElement('jb-lyrics', JbLyrics);

@@ -10,6 +10,7 @@ import './detail-view';
 import type { DetailEntry, JbDetail } from './detail-view';
 export { fromQueueTrack, queueTracks, mergePage, queueEntryId, QUEUE_PAGE_MIN, QUEUE_PAGE_MAX } from './detail-view';
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem } from './types';
+import { defineElement } from './define';
 
 export interface Cat { type: string; label: string; one: string }
 export const CATS: Cat[] = [
@@ -310,4 +311,4 @@ export class JbBrowse extends LitElement {
     }
   `];
 }
-if (!customElements.get('jb-browse')) customElements.define('jb-browse', JbBrowse);
+defineElement('jb-browse', JbBrowse);

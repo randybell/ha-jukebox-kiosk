@@ -10,6 +10,7 @@ import type { LyricsStore } from './lyrics/store';
 import type { QueueModel, QueueSnapshot } from './queue-model';
 import type { HassEntity, HomeAssistant, JukeboxCardConfig } from './types';
 import { volumeCap, canVolume, capVol } from './speakers/model';
+import { defineElement } from './define';
 
 const VOL_THROTTLE_MS = 200;
 /** dynamic mode: what a room plays when it is not part of the current target ('' when it is, or idle) */
@@ -391,7 +392,7 @@ export class JbNow extends LitElement {
     }
   `];
 }
-if (!customElements.get('jb-now')) customElements.define('jb-now', JbNow);
+defineElement('jb-now', JbNow);
 
 const OVERLAY_KEY = 'jukebox-card:lyrics-overlay:v1';
 function readOverlay() { try { return localStorage.getItem(OVERLAY_KEY) === '1'; } catch { return false; } }
