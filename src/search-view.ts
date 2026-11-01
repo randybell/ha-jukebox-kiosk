@@ -11,8 +11,9 @@ import './detail-view';
 import type { DetailEntry } from './detail-view';
 import type { KeyDetail } from './keyboard';
 import './keyboard';
-import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, SearchResults } from './types';
+import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, SearchCategory, SearchResults } from './types';
 import { defineElement } from './define';
+import { categoriesOn, resolveCategories, serviceTypes, defaultCategory } from './search-categories';
 
 const GROUPS: Array<{ key: GroupKey; label: string; type: string }> = [
   { key: 'artists', label: 'Artists', type: 'artist' },
@@ -22,6 +23,8 @@ const GROUPS: Array<{ key: GroupKey; label: string; type: string }> = [
   { key: 'radio', label: 'Radio', type: 'radio' },
   { key: 'podcasts', label: 'Podcasts', type: 'podcast' },
   { key: 'audiobooks', label: 'Audiobooks', type: 'audiobook' },
+  // v0.7: only with search_categories containing 'genres' and a backend that can search them
+  { key: 'genres', label: 'Genres', type: 'genre' },
 ];
 const SEARCH_TYPES = ['artist', 'album', 'track', 'playlist', 'radio', 'audiobook', 'podcast'];
 const RECENTS_KEY = 'jukebox-card:recents:v1';
@@ -90,6 +93,9 @@ export class JbSearch extends LitElement {
   private _chipTimer?: number;
   private _chipFired = false;
   private _seqShown = 0;
+  /** v0.7: configured search categories (null = 0.6 behaviour) */
+  private _cats: SearchCategory[] | null = null;
+  private _catsKey = '';
 
   engine = new SearchEngine({
     fetch: (q, limit) => this.fetchSearch(q, limit),
@@ -98,7 +104,8 @@ export class JbSearch extends LitElement {
       this._results = res;
       this._shownQuery = res ? q : '';
       this._error = '';
-      if (res && this._filter !== 'all' && !res[this._filter]?.length) this._filter = 'all';
+      // 0.6: a filter with no results falls back to All. With configured categories the chip the user picked stays put.
+      if (res && !this._cats && this._filter !== 'all' && !res[this._filter]?.length) this._filter = 'all';
       this.dispatchEvent(new CustomEvent('jukebox-search-results', {
         detail: { query: q, seq: info.seq, cached: info.cached, count: res ? this.count(res) : 0 }, bubbles: true, composed: true,
       }));
@@ -125,21 +132,40 @@ export class JbSearch extends LitElement {
     if (changed.has('config') && this.config) {
       this.engine.setLimit(this.config.limit ?? 8);
       this.engine.setSlowMs(this.config.slow_ms ?? 800);
+      const cats = categoriesOn(this.config) ? resolveCategories(this.config, this.config._backend?.ext) : null;
+      const key = cats ? cats.join(',') : '';
+      if (key !== this._catsKey) {
+        this._cats = cats; this._catsKey = key;
+        this.engine.clearCache();
+        this._filter = cats ? defaultCategory(this.config, cats) : 'all';
+        if (this._query) this.engine.query(this._query);
+      }
     }
   }
 
   // ---------- data ----------
   private async fetchSearch(name: string, limit: number): Promise<SearchResults> {
     if (!this.hass) throw new Error('hass not ready');
+    const cats = this._cats;
+    const types = cats ? serviceTypes(cats) : SEARCH_TYPES;
     const data: Record<string, any> = {
       config_entry_id: this.config.config_entry_id,
       name,
       limit,
-      media_type: SEARCH_TYPES,
+      media_type: types,
       library_only: this.config.library_only ?? false,
     };
-    const r = await this.hass.callService('music_assistant', 'search', data, undefined, false, true);
-    return normaliseResponse(r);
+    // v0.7: genres are library-only in MA and the HA service can't return them; ask MA directly, in parallel
+    const be = this.config._backend;
+    const genres = cats?.includes('genres') && be?.ext.genres
+      ? be.send('music/search', { search_query: name, media_types: ['genre'], limit, library_only: true })
+        .then((g: any) => (Array.isArray(g?.genres) ? g.genres : []).filter((x: any) => x && x.uri && x.name).map(normItem))
+        .catch((e: unknown) => { console.warn('[jukebox-card] genre search failed', e); return [] as MaItem[]; })
+      : null;
+    const svc = types.length ? this.hass.callService('music_assistant', 'search', data, undefined, false, true).then(normaliseResponse) : Promise.resolve({} as SearchResults);
+    const [out, g] = await Promise.all([svc, genres]);
+    if (g) out.genres = g;
+    return out;
   }
 
   private count(r: SearchResults) { return GROUPS.reduce((n, g) => n + (r[g.key]?.length ?? 0), 0); }
@@ -281,6 +307,7 @@ export class JbSearch extends LitElement {
     if (g === 'radio') return it.metadata && (it.metadata as any).description ? (it.metadata as any).description : 'Radio station';
     if (g === 'podcasts') return ['Podcast', (it as any).publisher ?? artistNames(it)].filter(Boolean).join(' · ');
     if (g === 'audiobooks') return ['Audiobook', artistNames(it)].filter(Boolean).join(' · ');
+    if (g === 'genres') return 'Genre';
     return artistNames(it);
   }
 
@@ -293,11 +320,11 @@ export class JbSearch extends LitElement {
         data-uri=${it.uri} data-group=${g} data-type=${type} aria-label=${drill ? `Open ${it.name}` : it.name}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
-      ${artTpl(it, g === 'artists' ? 'th circ' : 'th')}
+      ${g === 'genres' ? html`<span class="ar th gen" aria-hidden="true">${icon('genre')}</span>` : artTpl(it, g === 'artists' ? 'th circ' : 'th')}
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b>
         <small>${provTpl(it.uri, it.provider, it.media_type)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, g)}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
-      ${rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, g, a, el))}
+      ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, g, a, el))}
     </div>`;
   }
 
@@ -318,9 +345,26 @@ export class JbSearch extends LitElement {
     if (!this.count(r)) return html`<div class="empty"><b>No results for “${this._shownQuery}”</b><span>Try fewer letters or another spelling.</span></div>`;
     if (this._filter !== 'all') {
       const g = GROUPS.find((x) => x.key === this._filter)!;
+      if (this._cats && !r[g.key]?.length) return html`<div class="empty"><b>No ${g.label.toLowerCase()} for “${this._shownQuery}”</b><span>Try All, or fewer letters.</span></div>`;
       return this.group(g, r[g.key] ?? [], true);
     }
-    return html`${GROUPS.filter((g) => r[g.key]?.length).map((g) => this.group(g, r[g.key]!, false))}`;
+    return html`${this.groups().filter((g) => r[g.key]?.length).map((g) => this.group(g, r[g.key]!, false))}`;
+  }
+
+  /** groups in display order: the configured category order, or 0.6's fixed order */
+  private groups() {
+    return this._cats ? this._cats.map((k) => GROUPS.find((g) => g.key === k)!).filter(Boolean) : GROUPS;
+  }
+  /** v0.7: the category chips are always shown (All + each configured category with its count) */
+  private catChips(r: SearchResults | null) {
+    const keys: Array<GroupKey | 'all'> = ['all', ...this._cats!];
+    return html`<div class="filters cats" role="tablist" aria-label="Search categories">
+      ${keys.map((k) => {
+        const n = !r ? -1 : k === 'all' ? this.count(r) : r[k]?.length ?? 0;
+        return html`<button class="fc ${this._filter === k ? 'on' : ''} ${n === 0 ? 'zero' : ''}" role="tab" aria-selected=${this._filter === k ? 'true' : 'false'}
+          data-cat=${k} tabindex="-1" @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => (this._filter = k)}>${k === 'all' ? 'All' : GROUPS.find((g) => g.key === k)!.label}${n > 0 ? html`<em>${n}</em>` : nothing}</button>`;
+      })}
+    </div>`;
   }
 
   private renderMenu() {
@@ -360,7 +404,7 @@ export class JbSearch extends LitElement {
         <section class="res" aria-label="Search results" data-shown-query=${this._shownQuery} data-seq=${this._seqShown}>
           ${this._stack.length ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${this._stack[this._stack.length - 1]}
               .trail=${[`Search “${this._shownQuery || this._query}”`, ...this._stack.slice(0, -1).map((x) => x.item.name)]} @jb-nav=${this.onNav}></jb-detail>`
-          : html`${present.length > 1 ? html`<div class="filters">
+          : html`${this._cats ? this.catChips(r) : present.length > 1 ? html`<div class="filters">
             ${(['all', ...present.map((g) => g.key)] as Array<GroupKey | 'all'>).map((k) => html`<button class="fc ${this._filter === k ? 'on' : ''}" tabindex="-1"
               @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => (this._filter = k)}>${k === 'all' ? 'All' : GROUPS.find((g) => g.key === k)!.label}</button>`)}
           </div>` : nothing}
@@ -418,6 +462,12 @@ export class JbSearch extends LitElement {
     .filters::-webkit-scrollbar { display: none; }
     .fc { flex: none; height: 34px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 700; color: var(--_inactive); border: 1px solid #ffffff33; }
     .fc.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
+    /* v0.7 category chips: count after the label, empty categories dimmed but still tappable */
+    .fc em { font-style: normal; font-weight: 600; margin-left: 6px; opacity: .7; font-variant-numeric: tabular-nums; }
+    .fc.zero:not(.on) { opacity: .45; }
+    .ar.gen { display: grid; place-items: center; background: #ffffff14; color: #fff; box-shadow: 0 0 0 1px #ffffff33; }
+    .ar.gen .i { width: 22px; height: 22px; }
+    .ra.go { width: 48px; height: 48px; display: grid; place-items: center; color: var(--_inactive); }
     .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: 14px;
       padding: 12px 14px 24px; border-radius: var(--_radius); background: var(--_surface); border: 1px solid var(--_surface-border);
       -webkit-backdrop-filter: var(--jb-panel-filter, blur(14px)); backdrop-filter: var(--jb-panel-filter, blur(14px)); touch-action: pan-y; }

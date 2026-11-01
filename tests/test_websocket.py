@@ -300,3 +300,66 @@ async def test_verified_followup_commands_forwarded(
         c, args = fake_ma.calls[-1]
         assert c == cmd and args["summary"] is False and args["limit"] == 500
         assert args["user"] == {"provider": "homeassistant", "user_id": user.id, "required": False}
+
+
+async def test_v07_discover_search_features(hass: HomeAssistant, hass_ws_client: Any, user_token: Any) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    r = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
+    for flag in ("genres", "radio_browse", "discover", "resume"):
+        assert r["features"][flag] is True, flag
+    for cmd in ("music/browse", "music/recommendations", "music/recommendations/items", "music/in_progress_items",
+                "music/genres/overview", "music/genres/tracks", "music/search"):
+        assert cmd in r["commands"], cmd
+
+
+@pytest.mark.parametrize(
+    "options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["playback"]}]
+)
+async def test_v07_features_off_without_read(hass: HomeAssistant, hass_ws_client: Any, user_token: Any) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    r = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
+    for flag in ("genres", "radio_browse", "discover", "resume"):
+        assert r["features"][flag] is False, flag
+
+
+async def test_v07_discover_reads_forwarded(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/recommendations", args={})
+    assert res["success"] and fake_ma.calls[-1] == ("music/recommendations", {})
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/recommendations/items",
+                      args={"provider": "recommendations", "item_id": "recently_played"})
+    assert res["success"]
+    assert fake_ma.calls[-1] == ("music/recommendations/items", {"provider": "recommendations", "item_id": "recently_played"})
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/search",
+                      args={"search_query": "ja", "media_types": ["genre"], "limit": 5, "library_only": True})
+    assert res["success"]
+    c, args = fake_ma.calls[-1]
+    assert c == "music/search" and args["media_types"] == ["genre"] and "user" in args
+
+
+async def test_v07_browse_guest_radio_only(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    for path in ("radiobrowser://", "radiobrowser://category/country/xx", "radiobrowser://popularity/popular"):
+        res = await _call(ws, type="jukebox_kiosk/ma", command="music/browse", args={"path": path})
+        assert res["success"], path
+        assert fake_ma.calls[-1] == ("music/browse", {"path": path})
+    n = len(fake_ma.calls)
+    for args in ({}, {"path": None}, {"path": ""}, {"path": "filesystem_local--x://"}, {"path": "builtin://"},
+                 {"path": "RADIOBROWSER://"}, {"path": 5}, {"path": " radiobrowser://"}):
+        res = await _call(ws, type="jukebox_kiosk/ma", command="music/browse", args=args)
+        assert not res["success"] and res["error"]["code"] == "invalid_args", args
+    assert len(fake_ma.calls) == n
+
+
+async def test_v07_browse_admin_any_path(
+    hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa
+) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    for args in ({}, {"path": "builtin://"}, {"path": "radiobrowser://tag/jazz"}):
+        res = await _call(ws, type="jukebox_kiosk/ma", command="music/browse", args=args)
+        assert res["success"], args
+        assert fake_ma.calls[-1] == ("music/browse", args)

@@ -7,7 +7,7 @@
  *   jukebox_kiosk/unfavorite_current, jukebox_kiosk/subscribe_queue
  */
 import type { HomeAssistant } from '../types';
-import { BackendError, Emitter, type Caps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
+import { BackendError, Emitter, NO_EXT, type Caps, type ExtCaps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
 
 export const KIOSK_DOMAIN = 'jukebox_kiosk';
 export const KIOSK_PAGE_SIZE = 100;
@@ -24,11 +24,21 @@ export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
     lyrics: b('lyrics'), speakers: b('speakers'), unfavorite: b('unfavorite'), queuePush: b('queue_push'),
   };
 }
+/**
+ * v0.7 flags. Server keys: genres, radio_browse, discover, resume. A 0.6.0 server already sends
+ * genre_overview (same permission class), so genres falls back to it; the others stay off until the server says so.
+ */
+export function extFromServer(f: Record<string, unknown> | undefined): ExtCaps {
+  const b = (k: string, d = false) => (f && typeof f[k] === 'boolean' ? (f[k] as boolean) : d);
+  return { genres: b('genres', b('genre_overview')), radioBrowse: b('radio_browse'), discover: b('discover'), resume: b('resume') };
+}
 const code = (e: any): string => String(e?.code ?? '');
 
 export class KioskBackend implements MaBackend {
   readonly kind = 'kiosk' as const;
   caps: Caps = { ...OPTIMISTIC };
+  /** v0.7 features stay hidden until the server lists them (nothing flashes in and out) */
+  ext: ExtCaps = { ...NO_EXT };
   info: any = undefined;
   ready: Promise<void>;
   private em = new Emitter();
@@ -53,6 +63,7 @@ export class KioskBackend implements MaBackend {
     try {
       this.info = await this.ws({ type: 'capabilities' });
       this.caps = capsFromServer(this.info?.features);
+      this.ext = extFromServer(this.info?.features);
     } catch (e) {
       console.warn('[jukebox-card] jukebox_kiosk/capabilities failed', e);
       return; // keep optimistic caps; each call reports its own error

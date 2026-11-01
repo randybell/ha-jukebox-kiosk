@@ -352,6 +352,11 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `presets` | `[]` | `[{name, members: [room entities], volumes?: {entity: percent}, target?}]` (`dynamic`) |
 | `quiet_hours` | — | `{start: 'HH:MM', end: 'HH:MM', max_volume: percent, applies?: guests\|everyone}` caps volume sliders; `start === end` means all day. Guests only by default |
 | `large_buttons` | `false` | Bigger touch targets and text everywhere |
+| `search_categories` | unset | *(0.7, off by default)* Search category chips, in order: `tracks`, `artists`, `albums`, `playlists`, `radio`, `podcasts`, `audiobooks`, `genres`. Unset keeps the 0.6 search. `genres` needs the Jukebox Kiosk backend |
+| `search_default_category` | `all` | *(0.7)* Chip selected when Search opens |
+| `discover` | off | *(0.7)* `true` or a list of Music Assistant recommendation rows (`recently_played`, `favorite_radio`, `provider:item_id`, ...) shown as a **Discover** chip on Browse. Jukebox Kiosk backend only |
+| `radio_browse` | off | *(0.7)* `true` or a list of `popular`, `country`, `language`, `tag`: "Stations by" modes on Browse → Radio (Radio Browser provider). Hidden on the native backend |
+| `radio_country` | HA's country | *(0.7)* Two-letter code the Country mode opens on |
 
 The visual editor covers entity, config entry, rooms (an entity list that keeps existing names), favorite entity and mass_queue entry; a **Display** section (screensaver presets Off / 1 / 5 / 10 / 15 / 30 / 60 min plus Custom, screensaver lyrics, default tab, backdrop, accent); a **Lyrics** section (lyrics, Lyrics tab, long-press seek, offset); and an Advanced section (browse limit and the rest). Options you leave at their defaults are not written to YAML, and existing 0.3.x configs load unchanged.
 

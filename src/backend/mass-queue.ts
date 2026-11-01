@@ -1,6 +1,6 @@
 /** Legacy backend: the mass_queue custom integration (0.5.x behaviour, unchanged). */
 import type { HomeAssistant } from '../types';
-import { BackendError, Emitter, unwrapResponse, type Caps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
+import { BackendError, Emitter, unwrapResponse, type Caps, type ExtCaps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
 
 const SERVICE: Record<QueueAction, string> = {
   play: 'play_queue_item', up: 'move_queue_item_up', down: 'move_queue_item_down', next: 'move_queue_item_next', remove: 'remove_queue_item',
@@ -18,6 +18,8 @@ const byEntity = (r: any, entity: string) => {
 export class MassQueueBackend implements MaBackend {
   readonly kind = 'mass_queue' as const;
   caps: Caps;
+  /** send_command passes any MA command through, so the v0.7 reads work wherever send does (no per-user classes) */
+  ext: ExtCaps;
   ready = Promise.resolve();
   private em = new Emitter();
   constructor(private hassRef: () => HomeAssistant | undefined, readonly entryId: string) {
@@ -26,6 +28,7 @@ export class MassQueueBackend implements MaBackend {
       send: has, queue: true, queuePlay: true, queueEdit: true, undo: has, queueBuffer: has,
       trackLists: has, podcastEpisodes: has, lyrics: has, speakers: has, unfavorite: true, queuePush: false,
     };
+    this.ext = { genres: has, radioBrowse: has, discover: has, resume: has };
   }
   onChange(fn: () => void) { return this.em.on(fn); }
   private get hass() { const h = this.hassRef(); if (!h) throw new BackendError('failed', 'no hass'); return h; }

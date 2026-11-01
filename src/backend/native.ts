@@ -4,7 +4,7 @@
  * grouping, queue edits or unfavorite).
  */
 import type { HomeAssistant } from '../types';
-import { BackendError, Emitter, NO_CAPS, type Caps, type MaBackend, type QueueWindow, type TrackPage } from './types';
+import { BackendError, Emitter, NO_CAPS, NO_EXT, type Caps, type ExtCaps, type MaBackend, type QueueWindow, type TrackPage } from './types';
 
 const unsupported = (what: string) => Promise.reject(new BackendError('unsupported', `${what} needs the Jukebox Kiosk integration`));
 const byEntity = (r: any, entity: string) => {
@@ -30,6 +30,8 @@ export function nativeRow(x: any): any {
 export class NativeBackend implements MaBackend {
   readonly kind = 'native' as const;
   caps: Caps = { ...NO_CAPS, queue: true };
+  /** core MA services have no browse / genres / recommendations: every v0.7 feature stays hidden */
+  ext: ExtCaps = { ...NO_EXT };
   ready = Promise.resolve();
   private em = new Emitter();
   constructor(private hassRef: () => HomeAssistant | undefined) {}

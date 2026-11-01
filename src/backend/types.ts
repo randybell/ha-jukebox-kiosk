@@ -38,6 +38,22 @@ export const NO_CAPS: Caps = {
   trackLists: false, podcastEpisodes: false, lyrics: false, speakers: false, unfavorite: false, queuePush: false,
 };
 
+/**
+ * v0.7 Discover & Search features, kept apart from Caps so 0.6 code and tests are untouched. Each one is hidden unless
+ * the backend can do it AND the card config turns it on.
+ */
+export interface ExtCaps {
+  /** genre search, genre detail (music/search media_types [genre], music/genres/overview) */
+  genres: boolean;
+  /** Radio Browser folders (music/browse radiobrowser://...) */
+  radioBrowse: boolean;
+  /** recommendation rows (music/recommendations, music/recommendations/items) */
+  discover: boolean;
+  /** podcast / audiobook resume points (in_progress_items, resume_position_ms) */
+  resume: boolean;
+}
+export const NO_EXT: ExtCaps = { genres: false, radioBrowse: false, discover: false, resume: false };
+
 /** A queue window in the mass_queue get_queue_items row shape. */
 export interface QueueWindow {
   items: any[];
@@ -59,6 +75,8 @@ export class BackendError extends Error {
 export interface MaBackend {
   readonly kind: BackendKind;
   caps: Caps;
+  /** v0.7 features (see ExtCaps) */
+  ext: ExtCaps;
   /** resolves when caps are final (kiosk asks the server once) */
   ready: Promise<void>;
   /** called when caps change */

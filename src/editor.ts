@@ -1,6 +1,9 @@
 import { LitElement, html, css } from 'lit';
 import type { HomeAssistant, JukeboxCardConfig, RoomConfig } from './types';
 import { defineElement } from './define';
+import { CATEGORIES, DEFAULT_CATEGORIES } from './search-categories';
+import { LIBRARY_ROWS, DEFAULT_ROWS, rowName } from './discover';
+import { RADIO_MODES, MODE_LABEL } from './radio-browse';
 
 /**
  * Visual editor built on HA's <ha-form>. YAML remains the reference (see README).
@@ -24,6 +27,14 @@ export function parseSaver(v: unknown): number {
   if (!Number.isFinite(n)) return 10;
   return Math.max(0, Math.min(SAVER_MAX, Math.round(n)));
 }
+
+/** v0.7 Discover row options: MA's library rows plus any custom ids (e.g. provider:id) already in the config */
+export function discoverOptions(current?: unknown) {
+  const ids: string[] = [...LIBRARY_ROWS];
+  if (Array.isArray(current)) for (const x of current) if (typeof x === 'string' && x.trim() && !ids.includes(x.trim())) ids.push(x.trim());
+  return ids.map((id) => ({ value: id, label: id.includes(':') ? `${rowName(id.slice(id.indexOf(':') + 1))} (${id.slice(0, id.indexOf(':'))})` : rowName(id) }));
+}
+const sameList = (a: unknown, b: readonly string[]) => Array.isArray(a) && a.length === b.length && a.every((x, i) => x === b[i]);
 
 export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
   return [
@@ -78,6 +89,12 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
       schema: [
         { name: 'limit', selector: { number: { min: 1, max: 25, mode: 'box' } } },
         { name: 'browse_limit', selector: { number: { min: 10, max: 500, mode: 'box' } } },
+        // v0.7 (each hidden on the card when the backend can't do it)
+        { name: 'search_categories', selector: { select: { multiple: true, reorder: true, mode: 'list', options: CATEGORIES.map((x) => ({ value: x.key, label: x.label })) } } },
+        { name: 'search_default_category', selector: { select: { mode: 'dropdown', options: [{ value: 'all', label: 'All' }, ...CATEGORIES.map((x) => ({ value: x.key, label: x.label }))] } } },
+        { name: 'discover', selector: { select: { multiple: true, reorder: true, mode: 'list', custom_value: true, options: discoverOptions(c.discover) } } },
+        { name: 'radio_browse', selector: { select: { multiple: true, reorder: true, mode: 'list', options: RADIO_MODES.map((m) => ({ value: m, label: MODE_LABEL[m] })) } } },
+        { name: 'radio_country', selector: { text: {} } },
       ],
     },
   ];
@@ -112,6 +129,11 @@ export const LABELS: Record<string, string> = {
   quiet_end: 'Quiet hours until (same as from = all day)',
   quiet_max: 'Quiet hours: max volume',
   quiet_applies: 'Quiet hours apply to',
+  search_categories: 'Search categories (shown as chips, in this order)',
+  search_default_category: 'Search opens on',
+  discover: 'Discover rows on Browse (none = off; needs the Jukebox Kiosk backend)',
+  radio_browse: 'Radio: "Stations by" (none = off; Radio Browser provider)',
+  radio_country: 'Radio country code (e.g. us; empty = Home Assistant\'s country)',
 };
 const QUIET_KEYS = ['quiet_start', 'quiet_end', 'quiet_max', 'quiet_applies'] as const;
 const hhmm = (t: unknown) => (typeof t === 'string' ? t.slice(0, 5) : undefined);
@@ -164,6 +186,22 @@ export class JukeboxCardEditor extends LitElement {
       if (q.start && q.end && typeof q.max_volume === 'number' && Number.isFinite(q.max_volume)) v.quiet_hours = q;
       else if (q.start || q.end || q.max_volume !== undefined) v.quiet_hours = { start: q.start ?? '22:00', end: q.end ?? '07:00', max_volume: Number.isFinite(q.max_volume) ? q.max_volume : 30, ...(q.applies ? { applies: q.applies } : {}) };
     }
+    // v0.7 lists: empty = off (key removed); the shown defaults are not written back unless changed; `true` kept when still "all"
+    const prevC = this._config as any;
+    if ('search_categories' in v) {
+      if (!Array.isArray(v.search_categories) || !v.search_categories.length || (prevC?.search_categories === undefined && sameList(v.search_categories, DEFAULT_CATEGORIES))) delete v.search_categories;
+    }
+    if (v.search_default_category === 'all' && prevC?.search_default_category === undefined) delete v.search_default_category;
+    if ('discover' in v) {
+      if (!Array.isArray(v.discover) || !v.discover.length) delete v.discover;
+      else { v.discover = [...new Set((v.discover as string[]).map((x) => String(x).trim()).filter(Boolean))]; if (prevC?.discover === true && sameList(v.discover, DEFAULT_ROWS)) v.discover = true; }
+    }
+    if ('radio_browse' in v) {
+      if (!Array.isArray(v.radio_browse) || !v.radio_browse.length) delete v.radio_browse;
+      else if (prevC?.radio_browse === true && sameList(v.radio_browse, RADIO_MODES)) v.radio_browse = true;
+    }
+    // kept while typing; the card ignores anything but two letters (then HA's country is used)
+    if (v.radio_country !== undefined) { const cc = String(v.radio_country ?? '').trim(); if (!cc) delete v.radio_country; else v.radio_country = /^[a-z]{2}$/i.test(cc) ? cc.toLowerCase() : cc; }
     if (v.lyrics_offset_ms !== undefined) {
       const n = Math.round(Number(v.lyrics_offset_ms));
       if (Number.isFinite(n)) v.lyrics_offset_ms = Math.max(-5000, Math.min(5000, n)); else delete v.lyrics_offset_ms;
@@ -185,6 +223,10 @@ export class JukeboxCardEditor extends LitElement {
     if (c.grouping_users) out.grouping_users = c.grouping_users.join(', ');
     if (q) { out.quiet_start = q.start; out.quiet_end = q.end; out.quiet_max = q.max_volume; out.quiet_applies = q.applies ?? 'guests'; }
     delete out.quiet_hours;
+    out.search_categories = Array.isArray(c.search_categories) ? c.search_categories : [...DEFAULT_CATEGORIES];
+    out.search_default_category = c.search_default_category ?? 'all';
+    out.discover = c.discover === true ? [...DEFAULT_ROWS] : Array.isArray(c.discover) ? c.discover : [];
+    out.radio_browse = c.radio_browse === true ? [...RADIO_MODES] : Array.isArray(c.radio_browse) ? c.radio_browse : [];
     return out;
   }
   render() {

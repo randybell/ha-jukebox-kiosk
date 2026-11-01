@@ -164,6 +164,11 @@ async def forward(
         args[key] = value
     if command == "metadata/get_track_lyrics":
         _guard_lyrics_track(args.get("track"))
+    if spec.guest_arg_prefixes and not (user and user.is_admin):
+        for key, prefixes in spec.guest_arg_prefixes:
+            value = args.get(key)
+            if not isinstance(value, str) or not value.startswith(prefixes):
+                raise KioskError("invalid_args", f"{key} must start with {' or '.join(prefixes)} for {command}")
     _entry_, policy, client = _context(hass)
     check_class(user, policy, spec.perm)
     _check_players(hass, user, args, control=spec.perm is not PermClass.READ)
@@ -245,6 +250,11 @@ async def ws_capabilities(hass: HomeAssistant, connection: websocket_api.ActiveC
                 "speakers": has(PermClass.SPEAKERS),
                 "group_configs": has(PermClass.READ),
                 "queue_push": has(PermClass.READ),
+                # v0.7 Discover & Search
+                "genres": has(PermClass.READ),
+                "radio_browse": has(PermClass.READ),
+                "discover": has(PermClass.READ),
+                "resume": has(PermClass.READ),
             },
         },
     )

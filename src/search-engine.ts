@@ -49,6 +49,8 @@ export class SearchEngine {
     } as any;
   }
 
+  /** forget cached results (v0.7: the searched categories changed) */
+  clearCache() { this.cache.clear(); }
   setLimit(limit: number) { if (limit && limit !== this.o.limit) { this.o.limit = limit; this.cache.clear(); } }
   setSlowMs(ms: number) { if (ms) this.o.slowMs = ms; }
   get loading() { return this.inFlight > 0 || this.pending !== null; }

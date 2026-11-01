@@ -97,6 +97,9 @@ class MaCommand:
     # Args always sent with these values, whatever the caller passed. A caller that
     # passes a different value is refused (see forward()).
     forced: tuple[tuple[str, object], ...] = ()
+    # For non-admin callers: (arg, allowed prefixes). The arg must be a string that
+    # starts with one of the prefixes, or the call is refused. Admins are exempt.
+    guest_arg_prefixes: tuple[tuple[str, tuple[str, ...]], ...] = ()
     note: str = ""
 
 
@@ -107,6 +110,8 @@ _LIBRARY_ITEMS_ARGS: Final = (
     "keyword-only summary=True, collapse_collections, reachable_via. summary=False returns full items "
     "with fully_played / resume_position_ms"
 )
+
+RADIO_BROWSE_PREFIX: Final = "radiobrowser://"
 
 R, P, Q, L, S = (
     PermClass.READ,
@@ -144,7 +149,13 @@ MA_COMMANDS: Final[dict[str, MaCommand]] = {
         "but the LIBRARY copy (provider 'library') when the track is in the library",
     ),
     "music/search": MaCommand(R, "checked", impersonate=True, note="result has a genres key"),
-    "music/browse": MaCommand(R, "checked", note="path; skip leading '..' entries"),
+    "music/browse": MaCommand(
+        R,
+        "checked",
+        guest_arg_prefixes=(("path", (RADIO_BROWSE_PREFIX,)),),
+        note="path; skip leading '..' entries. Non-admins may only browse the Radio Browser tree "
+        "(the root also lists builtin and provider libraries, a filesystem provider lists file names)",
+    ),
     "music/albums/album_tracks": MaCommand(R, "client"),
     "music/artists/artist_tracks": MaCommand(R, "client"),
     "music/playlists/playlist_tracks": MaCommand(R, "client"),

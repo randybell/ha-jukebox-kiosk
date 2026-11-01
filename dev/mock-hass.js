@@ -509,7 +509,7 @@ window.__playTrack = (name, position = 60) => {
 
 const USER = { ...(params.get('uid') ? { id: params.get('uid') } : {}), name: params.get('user') ?? 'Kiosk', is_admin: params.get('admin') === '1' };
 // kiosk=1: the jukebox_kiosk integration is loaded (dev/mock-kiosk.js); the card's backend: auto then picks it
-const kiosk = params.get('kiosk') === '1' ? createKiosk({ params, maApi: ma, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit: () => commit(), sleep }) : null;
+const kiosk = params.get('kiosk') === '1' ? createKiosk({ params, maApi: ma, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit: () => commit(), sleep, catalog: CATALOG, user: USER }) : null;
 function makeHass() {
   return { states: { ...states }, user: USER, locale: { language: 'en-US' }, language: 'en-US', callService, ...(kiosk ? kiosk.extras : {}) };
 }

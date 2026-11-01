@@ -1,16 +1,21 @@
+import { createV07 } from './mock-v07.js';
 // Mock of the jukebox_kiosk integration's WebSocket API (custom_components/jukebox_kiosk/websocket_api.py) for the dev
 // harness: ?kiosk=1 adds hass.config.components ['music_assistant', 'jukebox_kiosk'], hass.callWS and hass.connection.
 // kcaps=<json> overrides capability flags (e.g. {"queue_edit":false,"lyrics":false}); kfail=<type> makes that message type
 // throw. Every message is logged in window.__ws ({type, ...}). Placeholder ids only.
 //   jukebox_kiosk/capabilities, /ma {command,args}, /queue_items, /item_tracks, /unfavorite_current, /subscribe_queue
 // The /ma allowlist mirrors const.py MA_COMMANDS; metadata/get_track_lyrics refuses library tracks like the server.
-const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search)|metadata\/get_track_lyrics)$/;
+const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks|in_progress_items)|metadata\/get_track_lyrics)$/;
+const V07 = /^music\/(browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks)$/;
 const MUTATING = /^player_queues\/(play_index|move_item|delete_item|play_media|transfer)$/;
 const FEATURES = { queue: true, queue_play: true, queue_edit: true, undo: true, ma_commands: true, lyrics: true, track_lists: true,
-  podcast_episodes: true, unfavorite: true, library_write: false, speakers: true, group_configs: true, queue_push: true };
+  podcast_episodes: true, unfavorite: true, library_write: false, speakers: true, group_configs: true, queue_push: true,
+  // v0.7 (read class): genres, Radio Browser "Stations by…", Discover rows, resume positions
+  genres: true, radio_browse: true, discover: true, resume: true };
 const err = (code, message) => Object.assign(new Error(message), { code });
 
-export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit, sleep }) {
+export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit, sleep, catalog, user }) {
+  const v07 = createV07({ params, catalog, sleep });
   const log = (window.__ws = []);
   const subs = new Map(); // id -> {entity, cb}
   let sid = 0;
@@ -38,7 +43,15 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
     // like const.py: allow_update_metadata may never be true, and item_by_uri always gets it forced to False
     if (args && args.allow_update_metadata) throw err('invalid_args', 'allow_update_metadata must be false');
     if (command === 'music/item_by_uri') return sendCommand(command, { ...args, allow_update_metadata: false });
-    if (command === 'music/search') return sendCommand(command, args);
+    if (V07.test(command)) {
+      if (command === 'music/browse' && !user?.is_admin && !String(args.path ?? '').startsWith('radiobrowser://')) throw err('invalid_args', 'path must start with radiobrowser:// for guests');
+      return v07.handle(command, args);
+    }
+    if (command === 'music/search') {
+      const types = args.media_types;
+      if (Array.isArray(types) && types.length === 1 && types[0] === 'genre') return v07.handle(command, args);
+      return sendCommand(command, args);
+    }
     if (MUTATING.test(command) && !features.queue_edit && command !== 'player_queues/play_index') throw err('unauthorized', 'Unauthorized');
     if (command === 'player_queues/play_index' && !features.queue_play) throw err('unauthorized', 'Unauthorized');
     const r = await maApi.command(command, args);
@@ -102,6 +115,6 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
     },
   };
   return {
-    extras: { config: { components: ['music_assistant', 'jukebox_kiosk'] }, callWS, connection },
+    extras: { config: { components: ['music_assistant', 'jukebox_kiosk'], country: params.get('country') ?? 'US' }, callWS, connection },
   };
 }

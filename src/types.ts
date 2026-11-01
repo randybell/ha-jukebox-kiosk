@@ -14,7 +14,7 @@ export interface HomeAssistant {
   locale?: { language?: string };
   language?: string;
   /** loaded integrations (backend: auto looks for jukebox_kiosk) */
-  config?: { components?: string[] };
+  config?: { components?: string[]; country?: string | null; language?: string };
   callWS?<T = any>(msg: Record<string, unknown>): Promise<T>;
   connection?: {
     sendMessagePromise<T = any>(msg: Record<string, unknown>): Promise<T>;
@@ -112,6 +112,19 @@ export interface JukeboxCardConfig {
   slow_ms?: number;
   /** Search library only. Default false (all providers). */
   library_only?: boolean;
+  /**
+   * v0.7 (default off). Search categories shown as chips, in this order. Unset = 0.6 behaviour
+   * (every type, chips only when results span several types). Genres need the kiosk backend.
+   */
+  search_categories?: SearchCategory[];
+  /** v0.7: the chip selected when the Search tab opens. Default 'all'. */
+  search_default_category?: SearchCategory | 'all';
+  /** v0.7 (default off): Browse › Radio gets "Stations by…" (Radio Browser: popular, country, language, tag). */
+  radio_browse?: boolean | RadioBrowseMode[];
+  /** v0.7: two-letter country for "Stations by country". Default: HA's configured country. */
+  radio_country?: string;
+  /** v0.7 (default off): a Discover category first in Browse with these recommendation rows, in this order. true = the default rows. */
+  discover?: boolean | string[];
   /** Clock and title */
   title?: string;
   /** fixed (default): always play on `entity`, the Speakers panel is a volume mixer. dynamic: pick the target, group and move. */
@@ -156,5 +169,7 @@ export interface MaItem {
   [k: string]: any;
 }
 
-export type GroupKey = 'artists' | 'albums' | 'tracks' | 'playlists' | 'radio' | 'podcasts' | 'audiobooks';
+export type GroupKey = 'artists' | 'albums' | 'tracks' | 'playlists' | 'radio' | 'podcasts' | 'audiobooks' | 'genres';
+export type SearchCategory = 'tracks' | 'artists' | 'albums' | 'playlists' | 'radio' | 'podcasts' | 'audiobooks' | 'genres';
+export type RadioBrowseMode = 'popular' | 'country' | 'language' | 'tag';
 export type SearchResults = Partial<Record<GroupKey, MaItem[]>>;
