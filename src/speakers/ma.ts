@@ -1,20 +1,16 @@
 /**
- * Music Assistant player access through mass_queue.send_command (the same path as Browse and lyrics):
+ * Music Assistant player access through the card's MaBackend (jukebox_kiosk/ma, or mass_queue.send_command):
  * players/all, config/players/get (group defaults), players/cmd/set_members, player_queues/transfer, players/cmd/stop. HA's media_player.join/unjoin are
  * never used: their ids don't match MA's speaker ids. players/cmd/ungroup is never used either.
  * Calls are serialised (one grouping change at a time) and time out.
  */
 import type { HomeAssistant } from '../types';
+import type { MaBackend } from '../backend/types';
 import { parsePlayers, parseGroupConfig, type GroupConfig, type Players } from './model';
 
 export class SpeakerError extends Error {
   constructor(public code: 'timeout' | 'failed' | 'config', message: string) { super(message); }
 }
-const mq = (r: any): any => {
-  let d = r && typeof r === 'object' && 'response' in r ? r.response : r;
-  if (d && typeof d === 'object' && !Array.isArray(d) && Object.keys(d).length === 1 && 'response' in d) d = d.response;
-  return d;
-};
 /** Timeouts (ms). Tests may shorten them through window.__jbSpeakerTimeouts. */
 export function timeouts() {
   const o = (typeof window !== 'undefined' && (window as any).__jbSpeakerTimeouts) || {};
@@ -39,14 +35,16 @@ export class SpeakerStore {
   private timer?: ReturnType<typeof setInterval>;
   private fastUntil = 0;
   private listeners = new Set<() => void>();
-  constructor(public entryId?: string) {}
+  constructor(public backend?: MaBackend) {}
+  /** true when this backend can read and group MA players */
+  get available() { return !!this.backend?.caps.speakers; }
   onChange(fn: () => void) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   private emit() { for (const f of this.listeners) f(); }
 
   async send(command: string, data: Record<string, unknown>, ms = timeouts().call): Promise<any> {
-    if (!this.hass || !this.entryId) throw new SpeakerError('config', 'mass_queue_entry_id is not set');
+    if (!this.hass || !this.backend || !this.backend.caps.send) throw new SpeakerError('config', 'Speaker grouping needs the Jukebox Kiosk integration or mass_queue_entry_id');
     try {
-      return mq(await withTimeout(this.hass.callService('mass_queue', 'send_command', { config_entry_id: this.entryId, command, data }, undefined, false, true), ms, command));
+      return await withTimeout(this.backend.send(command, data), ms, command);
     } catch (e: any) {
       if (e instanceof SpeakerError) throw e;
       throw new SpeakerError('failed', String(e?.message ?? e));

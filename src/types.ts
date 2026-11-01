@@ -13,6 +13,13 @@ export interface HomeAssistant {
   user?: { id?: string; name?: string; is_admin?: boolean };
   locale?: { language?: string };
   language?: string;
+  /** loaded integrations (backend: auto looks for jukebox_kiosk) */
+  config?: { components?: string[] };
+  callWS?<T = any>(msg: Record<string, unknown>): Promise<T>;
+  connection?: {
+    sendMessagePromise<T = any>(msg: Record<string, unknown>): Promise<T>;
+    subscribeMessage<T = any>(cb: (ev: T) => void, msg: Record<string, unknown>): Promise<() => Promise<void> | void>;
+  };
   callService(
     domain: string,
     service: string,
@@ -68,11 +75,14 @@ export interface JukeboxCardConfig {
   /** mass_queue config entry id (a different entry from the Music Assistant one). Needed for Browse drill-down
    *  (album/artist/playlist tracks via mass_queue.get_*_tracks). Optional. */
   mass_queue_entry_id?: string;
+  /** Which Music Assistant path to use (0.6.0). auto (default): the Jukebox Kiosk integration when it is installed,
+   *  else mass_queue when mass_queue_entry_id is set, else core Music Assistant only (fewer features). */
+  backend?: 'auto' | 'kiosk' | 'mass_queue' | 'native';
   /** @deprecated 0.3.0 name of mass_queue_entry_id, still accepted. */
   queue_config_entry_id?: string;
   /** Minutes of no touches before the screensaver. Default 10. 0 disables. Any whole number 0-1440. */
   screensaver_minutes?: number;
-  /** Lyrics (needs mass_queue_entry_id). Master switch for every lyrics surface and lookup. Default true. */
+  /** Lyrics (needs the Jukebox Kiosk integration or mass_queue_entry_id). Master switch for every lyrics surface and lookup. Default true. */
   show_lyrics?: boolean;
   /** The Lyrics tab. Default true (when show_lyrics is on). */
   lyrics_tab?: boolean;
@@ -120,6 +130,8 @@ export interface JukeboxCardConfig {
   quiet_hours?: QuietHours;
   /** Bigger touch targets and text. Default false. */
   large_buttons?: boolean;
+  /** @internal the card's Music Assistant backend (set by the card, shared with every view) */
+  _backend?: import('./backend/types').MaBackend;
   /** @internal set by the card in dynamic mode only: resolves false when the user cancels a start that would take speakers */
   _guard?: (entity: string) => Promise<boolean>;
 }

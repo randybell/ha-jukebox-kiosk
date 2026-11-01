@@ -1,16 +1,21 @@
 import { parseLrc, parsePlain, toLyrics, type LyricLine } from './lrc';
 import type { HassEntity, HomeAssistant } from '../types';
+import type { MaBackend } from '../backend/types';
+import { MassQueueBackend } from '../backend/mass-queue';
 
 /**
  * One lyrics store per card, shared by every lyrics surface (art overlay, Stage, Lyrics tab, screensaver).
  * The card calls follow() on every hass update; a lookup starts only when the track key changes.
  *
- * Lookup (mass_queue.send_command, return_response, config_entry_id = mass_queue_entry_id):
+ * Lookup through the card's MaBackend (jukebox_kiosk/ma, or mass_queue.send_command with config_entry_id = mass_queue_entry_id):
  *   track with an MA uri:  music/item_by_uri {uri}           -> item.metadata.lrc_lyrics / .lyrics
  *                          metadata/get_track_lyrics {track} -> [plain, lrc]   ([null, null] = not found)
  *   radio / no MA uri:     music/search {search_query, media_types:['track'], limit}
  *                          -> best track match by artist + title -> its metadata, else get_track_lyrics {track}
  * The service response is {response: X}; HA's callService wraps it again as {context, response: {response: X}}.
+ * Kiosk backend: MA writes metadata to its DB when get_track_lyrics gets a *library* track without lyrics, so the server
+ * refuses library tracks. The store then asks for the provider copy: the queue's current_item.media_item (live-checked on
+ * MA 2.10.9), else music/item_by_uri on the item's first provider mapping. No provider copy = 'none'.
  *
  * Caching: in-memory LRU (50, shared by every card on the page) and localStorage (100 entries). Found lyrics live 30 days,
  * "not found" 24 hours, errors are never stored (60 s in-memory back-off). Requests for the same key share one promise.
@@ -138,6 +143,8 @@ export function clearLyricsCache() {
 }
 const toLines = (e: Entry) => (e.kind === 'synced' ? parseLrc(e.raw) : e.kind === 'plain' ? parsePlain(e.raw) : []);
 
+/** MA library copy (get_track_lyrics would write metadata for it) */
+export const isLibraryItem = (it: any) => it?.provider === 'library' || String(it?.uri ?? '').startsWith('library://');
 class LyricsError extends Error { constructor(public reason: string, msg: string) { super(msg); } }
 function classify(err: any): string {
   if (err instanceof LyricsError) return err.reason;
@@ -152,8 +159,13 @@ function timeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 export class LyricsStore {
   hass?: HomeAssistant;
-  /** mass_queue config entry id; without it lookups report 'error' (reason 'config') */
-  entryId = '';
+  /** the card's Music Assistant backend; lookups report 'error' (reason 'config') when it can't do lyrics */
+  backend?: MaBackend;
+  /** 0.5.x API, kept for tests and embedders: a mass_queue config entry id selects the mass_queue backend. */
+  set entryId(id: string) { this.backend = id ? new MassQueueBackend(() => this.hass, id) : undefined; }
+  get entryId(): string { return this.backend instanceof MassQueueBackend ? this.backend.entryId : this.backend ? this.backend.kind : ''; }
+  /** player entity being followed (the kiosk path reads its queue for the provider track) */
+  private entity = '';
   enabled = true;
   state: LyricsState = { status: 'idle', lines: [] };
   private key = '';
@@ -167,7 +179,8 @@ export class LyricsStore {
   /** Called on every hass update. Cheap when the track did not change. */
   follow(hass: HomeAssistant | undefined, ent: HassEntity | undefined) {
     this.hass = hass;
-    const sig = `${this.enabled}|${this.entryId}`;
+    this.entity = ent?.entity_id ?? '';
+    const sig = `${this.enabled}|${this.entryId}|${!!this.backend?.caps.lyrics}`;
     if (sig !== this.sig) { this.sig = sig; this.key = ''; }
     if (!this.enabled) { if (this.state.status !== 'off') { this.key = ''; this.set({ status: 'off', lines: [] }); } return; }
     const ref = trackRef(ent);
@@ -193,7 +206,7 @@ export class LyricsStore {
     if (hit) { this.apply(ref, hit, 'cache'); return; }
     const err = ERRORS.get(ref.key);
     if (!force && err && Date.now() - err.at < ERR_BACKOFF) { this.set({ status: 'error', track: ref, lines: [], reason: err.reason }); return; }
-    if (!this.entryId) { this.set({ status: 'error', track: ref, lines: [], reason: 'config' }); return; }
+    if (!this.backend?.caps.lyrics) { this.set({ status: 'error', track: ref, lines: [], reason: 'config' }); return; }
     if (ref.key.startsWith('q:') && (!ref.artist || !ref.title)) { this.apply(ref, { kind: 'none', raw: '', at: Date.now() }, 'search'); return; }
     this.set({ status: 'loading', track: ref, lines: [] });
     this.get(ref).then((e) => { if (this.key === ref.key) this.apply(ref, e, ref.uri ? 'lookup' : 'search'); })
@@ -225,19 +238,44 @@ export class LyricsStore {
   }
 
   private send(command: string, data: Record<string, any>) {
-    const hass = this.hass;
+    const hass = this.hass, be = this.backend;
     if (!hass) return Promise.reject(new LyricsError('error', 'no hass'));
+    if (!be) return Promise.reject(new LyricsError('config', 'no backend'));
     LYRICS_STATS.calls++;
-    return timeout(hass.callService('mass_queue', 'send_command', { config_entry_id: this.entryId, command, data }, undefined, false, true), CALL_TIMEOUT)
-      .then(mqResult);
+    return timeout(be.send(command, data), CALL_TIMEOUT);
+  }
+  /** Kiosk: the provider copy of a library track (see the header). */
+  private async providerTrack(item: any): Promise<any> {
+    const qid = this.hass?.states[this.entity]?.attributes?.active_queue;
+    if (qid) {
+      try {
+        const q = await this.send('player_queues/get', { queue_id: qid });
+        const m = q?.current_item?.media_item;
+        if (m && typeof m === 'object' && !isLibraryItem(m) && normKey(cleanName(m.name)) === normKey(cleanName(item?.name))) return m;
+      } catch { /* fall through to the provider mapping */ }
+    }
+    // TODO-VERIFY: music/item_by_uri on a provider uri returns the provider item without adding it to the library
+    for (const pm of Array.isArray(item?.provider_mappings) ? item.provider_mappings : []) {
+      if (!pm?.item_id || !pm?.provider_instance || pm.available === false) continue;
+      const it = await this.send('music/item_by_uri', { uri: `${pm.provider_instance}://track/${pm.item_id}` }).catch(() => undefined);
+      if (it && typeof it === 'object' && !isLibraryItem(it)) return it;
+    }
+    return undefined;
   }
   private async fromItem(item: any): Promise<Entry> {
     const md = item?.metadata ?? {};
     let ly = toLyrics(md.lyrics, md.lrc_lyrics);
     if (!ly) {
-      const r = await this.send('metadata/get_track_lyrics', { track: item });
-      const [plain, lrc] = Array.isArray(r) ? r : [r?.lyrics ?? r?.plain, r?.lrc_lyrics ?? r?.lrc];
-      ly = toLyrics(plain, lrc);
+      const track = this.backend?.kind === 'kiosk' && isLibraryItem(item) ? await this.providerTrack(item) : item;
+      if (track) {
+        const tmd = track.metadata ?? {};
+        ly = track !== item ? toLyrics(tmd.lyrics, tmd.lrc_lyrics) : null;
+        if (!ly) {
+          const r = await this.send('metadata/get_track_lyrics', { track });
+          const [plain, lrc] = Array.isArray(r) ? r : [r?.lyrics ?? r?.plain, r?.lrc_lyrics ?? r?.lrc];
+          ly = toLyrics(plain, lrc);
+        }
+      }
     }
     if (!ly) return { kind: 'none', raw: '', at: Date.now() };
     const raw = ly.kind === 'synced'

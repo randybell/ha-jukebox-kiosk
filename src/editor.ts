@@ -28,6 +28,11 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
   return [
     { name: 'entity', selector: { entity: { domain: 'media_player' } } },
     { name: 'config_entry_id', required: true, selector: { text: {} } },
+    { name: 'backend', selector: { select: { options: [
+      { value: 'auto', label: 'Auto: Jukebox Kiosk if installed, else mass_queue, else core only' },
+      { value: 'kiosk', label: 'Jukebox Kiosk integration' },
+      { value: 'mass_queue', label: 'mass_queue (legacy)' },
+      { value: 'native', label: 'Core Music Assistant only (no lyrics, queue edits or speaker grouping)' }], mode: 'dropdown' } } },
     { name: 'mass_queue_entry_id', selector: { text: {} } },
     { name: 'rooms', selector: { entity: { domain: 'media_player', multiple: true } } },
     { name: 'favorite_entity', selector: { entity: { domain: ['button', 'input_button', 'script'] } } },
@@ -81,7 +86,8 @@ export const LABELS: Record<string, string> = {
   config_entry_id: 'Music Assistant config entry id',
   rooms: 'Room players (volume sliders)',
   favorite_entity: 'Favorite button',
-  mass_queue_entry_id: 'mass_queue config entry id (Browse drill-down and lyrics; not the Music Assistant one)',
+  backend: 'Music Assistant backend',
+  mass_queue_entry_id: 'mass_queue config entry id (legacy backend only; not the Music Assistant one)',
   screensaver_minutes: 'Screensaver after (pick or type minutes, 0-1440)',
   screensaver_lyrics: 'Lyrics on the screensaver',
   limit: 'Search results per type (1-letter queries use 5)',
