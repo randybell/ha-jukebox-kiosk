@@ -2,6 +2,20 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
+## 0.6.0 — unreleased (draft)
+
+The card moves into a Home Assistant integration, **Jukebox Kiosk** (`jukebox_kiosk`), and no longer needs mass_queue. The repository becomes `randybell/ha-jukebox-kiosk` (HACS category integration).
+
+### Added
+- **Integration** `custom_components/jukebox_kiosk`: a config flow that picks the Music Assistant entry, guest permission options, and a `jukebox_kiosk/*` WebSocket API (`capabilities`, `ma` with an allowlist, `queue_items`, `item_tracks` with server-side paging, `unfavorite_current`, `subscribe_queue`). It serves and auto-loads the card, and removes old `/hacsfiles/ha-jukebox-kiosk-card/` resources with a Repairs issue.
+- **Card backends**: `backend: auto | kiosk | mass_queue | native`. On `kiosk`, the server's feature flags hide controls the user may not use.
+- Lyrics send Music Assistant the provider copy of the track, never a library item (asking for a library track writes to MA's database).
+- Tests: `test/unit/backend.unit.mjs`, `test/kiosk.e2e.mjs` (against `dev/mock-kiosk.js`), and pytest for the integration.
+
+### Changed
+- The build goes to `custom_components/jukebox_kiosk/www/` and is committed. The card's `customElements.define` calls are guarded so a second copy doesn't throw.
+- Workflows: `hassfest.yaml`, `hacs.yaml` (integration) and `release.yaml` (tests, bundle freshness check, `jukebox_kiosk.zip`).
+
 ## 0.5.1 — 2026-10-31
 
 Docs and repo housekeeping for HACS: MIT license file, HACS validation workflow, README restructure, developer docs. No card changes.
