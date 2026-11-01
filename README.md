@@ -28,6 +28,8 @@ The card's element is still `custom:jukebox-card`, so existing dashboards keep w
 - **A Music Assistant player** to play to. Group players such as `media_player.everywhere` work too.
 - mass_queue is **not** needed. You can keep it installed: once Jukebox Kiosk is set up, the card uses mass_queue only if you set `backend: mass_queue`.
 
+> **Music licensing and lyrics.** Jukebox Kiosk plays whatever your Music Assistant providers give it; it ships no music and no lyrics. Personal streaming subscriptions are usually for private listening only, so a public or commercial venue (a bar, shop, gym or event) needs music services and performance licenses that cover public playback. Lyrics are fetched live through Music Assistant's metadata providers when you open them; they are never bundled, and the card keeps lyric text in memory only.
+
 ## Install
 
 ### HACS (custom repository)
@@ -355,7 +357,7 @@ The visual editor covers entity, config entry, rooms (an entity list that keeps 
 
 [MIT License](LICENSE). Copyright (c) 2026 Randy Bell.
 
-The bundled fonts (Inter and Plus Jakarta Sans) are SIL Open Font License 1.1, not MIT. Their `LICENSE-*.txt` files ship in `custom_components/jukebox_kiosk/www/fonts/`. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists everything bundled, with full license texts.
+The bundled fonts (Inter and Plus Jakarta Sans) are SIL Open Font License 1.1, and the icon path data is Apache-2.0 (Google Material Icons), not MIT. Their `LICENSE-*.txt` files ship in `custom_components/jukebox_kiosk/www/fonts/`. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists everything bundled, with full license texts.
 
 ### Credits
 
@@ -364,6 +366,7 @@ The bundled fonts (Inter and Plus Jakarta Sans) are SIL Open Font License 1.1, n
 - **Lyrics**: [LRCLIB](https://lrclib.net) (and optionally [Genius](https://genius.com)) are Music Assistant metadata providers. Music Assistant fetches the lyrics, and neither the integration nor the card contacts them. Lyrics remain the copyright of their owners.
 - **Inspiration**: [mass_queue](https://github.com/droans/mass_queue) (Music Assistant Queue Actions) by [droans](https://github.com/droans), which powered the card up to 0.5.x and shaped this API, and **Kiosk MA Cards**. No code from either is included.
 - **[Lit](https://lit.dev)** by Google LLC, BSD-3-Clause, is bundled into `jukebox-card.js`.
+- **Icons**: the UI glyph paths come from, or are adapted from, [Google Material Icons](https://github.com/google/material-design-icons) (Apache-2.0); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - **Fonts** (OFL-1.1, via [Fontsource](https://fontsource.org)): [Inter](https://rsms.me/inter/) by Rasmus Andersson and The Inter Project Authors, and [Plus Jakarta Sans](https://github.com/tokotype/PlusJakartaSans) by Tokotype and The Plus Jakarta Sans Project Authors.
 
 This project is not affiliated with or endorsed by Music Assistant, Home Assistant, WiiM, Apple or Genius. All trademarks belong to their owners.

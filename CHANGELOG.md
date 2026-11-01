@@ -14,6 +14,7 @@ The card moves into a Home Assistant integration, **Jukebox Kiosk** (`jukebox_ki
 - `music/item_by_uri` always gets `allow_update_metadata: false`. The allowlist refuses `allow_update_metadata: true` on every command, and nothing is sent to MA.
 - Lyrics fallback: when `music/item_by_uri` returns the library copy of a track that is in the library, the card skips it and never sends it to `get_track_lyrics`. With no provider copy, the card shows "No lyrics found", because it has no direct LRCLIB path.
 - Lyrics are fetched and displayed through Music Assistant only, and never stored. Lyric text is no longer written to `localStorage`; only "not found" markers are kept (`jukebox-card:lyrics:v2`, 1 day), and the old v1 cache with lyric text is deleted on load.
+- THIRD_PARTY_NOTICES.md now credits the icon path data (Google Material Icons, Apache-2.0, full text included). The README has a note on music licensing for public or commercial venues, and on lyrics being fetched live through Music Assistant, never bundled.
 - Tests: `test/unit/backend.unit.mjs`, `test/kiosk.e2e.mjs` (against `dev/mock-kiosk.js`), and pytest for the integration.
 
 ### Changed

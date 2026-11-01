@@ -24,6 +24,9 @@ const FONTS = [
   },
 ];
 
+// Apache-2.0 text for the icon path data in src/icons.ts (Google Material Icons; see render()).
+const APACHE_2_0 = readFileSync(new URL('./licenses/Apache-2.0.txt', import.meta.url), 'utf8').replace(/\s+$/, '');
+
 function packageRoot(id) {
   const marker = `${sep}node_modules${sep}`;
   const i = id.lastIndexOf(marker);
@@ -50,7 +53,7 @@ function licenseText(dir) {
 const licenseOf = (json) => (typeof json.license === 'string' ? json.license : json.license?.type) || 'UNKNOWN';
 const fence = (text) => '```text\n' + text + '\n```';
 
-export function render(pkgs, fontPkgs, version) {
+export function render(pkgs, fontPkgs, version, apache = APACHE_2_0) {
   const out = [];
   out.push('# Third-party notices');
   out.push('');
@@ -87,6 +90,19 @@ export function render(pkgs, fontPkgs, version) {
     out.push(fence(p.text));
     out.push('');
   }
+  out.push('## Icons in jukebox-card.js');
+  out.push('');
+  out.push('The SVG path data in `src/icons.ts` (play, pause, search, queue, volume, heart and the other UI glyphs) comes');
+  out.push('from, or is adapted from, **Google Material Icons** (https://github.com/google/material-design-icons,');
+  out.push('Copyright Google LLC), licensed under the Apache License 2.0. Some of these shapes are also published in');
+  out.push('**Material Design Icons** by Pictogrammers (https://pictogrammers.com/library/mdi/), whose icons are');
+  out.push('likewise Apache-2.0 (see https://pictogrammers.com/docs/general/license/ for their terms). The paths are');
+  out.push('embedded as strings; no icon font or npm package is bundled. Changes: some paths were simplified or combined.');
+  out.push('');
+  out.push('License: Apache-2.0');
+  out.push('');
+  out.push(fence(apache));
+  out.push('');
   out.push('## Fonts in custom_components/jukebox_kiosk/www/fonts');
   out.push('');
   out.push('The fonts are licensed under the SIL Open Font License 1.1 (OFL-1.1), not MIT. The full OFL text for');
