@@ -77,7 +77,13 @@ export interface JukeboxCardConfig {
   mass_queue_entry_id?: string;
   /** Which Music Assistant path to use (0.6.0). auto (default): the Jukebox Kiosk integration when it is installed,
    *  else mass_queue when mass_queue_entry_id is set, else core Music Assistant only (fewer features). */
-  backend?: 'auto' | 'kiosk' | 'mass_queue' | 'native';
+  backend?: 'auto' | 'kiosk' | 'mass_queue' | 'native' | 'ma_direct';
+  /** backend ma_direct: Music Assistant's address as the browser reaches it (http(s)://host:8095). Must be https/wss
+   *  when Home Assistant is opened over https (mixed content). */
+  ma_url?: string;
+  /** backend ma_direct: a Music Assistant long-lived token. Anyone who can open the dashboard can read it, and it carries
+   *  that MA user's full rights: no per-HA-user guest lock (that needs the Jukebox Kiosk integration). */
+  ma_token?: string;
   /** @deprecated 0.3.0 name of mass_queue_entry_id, still accepted. */
   queue_config_entry_id?: string;
   /** Minutes of no touches before the screensaver. Default 10. 0 disables. Any whole number 0-1440. */

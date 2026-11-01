@@ -3,9 +3,10 @@
  *   kiosk       the bundled jukebox_kiosk integration (allowlisted WebSocket API, per-user permission classes)
  *   mass_queue  the legacy mass_queue custom integration (services + send_command), as in 0.5.x
  *   native      core Music Assistant services only (no raw MA commands: no lyrics, track lists, speakers, queue edits)
+ *   ma_direct   opt-in: the MA server's own WebSocket with an MA token (ma_url / ma_token); no per-user guest lock
  * Features a backend can't do are reported in `caps`, and the card hides those controls.
  */
-export type BackendKind = 'kiosk' | 'mass_queue' | 'native';
+export type BackendKind = 'kiosk' | 'mass_queue' | 'native' | 'ma_direct';
 export type BackendSetting = 'auto' | BackendKind;
 
 export interface Caps {
@@ -75,6 +76,8 @@ export interface MaBackend {
   unfavoriteCurrent(entity: string): Promise<unknown>;
   /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. */
   subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;
+  /** Release connections (ma_direct closes its socket) when the card drops this backend. */
+  close?(): void;
 }
 
 /** {context, response: {response: X}} / {response: X} / X  ->  X */

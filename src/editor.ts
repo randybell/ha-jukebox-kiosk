@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import type { HomeAssistant, JukeboxCardConfig, RoomConfig } from './types';
 import { defineElement } from './define';
+import { mixedContentWarning } from './backend/ma-direct';
 
 /**
  * Visual editor built on HA's <ha-form>. YAML remains the reference (see README).
@@ -33,8 +34,13 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
       { value: 'auto', label: 'Auto: Jukebox Kiosk if installed, else mass_queue, else core only' },
       { value: 'kiosk', label: 'Jukebox Kiosk integration' },
       { value: 'mass_queue', label: 'mass_queue (legacy)' },
-      { value: 'native', label: 'Core Music Assistant only (no lyrics, queue edits or speaker grouping)' }], mode: 'dropdown' } } },
+      { value: 'native', label: 'Core Music Assistant only (no lyrics, queue edits or speaker grouping)' },
+      { value: 'ma_direct', label: 'Direct to Music Assistant (ma_url + token; no guest lock)' }], mode: 'dropdown' } } },
     { name: 'mass_queue_entry_id', selector: { text: {} } },
+    ...(c.backend === 'ma_direct' ? [
+      { name: 'ma_url', selector: { text: { type: 'url' } } },
+      { name: 'ma_token', selector: { text: { type: 'password' } } },
+    ] : []),
     { name: 'rooms', selector: { entity: { domain: 'media_player', multiple: true } } },
     { name: 'favorite_entity', selector: { entity: { domain: ['button', 'input_button', 'script'] } } },
     {
@@ -89,6 +95,8 @@ export const LABELS: Record<string, string> = {
   favorite_entity: 'Favorite button',
   backend: 'Music Assistant backend',
   mass_queue_entry_id: 'mass_queue config entry id (legacy backend only; not the Music Assistant one)',
+  ma_url: 'Music Assistant address as this browser reaches it (https when Home Assistant uses https)',
+  ma_token: 'Music Assistant long-lived token (stored in the dashboard; full MA rights for anyone who can open it)',
   screensaver_minutes: 'Screensaver after (pick or type minutes, 0-1440)',
   screensaver_lyrics: 'Lyrics on the screensaver',
   limit: 'Search results per type (1-letter queries use 5)',
@@ -191,9 +199,17 @@ export class JukeboxCardEditor extends LitElement {
     if (!this._config) return html``;
     if (!customElements.get('ha-form'))
       return html`<p>Edit this card in YAML. See the README for every option.</p>`;
-    return html`<ha-form .hass=${this.hass} .data=${this.formData()} .schema=${editorSchema(this._config)}
+    const c = this._config;
+    const warn = c.backend === 'ma_direct'
+      ? (!c.ma_url || !c.ma_token ? 'Direct to Music Assistant needs the address and a token.' : mixedContentWarning(location.protocol, c.ma_url))
+      : '';
+    const guest = c.backend === 'ma_direct'
+      ? 'Direct mode has no guest lock: everyone who can open this dashboard can read the token and use every Music Assistant feature it allows. For a locked-down kiosk use the Jukebox Kiosk integration.'
+      : '';
+    return html`${warn ? html`<ha-alert alert-type="warning" class="ma-warn">${warn}</ha-alert>` : ''}${guest ? html`<ha-alert alert-type="info">${guest}</ha-alert>` : ''}
+      <ha-form .hass=${this.hass} .data=${this.formData()} .schema=${editorSchema(this._config)}
       .computeLabel=${(s: any) => LABELS[s.name] ?? s.title ?? s.name} @value-changed=${this.changed}></ha-form>`;
   }
-  static styles = css`p { padding: 8px 0; }`;
+  static styles = css`p { padding: 8px 0; } ha-alert { display: block; margin-bottom: 8px; }`;
 }
 defineElement('jukebox-card-editor', JukeboxCardEditor);

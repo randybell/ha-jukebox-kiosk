@@ -46,7 +46,9 @@ function validateSpeakers(c: JukeboxCardConfig) {
     if (c[k] !== undefined && !vals.includes(c[k] as string)) throw new Error(`jukebox-card: ${String(k)} must be one of ${vals.join(', ')}.`);
   };
   oneOf('speaker_mode', ['fixed', 'dynamic']);
-  oneOf('backend', ['auto', 'kiosk', 'mass_queue', 'native']);
+  oneOf('backend', ['auto', 'kiosk', 'mass_queue', 'native', 'ma_direct']);
+  for (const k of ['ma_url', 'ma_token'] as const) if (c[k] !== undefined && typeof c[k] !== 'string') throw new Error(`jukebox-card: ${k} must be a string.`);
+  if (c.backend === 'ma_direct' && (!c.ma_url || !c.ma_token)) throw new Error('jukebox-card: backend ma_direct needs ma_url and ma_token.');
   oneOf('grouping', ['admins', 'everyone', 'nobody']);
   oneOf('guest_access', ['volume', 'none']);
   oneOf('leader_drop', ['block', 'allow']);
@@ -197,7 +199,7 @@ export class JukeboxCard extends LitElement {
     const kind = pickBackend(this._base, this.hass), key = backendKey(kind, this._base);
     if (key !== this._bkey || !this.backend) {
       this._bkey = key;
-      this._bunsub?.(); this.stopPush();
+      this._bunsub?.(); this.stopPush(); this.backend?.close?.();
       const be = createBackend(kind, this._base, () => this.hass);
       this.backend = be;
       this.queue.backend = be; this.lyrics.backend = be; this.speakers.backend = be;
