@@ -1,0 +1,164 @@
+/**
+ * Station sheet (0.6.3): tapping a radio station (Browse > Radio, its Favorites, Search radio rows) opens this instead of
+ * playing. Logo, name, and when Music Assistant has them a description, provider, genre and stream quality (empty fields are
+ * hidden), a heart (library permission class only; same logic as the Search heart, radio-fav.ts) and a big Play that replaces
+ * the queue like the old tap. Details come from music/item_by_uri (read class; the integration forces allow_update_metadata off).
+ */
+import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
+import { tokens, base } from './styles';
+import { icon } from './icons';
+import { mediaStyles, noFocus, artTpl, fire, playMedia, playMessage } from './shared';
+import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
+import { defineElement } from './define';
+import { stationInfo, toggleRadioFavorite } from './radio-fav';
+
+export class JbStation extends LitElement {
+  static properties = {
+    hass: { attribute: false }, config: { attribute: false }, item: { attribute: false },
+    large: { type: Boolean, reflect: true }, open: { type: Boolean, reflect: true },
+    _detail: { state: true }, _fav: { state: true }, _busy: { state: true }, _toast: { state: true },
+  };
+  hass?: HomeAssistant;
+  config!: JukeboxCardConfig;
+  /** the station to show; null closes the sheet */
+  item: MaItem | null = null;
+  large = false;
+  open = false;
+  private _detail: MaItem | null = null;
+  private _fav: boolean | null = null;
+  private _busy = false;
+  private _toast = '';
+  private _toastTimer?: number;
+  private _req = 0;
+  /** library id found by a heart lookup for the open station */
+  private _libId = '';
+
+  willUpdate(ch: PropertyValues) {
+    if (ch.has('item')) {
+      const prev = ch.get('item') as MaItem | null | undefined;
+      this.open = !!this.item;
+      if (this.item?.uri !== prev?.uri) { this._detail = null; this._fav = null; this._libId = ''; this._busy = false; if (this.item) this.load(this.item); }
+    }
+  }
+  /** music/item_by_uri (read). Only through a backend that can send MA commands; any error keeps the list item's fields. */
+  private async load(it: MaItem) {
+    const be = this.config?._backend;
+    const req = ++this._req;
+    if (!be?.caps.send || !it.uri) return;
+    try {
+      const r = await be.send('music/item_by_uri', { uri: it.uri });
+      if (req !== this._req || !r || typeof r !== 'object' || (r.media_type && r.media_type !== 'radio')) return;
+      this._detail = r as MaItem;
+    } catch (e) { console.debug('[jukebox-card] station details unavailable', e); }
+  }
+  private canFav() { return !!this.config?._backend?.caps.libraryWrite; }
+  private isFav() { return this._fav ?? !!(this._detail?.favorite ?? this.item?.favorite); }
+  private close() { fire(this, 'jukebox-station-close'); }
+  private toast(t: string) {
+    this._toast = t; window.clearTimeout(this._toastTimer);
+    this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400);
+  }
+  private async toggleFav() {
+    const it = this.item, be = this.config?._backend;
+    if (!it || !be?.caps.libraryWrite || this._busy) return;
+    const on = this.isFav();
+    this._busy = true; this._fav = !on;
+    try {
+      // the item_by_uri result is the library copy when the station is in the library: it carries the id the remove needs
+      const r = await toggleRadioFavorite(this._detail ?? it, on, (c, d) => be.send(c, d), this._libId);
+      if (r.result === 'notlib') { this._fav = on; this.toast(`${it.name} isn't in your library`); return; }
+      if (r.libId) this._libId = r.libId;
+      this.toast(on ? `Removed ${it.name} from favorites` : `Added ${it.name} to favorites`);
+      fire(this, 'jukebox-favorites-changed', { media_type: 'radio', uri: it.uri, favorite: !on });
+    } catch (e) {
+      console.warn('[jukebox-card] favorite failed', e);
+      this._fav = on;
+      this.toast(on ? `Couldn't remove ${it.name} from favorites` : `Couldn't add ${it.name} to favorites`);
+    } finally { this._busy = false; }
+  }
+  /** Play replaces the queue with the station, exactly like the tile's old "Play now" (play_media enqueue play). */
+  private async play() {
+    const it = this.item;
+    if (!it || !this.hass) return;
+    try {
+      const r = await playMedia(this.hass, this.config, it, 'radio', 'play');
+      if (!r) return;
+      this.toast(playMessage(this.hass, this.config, it, 'play', false));
+      fire(this, 'jukebox-played', { item: it, ...r });
+      this.close();
+    } catch (err) {
+      this.toast(`Couldn't play ${it.name}`);
+      console.warn('[jukebox-card] play_media failed', err);
+    }
+  }
+
+  render() {
+    const it = this.item;
+    const t = this._toast ? html`<div class="toast solo" role="status">${this._toast}</div>` : nothing;
+    if (!it) return t;
+    const d = this._detail;
+    const info = stationInfo(d ?? it);
+    const fav = this.isFav();
+    const field = (k: string, label: string, v: string) => (v ? html`<div class="f" data-field=${k}><dt>${label}</dt><dd>${v}</dd></div>` : nothing);
+    return html`<div class="scrim st-scrim" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this.close(); }}></div>
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="${it.name}, radio station" @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this.close(); }}>
+        <button class="x" data-action="close" aria-label="Close" title="Close" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.close()}>${icon('close')}</button>
+        <div class="top">
+          ${artTpl({ ...it, image: it.image ?? d?.image ?? null } as MaItem, 'logo')}
+          <div class="tt">
+            <span class="eyebrow">Radio station</span>
+            <h2 class="nm">${it.name.trim()}</h2>
+            ${info.description ? html`<p class="desc" data-field="description">${info.description}</p>` : nothing}
+          </div>
+        </div>
+        ${info.provider || info.genre || info.quality ? html`<dl class="meta">
+          ${field('provider', 'Provider', info.provider)}${field('genre', 'Genre', info.genre)}${field('quality', 'Stream', info.quality)}</dl>` : nothing}
+        <div class="acts">
+          <button class="play" data-action="play" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.play()}>${icon('play')}<span>Play</span></button>
+          ${this.canFav() ? html`<button class="fav ${fav ? 'on' : ''}" data-action="fav" tabindex="-1" aria-pressed=${fav ? 'true' : 'false'} ?disabled=${this._busy}
+            aria-label=${fav ? `Remove ${it.name} from favorites` : `Add ${it.name} to favorites`} title=${fav ? 'In favorites' : 'Add to favorites'}
+            @pointerdown=${noFocus} @click=${() => this.toggleFav()}>${icon(fav ? 'heart' : 'heartline')}</button>` : nothing}
+        </div>
+        <p class="note">Play replaces the current queue.</p>
+      </div>${t}`;
+  }
+
+  static styles = [tokens, base, mediaStyles, css`
+    :host { position: absolute; inset: 0; z-index: 32; pointer-events: none; container: st / size; font-family: var(--_font-body); color: var(--_fg); }
+    :host([open]) { pointer-events: auto; }
+    .scrim { position: absolute; inset: 0; }
+    .st-scrim { z-index: 1; background: #000000b0; }
+    .sheet { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; max-height: 92%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+      display: flex; flex-direction: column; gap: 16px; padding: 22px 20px calc(18px + env(safe-area-inset-bottom));
+      background: #0b0b0bf7; border: 1px solid #ffffff2b; border-radius: 20px 20px 0 0; box-shadow: 0 -20px 60px #000c; }
+    .x { position: absolute; top: 8px; right: 8px; width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; color: var(--_active); }
+    .x .i { width: 26px; height: 26px; } .x:active { background: #ffffff1f; }
+    .top { display: flex; gap: 16px; align-items: flex-start; padding-right: 40px; }
+    .ar.logo { width: 96px; height: 96px; flex: none; border-radius: 14px; overflow: hidden; display: block; }
+    .ar.logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .tt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .tt .eyebrow { font-size: 11px; color: var(--_inactive); }
+    .nm { margin: 0; font-family: var(--_font-display); font-size: 24px; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
+    .desc { margin: 4px 0 0; font-size: 15px; line-height: 1.4; color: var(--_muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+    .meta { margin: 0; display: flex; flex-wrap: wrap; gap: 8px 24px; }
+    .f { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .f dt { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--_inactive); }
+    .f dd { margin: 0; font-size: 15px; font-weight: 600; }
+    .acts { display: flex; gap: 12px; align-items: center; }
+    .play { flex: 1; height: 60px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 999px; background: #fff; color: #000;
+      font-size: 18px; font-weight: 800; }
+    .play .i { width: 28px; height: 28px; } .play:active { transform: scale(.98); }
+    .fav { width: 60px; height: 60px; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1px solid #ffffff38; color: var(--_fg); }
+    .fav .i { width: 28px; height: 28px; } .fav.on { color: var(--_active); border-color: currentColor; } .fav:disabled { opacity: .6; }
+    .note { margin: -6px 0 0; font-size: 13px; color: var(--_inactive); text-align: center; }
+    .toast.solo { z-index: 3; bottom: 96px; pointer-events: auto; }
+    :host([large]) .play, :host([large]) .fav { height: 68px; } :host([large]) .fav { width: 68px; }
+    /* tablet / desktop: a centred dialog */
+    @container st (min-width: 700px) {
+      .sheet { left: 50%; top: 50%; bottom: auto; transform: translate(-50%, -50%); width: min(560px, 90cqw); border-radius: 20px; padding: 26px 26px 20px; }
+      .ar.logo { width: 132px; height: 132px; }
+      .nm { font-size: 28px; }
+    }
+  `];
+}
+defineElement('jb-station', JbStation);

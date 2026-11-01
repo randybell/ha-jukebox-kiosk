@@ -4,12 +4,19 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## 0.6.3 — unreleased
 
+### Added
+- **Now Playing speaker controls.** Each room row in the Now Playing volume card has a Drop / Add button. It uses the same confirm, Undo and Regrouping steps as the Speakers panel, and the panel stays closed. The volume card header has a Speakers button that opens the panel. Guests without the speakers class see the volumes only.
+- **Station sheet for radio.** Tapping a radio station no longer plays it or replaces the queue. This covers Browse › Radio tiles (including Favorites), Search radio rows and Library home radio. Instead a sheet opens with the logo, name, description, provider (for example TuneIn), genre and stream quality. Music Assistant fills these in through the read-only `music/item_by_uri`, and empty fields are hidden. The sheet has a big Play button (this replaces the queue, as the old tap did), a heart for users with the library class, and Close. The Play icon on Search rows still works as before.
+
 ### Fixed
 - **Speakers: the room that leads a group can be dropped and re-added.** With a dynamic Music Assistant sync group ("Enable dynamic members"), the leading room used to show a greyed "Leader" button, so it could not be removed (for example, the Garage speaker from Everywhere). `leader_drop` now defaults to `allow`. Drop asks first, then calls `players/cmd/set_members` on the group (never an ungroup of the speaker). Music Assistant hands the group to the other rooms, there are a few seconds of silence, and the queue plays on. The panel says "Regrouping…" until it does. Join adds the room back. `leader_drop: block` keeps the old behaviour.
 - **The header pill no longer says "idle" while a group plays.** Home Assistant can report `group_members: []` for a playing Music Assistant group. The pill now counts the speakers from Music Assistant, or from the rooms playing the same title.
+- **Un-hearting a radio station from search works.** Search often returns the provider copy of a station (for example `radiobrowser://…`). The heart now looks up the library id with `music/item_by_uri` before `music/favorites/remove_item`. A station that isn't in the library says so instead of failing. The Search heart and the station sheet share this logic.
+- **Rooms in the playing group are no longer labelled "elsewhere".** The leading room reads "Leads the group".
 - **A saved speaker target that no longer exists is forgotten with a notice.** Before, it was dropped silently. The pill also no longer labels a missing entity "Everywhere".
 
 ### Changed
+- The header pill reads "Playing on: Everywhere · 3 speakers".
 - The last room in a group can't be dropped, because Music Assistant would stop the group. Instead the panel offers to pause the group: the room stays in it and the queue is kept.
 - While a dynamic group is idle, Join is shown greyed with a "start playback first" hint instead of being hidden.
 - Dev mock: `every=dyn` makes Everywhere a dynamic sync group led by Garage, with `group_members: []` on its Home Assistant entity, which is the shape seen live.

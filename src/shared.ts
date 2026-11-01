@@ -169,7 +169,7 @@ export class PressController<T> implements ReactiveController {
     return {
       down: (e: PointerEvent) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-        if ((e.target as HTMLElement).closest('.mo, .qa, .ra')) return;
+        if ((e.target as HTMLElement).closest('.mo, .qa, .ra, .ra-b')) return;
         e.preventDefault();
         const el = e.currentTarget as HTMLElement;
         this.cancel();

@@ -13,6 +13,7 @@ import type { KeyDetail } from './keyboard';
 import './keyboard';
 import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, SearchResults } from './types';
 import { defineElement } from './define';
+import { toggleRadioFavorite } from './radio-fav';
 
 const GROUPS: Array<{ key: GroupKey; label: string; type: string }> = [
   { key: 'artists', label: 'Artists', type: 'artist' },
@@ -71,6 +72,8 @@ export class JbSearch extends LitElement {
   /** Search radio heart (0.6.2): favourite state changed in this card, by uri (overrides the result's own flag). */
   private _favs: Record<string, boolean> = {};
   private _favBusy = new Set<string>();
+  /** library ids found by the heart lookup, per search-result uri */
+  private _favIds: Record<string, string> = {};
   private _results: SearchResults | null = null;
   private _shownQuery = '';
   private _loading = false;
@@ -228,18 +231,22 @@ export class JbSearch extends LitElement {
   private canFav(g: GroupKey) { return g === 'radio' && !!this.config._backend?.caps.libraryWrite; }
   private isFav(it: MaItem) { return this._favs[it.uri] ?? !!it.favorite; }
   /** MA stores favourites on library items: a provider station is added to the library and marked favourite in one call.
-   *  Removing needs the library id, so it works for library results; a provider result that is already a favourite says so. */
+   *  Removing needs the library id: a provider result has it looked up first with music/item_by_uri (read class, ported from
+   *  the design branch), so un-hearting works for it too. Shared with the station sheet (radio-fav.ts). */
   private async toggleFav(it: MaItem) {
     const be = this.config._backend;
     if (!be?.caps.libraryWrite || this._favBusy.has(it.uri)) return;
     const on = this.isFav(it);
-    const libId = it.provider === 'library' ? String(it.item_id ?? '') : (/^library:\/\/radio\/(.+)$/.exec(it.uri)?.[1] ?? '');
-    if (on && !libId) { this.toast(`${it.name} is in your favorites`); return; }
     this._favBusy.add(it.uri);
     this._favs = { ...this._favs, [it.uri]: !on };
     try {
-      if (on) await be.send('music/favorites/remove_item', { media_type: 'radio', library_item_id: libId });
-      else await be.send('music/favorites/add_item', { item: it.uri });
+      const r = await toggleRadioFavorite(it, on, (c, d) => be.send(c, d), this._favIds[it.uri]);
+      if (r.result === 'notlib') {
+        this._favs = { ...this._favs, [it.uri]: on };
+        this.toast(`${it.name} isn't in your library`);
+        return;
+      }
+      if (r.libId) this._favIds[it.uri] = r.libId;
       this.toast(on ? `Removed ${it.name} from favorites` : `Added ${it.name} to favorites`);
       this.engine.clearCache();
       fire(this, 'jukebox-favorites-changed', { media_type: 'radio', uri: it.uri, favorite: !on });
@@ -250,6 +257,13 @@ export class JbSearch extends LitElement {
     } finally {
       this._favBusy.delete(it.uri);
     }
+  }
+  /** A heart elsewhere (the station sheet) changed a station's favourite: show it on the row, drop cached results. */
+  favoriteChanged(uri: string, favorite: boolean) {
+    if (this._favs[uri] === favorite) return;
+    this._favs = { ...this._favs, [uri]: favorite };
+    this.engine.clearCache();
+    this.requestUpdate();
   }
   private favTpl(it: MaItem) {
     const on = this.isFav(it);
@@ -263,6 +277,8 @@ export class JbSearch extends LitElement {
   private tap(it: MaItem, g: GroupKey) {
     const type = this.mediaType(it, g);
     if (drillable(type, this.config)) { this.openDetail(it, type); return; }
+    // a station opens the station sheet (details, heart, Play); a tap never plays (0.6.3)
+    if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.isFav(it) } }); return; }
     this._sel = this._sel === it.uri ? '' : it.uri;
   }
   /** Row icons. Add / Play next run at once; Replace queue and Start radio (enqueue replace) ask first. */

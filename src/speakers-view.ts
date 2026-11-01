@@ -20,6 +20,8 @@ import { defineElement } from './define';
  * Changes are optimistic, time out, show a toast on failure and offer Undo for a few seconds.
  */
 interface Ask { title: string; sub?: string; lines: string[]; ok: string; danger?: boolean; resolve: (ok: boolean) => void }
+export type { InlineRoomState as InlineRoom } from './speakers/model';
+import type { InlineRoomState as InlineRoom } from './speakers/model';
 interface Undo { label: string; run: () => Promise<void> }
 interface Pending<T> { v: T; t: number }
 const UNDO_MS = 5000;
@@ -29,13 +31,15 @@ const VOL_THROTTLE_MS = 200;
 
 export class JbSpeakers extends LitElement {
   static properties = {
-    hass: { attribute: false }, config: { attribute: false }, store: { attribute: false }, open: { type: Boolean, reflect: true },
+    hass: { attribute: false }, config: { attribute: false }, store: { attribute: false }, open: { type: Boolean, reflect: true }, keep: { type: Boolean },
     _ask: { state: true }, _toast: { state: true }, _undo: { state: true }, _busy: { state: true }, _tick: { state: true }, _regroup: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
   store?: SpeakerStore;
   open = false;
+  /** 0.6.3: Now Playing shows Drop/Add per room: keep the MA player list fresh (slower poll) while the panel is closed */
+  keep = false;
   private _ask: Ask | null = null;
   private _toast = '';
   private _undo: Undo | null = null;
@@ -51,18 +55,52 @@ export class JbSpeakers extends LitElement {
   private vol = new Map<string, Pending<number>>();
   private mute = new Map<string, Pending<boolean>>();
   private senders = new Map<string, ReturnType<typeof throttle<[number]>>>();
+  private stateFns = new Set<() => void>();
+  private _lastHassRefresh = 0;
 
   private get dynamic() { return this.config?.speaker_mode === 'dynamic'; }
   private get mayGroup() { return canGroup(this.config, this.hass?.user); }
 
   protected willUpdate(ch: PropertyValues) {
-    if (ch.has('open') || ch.has('store')) {
-      if (this.open && this.dynamic && this.store) {
-        this._unsub?.(); this._unsub = this.store.onChange(() => this._tick++) as any; this.store.start();
-      } else if (!this.open) { this.store?.stopPolling(); this._unsub?.(); this._unsub = undefined; }
+    if (ch.has('open') || ch.has('store') || ch.has('keep') || ch.has('config')) {
+      const want = this.dynamic && !!this.store && (this.open || (this.keep && this.mayGroup));
+      if (want) {
+        if (!this._unsub) this._unsub = this.store!.onChange(() => this._tick++) as any;
+        this.store!.start(!this.open);
+      } else { this.store?.stopPolling(); this._unsub?.(); this._unsub = undefined; }
+    }
+    // inline (panel closed): HA saw the target or a room change → read MA again soon (at most once a second)
+    if (ch.has('hass') && !this.open && this.keep && this._unsub && this.store?.loaded) {
+      const old = ch.get('hass') as HomeAssistant | undefined;
+      const ids = [this.config?.entity!, ...roomsOf(this.config, this.hass).map((r) => r.entity)];
+      if (old && ids.some((id) => old.states[id]?.state !== this.hass?.states[id]?.state) && Date.now() - this._lastHassRefresh > 1000) {
+        this._lastHassRefresh = Date.now(); void this.store.refresh();
+      }
     }
   }
+  protected updated() { for (const f of this.stateFns) f(); }
+  /** 0.6.3: Now Playing re-renders its room buttons when the panel state (MA players, busy, regrouping) changes */
+  onState(fn: () => void) { this.stateFns.add(fn); return () => this.stateFns.delete(fn); }
+  /** 0.6.3: a room's group state and action for Now Playing (same logic as the panel row); undefined = no buttons */
+  inline(entity: string): InlineRoom | undefined {
+    if (!this.dynamic || !this.mayGroup || !this.store?.loaded) return undefined;
+    const x = this.ctx();
+    const r = x.rooms.find((y) => y.entity === entity);
+    if (!r || !r.ma || x.kind !== 'dynamic') return undefined;
+    const rs = this.roomState(r, x, true);
+    return { inT: rs.inT, where: rs.where, busy: rs.busy, leader: x.active && x.leader === r.ma && x.members.length > 1,
+      act: rs.act ? { label: rs.act.label, kind: rs.act.kind, dis: !!rs.act.dis || rs.act.kind === 'blocked' } : undefined };
+  }
+  /** 0.6.3: run a room's action from Now Playing (confirmations, toasts and Undo come from this element) */
+  inlineAct(entity: string) {
+    const x = this.ctx();
+    const r = x.rooms.find((y) => y.entity === entity);
+    if (r) this.roomState(r, x, this.dynamic && this.mayGroup && x.kind === 'dynamic' && !!this.store?.loaded).act?.fn();
+  }
+  /** 0.6.3: 'Regrouping…' for Now Playing */
+  inlineRegrouping() { return this.dynamic && !!this.store?.loaded && this.regrouping(this.ctx()); }
   disconnectedCallback() { super.disconnectedCallback(); window.clearTimeout(this._regroupTimer); this.store?.stopPolling(); this._unsub?.(); this._unsub = undefined; }
+  connectedCallback() { super.connectedCallback(); if (this.hasUpdated) this.requestUpdate('keep'); }
 
   /* ---------------- public: start confirmation (used by the card's start guard, panel open or not) ---------------- */
   ask(a: Omit<Ask, 'resolve'>): Promise<boolean> {
@@ -310,7 +348,8 @@ export class JbSpeakers extends LitElement {
   protected render() {
     if (!this.config) return nothing;
     const ask = this.askTpl();
-    if (!this.open) return html`${ask}${this._toast && !this.open ? html`<div class="toast solo" role="status">${this._toast}</div>` : nothing}`;
+    if (!this.open) return html`${ask}${this._undo ? html`<div class="undo solo" role="status"><span>${this._undo.label}</span>
+          <button class="ub" data-action="undo" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.doUndo()}>Undo</button></div>` : nothing}${this._toast ? html`<div class="toast solo" role="status">${this._toast}</div>` : nothing}`;
     const x = this.ctx();
     const user = this.hass?.user;
     const may = this.dynamic && this.mayGroup;
@@ -375,10 +414,9 @@ export class JbSpeakers extends LitElement {
       <span class="vv" data-v=${muted ? '–' : String(Math.round(v * 100))}></span>
     </div>`;
   }
-  private roomRow(r: Room, x: ReturnType<JbSpeakers['ctx']>, grouping: boolean, vol: boolean, cap?: number) {
+  private roomState(r: Room, x: ReturnType<JbSpeakers['ctx']>, grouping: boolean) {
     const st = this.hass?.states[r.entity];
     const off = !st || st.state === 'unavailable' || st.state === 'off';
-    const muted = this.mutedOf(r.entity), v = this.volOf(r.entity);
     const busy = r.ma ? this._busy.get(r.ma) : undefined;
     let inT: boolean, where = '', act: { label: string; kind: string; fn: () => void; dis?: boolean } | undefined;
     const p = r.ma ? x.players.get(r.ma) : undefined;
@@ -407,6 +445,11 @@ export class JbSpeakers extends LitElement {
       const title = st?.attributes?.media_title as string | undefined;
       where = inT ? 'In this group' : st && ['playing', 'paused'].includes(st.state) && title ? `${st.state === 'paused' ? 'Paused' : 'Playing'} · ${title}` : off ? 'Offline' : 'Not playing';
     }
+    return { inT, where, act, busy, off };
+  }
+  private roomRow(r: Room, x: ReturnType<JbSpeakers['ctx']>, grouping: boolean, vol: boolean, cap?: number) {
+    const { inT, where, act, busy, off } = this.roomState(r, x, grouping);
+    const muted = this.mutedOf(r.entity), v = this.volOf(r.entity);
     return html`<div class="vr room ${inT ? 'in' : 'out'} ${muted ? 'muted' : ''} ${off ? 'off' : ''} ${busy ? 'pending' : ''}" data-room=${r.entity} data-ma=${r.ma ?? ''}>
       <button class="vm" tabindex="-1" aria-label="${muted ? 'Unmute' : 'Mute'} ${r.name}" ?disabled=${off || !vol} @pointerdown=${noFocus} @click=${() => this.toggleMute(r.entity)}>${icon(muted ? 'volmute' : 'speaker')}</button>
       <span class="vn"><b>${r.name}</b><small class="where">${busy === 'in' ? 'Joining…' : busy === 'out' ? 'Leaving…' : where}</small></span>
@@ -433,7 +476,7 @@ export class JbSpeakers extends LitElement {
   static styles = [tokens, base, mediaStyles, css`
     :host { position: absolute; inset: 0; z-index: 30; pointer-events: none; container: spk / size; font-family: var(--_font-body); color: var(--_fg); }
     :host([open]) { pointer-events: auto; }
-    :host(:not([open])) .scrim, :host(:not([open])) .confirm { pointer-events: auto; }
+    :host(:not([open])) .scrim, :host(:not([open])) .confirm, :host(:not([open])) .undo { pointer-events: auto; }
     .scrim { position: absolute; inset: 0; }
     .sp-scrim { z-index: 1; background: #000000b0; }
     .sheet { position: absolute; z-index: 2; display: flex; flex-direction: column; background: #0b0b0bf7; border: 1px solid #ffffff2b; box-shadow: 0 -20px 60px #000c;
@@ -486,6 +529,8 @@ export class JbSpeakers extends LitElement {
     .undo span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ub { height: 40px; padding: 0 18px; border-radius: 999px; background: #fff; color: #000; font-weight: 800; font-size: 14px; }
     .undo ~ .toast { bottom: 76px; }
+    .undo.solo { bottom: 96px; left: 50%; right: auto; transform: translateX(-50%); width: min(440px, calc(100% - 24px)); }
+    .undo.solo ~ .toast.solo { bottom: 158px; }
     .toast.solo { position: absolute; z-index: 3; }
     .confirm { z-index: 10; max-height: calc(100cqh - 24px); overflow-y: auto; }
     /* the panel only knows the card's own height (not the viewport): short cards get a full-height sheet and tighter rows */
