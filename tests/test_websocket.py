@@ -84,6 +84,30 @@ async def test_guest_default_library_write(hass: HomeAssistant, hass_ws_client: 
     assert fake_ma.calls[-1][0] == "music/favorites/remove_item"
 
 
+async def test_search_radio_heart_commands(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    """0.6.2 Search radio heart: a provider station uri is favourited as is, a library station removed by id (Library class)."""
+    ws = await _ws(hass_ws_client, user_token[1])
+    caps = await _call(ws, type="jukebox_kiosk/capabilities")
+    assert caps["result"]["features"]["library_write"]
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/favorites/add_item", args={"item": "radiobrowser://radio/00000000-0000-0000-0000-000000000001"})
+    assert res["success"], res
+    assert fake_ma.calls[-1] == ("music/favorites/add_item", {"item": "radiobrowser://radio/00000000-0000-0000-0000-000000000001"})
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/favorites/remove_item", args={"media_type": "radio", "library_item_id": "7"})
+    assert res["success"], res
+    assert fake_ma.calls[-1] == ("music/favorites/remove_item", {"media_type": "radio", "library_item_id": "7"})
+
+
+@pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["read", "playback", "queue"]}])
+async def test_search_radio_heart_hidden_without_library(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    """Without the Library class the card gets library_write False (no heart) and the server refuses the write anyway."""
+    ws = await _ws(hass_ws_client, user_token[1])
+    caps = await _call(ws, type="jukebox_kiosk/capabilities")
+    assert caps["result"]["features"]["library_write"] is False
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/favorites/add_item", args={"item": "radiobrowser://radio/00000000-0000-0000-0000-000000000001"})
+    assert not res["success"] and res["error"]["code"] == "unauthorized"
+    assert fake_ma.calls == []
+
+
 @pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["read", "playback", "queue"]}])
 async def test_guest_without_library_denied(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
     ws = await _ws(hass_ws_client, user_token[1])

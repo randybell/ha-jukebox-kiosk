@@ -15,6 +15,8 @@ export const KIOSK_PAGE_SIZE = 100;
 const OPTIMISTIC: Caps = {
   send: true, queue: true, queuePlay: true, queueEdit: true, undo: true, queueBuffer: true,
   trackLists: true, podcastEpisodes: true, lyrics: true, speakers: true, unfavorite: true, queuePush: true,
+  // shown only once the server lists it (a guest without the library class never sees a heart flash in)
+  libraryWrite: false,
 };
 export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
   const b = (k: string, d = false) => (f && typeof f[k] === 'boolean' ? (f[k] as boolean) : d);
@@ -22,6 +24,7 @@ export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
     send: b('ma_commands', true), queue: b('queue', true), queuePlay: b('queue_play'), queueEdit: b('queue_edit'),
     undo: b('undo'), queueBuffer: b('queue', true), trackLists: b('track_lists'), podcastEpisodes: b('podcast_episodes'),
     lyrics: b('lyrics'), speakers: b('speakers'), unfavorite: b('unfavorite'), queuePush: b('queue_push'),
+    libraryWrite: b('library_write'),
   };
 }
 /**

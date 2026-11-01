@@ -64,12 +64,13 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
 }
 // ---------------- capsFromServer ----------------
 {
-  const all = B.capsFromServer({ queue: true, queue_play: true, queue_edit: true, undo: true, ma_commands: true, lyrics: true, track_lists: true, podcast_episodes: true, unfavorite: true, speakers: true, queue_push: true });
+  const all = B.capsFromServer({ queue: true, queue_play: true, queue_edit: true, undo: true, ma_commands: true, lyrics: true, track_lists: true, podcast_episodes: true, unfavorite: true, speakers: true, queue_push: true, library_write: true });
   check('C1 all features → all caps', Object.values(all).every(Boolean), J(all));
   const guest = B.capsFromServer({ queue: true, queue_play: false, queue_edit: false, undo: false, ma_commands: true, lyrics: true, track_lists: true, podcast_episodes: true, unfavorite: false, speakers: false, queue_push: true });
   check('C2 limited guest: no Play now / edits / undo / unfavorite / speakers; reads stay', !guest.queuePlay && !guest.queueEdit && !guest.undo && !guest.unfavorite && !guest.speakers && guest.queue && guest.lyrics && guest.trackLists, J(guest));
   const none = B.capsFromServer(undefined);
   check('C3 no feature map: read-only defaults (queue + send on, everything else off)', none.queue && none.send && !none.queueEdit && !none.lyrics && !none.speakers, J(none));
+  check('C5 library_write (0.6.2 Search radio heart) → libraryWrite; off when absent or false', all.libraryWrite && !none.libraryWrite && !guest.libraryWrite && !B.capsFromServer({ library_write: false }).libraryWrite);
   check('C4 non-boolean values are ignored', !B.capsFromServer({ lyrics: 'yes', queue_edit: 1 }).lyrics && !B.capsFromServer({ queue_edit: 1 }).queueEdit);
 }
 // ---------------- KioskBackend ----------------

@@ -211,14 +211,17 @@ function search(name, limit, types, by = '') {
   const score = (it) => (it.name.trim().toLowerCase().startsWith(q) ? 0 : it.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)) ? 1 : 2);
   const want = new Set((types ?? Object.keys(TYPE2KEY)).map((t) => TYPE2KEY[t]));
   const out = {};
-  for (const key of KEYS) out[key] = want.has(key) ? CATALOG[key].filter((it) => hay(it).includes(q) && byOk(it)).sort((a, b) => score(a) - score(b)).slice(0, limit).map(pub) : [];
+  // a station favourited through the Search heart is now a library item, so MA returns its library copy (uri, provider, item_id)
+  const asLib = (it) => (it.media_type === 'radio' && it._inlib ? { ...libView(it), provider: 'library', item_id: libUri(it).split('/').pop() } : it);
+  for (const key of KEYS) out[key] = want.has(key) ? CATALOG[key].filter((it) => hay(it).includes(q) && byOk(it)).sort((a, b) => score(a) - score(b)).slice(0, limit).map(asLib).map(pub) : [];
   return out;
 }
 function library({ media_type, favorite, search: s, limit = 25, offset = 0, order_by = 'name' }) {
   const key = TYPE2KEY[media_type];
   if (!key) throw new Error(`invalid media_type ${media_type}`);
   // Everything in the mock catalog is "in the library"; MA reports library items with library:// uris.
-  let items = EMPTY || (key === 'radio' && !RADIO_LIB) ? [] : CATALOG[key].map(libView);
+  // radio=1: stations are only in the library once favourited through the Search heart (0.6.2, kiosk mock)
+  let items = EMPTY ? [] : key === 'radio' && !RADIO_LIB ? CATALOG.radio.filter((i) => i._inlib).map(libView) : CATALOG[key].map(libView);
   if (favorite) items = items.filter((i) => i.favorite);
   if (s) items = items.filter((i) => i.name.toLowerCase().includes(String(s).toLowerCase()));
   const cmp = {

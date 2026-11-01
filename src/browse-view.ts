@@ -142,6 +142,15 @@ export class JbBrowse extends LitElement {
   rmodes(): RadioBrowseMode[] { return this.be?.ext?.radioBrowse ? radioModes(this.config ?? {}) : []; }
   private discKey() { return this.discRows().join(','); }
 
+  /** A favourite changed elsewhere in the card (Search radio heart, 0.6.2): drop the cached pages of that type so the
+   *  grid (Radio: My stations) is fresh when shown; the current category reloads at once (one get_library call). */
+  favoritesChanged(type = 'radio') {
+    const pages = Object.fromEntries(Object.entries(this._pages).filter(([k]) => !k.startsWith(`${type}|`)));
+    if (Object.keys(pages).length === Object.keys(this._pages).length) return;
+    this._pages = pages;
+    if (this._probed && this._cat === type) this.load();
+  }
+
   private get limit() { return Math.max(1, Math.min(500, this.config.browse_limit ?? 60)); }
   private key(type = this._cat, fav = this._fav, sort = this._sort) { return `${type}|${fav ? 1 : 0}|${sort}`; }
   private lib(data: Record<string, any>) {

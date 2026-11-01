@@ -73,7 +73,7 @@ Admins can do everything. In the integration's options (**Settings → Devices &
 | `read` | queue, search, browse, lyrics | ✅ |
 | `playback` | play and add music, jump in the queue | ✅ |
 | `queue` | reorder, remove, undo | ✅ |
-| `library` | favourite / unfavourite (the heart), playlists | ✅ |
+| `library` | favourite / unfavourite (the heart on Now Playing and on Search radio results), playlists | ✅ |
 | `speakers` | Music Assistant grouping: join / drop speakers (`players/cmd/set_members`), Move (`player_queues/transfer`), stop a group (`players/cmd/stop`) | — |
 | `admin` | `jukebox_kiosk/raw` diagnostics | never for guests |
 

@@ -26,7 +26,7 @@ export class MassQueueBackend implements MaBackend {
     const has = !!entryId;
     this.caps = {
       send: has, queue: true, queuePlay: true, queueEdit: true, undo: has, queueBuffer: has,
-      trackLists: has, podcastEpisodes: has, lyrics: has, speakers: has, unfavorite: true, queuePush: false,
+      trackLists: has, podcastEpisodes: has, lyrics: has, speakers: has, unfavorite: true, queuePush: false, libraryWrite: false,
     };
     this.ext = { genres: has, radioBrowse: has, discover: has, resume: has, autoplay: false, autoplayMode: false };
   }

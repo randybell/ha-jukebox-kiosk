@@ -32,10 +32,12 @@ export interface Caps {
   unfavorite: boolean;
   /** server pushes queue changes (no polling needed after a change) */
   queuePush: boolean;
+  /** add / remove favorites by uri (music/favorites/*, permission class library): the Search radio heart */
+  libraryWrite: boolean;
 }
 export const NO_CAPS: Caps = {
   send: false, queue: false, queuePlay: false, queueEdit: false, undo: false, queueBuffer: false,
-  trackLists: false, podcastEpisodes: false, lyrics: false, speakers: false, unfavorite: false, queuePush: false,
+  trackLists: false, podcastEpisodes: false, lyrics: false, speakers: false, unfavorite: false, queuePush: false, libraryWrite: false,
 };
 
 /**

@@ -295,6 +295,7 @@ export class JukeboxCard extends LitElement {
     this.addEventListener('keydown', this.onActivity, { capture: true });
     this.addEventListener('jukebox-played', this.onPlayed as EventListener);
     this.addEventListener('jukebox-nav', this.onNav as EventListener);
+    this.addEventListener('jukebox-favorites-changed', this.onFavs as EventListener);
     this.addEventListener('jukebox-open', this.onOpen as EventListener);
     this.addEventListener('jukebox-stage', this.onStage as EventListener);
     this.addEventListener('jukebox-target', this.onTarget as EventListener);
@@ -331,6 +332,7 @@ export class JukeboxCard extends LitElement {
     this.removeEventListener('keydown', this.onActivity, { capture: true });
     this.removeEventListener('jukebox-played', this.onPlayed as EventListener);
     this.removeEventListener('jukebox-nav', this.onNav as EventListener);
+    this.removeEventListener('jukebox-favorites-changed', this.onFavs as EventListener);
     this.removeEventListener('jukebox-open', this.onOpen as EventListener);
     this.removeEventListener('jukebox-stage', this.onStage as EventListener);
     this.removeEventListener('jukebox-target', this.onTarget as EventListener);
@@ -474,6 +476,8 @@ export class JukeboxCard extends LitElement {
     this._tab = ids[i]; this._spk = false;
     this.updateComplete.then(() => (this.renderRoot.querySelector(`.tab[data-tab="${ids[i]}"]`) as HTMLElement | null)?.focus());
   };
+  /** Search radio heart (0.6.2): Browse > Radio reloads My stations next time it shows. */
+  private onFavs = (e: CustomEvent) => { (this.renderRoot.querySelector('jb-browse') as any)?.favoritesChanged?.(e.detail?.media_type); };
   private onNav = (e: CustomEvent) => {
     const t = e.detail?.tab; if (!this.tabs().some((x) => x.id === t)) return;
     this._tab = t;
