@@ -4,6 +4,8 @@ import { rollup } from 'rollup';
 import typescript from '@rollup/plugin-typescript';
 import resolve from '@rollup/plugin-node-resolve';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const OUT = new URL('../tmp/unit/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
@@ -216,5 +218,7 @@ const newStore = (hass) => { const s = new S.LyricsStore(); s.entryId = ENTRY; s
 }
 console.warn = origWarn;
 console.log(`\n${results.length - failures}/${results.length} unit checks passed`);
-writeFileSync(new URL('../shots/unit-results.json', import.meta.url), J(results, null, 2));
+const resultsFile = fileURLToPath(new URL('../shots/unit-results.json', import.meta.url));
+mkdirSync(dirname(resultsFile), { recursive: true });
+writeFileSync(resultsFile, J(results, null, 2));
 process.exit(failures ? 1 : 0);
