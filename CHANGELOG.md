@@ -2,7 +2,7 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
-## 0.6.3 — unreleased
+## 0.6.3 — 2026-11-01
 
 ### Added
 - **Now Playing speaker controls.** Each room row in the Now Playing volume card has a Drop / Add button. It uses the same confirm, Undo and Regrouping steps as the Speakers panel, and the panel stays closed. The volume card header has a Speakers button that opens the panel. Guests without the speakers class see the volumes only.
