@@ -43,7 +43,7 @@
         "playback": "Playback: play and add music",
         "queue": "Queue: reorder, remove, undo",
         "library": "Library: favourites and playlists",
-        "speakers": "Speakers: group, move and stop"
+        "speakers": "Speakers: group, move and stop (not needed for volume)"
       }
     }
   },

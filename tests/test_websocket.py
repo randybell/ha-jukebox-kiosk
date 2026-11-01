@@ -41,9 +41,13 @@ async def test_capabilities_guest_default(hass: HomeAssistant, hass_ws_client: A
     ws = await _ws(hass_ws_client, user_token[1])
     r = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
     assert r["guest"]
-    assert r["classes"] == ["playback", "queue", "read", "speakers"]
-    assert not r["features"]["unfavorite"] and not r["features"]["library_write"]
-    assert "music/favorites/add_item" not in r["commands"]
+    assert r["classes"] == ["library", "playback", "queue", "read"]
+    f = r["features"]
+    assert f["unfavorite"] and f["library_write"] and f["queue_edit"] and f["undo"]
+    assert not f["speakers"]
+    assert "music/favorites/add_item" in r["commands"] and "music/favorites/remove_item" in r["commands"]
+    for cmd in ("players/cmd/set_members", "player_queues/transfer", "players/cmd/stop"):
+        assert cmd not in r["commands"], cmd
 
 
 async def test_not_allowlisted_refused(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
@@ -69,7 +73,19 @@ async def test_guest_allowed_queue_edit(hass: HomeAssistant, hass_ws_client: Any
     assert fake_ma.calls[-1] == ("player_queues/move_item", {"queue_id": PLAYER_A, "queue_item_id": "qi1", "pos_shift": 1})
 
 
-async def test_non_admin_denied_library_write(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+async def test_guest_default_library_write(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    """Default guests may favourite and unfavourite (Library class)."""
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/favorites/add_item", args={"item": "library://track/1"})
+    assert res["success"], res
+    assert fake_ma.calls[-1] == ("music/favorites/add_item", {"item": "library://track/1"})
+    res = await _call(ws, type="jukebox_kiosk/unfavorite_current", entity_id=ENTITY_A)
+    assert res["success"], res
+    assert fake_ma.calls[-1][0] == "music/favorites/remove_item"
+
+
+@pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["read", "playback", "queue"]}])
+async def test_guest_without_library_denied(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
     ws = await _ws(hass_ws_client, user_token[1])
     res = await _call(ws, type="jukebox_kiosk/ma", command="music/favorites/add_item", args={"item": "library://track/1"})
     assert not res["success"] and res["error"]["code"] == "unauthorized"
@@ -92,6 +108,8 @@ async def test_admin_raw_but_never_auth(hass: HomeAssistant, hass_ws_client: Any
     assert res["error"]["code"] == "not_allowed"
 
 
+@pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True,
+                                      "guest_classes": ["read", "playback", "queue", "speakers"]}])
 async def test_unknown_player_denied_for_non_admin(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
     ws = await _ws(hass_ws_client, user_token[1])
     res = await _call(ws, type="jukebox_kiosk/ma", command="players/cmd/set_members",
@@ -100,7 +118,33 @@ async def test_unknown_player_denied_for_non_admin(hass: HomeAssistant, hass_ws_
     assert fake_ma.calls == []
 
 
-async def test_set_members_allowed(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+async def test_guest_default_cannot_regroup(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    """Default guests have no Speakers class: set_members, transfer and stop are refused before MA is called."""
+    ws = await _ws(hass_ws_client, user_token[1])
+    for cmd, args in (
+        ("players/cmd/set_members", {"target_player": SYNCGROUP, "player_ids_to_add": [PLAYER_B]}),
+        ("players/cmd/set_members", {"target_player": SYNCGROUP, "player_ids_to_remove": [PLAYER_A]}),
+        ("player_queues/transfer", {"source_queue_id": SYNCGROUP, "target_queue_id": PLAYER_A}),
+        ("players/cmd/stop", {"player_id": SYNCGROUP}),
+    ):
+        res = await _call(ws, type="jukebox_kiosk/ma", command=cmd, args=args)
+        assert not res["success"] and res["error"]["code"] == "unauthorized", (cmd, res)
+    res = await _call(ws, type="jukebox_kiosk/raw", command="players/cmd/set_members",
+                      args={"target_player": SYNCGROUP, "player_ids_to_add": [PLAYER_B]})
+    assert res["error"]["code"] == "unauthorized"
+    assert fake_ma.calls == []
+
+
+async def test_admin_set_members_allowed(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    res = await _call(ws, type="jukebox_kiosk/ma", command="players/cmd/set_members",
+                      args={"target_player": SYNCGROUP, "player_ids_to_add": [PLAYER_B]})
+    assert res["success"], res
+
+
+@pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True,
+                                      "guest_classes": ["read", "playback", "queue", "speakers"]}])
+async def test_set_members_allowed_when_speakers_granted(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
     ws = await _ws(hass_ws_client, user_token[1])
     res = await _call(ws, type="jukebox_kiosk/ma", command="players/cmd/set_members",
                       args={"target_player": SYNCGROUP, "player_ids_to_add": [PLAYER_B]})

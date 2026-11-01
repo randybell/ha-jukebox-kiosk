@@ -62,11 +62,24 @@ On the kiosk backend the card asks `jukebox_kiosk/capabilities` once per connect
 
 ## Permissions
 
-Admins can do everything. In the integration's options (**Configure**) you choose:
+Admins can do everything. In the integration's options (**Settings → Devices & services → Jukebox Kiosk → Configure**, form "Guest permissions") you choose:
 
 - **Guest users**: these users get guest rights even if they are admins. This is handy for a kiosk login.
-- **Treat every non-admin user as a guest**: when this is off, non-admins get every class except `admin`.
-- **What guests may do**: any of `read` (queue, search, browse, lyrics), `playback` (play and add music, jump in the queue), `queue` (reorder, remove, undo), `library` (favourites and playlists) and `speakers` (group, move and stop). The default is read, playback, queue and speakers.
+- **Treat every non-admin user as a guest** (default on): when this is off, non-admins get every class except `admin`.
+- **What guests may do**: any of the classes below. `admin` can never be given to guests.
+
+| Class | Allows | Guest default |
+|---|---|---|
+| `read` | queue, search, browse, lyrics | ✅ |
+| `playback` | play and add music, jump in the queue | ✅ |
+| `queue` | reorder, remove, undo | ✅ |
+| `library` | favourite / unfavourite (the heart), playlists | ✅ |
+| `speakers` | Music Assistant grouping: join / drop speakers (`players/cmd/set_members`), Move (`player_queues/transfer`), stop a group (`players/cmd/stop`) | — |
+| `admin` | `jukebox_kiosk/raw` diagnostics | never for guests |
+
+**Volume needs no class.** Volume and mute (the Now Playing sliders and the Speakers panel mixer, in fixed and dynamic mode) are sent as Home Assistant `media_player.volume_set` / `volume_mute` services, not through the integration, so a guest without `speakers` keeps the mixer. Without `speakers` the card hides grouping and the server refuses `set_members`, `transfer` and `stop`.
+
+**Existing entries keep their saved choice.** The defaults apply when the integration is added (they are written into the entry's options) and when the options have no `guest_classes` key at all. An entry that already saved a list, for example one added from an earlier 0.6.0 draft with read, playback, queue and speakers, keeps exactly that list until you change it under **Configure**.
 
 The server enforces these on every command. Hiding a control in the card is a convenience only; the card's own `grouping` option is still not a security boundary.
 

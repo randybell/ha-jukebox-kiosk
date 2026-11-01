@@ -8,7 +8,7 @@ import pytest
 
 from homeassistant.exceptions import Unauthorized
 
-from custom_components.jukebox_kiosk.const import ALL_CLASSES, PermClass
+from custom_components.jukebox_kiosk.const import ALL_CLASSES, DEFAULT_GUEST_CLASSES, PermClass
 from custom_components.jukebox_kiosk.permissions import Policy, allowed_classes, check_class
 
 
@@ -27,7 +27,22 @@ def test_listed_admin_is_guest() -> None:
 
 def test_non_admin_default_guest() -> None:
     got = allowed_classes(_u("u", False), Policy())
-    assert got == {PermClass.READ, PermClass.PLAYBACK, PermClass.QUEUE, PermClass.SPEAKERS}
+    assert got == {PermClass.READ, PermClass.PLAYBACK, PermClass.QUEUE, PermClass.LIBRARY}
+    assert PermClass.SPEAKERS not in got
+
+
+def test_default_guest_classes() -> None:
+    assert DEFAULT_GUEST_CLASSES == (PermClass.READ, PermClass.PLAYBACK, PermClass.QUEUE, PermClass.LIBRARY)
+
+
+def test_options_without_classes_use_defaults() -> None:
+    assert Policy.from_options({}).guest_classes == set(DEFAULT_GUEST_CLASSES)
+
+
+def test_saved_options_keep_their_classes() -> None:
+    """An entry saved with the earlier draft defaults keeps them; nothing rewrites options."""
+    p = Policy.from_options({"guest_classes": ["read", "playback", "queue", "speakers"]})
+    assert p.guest_classes == {PermClass.READ, PermClass.PLAYBACK, PermClass.QUEUE, PermClass.SPEAKERS}
 
 
 def test_non_admin_not_guest_mode() -> None:

@@ -160,6 +160,29 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('G5 full caps: heart on a favorite → jukebox_kiosk/unfavorite_current {entity_id}', m.length === 1 && m[0].entity_id === EV && (await mqCalls(p)).length === 0, J(m));
   await p.close();
 }
+// ---------------- 5b. default guest (no Speakers class): volume still works, grouping stays off ----------------
+{
+  // the server's caps for the 0.6.0 guest default (read, playback, queue, library): only speakers is off
+  const caps = encodeURIComponent(J({ speakers: false }));
+  const p = await open(`&kcaps=${caps}`); // not admin=1: a plain (kiosk) user
+  const SPK = `__card.shadowRoot.querySelector('jb-speakers')`, SR = `${SPK}.shadowRoot`;
+  check('V1 default guest (speakers feature off): grouping unavailable', (await ev(p, `__card.speakers.available`)) === false);
+  await tap(p, `__card.shadowRoot.querySelector('.pill')`);
+  await wait(p, `${SPK}.open && !!${SR}.querySelector('section.sheet')`); await sleep(250);
+  const sh = await ev(p, `(() => { const r = ${SR}; return { mode: r.querySelector('.sheet')?.dataset.mode, sliders: [...r.querySelectorAll('jb-slider')].filter((s) => !s.disabled).length, chips: r.querySelectorAll('[data-target]').length, acts: r.querySelectorAll('.act').length }; })()`);
+  check('V2 default guest: Speakers panel = enabled volume mixer, no join/drop/move', sh.mode === 'fixed' && sh.sliders >= 1 && sh.chips === 0 && sh.acts === 0, J(sh));
+  const c0 = await ev(p, `window.__calls.length`), w0 = await nws(p);
+  const r = await ev(p, `(() => { const b = ${SR}.querySelector('[data-room] jb-slider').getBoundingClientRect(); return { x: b.left, y: b.top + b.height / 2, w: b.width, id: ${SR}.querySelector('[data-room]').dataset.room }; })()`);
+  await p.mouse.move(r.x + r.w * 0.4, r.y); await p.mouse.down(); await sleep(30); await p.mouse.up(); await sleep(250);
+  await tap(p, `${SR}.querySelector('[data-room] .vm')`); await sleep(250);
+  const vc = await ev(p, `window.__calls.slice(${c0}).filter((c) => c.domain === 'media_player').map((c) => ({ s: c.service, e: c.target?.entity_id }))`);
+  check('V3 default guest: room slider → media_player.volume_set, mute → media_player.volume_mute (HA services)',
+    vc.some((c) => c.s === 'volume_set' && c.e === r.id) && vc.some((c) => c.s === 'volume_mute' && c.e === r.id), J(vc));
+  const sent = (await ws(p, w0)).filter((x) => x.type === 'ma' || x.type === 'raw').map((x) => x.command);
+  check('V4 default guest: volume sends nothing through jukebox_kiosk/ma (no set_members / transfer / stop)',
+    !sent.some((c) => /set_members|transfer|cmd\/stop/.test(c)), J(sent));
+  await p.close();
+}
 // ---------------- 6. explicit backend: mass_queue still wins over auto ----------------
 {
   const p = await open(`&cfg=${encodeURIComponent(J({ backend: 'mass_queue' }))}&tab=queue`);
