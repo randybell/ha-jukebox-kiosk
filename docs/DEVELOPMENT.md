@@ -29,7 +29,7 @@ npm run typecheck     # tsc --noEmit
 ```bash
 python3 -m http.server 8765 --bind 127.0.0.1     # from the project root; the harness won't run from file://
 # open http://127.0.0.1:8765/dev/index.html?log=1
-npm test                                           # run.mjs + lyrics unit/e2e + speakers unit/e2e (mass_queue backend) + backend unit + kiosk e2e (puppeteer-core + /usr/bin/google-chrome; CHROME=... to override)
+npm test                                           # run.mjs + lyrics unit/e2e + speakers unit/e2e (mass_queue backend) + backend unit + define unit + ma-direct unit + kiosk e2e (puppeteer-core + /usr/bin/google-chrome; CHROME=... to override)
 npm run test:unit                                  # unit tests only (no server or browser)
 node test/shots-m2.mjs f1                          # every tab at 1920x1080, 1280x800, 820x1180 and 390x844 -> test/shots/m2/
 JB_SIZES=1920x1080 node test/shots-m2.mjs x1 '&backdrop=light'   # one size, one mode
@@ -113,7 +113,9 @@ Helpers: `ha_ws.py TYPE [JSON] [--kiosk]` and `ma_ws.py COMMAND [JSON]` send one
 
 `ha-e2e.mjs` checks (36): the card element is registered and renders (E1), `backend: auto` picks the kiosk backend (E2), no manual resource (E3), migration Repairs issue while the old plugin files remain, across restarts (R1), capabilities for admin (E4) and the kiosk user's denials, keyboard search through `music_assistant.search` (S1), Replace / Add to queue through `music_assistant.play_media` (P1, P2), Up next, Play next, Remove + Undo, Play now and queue push from an outside MA edit (Q0–Q5), Now Playing (N1), the Speakers sheet (K1), lyrics resolve to "No lyrics found" for local files and the library copy is never asked (L1, L2), `item_tracks` paging and the album detail (T1–T3), and the double load of the old card file next to the bundled one with no console errors (D1, D2).
 
-Other checks that need no HA: `node test/unit/define.unit.mjs` (element re-definition when HA swaps the custom element registry; part of `npm test`), `pytest tests/` from the `.venv` with `homeassistant` installed, and hassfest:
+`node dev/e2e/ma-direct-e2e.mjs [--shots DIR]` (17 checks) runs the card on the same dashboard switched in the page (nothing saved) to `backend: ma_direct` with `ma_url` `http://127.0.0.1:8095` and the env's MA admin token read at runtime (never printed). It checks that MA accepts the browser socket and token, the live schema gate, the queue over the direct socket with no `jukebox_kiosk/*` calls, push, Play next and Remove in MA, track lists and the album detail, lyrics never asked with a library track, the Speakers sheet, a `docker restart jbe2e-ma` (reconnect, re-auth, queue reload, push again), a rejected token, the editor notes, and the switch back to `auto`. It restarts the MA container once.
+
+Other checks that need no HA: `node test/unit/ma-direct.unit.mjs` (the direct backend against a fake MA socket: URLs, mixed content, schema gating, auth, partial results, allowlist, queue and track shapes, events, reconnect; part of `npm test`), `node test/unit/define.unit.mjs` (element re-definition when HA swaps the custom element registry; part of `npm test`), `pytest tests/` from the `.venv` with `homeassistant` installed, and hassfest:
 
 ```bash
 docker run --rm -v "$PWD/custom_components:/github/workspace/custom_components" ghcr.io/home-assistant/hassfest:latest

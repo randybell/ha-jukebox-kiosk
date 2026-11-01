@@ -49,7 +49,7 @@ The integration finds dashboard resources that still point at `/hacsfiles/ha-juk
 
 ## Backends
 
-The card talks to Music Assistant through one of three backends. Set `backend` in the card config. The resolved backend is shown on the element as `data-backend`.
+The card talks to Music Assistant through one of four backends. Set `backend` in the card config. The resolved backend is shown on the element as `data-backend`.
 
 | `backend` | Uses | Notes |
 |---|---|---|
@@ -57,8 +57,26 @@ The card talks to Music Assistant through one of three backends. Set `backend` i
 | `kiosk` | `jukebox_kiosk/*` WebSocket commands | Every feature. Controls the server doesn't allow for this user are hidden. |
 | `mass_queue` *(legacy)* | `mass_queue.*` services, as in 0.5.x | Needs `mass_queue_entry_id`. Kept for anyone not ready to install the integration. |
 | `native` | the official `music_assistant` services only | Search, Browse grid, transport, volume and playing music. No queue tab, track lists, lyrics or grouping. |
+| `ma_direct` *(opt-in)* | Music Assistant's own WebSocket API, from the browser, with `ma_url` and `ma_token` | Queue, track lists, lyrics and grouping without the integration. **No guest lock** (see below). `auto` never picks it. |
 
 On the kiosk backend the card asks `jukebox_kiosk/capabilities` once per connection and hides what the server reports as unavailable: queue icons (`queue_play`, `queue_edit`), Undo, the remove-favourite heart (`unfavorite`), the Speakers panel's grouping (`speakers`) and the Lyrics tab (`lyrics`).
+
+### Direct to Music Assistant (`backend: ma_direct`)
+
+For setups that can't install the integration, the card can connect straight to the Music Assistant server:
+
+```yaml
+type: custom:jukebox-card
+entity: media_player.kitchen        # example
+backend: ma_direct
+ma_url: https://music.example.lan:8095   # Music Assistant as this browser reaches it
+ma_token: <Music Assistant long-lived token>   # pasted as-is; dashboards cannot use !secret
+```
+
+- **No guest lock.** The token sits in the dashboard config. Anyone who can open the dashboard can read it and use every Music Assistant feature that token allows, from any browser. The per-user limits in [Permissions](#permissions) only exist on the `kiosk` backend, because they need a server-side proxy (the Jukebox Kiosk integration) between the browser and Music Assistant. Use `ma_direct` on dashboards only trusted people can open. Where your Music Assistant version allows it, give the dashboard its own user and token, so you can revoke it on its own.
+- **Mixed content.** If Home Assistant is opened over `https`, `ma_url` must be `https` too (a `wss://` socket), for example through the same reverse proxy. Browsers block `ws://` from `https` pages. The editor warns about this, and the card turns the direct features off instead of failing silently.
+- **Versions.** The card checks the server's API schema on every connect. It refuses a server whose oldest supported schema is newer than the one the card speaks (then the card needs an update), and hides features whose commands the server is too old for.
+- It reconnects by itself (1, 2, 5, 10, 30 s backoff) and reloads the queue after a reconnect. Search and play still use the `music_assistant` actions in Home Assistant. The card only sends the Music Assistant commands it needs. Item lookups never ask Music Assistant to update its library, and lyrics are never requested for a library track, so nothing is written to Music Assistant. Lyrics are only shown, never stored.
 
 ## Permissions
 
@@ -310,7 +328,9 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `config_entry_id` | (required) | MA config entry for `music_assistant.search` / `get_library` |
 | `rooms` | `[]` | `[{name, entity, icon?}]`, or bare entity ids (the name then comes from `friendly_name`). Each room gets its own volume slider |
 | `favorite_entity` | `button.everywhere_favorite_current_song` | Pressed by the heart (button, input_button or script). `''` hides the heart |
-| `backend` | `auto` | `auto`, `kiosk`, `mass_queue` or `native` (see [Backends](#backends)) |
+| `backend` | `auto` | `auto`, `kiosk`, `mass_queue`, `native` or `ma_direct` (see [Backends](#backends)) |
+| `ma_url` | — | `backend: ma_direct` only: Music Assistant's address as the browser reaches it (`https://…` when Home Assistant uses https) |
+| `ma_token` | — | `backend: ma_direct` only: a Music Assistant long-lived token. Readable by everyone who can open the dashboard; see [Direct to Music Assistant](#direct-to-music-assistant-backend-ma_direct) |
 | `mass_queue_entry_id` | — | *(legacy, `backend: mass_queue` only)* mass_queue (Music Assistant Queue Actions) config entry, used for `mass_queue.get_album_tracks / get_artist_tracks / get_playlist_tracks` and for lyrics (`mass_queue.send_command`). The 0.3.0 name `queue_config_entry_id` is still accepted, and the visual editor rewrites it to the new key |
 | `screensaver_minutes` | `10` (0–1440) | Idle minutes before the screensaver. `0` turns it off. The editor offers Off, 1, 5, 10, 15, 30, 60 and Custom; any 0–1440 value from YAML still loads |
 | `browse_limit` | `60` (1–500) | Items per Browse page (infinite scroll pages by `offset`) |
