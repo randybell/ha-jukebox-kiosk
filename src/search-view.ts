@@ -355,7 +355,8 @@ export class JbSearch extends LitElement {
     const type = this.mediaType(it, g);
     const drill = drillable(type, this.config);
     const p = this.press.handlers(it.uri, { it, g });
-    return html`<div class="row ${drill ? 'drill' : ''} ${this.press.held === it.uri ? 'held' : ''} ${this._sel === it.uri ? 'sel' : ''}"
+    const fav = this.canFav(g);
+    return html`<div class="row ${drill ? 'drill' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''} ${this._sel === it.uri ? 'sel' : ''}"
         data-uri=${it.uri} data-group=${g} data-type=${type} aria-label=${drill ? `Open ${it.name}` : it.name}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
@@ -363,7 +364,7 @@ export class JbSearch extends LitElement {
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b>
         <small>${provTpl(it.uri, it.provider, it.media_type)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, g)}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
-      ${this.canFav(g) ? this.favTpl(it) : nothing}
+      ${fav ? this.favTpl(it) : nothing}
       ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, g, a, el))}
     </div>`;
   }
@@ -468,6 +469,12 @@ export class JbSearch extends LitElement {
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     .ra-b.fav { flex: none; color: var(--_inactive); }
     .ra-b.fav.on { color: var(--_active); }
+    /* a radio row with the heart has one more column (0.6.2) */
+    .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto; }
+    @container np (max-width: 520px) {
+      .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: 6px; }
+      .row.hasfav .ra-b { width: 40px; }
+    }
     .sx {
       position: relative; z-index: 1; height: 100%; display: grid; gap: 12px; padding: 14px var(--_pad) 12px;
       grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
