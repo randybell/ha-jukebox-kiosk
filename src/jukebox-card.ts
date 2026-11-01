@@ -14,7 +14,7 @@ import { roomsOf, playerArt } from './shared';
 import './speakers-view';
 import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
-import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, validPreset, validQuiet } from './speakers/model';
+import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, validPreset, validQuiet, liveCount, membersOf } from './speakers/model';
 import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type BackdropMode } from './backdrop';
 import type { HomeAssistant, JukeboxCardConfig, TabId } from './types';
 import { pickBackend, createBackend, backendKey, type MaBackend } from './backend';
@@ -83,6 +83,7 @@ export class JukeboxCard extends LitElement {
     _stage: { state: true },
     _stageUi: { state: true },
     _spk: { state: true },
+    _lost: { state: true },
   };
   hass?: HomeAssistant;
   private _config!: JukeboxCardConfig;
@@ -120,6 +121,11 @@ export class JukeboxCard extends LitElement {
   /** config with defaults, before the dynamic-mode target is applied (fixed mode: _config === _base) */
   private _base!: JukeboxCardConfig;
   private _spk = false;
+  /** one-time notice: the saved speaker target is gone from HA */
+  private _lost = '';
+  private _lostTimer?: number;
+  private _sunsub?: () => void;
+  private _pn = -1;
   /** Music Assistant players (dynamic mode only; fixed mode never calls it) */
   readonly speakers = new SpeakerStore();
   /** Music Assistant backend (kiosk / mass_queue / native), shared by queue, lyrics, speakers and the views */
@@ -236,7 +242,9 @@ export class JukeboxCard extends LitElement {
     if (b.speaker_mode !== 'dynamic') return b;
     let t = '';
     try { t = localStorage.getItem(TARGET_KEY) ?? ''; } catch { /* private mode */ }
-    const ok = !!t && (b.targets?.length ? targetsOf(b, this.hass).some((x) => x.entity === t) : t.startsWith('media_player.'));
+    const ok = !!t && (b.targets?.length ? targetsOf(b, this.hass).some((x) => x.entity === t) : t.startsWith('media_player.'))
+      // a saved target that HA no longer has (renamed / deleted group) must not win over the configured one
+      && (!this.hass || !!this.hass.states[t] || t === b.entity);
     return { ...b, entity: ok ? t : b.entity, _guard: this.guard };
   }
   /** Move the card to another group (from the Speakers panel). Allowed users only; remembered per device. */
@@ -289,6 +297,7 @@ export class JukeboxCard extends LitElement {
     // Belt and braces: if anything editable ever takes focus inside the card, drop it so no OS keyboard opens.
     this.renderRoot?.addEventListener?.('focusin', this.onFocusIn as EventListener);
     this._lunsub ??= this.lyrics.subscribe((st) => { if (st.status !== this._lstatus) { this._lstatus = st.status; this.requestUpdate(); } });
+    this._sunsub ??= this.speakers.onChange(() => { const n = this.pillCount(); if (n !== this._pn) { this._pn = n; this.requestUpdate(); } }) as any;
     this._qunsub = this.queue.subscribe(() => { this._qcount = this.queue.remaining; this._qart = this.art(); }) as any;
     this.addEventListener('pointerdown', this.onActivity, { capture: true });
     this.addEventListener('keydown', this.onActivity, { capture: true });
@@ -325,6 +334,7 @@ export class JukeboxCard extends LitElement {
     super.disconnectedCallback();
     window.clearInterval(this._clock); window.clearTimeout(this._idleTimer);
     this._qunsub?.();
+    this._sunsub?.(); this._sunsub = undefined; window.clearTimeout(this._lostTimer);
     this._lunsub?.(); this._lunsub = undefined;
     this.stopPush();
     this.removeEventListener('pointerdown', this.onActivity, { capture: true });
@@ -565,6 +575,7 @@ export class JukeboxCard extends LitElement {
     if ((changed.has('hass') || changed.has('_config')) && this.hass && this._config) this.lyrics.follow(this.hass, this.hass.states[this._config.entity!]);
     if (changed.has('hass') && this.hass) {
       if (!this._push) this.startPush();
+      this.dropLostTarget();
       this.queue.hass = this.hass;
       this.speakers.hass = this.hass;
       const id = this._config.entity!;
@@ -573,6 +584,37 @@ export class JukeboxCard extends LitElement {
       else if (a !== b && (a?.state !== b?.state || a?.attributes?.media_content_id !== b?.attributes?.media_content_id
         || a?.attributes?.media_title !== b?.attributes?.media_title || a?.attributes?.shuffle !== b?.attributes?.shuffle)) this.queue.refreshSoon();
     }
+  }
+  /** dynamic mode: a remembered target missing from hass.states is forgotten once, with a notice (it used to fall back silently) */
+  private dropLostTarget() {
+    if (this._base?.speaker_mode !== 'dynamic' || !this.hass || !Object.keys(this.hass.states).length) return;
+    let t = '';
+    try { t = localStorage.getItem(TARGET_KEY) ?? ''; } catch { return; }
+    if (!t || this.hass.states[t] || t === this._base.entity) return;
+    try { localStorage.removeItem(TARGET_KEY); } catch { /* */ }
+    const pretty = t.replace(/^media_player\./, '').replace(/_/g, ' ');
+    const base = this._base.entity!;
+    const fallback = (this.hass.states[base]?.attributes?.friendly_name as string | undefined) ?? base.replace(/^media_player\./, '').replace(/_/g, ' ');
+    this._lost = `Saved speaker "${pretty}" not found. Using ${fallback}.`;
+    window.clearTimeout(this._lostTimer);
+    this._lostTimer = window.setTimeout(() => (this._lost = ''), 8000);
+    if (this._config.entity !== base) {
+      this._config = this.effective();
+      this.queue.entity = this._config.entity!;
+      this.queue.refreshSoon(0);
+      this.stopPush(); this.startPush();
+    }
+  }
+  /** speakers on the pill (see liveCount) */
+  private pillCount(): number {
+    const c = this._config, h = this.hass;
+    if (!c || !h || c.speaker_mode !== 'dynamic') return 0;
+    const ent = h.states[c.entity!];
+    const players = this.speakers.loaded ? this.speakers.players : undefined;
+    const ma = players ? targetMa(c.entity!, h, players) : undefined;
+    const g = ma ? players!.get(ma) : undefined;
+    const store = g && isActive(g) ? membersOf(g, players!) : undefined;
+    return liveCount(ent, store, roomsOf(c, h).map((r) => h.states[r.entity]));
   }
   private onFocusIn = (e: FocusEvent) => {
     const t = e.composedPath()[0] as HTMLElement;
@@ -586,7 +628,11 @@ export class JukeboxCard extends LitElement {
       const id = this._config.entity!;
       // Re-render the shell only when our player changed; the search view gets hass directly.
       for (const tag of CHILDREN) { const el = this.renderRoot?.querySelector(tag) as any; if (el) el.hass = this.hass; }
-      return !old || old.states[id] !== this.hass?.states[id];
+      if (!old || old.states[id] !== this.hass?.states[id]) return true;
+      // the pill count can come from the rooms (HA leaves the group's group_members empty)
+      const n = this.pillCount();
+      if (n !== this._pn) { this._pn = n; return true; }
+      return false;
     }
     return true;
   }
@@ -629,10 +675,11 @@ export class JukeboxCard extends LitElement {
     if (!this._config) return nothing;
     const ent = this.hass?.states[this._config.entity!];
     const pic = this.art();
-    const name = ent?.attributes?.friendly_name ?? 'Everywhere';
+    // never borrow 'Everywhere' for another entity: a missing one shows its object id
+    const name = ent?.attributes?.friendly_name ?? (ent || !this.hass ? 'Everywhere' : this._config.entity!.replace(/^media_player\./, '').replace(/_/g, ' '));
     const dyn = this._config.speaker_mode === 'dynamic';
-    const gm = ent?.attributes?.group_members;
-    const live = dyn && ent && ['playing', 'paused', 'buffering'].includes(ent.state) && Array.isArray(gm) ? gm.length : 0;
+    const live = dyn ? this.pillCount() : 0;
+    this._pn = live;
     const rooms = roomsOf(this._config, this.hass).length;
     const bd = this._bd;
     const artStyle = pic && bd === 'full' ? `--_art:url("${pic.replace(/"/g, '%22')}")` : '';
@@ -644,8 +691,9 @@ export class JukeboxCard extends LitElement {
           <div class="brand">${icon('disc', 'i brand-i')}<span>${c.title ?? 'Jukebox'}</span></div>
           <button class="pill" title=${c.entity!} tabindex="-1" aria-label="Speakers: ${name}" aria-haspopup="dialog" @pointerdown=${(e: PointerEvent) => e.preventDefault()}
             @click=${() => (this._spk = !this._spk)}>${icon('group', 'i xs')}<span class="pn">${name}</span>${dyn
-              ? html`<b>· ${live ? `${live} speaker${live === 1 ? '' : 's'}` : ent?.state === 'buffering' ? 'regrouping…' : 'idle'}</b>`
+              ? html`<b>· ${!ent && this.hass ? 'not found' : ent?.state === 'buffering' ? 'regrouping…' : live ? `${live} speaker${live === 1 ? '' : 's'}` : 'idle'}</b>`
               : rooms ? html`<b>· ${rooms} room${rooms === 1 ? '' : 's'} synced</b>` : nothing}</button>
+          ${this._lost ? html`<span class="lost" role="status">${this._lost}</span>` : nothing}
           <div class="spacer"></div>
           <div class="clock">${this.timeStr()}</div>
         </header>
@@ -690,6 +738,7 @@ export class JukeboxCard extends LitElement {
     .pill { white-space: nowrap; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: #ffffff0f;
       border: 1px solid #ffffff1a; font-size: 14px; font-weight: 600; }
     .pill b { font-weight: 500; color: var(--_muted); }
+    .lost { margin-left: 10px; font-size: 13px; color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: #ffffff26; }
     .lg .pill { min-height: 52px; font-size: 17px; padding: 0 18px; }
     .spacer { flex: 1; }

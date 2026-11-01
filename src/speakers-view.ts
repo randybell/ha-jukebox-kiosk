@@ -187,13 +187,20 @@ export class JbSpeakers extends LitElement {
   async drop(room: Room) {
     const x = this.ctx();
     if (!room.ma || !x.tMa || x.kind !== 'dynamic' || !x.active) return;
-    const allow = x.c.leader_drop === 'allow';
+    const allow = x.c.leader_drop !== 'block';
     const why = dropBlock(x.tP, room.ma, x.players, allow);
     const tName = this.nameOf(x.tMa, x.players, x.rooms);
-    if (why === 'last') { this.toast(`${room.name} is the last speaker in ${tName}. Pause instead.`); return; }
+    if (why === 'last') {
+      // MA would stop and dissolve the group: offer Pause instead (the queue and the speaker stay on the group)
+      const playing = this.hass?.states[x.c.entity!]?.state === 'playing';
+      if (!playing) { this.toast(`${room.name} is the last speaker in ${tName}. Add another speaker first.`); return; }
+      if (await this.ask({ title: `${room.name} is the last speaker`, lines: [`${tName} needs at least one speaker. Pause ${tName} instead? Its queue stays; tap Play to go on.`], ok: 'Pause' }))
+        void this.hass!.callService('media_player', 'media_pause', {}, { entity_id: x.c.entity! }).then(() => this.toast(`${tName} paused`), () => this.toast('That did not work. Check the speaker.'));
+      return;
+    }
     if (why === 'leader') { this.toast(`${room.name} leads ${tName}. Use Move to hand off, or drop the other speakers.`, 4500); return; }
     const isLeader = x.leader === room.ma;
-    if (isLeader && !(await this.ask({ title: `Drop ${room.name}?`, lines: [`${tName} pauses briefly and restarts on the other speakers: ${room.name} leads it.`], ok: 'Drop' }))) return;
+    if (isLeader && !(await this.ask({ title: `Drop ${room.name}?`, lines: [`${room.name} leads ${tName} now. Music Assistant hands ${tName} to the other speakers: they go quiet for a few seconds, then the queue plays on.`], ok: 'Drop' }))) return;
     this.setBusy(room.ma, 'out');
     if (isLeader) this.startRegroup(x.tMa, room.ma);
     try {
@@ -276,7 +283,7 @@ export class JbSpeakers extends LitElement {
       await this.updateComplete;
       const x = this.ctx();
       if (x.tMa && x.kind === 'dynamic' && x.active) {
-        const plan = planMembers(x.members, want, x.leader, x.c.leader_drop === 'allow');
+        const plan = planMembers(x.members, want, x.leader, x.c.leader_drop !== 'block');
         if (plan.add.length || plan.remove.length) {
           for (const s of plan.add) { const h = holderOf(s, x.players, x.tMa); if (h && kindOf(h) === 'static' && leaderOf(h, x.players) === s) await this.store!.stop(h.player_id); }
           await this.store!.setMembers(x.tMa, plan.add, plan.remove);
@@ -311,13 +318,13 @@ export class JbSpeakers extends LitElement {
     const cap = this.cap();
     const targets = this.dynamic ? targetsOf(x.c, this.hass) : [];
     const tName = (this.hass?.states[x.c.entity!]?.attributes?.friendly_name as string) ?? targets.find((t) => t.entity === x.c.entity)?.name ?? 'Speakers';
-    const grouping = may && x.kind === 'dynamic' && x.active && !!this.store?.loaded;
+    const grouping = may && x.kind === 'dynamic' && !!this.store?.loaded;
     let banner = '';
     if (!this.dynamic) banner = `${tName} always plays on these speakers. Set the volume per room here.`;
     else if (!may) banner = vol ? 'Volume only. Ask an admin to change speakers.' : 'Ask an admin to change speakers or volume.';
     else if (this.store?.error && !this.store.loaded) banner = `Music Assistant did not answer (${this.store.error}). Volume still works.`;
     else if (x.kind === 'static') banner = `${tName} is a fixed group in Music Assistant: no join or drop. Move to another group to change speakers.`;
-    else if (x.kind === 'dynamic' && !x.active && this.store?.loaded) banner = `${tName} is not playing. Play something to join speakers, or pick a preset.`;
+    else if (x.kind === 'dynamic' && !x.active && this.store?.loaded) banner = `${tName} is not playing. Start playback to join or drop speakers (the buttons wake up), or pick a preset.`;
     // card-config presets plus each dynamic group's MA default (config/players/get); unreadable MA config: card presets only
     const presets = may ? maPresets(this.store?.configs ?? new Map(), x.players, x.rooms, targets, this.hass, x.c.presets ?? []) : [];
     return html`<div class="scrim dim sp-scrim" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this.close(); }}></div>
@@ -386,9 +393,10 @@ export class JbSpeakers extends LitElement {
       else where = 'Not playing';
       if (grouping) {
         if (inT) {
-          const why = dropBlock(x.tP, r.ma, x.players, x.c.leader_drop === 'allow');
+          const why = dropBlock(x.tP, r.ma, x.players, x.c.leader_drop !== 'block');
           act = { label: why === 'leader' ? 'Leader' : why === 'last' ? 'Last' : 'Drop', kind: why ? 'blocked' : 'drop', fn: () => this.drop(r) };
         } else if (h) act = { label: `Take from ${this.nameOf(h.player_id, x.players, x.rooms)}`, kind: 'take', fn: () => this.join(r) };
+        else if (x.kind === 'dynamic' && !x.active) act = { label: 'Join', kind: 'idle', dis: true, fn: () => this.toast(`Start playback on ${this.nameOf(x.tMa!, x.players, x.rooms)} first, then join speakers.`) };
         else act = { label: 'Join', kind: 'join', fn: () => this.join(r) };
       }
       if (busy) inT = busy === 'in';
@@ -402,7 +410,7 @@ export class JbSpeakers extends LitElement {
     return html`<div class="vr room ${inT ? 'in' : 'out'} ${muted ? 'muted' : ''} ${off ? 'off' : ''} ${busy ? 'pending' : ''}" data-room=${r.entity} data-ma=${r.ma ?? ''}>
       <button class="vm" tabindex="-1" aria-label="${muted ? 'Unmute' : 'Mute'} ${r.name}" ?disabled=${off || !vol} @pointerdown=${noFocus} @click=${() => this.toggleMute(r.entity)}>${icon(muted ? 'volmute' : 'speaker')}</button>
       <span class="vn"><b>${r.name}</b><small class="where">${busy === 'in' ? 'Joining…' : busy === 'out' ? 'Leaving…' : where}</small></span>
-      ${act ? html`<button class="act ${act.kind}" data-act=${act.kind} tabindex="-1" ?disabled=${!!busy} @pointerdown=${noFocus} @click=${act.fn}>${act.label}</button>` : html`<span></span>`}
+      ${act ? html`<button class="act ${act.kind}" data-act=${act.kind} tabindex="-1" aria-disabled=${act.dis || act.kind === 'blocked' ? 'true' : 'false'} ?disabled=${!!busy} @pointerdown=${noFocus} @click=${act.fn}>${act.label}</button>` : html`<span></span>`}
       <jb-slider class="vs" .value=${muted ? 0 : v} .max=${cap} ?disabled=${off || !vol} .label=${`${r.name} volume`}
         @jb-input=${(e: CustomEvent) => this.onVol(r.entity, e, false)} @jb-change=${(e: CustomEvent) => this.onVol(r.entity, e, true)}></jb-slider>
       <span class="vv" data-v=${muted ? '–' : String(Math.round(v * 100))}></span>
@@ -471,7 +479,7 @@ export class JbSpeakers extends LitElement {
       max-width: 52cqw; overflow: hidden; text-overflow: ellipsis; }
     .act.join { background: #fff; color: #000; border-color: #fff; }
     .act.take { border-style: dashed; }
-    .act.blocked { color: var(--_inactive); border-color: var(--_divider); }
+    .act.blocked, .act.idle { color: var(--_inactive); border-color: var(--_divider); }
     .act:disabled { opacity: .4; }
     .undo { position: absolute; left: 12px; right: 12px; bottom: 14px; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 18px; border-radius: 999px;
       background: #1c1c1c; border: 1px solid #ffffff38; box-shadow: 0 10px 30px #000a; font-size: 14px; font-weight: 600; }

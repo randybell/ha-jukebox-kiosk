@@ -125,7 +125,7 @@ export interface JukeboxCardConfig {
   /** What everyone else may do in the Speakers panel: volume (default) or none (read only). */
   guest_access?: 'volume' | 'none';
   /** Dropping the leader of a playing group: block (default) or allow (MA hands off; WiiM restarts the group after a gap). */
-  leader_drop?: 'block' | 'allow';
+  leader_drop?: 'allow' | 'block'; // default 'allow' (0.6.3)
   presets?: PresetConfig[];
   quiet_hours?: QuietHours;
   /** Bigger touch targets and text. Default false. */

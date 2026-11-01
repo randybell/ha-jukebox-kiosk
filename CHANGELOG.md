@@ -2,6 +2,18 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
+## 0.6.3 — unreleased
+
+### Fixed
+- **Speakers: the room that leads a group can be dropped and re-added.** With a dynamic Music Assistant sync group ("Enable dynamic members"), the leading room used to show a greyed "Leader" button, so it could not be removed (for example, the Garage speaker from Everywhere). `leader_drop` now defaults to `allow`. Drop asks first, then calls `players/cmd/set_members` on the group (never an ungroup of the speaker). Music Assistant hands the group to the other rooms, there are a few seconds of silence, and the queue plays on. The panel says "Regrouping…" until it does. Join adds the room back. `leader_drop: block` keeps the old behaviour.
+- **The header pill no longer says "idle" while a group plays.** Home Assistant can report `group_members: []` for a playing Music Assistant group. The pill now counts the speakers from Music Assistant, or from the rooms playing the same title.
+- **A saved speaker target that no longer exists is forgotten with a notice.** Before, it was dropped silently. The pill also no longer labels a missing entity "Everywhere".
+
+### Changed
+- The last room in a group can't be dropped, because Music Assistant would stop the group. Instead the panel offers to pause the group: the room stays in it and the queue is kept.
+- While a dynamic group is idle, Join is shown greyed with a "start playback first" hint instead of being hidden.
+- Dev mock: `every=dyn` makes Everywhere a dynamic sync group led by Garage, with `group_members: []` on its Home Assistant entity, which is the shape seen live.
+
 ## 0.6.2 — 2026-11-01
 
 ### Added

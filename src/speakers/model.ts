@@ -74,6 +74,26 @@ export function membersOf(g: MaPlayer | undefined, players: Players): string[] {
   const live = g.group_members.filter((id) => players.get(id)?.type !== 'group');
   return live.length ? live : kindOf(g) === 'static' ? g.static_group_members : [];
 }
+/**
+ * Speakers on the pill. HA's media_player for a Music Assistant sync group can report group_members: [] while
+ * it plays (live 2026.10, dynamic group): then use MA's own member list, else the biggest room that plays the same
+ * title, else 1. 0 = not playing.
+ */
+export function liveCount(ent: { state?: string; attributes?: Record<string, any> } | undefined, store: string[] | undefined,
+  rooms: Array<{ state?: string; attributes?: Record<string, any> } | undefined>): number {
+  if (!ent || !['playing', 'paused', 'buffering'].includes(ent.state ?? '')) return 0;
+  const gm = ent.attributes?.group_members;
+  if (Array.isArray(gm) && gm.length) return gm.length;
+  if (store?.length) return store.length;
+  const t = ent.attributes?.media_title;
+  let n = 0;
+  for (const r of rooms) {
+    if (!r || !['playing', 'paused', 'buffering'].includes(r.state ?? '') || (t && r.attributes?.media_title !== t)) continue;
+    const g = r.attributes?.group_members;
+    n = Math.max(n, Array.isArray(g) && g.length ? g.length : 1);
+  }
+  return n || 1;
+}
 /** The sync leader among a group's speakers (live: the first configured member leads; after it is removed the next one does). */
 export function leaderOf(g: MaPlayer | undefined, players: Players): string | undefined {
   const ms = membersOf(g, players);
