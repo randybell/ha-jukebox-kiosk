@@ -2,7 +2,7 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
-## 0.6.0 — unreleased (draft)
+## 0.6.0 — 2026-11-01
 
 The card moves into a Home Assistant integration, **Jukebox Kiosk** (`jukebox_kiosk`), and no longer needs mass_queue. The repository becomes `randybell/ha-jukebox-kiosk` (HACS category integration).
 
