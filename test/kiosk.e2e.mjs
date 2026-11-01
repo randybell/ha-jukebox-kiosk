@@ -400,6 +400,8 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   await ev(p, `${SV}.setQuery('mockingbird')`); await wait(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].some((r) => r.dataset.group === 'radio')`); await sleep(150);
   const st = await ev(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].find((r) => r.dataset.group === 'radio').dataset.uri`);
   const row = `${SV}.shadowRoot.querySelector('.row[data-uri="${st}"]')`;
+  // v0.7 library-first labels push the radio group lower: bring the row on screen first
+  await ev(p, `${row}.scrollIntoView({ block: 'center' })`); await sleep(120);
   await tap(p, `${row}.querySelector('.rt') ?? ${row}`); await sleep(300);
   s = await sheet(p);
   check('S9 Search radio row tap → station sheet, nothing played', s?.name === 'Mockingbird FM' && (await plays(p)).length === 0 && s.fav === 'false', J(s));

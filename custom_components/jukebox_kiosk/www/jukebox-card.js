@@ -827,11 +827,11 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
       <span>${this._fav?"Only favorites are shown. ":""}Try fewer letters.</span>${this.clearBtn()}</div>`}gridOf(t,e,i="library"){return"track"===this._cat?F`<div class="list">${t.map(t=>this.row(t))}</div>${e}`:F`<div class="grid ${this._cat}" data-src=${i}>${t.map(t=>this.tile(t,this._cat))}</div>${e}`}renderHome(){const t=this.tiles();return F`<div class="scroll panel home-scroll"><div class="home" role="list" aria-label="Library">
       ${t.map(t=>F`<button class="lt" role="listitem" data-tile=${t.id} tabindex="-1" @pointerdown=${yt} @click=${()=>this.openTile(t.id)}>
         <span class="lti">${ht(us(t.id).icon)}</span><span class="ltl">${t.label}</span><span class="lts">${us(t.id).sub}</span></button>`)}
-    </div></div>`}render(){const t=this.homeOn();if(t&&this._home&&!this._stack.length)return F`<div class="bx">${this.renderHome()}</div>`;const e=this._lart&&this.filtersOn()?this._lart:null,i=e?this.visibleCats().filter(t=>ks.includes(t.type)):this.visibleCats(),s=$s(this._cat).find(t=>t.id===this._sort)??xs[0],a=this._menu,r=this._stack[this._stack.length-1],o=_s(this._cat),n="radio"===this._cat?this.rmodes():[],l=this._cat!==ys.type&&!("radio"===this._cat&&"library"!==this._rmode),c="radio"===this._cat&&"library"!==this._rmode?`Radio · ${Ki[this._rmode]}`:e?`${o.label} · ${e.name}`:`Browse ${o.label}${this.lq()?` “${this.lq()}”`:""}`,d=l&&this.filtersOn(),h=F`<div class="cats">${i.map(t=>F`<button class="fc ${this._cat!==t.type||r?"":"on"}" data-cat=${t.type} tabindex="-1"
+    </div></div>`}render(){const t=this.homeOn();if(t&&this._home&&!this._stack.length)return F`<div class="bx">${this.renderHome()}</div>`;const e=this._lart&&this.filtersOn()?this._lart:null,i=e?this.visibleCats().filter(t=>ks.includes(t.type)):this.visibleCats(),s=$s(this._cat).find(t=>t.id===this._sort)??xs[0],a=this._menu,r=this._stack[this._stack.length-1],o=_s(this._cat),n="radio"===this._cat?this.rmodes():[],l=this._cat!==ys.type&&!("radio"===this._cat&&"library"!==this._rmode),c="radio"===this._cat&&"library"!==this._rmode?`Radio · ${Ki[this._rmode]}`:e?`${o.label} · ${e.name}`:`Browse ${o.label}${this.lq()?` “${this.lq()}”`:""}`,d=l&&this.filtersOn(),h=d&&this._lkb&&!r,p=F`<div class="cats">${i.map(t=>F`<button class="fc ${this._cat!==t.type||r?"":"on"}" data-cat=${t.type} tabindex="-1"
           @pointerdown=${yt} @click=${()=>this.setCat(t.type)}>${t.type===ys.type?ht("compass","i xs"):B}${t.label}</button>`)}</div>`;return F`<div class="bx">
       <div class="bar">
         ${t?F`<div class="cats lhead"><button class="fc back" data-act="home" tabindex="-1" aria-label="Back to Library" @pointerdown=${yt}
-          @click=${()=>this.goHome()}>${ht("back","i xs")}${this.homeLabel()}</button>${e?h:F`<span class="lt-title">${bs(this.config).find(t=>t.id===this._cat)?.label??o.label}</span>`}</div>`:h}
+          @click=${()=>this.goHome()}>${ht("back","i xs")}${this.homeLabel()}</button>${e?p:F`<span class="lt-title">${bs(this.config).find(t=>t.id===this._cat)?.label??o.label}</span>`}</div>`:p}
         ${d?F`<button class="fc tog flt ${this._lkb||this.lq()?"on":""}" data-act="filter" tabindex="-1" aria-pressed=${this._lkb?"true":"false"}
           aria-label="Filter this list" @pointerdown=${yt} @click=${()=>this.toggleFilter()}>${ht("search","i xs")}<span class="fl">Filter</span></button>`:B}
         ${l?F`<button class="fc tog ${this._fav?"on":""}" data-cat="favorites" tabindex="-1" aria-pressed=${this._fav?"true":"false"}
@@ -842,11 +842,13 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
         ${["library",...n].map(t=>F`<button class="fc sm ${this._rmode===t?"on":""}" role="tab" aria-selected=${this._rmode===t?"true":"false"}
           data-rmode=${t} tabindex="-1" @pointerdown=${yt} @click=${()=>this.setRMode(t)}>${"library"===t?"My stations":Ki[t]}</button>`)}
       </div>`:B}
-      ${l&&!r?F`${this.filterBox()}${this.filterTpl()}`:B}
-      ${r?F`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${r} .scopeLabel=${this.scopeLabel}
+      ${h?B:l&&!r?F`${this.filterBox()}${this.filterTpl()}`:B}
+      ${h?F`<div class="lsplit">
+          <div class="lkcol">${this.filterBox()}${this.filterTpl()}<jb-keyboard class="kbd" @jb-key=${this.onFilterKey}></jb-keyboard></div>
+          <div class="scroll panel" @scroll=${this.onScroll}>${this.renderGrid()}</div>
+        </div>`:r?F`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${r} .scopeLabel=${this.scopeLabel}
           .trail=${[c,...this._stack.slice(0,-1).map(t=>t.item.name)]} @jb-nav=${this.onNav}></jb-detail>`:F`<div class="scroll panel" @scroll=${this.onScroll}>${this.renderGrid()}</div>`}
       ${a?Nt(a.pos,{item:a.item,sub:this.sub(a.item,a.type)||mt(a.item.uri)},a.actions,()=>{this._menu=null,this.press.release()}):B}
-      ${d&&this._lkb&&!r?F`<jb-keyboard class="kbd" @jb-key=${this.onFilterKey}></jb-keyboard>`:B}
       ${Kt(this._confirm,()=>this._confirm=null)}
       ${this._toast?F`<div class="toast" role="status">${this._toast}</div>`:B}
     </div>`}}As.properties={hass:{attribute:!1},config:{attribute:!1},active:{type:Boolean},_cat:{state:!0},_fav:{state:!0},_sort:{state:!0},_pages:{state:!0},_avail:{state:!0},_stack:{state:!0},_home:{state:!0},_menu:{state:!0},_toast:{state:!0},_confirm:{state:!0},_rmode:{state:!0},_rtrail:{state:!0},_rb:{state:!0},_disc:{state:!0},_ditems:{state:!0},_lq:{state:!0},_lkb:{state:!0},_lart:{state:!0},_lpool:{state:!0}},As.styles=[lt,ct,Qt,r`
@@ -875,6 +877,15 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .lfq .caret { width: 2px; height: 26px; background: var(--_active); flex: none; margin-left: -8px; }
     .lfq .lfx { margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--_inactive); flex: none; }
     .kbd { flex: none; width: 100%; max-width: 1100px; align-self: center; }
+    .lsplit { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 18px; }
+    .lkcol { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+    .lkcol .kbd { margin-top: auto; }
+    .lsplit > .scroll { min-height: 0; }
+    @media (max-width: 999px) {
+      .lsplit { display: flex; flex-direction: column; gap: 12px; }
+      .lkcol { display: contents; }
+      .lkcol .lfq { order: 1; } .lkcol .scope { order: 2; } .lsplit > .scroll { order: 3; flex: 1; } .lkcol .kbd { order: 4; margin-top: 0; }
+    }
     @media (max-width: 600px) {
       .sc { height: 40px; font-size: 14px; padding-left: 13px; }
       .fc.clr { height: 40px; padding: 0 13px; font-size: 13px; }

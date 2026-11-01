@@ -647,6 +647,9 @@ export class JbBrowse extends LitElement {
     const trail0 = this._cat === 'radio' && this._rmode !== 'library' ? `Radio · ${MODE_LABEL[this._rmode]}`
       : lart ? `${cat.label} · ${lart.name}` : `Browse ${cat.label}${this.lq() ? ` “${this.lq()}”` : ''}`;
     const filt = libTools && this.filtersOn();
+    // filter keyboard open: wide screens put box + chips + keyboard on the left and the list on the right (like Search);
+    // narrower screens stack box, chips, list, keyboard (CSS order on .lkcol's children)
+    const kbOpen = filt && this._lkb && !top;
     const catChips = html`<div class="cats">${cats.map((c) => html`<button class="fc ${this._cat === c.type && !top ? 'on' : ''}" data-cat=${c.type} tabindex="-1"
           @pointerdown=${noFocus} @click=${() => this.setCat(c.type)}>${c.type === DISCOVER_CAT.type ? icon('compass', 'i xs') : nothing}${c.label}</button>`)}</div>`;
     return html`<div class="bx">
@@ -665,13 +668,16 @@ export class JbBrowse extends LitElement {
         ${(['library', ...modes] as RMode[]).map((m) => html`<button class="fc sm ${this._rmode === m ? 'on' : ''}" role="tab" aria-selected=${this._rmode === m ? 'true' : 'false'}
           data-rmode=${m} tabindex="-1" @pointerdown=${noFocus} @click=${() => this.setRMode(m)}>${m === 'library' ? 'My stations' : MODE_LABEL[m]}</button>`)}
       </div>` : nothing}
-      ${libTools && !top ? html`${this.filterBox()}${this.filterTpl()}` : nothing}
-      ${top ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${top} .scopeLabel=${this.scopeLabel}
+      ${kbOpen ? nothing : libTools && !top ? html`${this.filterBox()}${this.filterTpl()}` : nothing}
+      ${kbOpen ? html`<div class="lsplit">
+          <div class="lkcol">${this.filterBox()}${this.filterTpl()}<jb-keyboard class="kbd" @jb-key=${this.onFilterKey}></jb-keyboard></div>
+          <div class="scroll panel" @scroll=${this.onScroll}>${this.renderGrid()}</div>
+        </div>`
+      : top ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${top} .scopeLabel=${this.scopeLabel}
           .trail=${[trail0, ...this._stack.slice(0, -1).map((x) => x.item.name)]} @jb-nav=${this.onNav}></jb-detail>`
         : html`<div class="scroll panel" @scroll=${this.onScroll}>${this.renderGrid()}</div>`}
       ${m ? menuTpl(m.pos, { item: m.item, sub: this.sub(m.item, m.type) || providerLabel(m.item.uri) }, m.actions,
         () => { this._menu = null; this.press.release(); }) : nothing}
-      ${filt && this._lkb && !top ? html`<jb-keyboard class="kbd" @jb-key=${this.onFilterKey}></jb-keyboard>` : nothing}
       ${confirmTpl(this._confirm, () => (this._confirm = null))}
       ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
     </div>`;
@@ -703,6 +709,15 @@ export class JbBrowse extends LitElement {
     .lfq .caret { width: 2px; height: 26px; background: var(--_active); flex: none; margin-left: -8px; }
     .lfq .lfx { margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--_inactive); flex: none; }
     .kbd { flex: none; width: 100%; max-width: 1100px; align-self: center; }
+    .lsplit { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 18px; }
+    .lkcol { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+    .lkcol .kbd { margin-top: auto; }
+    .lsplit > .scroll { min-height: 0; }
+    @media (max-width: 999px) {
+      .lsplit { display: flex; flex-direction: column; gap: 12px; }
+      .lkcol { display: contents; }
+      .lkcol .lfq { order: 1; } .lkcol .scope { order: 2; } .lsplit > .scroll { order: 3; flex: 1; } .lkcol .kbd { order: 4; margin-top: 0; }
+    }
     @media (max-width: 600px) {
       .sc { height: 40px; font-size: 14px; padding-left: 13px; }
       .fc.clr { height: 40px; padding: 0 13px; font-size: 13px; }
