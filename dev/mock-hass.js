@@ -106,8 +106,20 @@ const STATIONS = () => (params.get('stations') === 'fake' ? FAKE_STATIONS.map((n
   radio('\t\tKEXP 90.3 FM', undefined, 64), radio('BBC Radio 6 Music', undefined, 71), radio('\tSomaFM Groove Salad', undefined, 44),
   radio('FIP Radio', null, 9), radio('\tAbsolute Classic Rock', undefined, 22), radio('NTS Radio 1 ', undefined, 5),
 ]).map((x, i) => (i < Number(params.get('radiofav') ?? 0) ? { ...x, favorite: true } : x))
-  // radioinlib=N (v0.7 heart lookup): the first N stations are already library items (e.g. favourited elsewhere)
+  // radioinlib=N (heart lookup): the first N stations are already library items (e.g. favourited elsewhere)
   .map((x, i) => (i < Number(params.get('radioinlib') ?? 0) ? { ...x, _inlib: true } : x));
+// station sheet (0.6.3): what music/item_by_uri adds for a few placeholder stations (fake text); the others have no extra fields
+const STATION_DETAILS = {
+  'Mockingbird FM': { description: 'Placeholder station for screenshots: easy listening all day, with a fake morning show and no real broadcaster behind it.',
+    genres: ['Easy listening', 'Pop'], domain: 'tunein', ct: 'mp3', br: 128 },
+  'Lakeside Jazz 101': { description: 'Made-up jazz station used by the mock.', genres: ['Jazz'], domain: 'radiobrowser', ct: 'aac', br: 64 },
+};
+const stationDetail = (t) => {
+  const d = STATION_DETAILS[t.name.trim()];
+  return { metadata: { description: d?.description ?? null, genres: d?.genres ?? [], images: null },
+    provider_mappings: [{ item_id: 'XXXXXXXX', provider_domain: d?.domain ?? 'radiobrowser', provider_instance: `${d?.domain ?? 'radiobrowser'}--XXXXXXXX`, available: true,
+      audio_format: { content_type: d?.ct ?? '?', bit_rate: d?.br ?? 0 } }] };
+};
 
 const CATALOG = {
   artists: [
@@ -205,11 +217,11 @@ const libUri = (it) => (it.uri.startsWith('library://') ? it.uri : (it._lib ??= 
 const libView = (it) => (it.uri.startsWith('library://') ? it : { ...it, uri: libUri(it), favorite: it.favorite,
   artists: it.artists?.map((a) => ({ ...a, uri: A[a.name] ? libUri(A[a.name]) : a.uri })) });
 const byUri = (uri) => allItems().find((i) => i.uri === uri || i._lib === uri);
-
 // a station favourited through the Search heart is now a library item, so MA returns its library copy (uri, provider, item_id)
 const asLibRadio = (it) => (it.media_type === 'radio' && it._inlib ? { ...libView(it), provider: 'library', item_id: libUri(it).split('/').pop() } : it);
-// radiohit=provider (v0.7 heart lookup): search keeps returning the provider copy (radiobrowser://…) even for library stations
+// radiohit=provider (heart lookup): search keeps returning the provider copy (radiobrowser://…) even for library stations
 const RADIO_HIT_PROVIDER = params.get('radiohit') === 'provider';
+
 function search(name, limit, types, by = '') {
   const q = name.trim().toLowerCase();
   const byOk = (it) => !by || (it.artists ?? []).some((a) => a.name.toLowerCase() === by.toLowerCase()) || it.name.toLowerCase() === by.toLowerCase();
@@ -519,7 +531,7 @@ function sendCommand(command, d) {
       const t = byUri(d.uri) ?? [...libTracks, ...LONG_DRIVE].find((x) => x.uri === d.uri);
       if (!t) throw new Error(`MediaNotFoundError: ${d.uri}`);
       // like MA's RadioController.get(): the library copy when the station is in the library, else the provider item
-      if (t.media_type === 'radio') { window.__itemByUriLog?.push(d.uri); return pub(asLibRadio(t)); }
+      if (t.media_type === 'radio') { window.__itemByUriLog?.push(d.uri); return pub({ ...asLibRadio(t), ...stationDetail(t) }); }
       return maItem(t);
     }
     case 'metadata/get_track_lyrics': {

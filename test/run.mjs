@@ -682,9 +682,11 @@ await page.keyboard.press('Escape');
   const st = g.tiles.find((t) => t.name === 'Arrow Classic Rock');
   const stEl = `[...${BR}.shadowRoot.querySelectorAll('.tile')].find((x) => x.dataset.uri === '${st?.uri}')`;
   let pr = await pq(async () => { const r = await rectOf(pg, stEl); await pg.mouse.click(r.x - r.w / 4, r.y - r.h / 4); });
-  const stSheet = await pg.evaluate((b) => [...eval(b).shadowRoot.querySelectorAll('.menu .mi')].map((e) => e.dataset.action), BR);
-  check('16zc tap a station → sheet with Play now + Cancel only, nothing played yet', pr.length === 0 && stSheet.join() === 'play,cancel', `${stSheet} calls=${pr.length}`);
-  pr = await pq(() => clickEl(pg, `${BR}.shadowRoot.querySelector('.menu .mi[data-action="play"]')`));
+  await sleep(300);
+  const ST = `__card.shadowRoot.querySelector('jb-station').shadowRoot`;
+  const stSheet = await pg.evaluate((s, b) => { const r = eval(s); return { name: r.querySelector('.nm')?.textContent, acts: [...r.querySelectorAll('[data-action]')].map((e) => e.dataset.action), menu: !!eval(b).shadowRoot.querySelector('.menu') }; }, ST, BR);
+  check('16zc tap a station → station sheet (name, Play, Close; no heart without the library class), nothing played', pr.length === 0 && stSheet.name === 'Arrow Classic Rock' && stSheet.acts.join() === 'close,play' && !stSheet.menu, `${JSON.stringify(stSheet)} calls=${pr.length}`);
+  pr = await pq(() => clickEl(pg, `${ST}.querySelector('[data-action="play"]')`));
   check('16u station Play now → play_media {library://radio/<id>, media_type radio} on everywhere, no radio_mode', pr.length === 1 && pr[0].s === 'play_media' && tgt(pr[0]) === EV && /^library:\/\/radio\/\w+$/.test(pr[0].data.media_id) && pr[0].data.media_type === 'radio' && !('radio_mode' in pr[0].data), JSON.stringify(pr));
   await pg.evaluate(() => { __card.shadowRoot.querySelector('[data-tab="now"]').click(); }); await sleep(500);
   a = await artState();
@@ -901,7 +903,9 @@ await page.keyboard.press('Escape');
   cs = await act(() => tapEl(searchTile('radio', 'WXRT Chicago 93.1 FM')));
   let menu = await pg.evaluate((sv) => [...eval(sv).shadowRoot.querySelectorAll('.menu .mi')].map((m) => m.dataset.action), SV);
   const radioIcons = await pg.evaluate((sv) => Object.fromEntries([...eval(sv).shadowRoot.querySelectorAll('.grp')].map((g) => [g.classList[1], [...g.querySelectorAll('.row')].map((r) => [...r.querySelectorAll('.ra-b:not(.ra-more)')].map((b) => b.dataset.act).join('+'))])), SV);
-  check('17y Search: tap a station row → nothing played, no sheet (name trimmed of tabs)', plays(cs).length === 0 && menu.length === 0, menu.join());
+  const stName = await pg.evaluate(() => __card.shadowRoot.querySelector('jb-station').shadowRoot.querySelector('.nm')?.textContent.trim() ?? '');
+  check('17y Search: tap a station row → nothing played, no menu; the station sheet opens (name trimmed of tabs)', plays(cs).length === 0 && menu.length === 0 && stName === 'WXRT Chicago 93.1 FM', JSON.stringify({ menu, stName }));
+  await tapEl(`__card.shadowRoot.querySelector('jb-station').shadowRoot.querySelector('[data-action="close"]')`);
   check('17y2 Start radio icon hidden on stations, playlists and podcasts; shown on artists, albums and tracks',
     radioIcons.radio.every((x) => x === 'add+next+replace') && radioIcons.playlists.every((x) => x === 'add+next+replace') && radioIcons.podcasts.every((x) => x === 'add+next+replace')
     && ['artists', 'albums', 'tracks'].every((g) => radioIcons[g].length && radioIcons[g].every((x) => x === 'add+next+replace+radio')), JSON.stringify(radioIcons));

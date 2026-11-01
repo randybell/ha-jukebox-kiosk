@@ -2,10 +2,44 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
-## 0.6.2 — unreleased
+## 0.6.4 — 2026-11-01
+
+### Changed
+- **No popup in the middle of the card when grouping speakers.** Dropping a room, including the room that leads the group (for example Garage from Everywhere), now happens on tap. There is no centred "Drop …?" dialog.
+- **One small status chip, top right.** Every grouping message ("Regrouping…", "Garage left", "Kitchen joined Indoor", "Moved to …") appears in one Black Frame chip under the header clock. It doesn't cover the clock or block taps elsewhere, hides after about 4 s, and a new message replaces the old one. It replaces the grouping toasts and the Undo bar. Undo stays in the chip while it shows. It is readable on a kiosk tablet, an iPad and a 390 px phone, and respects reduced motion.
+- **Errors use the chip in an error style** (inverted white with an alert icon, about 6 s, with ✕), for example "Couldn't drop Garage: …".
+- **The last room is non-modal.** Tapping the last room in a group shows "Garage is the last speaker in Everywhere · Pause" in the chip. Pause keeps the room and the queue, then "Everywhere paused · Undo" resumes. Ignoring the chip does nothing. Music Assistant stops and dissolves a group when its last speaker leaves, so the card still pauses instead of dropping.
+- **Taking a speaker from another group** asks in the chip ("Garage stops what it is playing. · Add") instead of a dialog.
 
 ### Added
-- **Heart on Search radio results.** On the Jukebox Kiosk backend, each station in Search › Radio has a heart. Tap it to add the station to your Music Assistant favourites (`music/favorites/add_item` with the station's URI). Music Assistant adds a Radio Browser station to its library at the same time, so it then shows under **Favorites** in Browse › Radio (My stations), which reloads straight away. Tap a filled heart on a library station to remove it from favourites (`music/favorites/remove_item`). The heart shows only for users with the `library` permission class (capability `library_write`); the server checks that class on every write, as before. Search results of other types, Browse and the other card backends are unchanged.
+- `confirm_drop` (default `false`). `true` restores the 0.6.3 centred dialogs for drop, takeover and last-room. Also in the editor.
+
+### Unchanged
+- `leader_drop` (`allow` / `block`) works as before. Dialogs that aren't about grouping (the Start guard, queue Undo, other toasts) are unchanged.
+
+## 0.6.3 — 2026-11-01
+
+### Added
+- **Now Playing speaker controls.** Each room row in the Now Playing volume card has a Drop / Add button. It uses the same confirm, Undo and Regrouping steps as the Speakers panel, and the panel stays closed. The volume card header has a Speakers button that opens the panel. Guests without the speakers class see the volumes only.
+- **Station sheet for radio.** Tapping a radio station no longer plays it or replaces the queue. This covers Browse › Radio tiles (including Favorites), Search radio rows and Library home radio. Instead a sheet opens with the logo, name, description, provider (for example TuneIn), genre and stream quality. Music Assistant fills these in through the read-only `music/item_by_uri`, and empty fields are hidden. The sheet has a big Play button (this replaces the queue, as the old tap did), a heart for users with the library class, and Close. The Play icon on Search rows still works as before.
+
+### Fixed
+- **Speakers: the room that leads a group can be dropped and re-added.** With a dynamic Music Assistant sync group ("Enable dynamic members"), the leading room used to show a greyed "Leader" button, so it could not be removed (for example, the Garage speaker from Everywhere). `leader_drop` now defaults to `allow`. Drop asks first, then calls `players/cmd/set_members` on the group (never an ungroup of the speaker). Music Assistant hands the group to the other rooms, there are a few seconds of silence, and the queue plays on. The panel says "Regrouping…" until it does. Join adds the room back. `leader_drop: block` keeps the old behaviour.
+- **The header pill no longer says "idle" while a group plays.** Home Assistant can report `group_members: []` for a playing Music Assistant group. The pill now counts the speakers from Music Assistant, or from the rooms playing the same title.
+- **Un-hearting a radio station from search works.** Search often returns the provider copy of a station (for example `radiobrowser://…`). The heart now looks up the library id with `music/item_by_uri` before `music/favorites/remove_item`. A station that isn't in the library says so instead of failing. The Search heart and the station sheet share this logic.
+- **Rooms in the playing group are no longer labelled "elsewhere".** The leading room reads "Leads the group".
+- **A saved speaker target that no longer exists is forgotten with a notice.** Before, it was dropped silently. The pill also no longer labels a missing entity "Everywhere".
+
+### Changed
+- The header pill reads "Playing on: Everywhere · 3 speakers".
+- The last room in a group can't be dropped, because Music Assistant would stop the group. Instead the panel offers to pause the group: the room stays in it and the queue is kept.
+- While a dynamic group is idle, Join is shown greyed with a "start playback first" hint instead of being hidden.
+- Dev mock: `every=dyn` makes Everywhere a dynamic sync group led by Garage, with `group_members: []` on its Home Assistant entity, which is the shape seen live.
+
+## 0.6.2 — 2026-11-01
+
+### Added
+- **Heart on Search radio results.** Radio stations in Search results now have a favourite heart, so you can add or remove a station from your Music Assistant favourites without playing it. It needs the `library` permission, which guests have by default. Browse › Radio reloads after a change, and the row layout no longer wraps on narrow (390px) phone screens.
 
 ## 0.6.1 — 2026-11-01
 

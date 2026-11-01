@@ -74,6 +74,26 @@ export function membersOf(g: MaPlayer | undefined, players: Players): string[] {
   const live = g.group_members.filter((id) => players.get(id)?.type !== 'group');
   return live.length ? live : kindOf(g) === 'static' ? g.static_group_members : [];
 }
+/**
+ * Speakers on the pill. HA's media_player for a Music Assistant sync group can report group_members: [] while
+ * it plays (live 2026.10, dynamic group): then use MA's own member list, else the biggest room that plays the same
+ * title, else 1. 0 = not playing.
+ */
+export function liveCount(ent: { state?: string; attributes?: Record<string, any> } | undefined, store: string[] | undefined,
+  rooms: Array<{ state?: string; attributes?: Record<string, any> } | undefined>): number {
+  if (!ent || !['playing', 'paused', 'buffering'].includes(ent.state ?? '')) return 0;
+  const gm = ent.attributes?.group_members;
+  if (Array.isArray(gm) && gm.length) return gm.length;
+  if (store?.length) return store.length;
+  const t = ent.attributes?.media_title;
+  let n = 0;
+  for (const r of rooms) {
+    if (!r || !['playing', 'paused', 'buffering'].includes(r.state ?? '') || (t && r.attributes?.media_title !== t)) continue;
+    const g = r.attributes?.group_members;
+    n = Math.max(n, Array.isArray(g) && g.length ? g.length : 1);
+  }
+  return n || 1;
+}
 /** The sync leader among a group's speakers (live: the first configured member leads; after it is removed the next one does). */
 export function leaderOf(g: MaPlayer | undefined, players: Players): string | undefined {
   const ms = membersOf(g, players);
@@ -288,4 +308,37 @@ export function takeoverText(t: Takeover, nameOf: (id: string) => string): strin
       if (t.leader) return `${g} pauses briefly and restarts: ${s} leads it.`;
       return `${s} leaves ${g}; ${g} keeps playing.`;
   }
+}
+
+/** dynamic mode: what a room plays when it is not part of the current target ('' when it is, or idle) */
+export function roomElsewhere(hass: HomeAssistant | undefined, target: string, room: string): string {
+  const r = hass?.states[room], t = hass?.states[target];
+  if (!r || !['playing', 'paused'].includes(r.state) || !r.attributes?.media_title) return '';
+  const on = ['playing', 'paused', 'buffering'].includes(t?.state ?? '');
+  const gm = t?.attributes?.group_members;
+  // HA 2026.10 leaves group_members [] on an MA sync group: a room playing the group's title is in it, not "elsewhere"
+  const inT = on && Array.isArray(gm) && (gm.includes(room) || (!gm.length && r.attributes.media_title === t!.attributes?.media_title));
+  return inT ? '' : `${r.state === 'paused' ? 'Paused: ' : ''}${r.attributes.media_title}`;
+}
+
+/** 0.6.3 Now Playing room state (from the speakers panel); kept here so it can be unit-tested */
+export interface InlineRoomState { inT: boolean; where: string; busy?: string; leader: boolean; act?: { label: string; kind: string; dis: boolean } }
+/** the line under a room name in Now Playing: '' for a plain member */
+export function inlineLine(r: InlineRoomState): string {
+  if (r.busy === 'in') return 'Joining…';
+  if (r.busy === 'out') return 'Leaving…';
+  if (r.inT) return r.leader ? 'Leads the group' : '';
+  return r.where;
+}
+/** the round Drop (−) / Add (+) button: undefined = no button */
+export function inlineButton(r: InlineRoomState, name: string): { add: boolean; label: string; dis: boolean } | undefined {
+  const a = r.act;
+  if (!a) return undefined;
+  const add = !r.inT;
+  const label = add ? (a.kind === 'take' ? `Add ${name} (${a.label.toLowerCase()})` : `Add ${name}`) : `Drop ${name}`;
+  return { add, label, dis: a.dis };
+}
+/** the header pill reads as a control: "Playing on: Everywhere · 3 speakers" */
+export function pillPrefix(state: string | undefined): string {
+  return state === 'playing' || state === 'buffering' ? 'Playing on:' : state === 'paused' ? 'Paused on:' : 'Speakers:';
 }

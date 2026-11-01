@@ -388,6 +388,8 @@ export class JbBrowse extends LitElement {
   private root() { return this.renderRoot.querySelector('.bx') as HTMLElement; }
   private tap(it: MaItem, type: string, el: HTMLElement) {
     if (drillable(type, this.config)) { this.press.release(); this.openDetail(it, type); return; }
+    // a station (My stations, Favorites, the Favorites chip) opens the station sheet: details, heart, Play. A tap never plays (0.6.3)
+    if (type === 'radio') { this.press.release(); fire(this, 'jukebox-station', { item: it }); return; }
     const actions = tapActions((enq) => this.play(it, playType(it, type), enq), type === 'radio');
     this._menu = { item: it, type, pos: menuPos(this.root(), el, actions.length), actions };
   }

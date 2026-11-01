@@ -119,10 +119,13 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('R3 station names trimmed, ".." never shown', names.every((n) => n === n.trim() && n !== '..'));
   const n0 = await plays(p);
   await tap(p, `${BR}.querySelector('.grid.radio .tile')`);
-  await wait(p, `${BR}.querySelector('.menu')`, 1500);
-  check('R4 tapping a station opens the action sheet (Play now only, no queue actions), does not play yet',
-    (await plays(p)) === n0 && J(await ev(p, `[...${BR}.querySelectorAll('.menu .mi')].map((b) => b.dataset.action)`)) === J(['play', 'cancel']));
-  await tap(p, `${BR}.querySelector('.menu [data-action="cancel"]')`);
+  // merged with 0.6.3+: a station tap opens the station sheet (details, heart, Play), never plays
+  const STS = `__card.shadowRoot.querySelector('jb-station').shadowRoot`;
+  await wait(p, `!!${STS}.querySelector('.sheet [data-action="play"]')`, 1500);
+  check('R4 tapping a station opens the station sheet (Play, no queue actions), does not play yet',
+    (await plays(p)) === n0 && !(await ev(p, `!!${BR}.querySelector('.menu')`)) && (await ev(p, `!${STS}.querySelector('[data-action="next"],[data-action="add"]')`)));
+  await tap(p, `${STS}.querySelector('[data-action="close"]')`);
+  await wait(p, `!${STS}.querySelector('.sheet')`, 1500);
   await tap(p, `${BR}.querySelector('.modes .fc[data-rmode="country"]')`);
   await wait(p, `/Stations in/.test(${BR}.querySelector('.rbt')?.textContent ?? '')`);
   const b2 = await maOf(p, 'music/browse');

@@ -19,7 +19,9 @@
 // gap=<ms> (leader re-form gap, default 1200), malat=<ms> (players/* latency, default 40), xgap=<ms> (transfer silence,
 // default 0), live=1 (live timings: gap 5900 with the group left 'playing' and the new leader silent, xgap 4700, set_members
 // ~1 s, idle groups report a stale active_queue), qbuf=1 (MA buffered the next track: index_in_buffer = current + 1),
-// macfg=deny (config/players/get refused, like a token without the config read scope).
+// macfg=deny (config/players/get refused, like a token without the config read scope),
+// every=dyn (0.6.3, live shape): Everywhere is a DYNAMIC sync group ("Enable dynamic members") playing on garage (leader),
+// living, kitchen; its HA entity reports group_members: [] while it plays (only the room entities list the members).
 export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlaying, EVERY, libTracks, qItem }) {
   const INDOOR = 'media_player.indoor', OUTDOOR = 'media_player.outdoor';
   const SP = { living: 'wiim_mock_living', kitchen: 'wiim_mock_kitchen', garage: 'wiim_mock_garage' };
@@ -30,6 +32,8 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
     syncgroup_mock_indoor: { entity: INDOOR, name: 'Indoor', kind: 'dynamic', preset: [SP.living, SP.kitchen], members: [] },
     syncgroup_mock_outdoor: { entity: OUTDOOR, name: 'Outdoor', kind: 'dynamic', preset: [SP.garage], members: [] },
   };
+  const EVDYN = params.get('every') === 'dyn';
+  if (EVDYN) G.syncgroup_everywhere.kind = 'dynamic';
   const gidOf = (entity) => Object.keys(G).find((k) => G[k].entity === entity);
   const solo = {}; // speaker -> {state, title}
   const log = (window.__maLog = []);
@@ -83,7 +87,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   }
   /** HA side: group + room entities follow MA */
   function syncHa() {
-    for (const [g, d] of Object.entries(G)) if (d.kind === 'dynamic') setState(d.entity, null, { group_members: membersNow(g).map((s) => ROOM_OF[s]),
+    for (const [g, d] of Object.entries(G)) if (d.kind === 'dynamic') setState(d.entity, null, { group_members: EVDYN && d.entity === EVERY ? [] : membersNow(g).map((s) => ROOM_OF[s]),
       // live: an idle MA group entity reports another group's queue as active_queue
       active_queue: STALEAQ && !active(g) ? 'syncgroup_everywhere' : g });
     for (const s of Object.values(SP)) {
@@ -319,6 +323,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
     solo[SP.garage] = { state: 'playing', title: 'Mock Radio FM', artist: '' };
     syncHa();
   }
+  if (EVDYN) syncHa();
   /** test hook: force a group's state (and dynamic members), e.g. an overlap MA can reach but the mock flows don't */
   function force(g, state, members) { if (members && G[g].kind === 'dynamic') G[g].members = [...members]; setState(G[g].entity, state); syncHa(); commit(); }
   window.__ma = { G, SP, solo, players, events, force, silent };

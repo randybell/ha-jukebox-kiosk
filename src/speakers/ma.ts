@@ -99,13 +99,16 @@ export class SpeakerStore {
   }
   /** poll faster for a few seconds after a change */
   private burst() { this.fastUntil = Date.now() + 6000; }
-  start() {
+  /** slow = nobody has the panel open (Now Playing room buttons only): poll 4x less often, still fast after a change */
+  private slow = false;
+  start(slow = false) {
+    this.slow = slow;
     if (this.timer) return;
     void this.refresh();
     let last = Date.now();
     this.timer = setInterval(() => {
       const t = timeouts(); const now = Date.now();
-      if (now - last >= (now < this.fastUntil ? t.fast : t.poll)) { last = now; void this.refresh(); }
+      if (now - last >= (now < this.fastUntil ? t.fast : this.slow ? t.poll * 4 : t.poll)) { last = now; void this.refresh(); }
     }, 250);
   }
   stopPolling() { if (this.timer) clearInterval(this.timer); this.timer = undefined; }

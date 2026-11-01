@@ -78,6 +78,26 @@ check('U16 planMembers never removes the last speaker', p2.remove.length === 1 &
 check('U17 dropBlock: leader (block) / last / allowed',
   M.dropBlock(players.get('syncgroup_indoor'), 'spk_living', players, false) === 'leader' && M.dropBlock(players.get('syncgroup_indoor'), 'spk_kitchen', players, false) === ''
     && M.dropBlock(players.get('syncgroup_indoor'), 'spk_living', players, true) === '' && M.dropBlock(players.get('spk_garage'), 'spk_garage', players, false) === 'last');
+// 0.6.3: live shape — a dynamic sync group led by Garage, HA's group entity lists no group_members
+{
+  const live = M.parsePlayers([
+    P('spk_garage', { playback_state: 'playing', group_members: ['spk_garage', 'spk_living', 'spk_kitchen'] }),
+    P('spk_living', { playback_state: 'playing', synced_to: 'spk_garage' }), P('spk_kitchen', { playback_state: 'playing', synced_to: 'spk_garage' }),
+    P('syncgroup_all', { type: 'group', provider: 'sync_group', playback_state: 'playing', group_members: ['spk_garage', 'spk_living', 'spk_kitchen'], supported_features: ['set_members'] }),
+  ]);
+  const g = live.get('syncgroup_all');
+  check('U17b dynamic sync group: Garage leads; with leader_drop allow (0.6.3 default) every member can drop, the leader too',
+    M.kindOf(g) === 'dynamic' && M.leaderOf(g, live) === 'spk_garage' && ['spk_garage', 'spk_living', 'spk_kitchen'].every((s) => M.dropBlock(g, s, live, true) === ''), J(M.membersOf(g, live)));
+  const pm = M.planMembers(['spk_garage', 'spk_living', 'spk_kitchen'], ['spk_living', 'spk_kitchen'], 'spk_garage', true);
+  check('U17c planMembers (allow) removes the leader', J(pm.remove) === J(['spk_garage']) && pm.add.length === 0, J(pm));
+  const solo = M.parsePlayers([P('spk_garage', { playback_state: 'playing' }), P('syncgroup_all', { type: 'group', playback_state: 'playing', group_members: ['spk_garage'], supported_features: ['set_members'] })]);
+  check('U17d the last speaker stays blocked even with allow', M.dropBlock(solo.get('syncgroup_all'), 'spk_garage', solo, true) === 'last');
+  const E = (state, gm, title = 'Song') => ({ state, attributes: { group_members: gm, media_title: title } });
+  check('U17e liveCount: HA list wins; [] while playing → MA members, else biggest room on the same title, else 1; idle = 0',
+    M.liveCount(E('playing', ['a', 'b']), undefined, []) === 2 && M.liveCount(E('playing', []), ['x', 'y', 'z'], []) === 3
+      && M.liveCount(E('playing', []), undefined, [E('playing', ['a', 'b', 'c']), E('playing', []), E('playing', ['q', 'r', 's', 't'], 'Other')]) === 3
+      && M.liveCount(E('playing', []), undefined, []) === 1 && M.liveCount(E('idle', ['a']), ['x'], []) === 0 && M.liveCount(undefined, undefined, []) === 0);
+}
 const tk = M.takeovers('syncgroup_static', ['spk_kitchen'], players);
 check('U18 takeovers: taking a member of a playing dynamic group', tk.length === 1 && tk[0].kind === 'dynamic' && tk[0].group === 'syncgroup_indoor' && !tk[0].last && !tk[0].leader, J(tk));
 check('U19 takeoverText for a leader is the re-form warning', /restarts/.test(M.takeoverText({ speaker: 'spk_living', kind: 'dynamic', group: 'syncgroup_indoor', leader: true }, (x) => players.get(x)?.name ?? x)));
@@ -253,6 +273,31 @@ check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.is
   check('U48 maPresets: no MA config (unreadable / non-admin) → card presets only; same target + members as a card preset → not doubled',
     J(M.maPresets(new Map(), lp, lrooms, tg, lh, own)) === J(own)
       && M.maPresets(cf, lp, lrooms, tg, lh, [{ name: 'X', members: ['media_player.b', 'media_player.a'], target: 'media_player.inside' }]).length === 1);
+}
+
+// ---------------- 0.6.3: Now Playing speaker controls ----------------
+{
+  const R = (o) => ({ inT: true, where: 'In this group', leader: false, ...o });
+  check('U49 inlineButton: member → "Drop <room>"; out → "Add <room>"; held elsewhere → "Add <room> (take from …)"; no act → no button',
+    J(M.inlineButton(R({ act: { label: 'Drop', kind: 'drop', dis: false } }), 'Garage')) === J({ add: false, label: 'Drop Garage', dis: false })
+    && J(M.inlineButton(R({ inT: false, act: { label: 'Join', kind: 'join', dis: false } }), 'Garage')) === J({ add: true, label: 'Add Garage', dis: false })
+    && M.inlineButton(R({ inT: false, act: { label: 'Take from Outdoor', kind: 'take', dis: false } }), 'Garage').label === 'Add Garage (take from outdoor)'
+    && M.inlineButton(R({}), 'Garage') === undefined);
+  check('U50 inlineButton: last / blocked leader and idle stay visible but disabled (the tap explains)',
+    M.inlineButton(R({ act: { label: 'Last', kind: 'blocked', dis: true } }), 'Garage').dis === true
+    && J(M.inlineButton(R({ inT: false, act: { label: 'Join', kind: 'idle', dis: true } }), 'Garage')) === J({ add: true, label: 'Add Garage', dis: true }));
+  check('U51 inlineLine: plain member → "", leader → "Leads the group", busy → Joining…/Leaving…, out → where',
+    M.inlineLine(R({})) === '' && M.inlineLine(R({ leader: true })) === 'Leads the group' && M.inlineLine(R({ busy: 'in' })) === 'Joining…'
+    && M.inlineLine(R({ busy: 'out' })) === 'Leaving…' && M.inlineLine(R({ inT: false, where: 'Playing alone · Blue Hour' })) === 'Playing alone · Blue Hour');
+  check('U52 pillPrefix: playing/buffering → "Playing on:", paused → "Paused on:", else "Speakers:"',
+    M.pillPrefix('playing') === 'Playing on:' && M.pillPrefix('buffering') === 'Playing on:' && M.pillPrefix('paused') === 'Paused on:' && M.pillPrefix('idle') === 'Speakers:' && M.pillPrefix(undefined) === 'Speakers:');
+  const H = (gm, rt = 'So What') => ({ states: {
+    'media_player.everywhere': { state: 'playing', attributes: { group_members: gm, media_title: 'So What' } },
+    'media_player.garage': { state: 'playing', attributes: { media_title: rt } } } });
+  check('U53 roomElsewhere: HA group_members [] on a playing sync group + same title → in the group (""), different title → that title; listed → ""',
+    M.roomElsewhere(H([]), 'media_player.everywhere', 'media_player.garage') === '' && M.roomElsewhere(H([], 'Blue Hour'), 'media_player.everywhere', 'media_player.garage') === 'Blue Hour'
+    && M.roomElsewhere(H(['media_player.garage'], 'Blue Hour'), 'media_player.everywhere', 'media_player.garage') === ''
+    && M.roomElsewhere(H(['media_player.kitchen'], 'Blue Hour'), 'media_player.everywhere', 'media_player.garage') === 'Blue Hour');
 }
 await tick(700); // let refreshSoon timers drain
 console.warn = origWarn;

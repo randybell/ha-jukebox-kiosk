@@ -56,10 +56,17 @@ const ma = (page, cmd) => page.evaluate((cmd) => window.__maLog.filter((x) => !c
 // reads (players/all, config/players/get, player_queues/get) are left out: only commands that change something
 const maCmds = (page) => page.evaluate(() => window.__maLog.map((x) => x.command).filter((c) => !['players/all', 'config/players/get', 'player_queues/get'].includes(c)));
 const events = (page) => page.evaluate(() => window.__maEvents.map((e) => e.type ?? e[0] ?? e));
-const toast = (page) => ev(page, `${SR}.querySelector('.toast')?.textContent?.trim() ?? ''`);
-const askLines = (page) => ev(page, `[...${SR}.querySelectorAll('.sp-ask .tk')].map((x) => x.textContent.trim())`);
-const askTitle = (page) => ev(page, `${SR}.querySelector('.sp-ask h3, .sp-ask .t, .sp-ask b')?.textContent?.trim() ?? ''`);
-const hasAsk = (page) => ev(page, `!!${SR}.querySelector('.sp-ask')`);
+// 0.6.4: every grouping message is the one top-right status chip (.st); a question is a chip with an action (.st.ask),
+// or the 0.6.3 dialog (.sp-ask) with confirm_drop: true or for the card's Start guard
+const ASKSEL = '.sp-ask, .st.ask';
+const ASKQ = `!!${SR}.querySelector('${ASKSEL}')`;
+const MODALQ = `!!${SR}.querySelector('.sp-ask')`;
+const toast = (page) => ev(page, `${SR}.querySelector('.st .ct')?.textContent?.trim() ?? ''`);
+const chip = (page) => ev(page, `(() => { const c = ${SR}.querySelector('.st'); if (!c) return null; const r = c.getBoundingClientRect();
+  return { text: c.querySelector('.ct')?.textContent.trim(), kind: c.dataset.kind, act: c.querySelector('.ca')?.textContent.trim() ?? '', l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; })()`);
+const askLines = (page) => ev(page, `${SR}.querySelector('.sp-ask') ? [...${SR}.querySelectorAll('.sp-ask .tk')].map((x) => x.textContent.trim()) : [...${SR}.querySelectorAll('.st.ask .ct')].map((x) => x.textContent.trim())`);
+const askTitle = (page) => ev(page, `${SR}.querySelector('.sp-ask h3, .sp-ask .t, .sp-ask b, .st.ask .ct')?.textContent?.trim() ?? ''`);
+const hasAsk = (page) => ev(page, ASKQ);
 const target = (page) => ev(page, `${NOW}.config.entity`);
 const maMembers = (page, g) => page.evaluate((g) => window.__ma.G[g].members.slice(), g);
 const st = (page, e) => page.evaluate((e) => window.__hass.states[e]?.state, e);
@@ -71,8 +78,8 @@ async function openPanel(page) {
 }
 async function waitLoaded(page) { return wait(page, `${SPK}.store?.loaded && !!${SR}.querySelector('[data-room] .where')`); }
 async function confirm(page, yes = true) {
-  await wait(page, `!!${SR}.querySelector('.sp-ask')`);
-  await tap(page, `${SR}.querySelector('.sp-ask [data-action="${yes ? 'confirm' : 'cancel'}"]')`);
+  await wait(page, ASKQ);
+  await tap(page, `${SR}.querySelector('${ASKSEL}').querySelector('[data-action="${yes ? 'confirm' : 'cancel'}"]')`);
 }
 async function sliderTo(page, sliderExpr, frac) {
   const r = await rectOf(page, sliderExpr);
@@ -97,7 +104,7 @@ const allJoins = [];
   // group-config read (config/players/get) are not counted here
   const page_ma = (p) => p.evaluate(() => window.__maLog.map((x) => x.command).filter((c) => c !== 'player_queues/get' && c !== 'config/players/get'));
   const a = await seq(null);
-  const b = await seq({ speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'block', large_buttons: false });
+  const b = await seq({ speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', large_buttons: false });
   check('R1 default config = fixed mode: no Music Assistant players/* calls at all (not even players/all)', a.m.length === 0, J(a.m));
   const writes = (c) => c.filter((x) => !/^get_/.test(x.service));
   check('R2 default config makes the same (write) calls as an explicit fixed config', J(writes(a.c)) === J(writes(b.c)) && writes(a.c).length >= 3, J(writes(a.c).map((x) => x.service)) + ' vs ' + J(writes(b.c).map((x) => x.service)));
@@ -190,7 +197,7 @@ const allJoins = [];
   check('M1 dynamic panel: Play-on chips (Everywhere on), card presets + the MA default "Outdoor default" (config/players/get; the Indoor default equals Dinner, so no duplicate), static Everywhere shown as fixed (no join/drop)',
     d.mode === 'dynamic' && d.chips.length === 3 && d.chips[0] === `${EVERY}:true` && J(d.presets) === J(['Dinner', 'Whole house', 'Outdoor default']) && d.banner === 'static' && d.acts === 0, J(d));
   await tap(p, `${SR}.querySelector('[data-target="${OUT}"]')`);
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`);
+  await wait(p, ASKQ);
   // Outdoor idle → just retarget (no transfer needed for an idle target? no: Everywhere active → transfer offers takeovers)
   const lines = await askLines(p);
   check('M2 move to Outdoor warns first: its would-be leader Garage leads Everywhere (static) → takeover line', lines.some((l) => /Everywhere/.test(l)), J(lines));
@@ -205,43 +212,60 @@ const allJoins = [];
   const tr = await ma(p, 'player_queues/transfer');
   check('M6 transfer = mass_queue.send_command player_queues/transfer Everywhere → Indoor (auto_play)',
     tr.length === 1 && tr[0].data.source_queue_id === 'syncgroup_everywhere' && tr[0].data.target_queue_id === 'syncgroup_mock_indoor', J(tr));
-  await wait(p, `/Moved to Indoor/.test(${SR}.querySelector('.toast')?.textContent ?? '')`);
-  check('M7 toast "Moved to Indoor"; no Undo (Everywhere was stopped)', /Moved to Indoor/.test(await toast(p)) && !(await ev(p, `!!${SR}.querySelector('.ub')`)), await toast(p));
+  await wait(p, `/Moved to Indoor/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`);
+  check('M7 toast "Moved to Indoor"; no Undo (Everywhere was stopped)', /Moved to Indoor/.test(await toast(p)) && !(await ev(p, `!!${SR}.querySelector('.st [data-action="undo"]')`)), await toast(p));
   check('M8 Everywhere stopped, Indoor plays living+kitchen', (await st(p, EVERY)) !== 'playing' && J(await maMembers(p, 'syncgroup_mock_indoor')) === J(['wiim_mock_living', 'wiim_mock_kitchen']));
   check('M9 target persisted per device', (await p.evaluate(() => localStorage.getItem('jukebox-card:target:v1'))) === IN);
   await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state === 'playing' && ${row(GAR)}?.querySelector('.act')?.dataset.act === 'join'`);
   // join + undo
   await tap(p, act(GAR));
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`, 1500) && (await confirm(p));
+  await wait(p, ASKQ, 1500) && (await confirm(p));
   await wait(p, `${row(GAR)}.classList.contains('in')`);
   const sm = await ma(p, 'players/cmd/set_members');
   check('M10 Join Garage → players/cmd/set_members(Indoor, add Garage)', sm.length === 1 && sm[0].data.target_player === 'syncgroup_mock_indoor' && J(sm[0].data.player_ids_to_add) === J(['wiim_mock_garage']), J(sm));
-  await wait(p, `!!${SR}.querySelector('.ub')`);
-  check('M11 toast "Garage joined Indoor" with Undo', /joined Indoor/.test(await toast(p)) && (await ev(p, `!!${SR}.querySelector('.ub')`)), await toast(p));
-  await tap(p, `${SR}.querySelector('.ub')`);
+  await wait(p, `!!${SR}.querySelector('.st [data-action="undo"]')`);
+  check('M11 toast "Garage joined Indoor" with Undo', /joined Indoor/.test(await toast(p)) && (await ev(p, `!!${SR}.querySelector('.st [data-action="undo"]')`)), await toast(p));
+  await tap(p, `${SR}.querySelector('.st [data-action="undo"]')`);
   await wait(p, `${row(GAR)}.classList.contains('out') && !window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_garage')`);
   const sm2 = (await ma(p, 'players/cmd/set_members')).at(-1);
   check('M12 Undo → set_members(Indoor, remove Garage)', J(sm2?.data.player_ids_to_remove) === J(['wiim_mock_garage']), J(sm2));
-  // leader drop is blocked by default
-  await wait(p, `${act(LIV)}?.dataset.act === 'blocked'`);
-  const nSm = (await ma(p, 'players/cmd/set_members')).length;
-  check('M13 leader (Living Room) shows "Leader" (blocked) by default', (await ev(p, `${act(LIV)}.textContent.trim()`)) === 'Leader');
+  // 0.6.3: the leader can be dropped by default (MA re-forms the group on the next room) and re-added
+  await wait(p, `${act(LIV)}?.dataset.act === 'drop'`);
+  check('M13 leader (Living Room) shows "Drop" by default (0.6.3)', (await ev(p, `${act(LIV)}.textContent.trim()`)) === 'Drop' && (await ev(p, `${row(LIV)}.querySelector('.where').textContent`)) === 'Leads the group');
   await tap(p, act(LIV));
-  check('M14 tapping it explains (Move to hand off) and sends nothing', /leads Indoor/.test(await toast(p)) && (await ma(p, 'players/cmd/set_members')).length === nSm, await toast(p));
-  // drop kitchen, then living is the last speaker
+  const modal14 = await ev(p, MODALQ);
+  const c14 = await chip(p);
+  await wait(p, `${row(LIV)}.classList.contains('out') && !window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_living')`);
+  const smL = (await ma(p, 'players/cmd/set_members')).at(-1);
+  check('M14 Drop leader → no dialog (0.6.4), the top-right chip says so at once → set_members(Indoor, remove Living), no stop',
+    !modal14 && /Regrouping…|Living Room left/.test(c14?.text ?? '') && smL?.data.target_player === 'syncgroup_mock_indoor' && J(smL?.data.player_ids_to_remove) === J(['wiim_mock_living'])
+    && !(await maCmds(p)).includes('players/cmd/stop'), J({ modal14, c14, smL }));
+  await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state === 'playing' && ${act(LIV)}?.dataset.act === 'join'`);
+  await tap(p, act(LIV));
+  await wait(p, ASKQ, 800) && (await confirm(p));
+  await wait(p, `${row(LIV)}.classList.contains('in')`);
+  const smR = (await ma(p, 'players/cmd/set_members')).at(-1);
+  check('M15 re-add the dropped leader → set_members(Indoor, add Living)', J(smR?.data.player_ids_to_add) === J(['wiim_mock_living']) && J(await maMembers(p, 'syncgroup_mock_indoor')) === J(['wiim_mock_kitchen', 'wiim_mock_living']), J(smR));
+  // drop the new leader (Kitchen): Living is the last speaker
+  await wait(p, `${act(KIT)}?.dataset.act === 'drop'`);
   await tap(p, act(KIT));
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`, 800) && (await confirm(p));
-  await wait(p, `${row(KIT)}.classList.contains('out') && ${act(LIV)}?.textContent.trim() === 'Last'`);
-  const sm3 = (await ma(p, 'players/cmd/set_members')).at(-1);
-  check('M15 Drop Kitchen → set_members(Indoor, remove Kitchen)', J(sm3?.data.player_ids_to_remove) === J(['wiim_mock_kitchen']), J(sm3));
+  await wait(p, ASKQ, 800) && (await confirm(p));
+  await wait(p, `${row(KIT)}.classList.contains('out') && ${act(LIV)}?.textContent.trim() === 'Last'`, 6000);
+  const nSm = (await ma(p, 'players/cmd/set_members')).length;
+  await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state === 'playing'`);
   await tap(p, act(LIV));
-  check('M16 the last speaker cannot be dropped (toast says pause instead)', /last speaker/.test(await toast(p)), await toast(p));
+  await wait(p, ASKQ, 1500);
+  const lastT = await askTitle(p);
+  const lastC = await chip(p), modal16 = await ev(p, MODALQ);
+  await confirm(p, false);
+  check('M16 the last speaker cannot be dropped: the chip offers Pause instead (no dialog), sends nothing',
+    /last speaker/.test(lastT) && lastC?.act === 'Pause' && !modal16 && (await ma(p, 'players/cmd/set_members')).length === nSm && (await ev(p, `${act(LIV)}.getAttribute('aria-disabled')`)) === 'true', J({ lastT, lastC, modal16, dis: await ev(p, `${act(LIV)}.getAttribute('aria-disabled')`) }));
   // preset: Dinner (same target) → re-adds Kitchen and sets capped volumes
   const v0 = (await calls(p)).length;
   await tap(p, `${SR}.querySelector('[data-preset="Dinner"]')`);
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`, 800) && (await confirm(p));
+  await wait(p, ASKQ, 800) && (await confirm(p));
   await wait(p, `window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_kitchen')`);
-  await wait(p, `/Dinner/.test(${SR}.querySelector('.toast')?.textContent ?? '')`);
+  await wait(p, `/Dinner/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`);
   const vols = (await calls(p)).slice(v0).filter((x) => x.service === 'volume_set').map((x) => `${x.target.entity_id}=${x.data.volume_level}`);
   check('M17 preset Dinner → set_members adds Kitchen back, sets 35 % / 30 %', vols.includes(`${LIV}=0.35`) && vols.includes(`${KIT}=0.3`), J(vols));
   check('M18 preset toast names it', /Dinner/.test(await toast(p)), await toast(p));
@@ -258,10 +282,8 @@ const allJoins = [];
   await wait(p, `${act(leadRoom)}?.dataset.act === 'drop'`);
   check('L1 leader_drop: allow → the leader row offers Drop', (await ev(p, `${act(leadRoom)}.dataset.act`)) === 'drop');
   await tap(p, act(leadRoom));
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`);
-  const t = await ev(p, `${SR}.querySelector('.sp-ask').textContent`);
-  check('L2 dropping the leader asks first (the group restarts)', /restart|pause|leads/i.test(t), t.replace(/\s+/g, ' ').slice(0, 160));
-  await confirm(p);
+  const modalL = await ev(p, MODALQ), cL = await chip(p);
+  check('L2 dropping the leader: no dialog; the chip says "Regrouping…" (0.6.4)', !modalL && cL?.text === 'Regrouping…' && cL?.kind === 'busy', J({ modalL, cL }));
   const sawBuf = await wait(p, `window.__hass.states['${IN}'].state === 'buffering'`, 2000);
   const rg = await wait(p, `${SR}.querySelector('.stl')?.textContent.includes('Regrouping…')`, 1500);
   await wait(p, `window.__hass.states['${IN}'].state === 'playing' && !window.__ma.G.syncgroup_mock_indoor.members.includes('${lead}')`, 4000);
@@ -269,8 +291,8 @@ const allJoins = [];
   check('L3 MA re-forms the group after a gap (buffering → playing, reform event)', sawBuf && evs.some((e) => /reform/.test(J(e))), J(evs));
   const rg2 = await wait(p, `!${SR}.querySelector('.stl')?.textContent.includes('Regrouping…')`, 2000);
   check('L3b the status says "Regrouping…" during the re-form and stops once the new leader plays', rg && rg2, J({ rg, rg2, now: await ev(p, `${SR}.querySelector('.stl')?.textContent`) }));
-  await wait(p, `!!${SR}.querySelector('.ub')`, 3000);
-  check('L4 toast + Undo after dropping the leader', !!(await ev(p, `${SR}.querySelector('.ub')`)), await toast(p));
+  await wait(p, `!!${SR}.querySelector('.st [data-action="undo"]')`, 3000);
+  check('L4 toast + Undo after dropping the leader', !!(await ev(p, `${SR}.querySelector('.st [data-action="undo"]')`)), await toast(p));
   await p.close();
 }
 
@@ -288,7 +310,7 @@ const allJoins = [];
   // start warning via the play guard
   const n0 = (await calls(p)).length;
   await tap(p, `${NOW}.shadowRoot.querySelector('.pp')`);
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`);
+  await wait(p, ASKQ);
   const sl = await askLines(p);
   check('S4 pressing Play on idle Outdoor warns first: Garage stops what it is playing', sl.some((l) => /Garage stops what it is playing/.test(l)), J(sl));
   await confirm(p, false); await sleep(200);
@@ -303,7 +325,7 @@ const allJoins = [];
   check('S7 a speaker held by another group shows "Take from Indoor"', lbl === 'Take from Indoor', lbl);
   const qBefore = await p.evaluate(() => J(window.__queues['media_player.indoor']?.items?.map((i) => i.media_title ?? i.title ?? i.name)), null).catch(() => null);
   await tap(p, act(KIT));
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`);
+  await wait(p, ASKQ);
   const kl = await askLines(p);
   const kitLeads = (await maMembers(p, 'syncgroup_mock_indoor'))[0] === 'wiim_mock_kitchen';
   check('S8 confirm explains the cost (leader → Indoor restarts; member → keeps playing)', kl.some((l) => (kitLeads ? /Indoor pauses briefly and restarts/ : /Kitchen leaves Indoor; Indoor keeps playing/).test(l)), J(kl));
@@ -314,8 +336,8 @@ const allJoins = [];
   check('S9 take = set_members(Outdoor, add Kitchen) — a move between playing dynamic groups', sm?.data.target_player === 'syncgroup_mock_outdoor' && J(sm.data.player_ids_to_add) === J(['wiim_mock_kitchen']), J(sm));
   const qAfter = await p.evaluate(() => JSON.stringify(window.__queues['media_player.indoor']?.items?.map((i) => i.media_title ?? i.title ?? i.name))).catch(() => null);
   check('S10 Indoor keeps playing its own queue (Living Room only)', (await st(p, IN)) === 'playing' && J(await maMembers(p, 'syncgroup_mock_indoor')) === J(['wiim_mock_living']) && (qBefore == null || qAfter === JSON.parse(J(qBefore))), J(await maMembers(p, 'syncgroup_mock_indoor')));
-  await wait(p, `!!${SR}.querySelector('.ub')`);
-  await tap(p, `${SR}.querySelector('.ub')`);
+  await wait(p, `!!${SR}.querySelector('.st [data-action="undo"]')`);
+  await tap(p, `${SR}.querySelector('.st [data-action="undo"]')`);
   await wait(p, `window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_kitchen')`);
   const u = (await ma(p, 'players/cmd/set_members')).at(-1);
   check('S11 Undo gives Kitchen back to Indoor (set_members(Indoor, add Kitchen))', u?.data.target_player === 'syncgroup_mock_indoor' && J(u.data.player_ids_to_add) === J(['wiim_mock_kitchen']), J(u));
@@ -325,10 +347,13 @@ const allJoins = [];
   await wait(p, `window.__ma.G.syncgroup_mock_outdoor.members.includes('wiim_mock_kitchen') && ${act(LIV)}?.dataset.act === 'take'`, 5000);
   await wait(p, `window.__hass.states['${IN}'].state === 'playing'`, 4000);
   await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.group_members?.length === 1`, 3000);
+  // wait for Kitchen's take to finish: its late "Kitchen joined Outdoor · Undo" status replaces (answers no to) a question
+  // asked in the meantime, which made S12 flaky (also on main 0.6.4)
+  await wait(p, `!${row(KIT)}?.classList.contains('pending') && ${SR}.querySelector('.st .ct')?.textContent.includes('Kitchen joined')`, 5000);
   await tap(p, act(LIV));
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`);
+  await wait(p, ASKQ);
   const ll = await askLines(p);
-  check('S12 taking Indoor\'s last speaker warns "Indoor stops: Living Room is its last speaker."', ll.some((l) => /Indoor stops: Living Room is its last speaker/.test(l)), J(ll));
+  check('S12 taking Indoor\'s last speaker warns "Indoor stops: Living Room is its last speaker."', ll.some((l) => /Indoor stops: Living Room is its last speaker/.test(l)), J({ ll, c: await chip(p), a: await ev(p, `${act(LIV)}?.dataset.act + ' ' + ${act(LIV)}?.textContent.trim()`) }));
   await confirm(p);
   await wait(p, `window.__hass.states['${IN}'].state !== 'playing' && window.__ma.G.syncgroup_mock_outdoor.members.length === 3`, 4000);
   check('S13 moving the last speaker dissolves Indoor (dissolve event)', (await events(p)).some((e) => /dissolve/.test(J(e))) && (await st(p, IN)) !== 'playing', J(await events(p)));
@@ -339,8 +364,8 @@ const allJoins = [];
   // hijack: start Outdoor while Everywhere plays (Garage leads Everywhere)
   const p = await open(`&spk=dyn&admin=1&target=${OUT}`);
   await tap(p, `${NOW}.shadowRoot.querySelector('.pp')`);
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`);
-  const t = await ev(p, `${SR}.querySelector('.sp-ask').textContent.replace(/\\s+/g,' ')`);
+  await wait(p, ASKQ);
+  const t = await ev(p, `${SR}.querySelector('.sp-ask, .st.ask').textContent.replace(/\\s+/g,' ')`);
   check('H1 "Start Outdoor?" warns that Everywhere is taken over (Garage leads it)', /Start Outdoor/.test(t) && /Everywhere is taken over: Garage leads it/.test(t), t.slice(0, 200));
   await confirm(p);
   await wait(p, `window.__hass.states['${OUT}'].state === 'playing'`);
@@ -365,15 +390,15 @@ const allJoins = [];
   await wait(p, `${act(GAR)}?.dataset.act === 'take'`);
   check('N4 Garage (in the fixed group Everywhere) shows "Take from Everywhere"', (await ev(p, `${act(GAR)}.textContent.trim()`)) === 'Take from Everywhere');
   await tap(p, act(GAR));
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`);
+  await wait(p, ASKQ);
   const tl = await askLines(p);
   check('N5 the confirm warns that taking it stops all of Everywhere', tl.some((l) => /Everywhere stops: it is a fixed group/.test(l)), J(tl));
   await confirm(p);
   await wait(p, `window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_garage')`, 5000);
   const cmds = (await maCmds(p)).slice(nMa);
   check('N6 the card stops Everywhere first (players/cmd/stop), then set_members — no refusal', cmds.indexOf('players/cmd/stop') > -1 && cmds.indexOf('players/cmd/stop') < cmds.lastIndexOf('players/cmd/set_members') && (await st(p, EVERY)) !== 'playing', J(cmds));
-  await wait(p, `/joined Indoor/.test(${SR}.querySelector('.toast')?.textContent ?? '')`, 3000);
-  check('N7 no Undo after stopping a fixed group', !(await ev(p, `!!${SR}.querySelector('.ub')`)), await toast(p));
+  await wait(p, `/joined Indoor/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 3000);
+  check('N7 no Undo after stopping a fixed group', !(await ev(p, `!!${SR}.querySelector('.st [data-action="undo"]')`)), await toast(p));
   allJoins.push(...(await joins(p)));
   await p.close();
 }
@@ -384,30 +409,32 @@ const allJoins = [];
   await openPanel(p); await waitLoaded(p);
   await wait(p, `${act(GAR)}?.dataset.act === 'take'`);
   await tap(p, act(GAR)); await confirm(p);
-  await wait(p, `/Couldn't add Garage/.test(${SR}.querySelector('.toast')?.textContent ?? '')`);
+  await wait(p, `/Couldn't add Garage/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`);
   check('F1 set_members fails → toast "Couldn\'t add Garage …" and the row reverts', /Couldn't add Garage/.test(await toast(p)) && (await ev(p, `${row(GAR)}.classList.contains('out')`)), await toast(p));
+  const fc = await chip(p);
+  check('F1b the failure is the chip in its error style (role alert), not a dialog', fc?.kind === 'error' && (await ev(p, `${SR}.querySelector('.st').getAttribute('role')`)) === 'alert' && !(await ev(p, MODALQ)), J(fc));
   await p.close();
   const p2 = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&grp=timeout`, undefined, { ...FAST, join: 900, call: 900 });
   await openPanel(p2); await waitLoaded(p2);
   await wait(p2, `${act(GAR)}?.dataset.act === 'take'`);
   await tap(p2, act(GAR)); await confirm(p2);
   const pending = await wait(p2, `${row(GAR)}.classList.contains('pending')`, 600);
-  await wait(p2, `/Couldn't add/.test(${SR}.querySelector('.toast')?.textContent ?? '')`, 4000);
+  await wait(p2, `/Couldn't add/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
   check('F2 set_members never answers → pending row, then timeout toast "no answer in time" and revert', pending && /no answer in time/.test(await toast(p2)) && (await ev(p2, `${row(GAR)}.classList.contains('out')`)), await toast(p2));
   await p2.close();
   const p3 = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&xfer=timeout`, undefined, { ...FAST, move: 900, call: 900 });
   await openPanel(p3); await waitLoaded(p3);
   await tap(p3, `${SR}.querySelector('[data-target="${OUT}"]')`);
-  if (await wait(p3, `!!${SR}.querySelector('.sp-ask')`, 800)) await confirm(p3);
+  if (await wait(p3, ASKQ, 800)) await confirm(p3);
   const opt = (await target(p3)) === OUT;
-  await wait(p3, `/Couldn't move to Outdoor/.test(${SR}.querySelector('.toast')?.textContent ?? '')`, 4000);
+  await wait(p3, `/Couldn't move to Outdoor/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
   check('F3 transfer times out → optimistic switch reverts to Indoor with "Couldn\'t move to Outdoor … Still on Indoor."', opt && (await target(p3)) === IN && /Still on Indoor/.test(await toast(p3)), await toast(p3));
   await p3.close();
   const p4 = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&xfer=fail`);
   await openPanel(p4); await waitLoaded(p4);
   await tap(p4, `${SR}.querySelector('[data-target="${OUT}"]')`);
-  if (await wait(p4, `!!${SR}.querySelector('.sp-ask')`, 800)) await confirm(p4);
-  await wait(p4, `/Couldn't move/.test(${SR}.querySelector('.toast')?.textContent ?? '')`, 4000);
+  if (await wait(p4, ASKQ, 800)) await confirm(p4);
+  await wait(p4, `/Couldn't move/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
   check('F4 transfer fails → revert + toast', (await target(p4)) === IN && /Couldn't move to Outdoor/.test(await toast(p4)), await toast(p4));
   await p4.close();
 }
@@ -792,7 +819,7 @@ const allJoins = [];
   const p = await open(`&spk=dyn&admin=1&live=1&gap=1500&xgap=1200&target=${IN}&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
   // start Indoor (from Now Playing, before the panel covers it), then drop its leader: live keeps the group 'playing' while the next member is silent ~5.9 s (1.5 s here)
   await tap(p, `${NOW}.shadowRoot.querySelector('.pp')`);
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`, 1500) && (await confirm(p));
+  await wait(p, ASKQ, 1500) && (await confirm(p));
   await wait(p, `window.__hass.states['${IN}'].state === 'playing'`, 4000);
   const aqPlaying = await ev(p, `window.__hass.states['${IN}'].attributes.active_queue`);
   await openPanel(p); await waitLoaded(p);
@@ -801,7 +828,6 @@ const allJoins = [];
   const leadRoom = lead === 'wiim_mock_kitchen' ? KIT : LIV;
   await wait(p, `${act(leadRoom)}?.dataset.act === 'drop'`, 4000);
   await tap(p, act(leadRoom));
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`) && (await confirm(p));
   const rg = await wait(p, `${SR}.querySelector('.stl')?.textContent.includes('Regrouping…')`, 1200);
   const stDuring = await st(p, IN);
   const back = await wait(p, `!${SR}.querySelector('.stl')?.textContent.includes('Regrouping…') && ${SR}.querySelector('.stl')?.textContent.includes('Playing')`, 5000);
@@ -814,7 +840,7 @@ const allJoins = [];
   const p = await open(`&spk=dyn&admin=1&ma=split&xgap=1200&target=${IN}`);
   await openPanel(p); await waitLoaded(p);
   await tap(p, `${SR}.querySelector('[data-target="${OUT}"]')`);
-  await wait(p, `!!${SR}.querySelector('.sp-ask')`, 1500) && (await confirm(p));
+  await wait(p, ASKQ, 1500) && (await confirm(p));
   const srcStop = await wait(p, `window.__hass.states['${IN}'].state === 'idle' && window.__hass.states['${OUT}'].state === 'buffering'`, 3000);
   const play = await wait(p, `window.__hass.states['${OUT}'].state === 'playing'`, 4000);
   check('LV4 transfer: the source stops on its own (no stop call), the target is silent for the gap and then plays', srcStop && play && (await ma(p, 'players/cmd/stop')).length === 0 && (await target(p)) === OUT, J({ srcStop, play, t: await target(p) }));
@@ -827,6 +853,285 @@ const allJoins = [];
   const pr = await ev(p, `[...${SR}.querySelectorAll('[data-preset]')].map((c) => c.dataset.preset)`);
   check('LV5 MA group config unreadable → the card presets only (no "<Group> default" chips), panel otherwise works', J(pr) === J(['Dinner', 'Whole house']), J(pr));
   await p.close();
+}
+
+// ---------------- 0.6.3: live shape — Everywhere is a DYNAMIC MA sync group, Garage leads, HA lists no group_members ----------------
+{
+  const GSM = 'syncgroup_everywhere', GW = 'wiim_mock_garage';
+  const pillTxt = (p) => ev(p, `__card.shadowRoot.querySelector('.pill')?.textContent.replace(/\\s+/g,' ').trim()`);
+  const p = await open('&spk=dyn&admin=1&every=dyn');
+  const gm0 = await ev(p, `window.__hass.states['${EVERY}'].attributes.group_members`);
+  await wait(p, `/3 speakers/.test(__card.shadowRoot.querySelector('.pill')?.textContent ?? '')`, 3000);
+  const pl0 = await pillTxt(p);
+  check('V1 pill: "3 speakers" while Everywhere plays although HA reports group_members: [] (was "idle")', J(gm0) === '[]' && /· 3 speakers/.test(pl0) && !/idle/.test(pl0), J({ gm0, pl0 }));
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${act(GAR)}?.dataset.act === 'drop'`, 3000);
+  const gw = await ev(p, `${row(GAR)}.querySelector('.where').textContent`);
+  check('V2 the leader (Garage) offers Drop by default, not a greyed "Leader"', gw === 'Leads the group' && (await ev(p, `${act(GAR)}.textContent.trim()`)) === 'Drop'
+    && (await ev(p, `${act(GAR)}.getAttribute('aria-disabled')`)) === 'false', gw);
+  const n0 = (await ma(p, 'players/cmd/set_members')).length;
+  await tap(p, act(GAR));
+  const rg = await wait(p, `${SR}.querySelector('.stl')?.textContent.includes('Regrouping…')`, 1500);
+  await wait(p, `${row(GAR)}.classList.contains('out') && !window.__ma.G.${GSM}.members.includes('${GW}')`, 4000);
+  const sm = (await ma(p, 'players/cmd/set_members')).slice(n0);
+  check('V3 Drop Garage (leader) → one players/cmd/set_members on the sync group (remove Garage); no stop, no HA unjoin',
+    sm.length === 1 && sm[0].data.target_player === GSM && J(sm[0].data.player_ids_to_remove) === J([GW]) && J(sm[0].data.player_ids_to_add) === '[]'
+    && !(await maCmds(p)).includes('players/cmd/stop') && (await joins(p)).length === 0, J(sm));
+  await wait(p, `window.__hass.states['${EVERY}'].state === 'playing' && ${act(GAR)}?.dataset.act === 'join'`, 4000);
+  const evs = await events(p);
+  check('V4 MA re-forms Everywhere on Living Room + Kitchen ("Regrouping…"), Garage is offered Join',
+    rg && evs.some((e) => /reform/.test(J(e))) && J(await maMembers(p, GSM)) === J(['wiim_mock_living', 'wiim_mock_kitchen']) && (await ev(p, `${act(GAR)}.dataset.act`)) === 'join', J({ rg, evs }));
+  await wait(p, `/2 speakers/.test(__card.shadowRoot.querySelector('.pill')?.textContent ?? '')`, 3000);
+  check('V4b pill counts 2 speakers after the drop', /· 2 speakers/.test(await pillTxt(p)), await pillTxt(p));
+  await tap(p, act(GAR));
+  await wait(p, ASKQ, 800) && (await confirm(p));
+  await wait(p, `${row(GAR)}.classList.contains('in')`, 4000);
+  const sm2 = (await ma(p, 'players/cmd/set_members')).at(-1);
+  check('V5 re-add Garage → set_members(sync group, add Garage), Garage back in', sm2?.data.target_player === GSM && J(sm2?.data.player_ids_to_add) === J([GW])
+    && (await maMembers(p, GSM)).includes(GW), J(sm2));
+  await wait(p, `/3 speakers/.test(__card.shadowRoot.querySelector('.pill')?.textContent ?? '')`, 3000);
+  check('V6 pill back to 3 speakers; Garage row "In this group" with Drop', /· 3 speakers/.test(await pillTxt(p)) && (await ev(p, `${act(GAR)}.dataset.act`)) === 'drop', await pillTxt(p));
+  allJoins.push(...(await joins(p)));
+  await p.close();
+}
+{
+  // leader_drop: block is still available (opt-in)
+  const p = await open(`&spk=dyn&admin=1&every=dyn&cfg=${encodeURIComponent(J({ leader_drop: 'block' }))}`);
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${act(GAR)}?.dataset.act === 'blocked'`, 3000);
+  const n = (await ma(p, 'players/cmd/set_members')).length;
+  const lbl = await ev(p, `${act(GAR)}.textContent.trim()`);
+  await tap(p, act(GAR));
+  check('V7 leader_drop: block (opt-in) keeps "Leader" greyed; tapping explains and sends nothing', lbl === 'Leader' && /leads Everywhere/.test(await toast(p)) && (await ma(p, 'players/cmd/set_members')).length === n, J({ lbl, t: await toast(p) }));
+  await p.close();
+}
+{
+  // idle dynamic group: Join is shown greyed with a hint instead of hidden
+  const p = await open('&spk=dyn&admin=1&every=dyn&idle=1');
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${act(GAR)}?.dataset.act === 'idle'`, 3000);
+  const a = await ev(p, `[...${SR}.querySelectorAll('.rooms .act')].map((b) => b.dataset.act + ':' + b.getAttribute('aria-disabled'))`);
+  await tap(p, act(GAR));
+  check('V8 idle Everywhere: every room shows a greyed Join; tapping says start playback first, sends nothing',
+    a.length === 3 && a.every((x) => x === 'idle:true') && /Start playback/.test(await toast(p)) && (await ma(p, 'players/cmd/set_members')).length === 0, J({ a, t: await toast(p) }));
+  await p.close();
+}
+{
+  // a remembered target HA no longer has: forgotten once with a notice (was a silent fallback)
+  const p = await open(`&spk=dyn&admin=1&target=media_player.old_group&cfg=${encodeURIComponent(J({ targets: [] }))}`);
+  await wait(p, `!!__card.shadowRoot.querySelector('.lost')`, 3000);
+  const lost = await ev(p, `__card.shadowRoot.querySelector('.lost')?.textContent ?? ''`);
+  const ls = await p.evaluate(() => localStorage.getItem('jukebox-card:target:v1'));
+  const ent = await target(p);
+  const pl = await ev(p, `__card.shadowRoot.querySelector('.pill .pn')?.textContent`);
+  check('V9 stale saved target: cleared, back on Everywhere, one notice names it', ls === null && ent === EVERY && pl === 'Everywhere' && /old group.*not found/i.test(lost), J({ ls, ent, pl, lost }));
+  await p.close();
+}
+
+// ---------------- 0.6.3: Now Playing speaker controls (Drop / Add per room, Speakers button, "Playing on:" pill) ----------------
+{
+  const GSM = 'syncgroup_everywhere', GW = 'wiim_mock_garage';
+  const nrow = (e) => `${NOW}.shadowRoot.querySelector('.vr[data-entity="${e}"]')`;
+  const ra = (e) => `${nrow(e)}?.querySelector('.ra')`;
+  const p = await open('&spk=dyn&admin=1&every=dyn', { width: 1920, height: 1080 });
+  await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 4000);
+  const btns = await ev(p, `[${[LIV, KIT, GAR].map((e) => `${ra(e)}?.getAttribute('aria-label')`).join(',')}]`);
+  const pill = await ev(p, `__card.shadowRoot.querySelector('.pill')?.textContent.replace(/\\s+/g,' ').trim()`);
+  check('N1 admin + dynamic: each Now Playing room row has a Drop button (aria "Drop <room>"), the pill reads "Playing on: Everywhere · 3 speakers"',
+    J(btns) === J(['Drop Living Room', 'Drop Kitchen', 'Drop Garage']) && /^Playing on:\s*Everywhere\s*· 3 speakers$/.test(pill)
+    && /^Playing on: Everywhere/.test(await ev(p, `__card.shadowRoot.querySelector('.pill').getAttribute('aria-label')`)) && !(await ev(p, `${SPK}.open`)), J({ btns, pill }));
+  const sb = await ev(p, `!!${NOW}.shadowRoot.querySelector('.vr.main [data-action="speakers"]')`);
+  const gw = await ev(p, `${nrow(GAR)}.querySelector('.else')?.textContent ?? ''`);
+  const lw = await ev(p, `${nrow(LIV)}.querySelector('.else')?.textContent ?? ''`);
+  check('N2 the group row has a Speakers button; Garage says "Leads the group", members show no "elsewhere" title', sb && gw === 'Leads the group' && lw === '', J({ sb, gw, lw }));
+  const n0 = (await ma(p, 'players/cmd/set_members')).length;
+  await tap(p, ra(GAR));
+  const modalN3 = await ev(p, MODALQ);
+  await wait(p, `${nrow(GAR)}?.classList.contains('out') && ${ra(GAR)}?.dataset.act === 'join'`, 5000);
+  const sm = (await ma(p, 'players/cmd/set_members')).slice(n0);
+  const lbl = await ev(p, `${ra(GAR)}.getAttribute('aria-label')`);
+  check('N3 Drop Garage from Now Playing → no dialog → one set_members(remove Garage); Garage greyed with "Add Garage", panel stays closed',
+    !modalN3 && sm.length === 1 && sm[0].data.target_player === GSM && J(sm[0].data.player_ids_to_remove) === J([GW]) && lbl === 'Add Garage' && !(await ev(p, `${SPK}.open`)), J({ sm, lbl }));
+  const undo = await ev(p, `!!${SR}.querySelector('.st [data-action="undo"]')`);
+  check('N4 the chip offers Undo with the panel closed', undo);
+  await tap(p, ra(GAR));
+  await wait(p, ASKQ, 800) && (await confirm(p));
+  await wait(p, `${nrow(GAR)} && !${nrow(GAR)}.classList.contains('out') && ${ra(GAR)}?.dataset.act === 'drop'`, 5000);
+  const sm2 = (await ma(p, 'players/cmd/set_members')).at(-1);
+  check('N5 Add Garage from Now Playing → set_members(add Garage); back in with Drop', sm2?.data.target_player === GSM && J(sm2?.data.player_ids_to_add) === J([GW]) && (await maMembers(p, GSM)).includes(GW), J(sm2));
+  // drop Kitchen and Living Room: Garage becomes the last speaker → Pause offered, nothing sent
+  for (const e of [KIT, LIV]) {
+    await wait(p, `${ra(e)}?.dataset.act === 'drop' && !${nrow(e)}.classList.contains('pending')`, 5000);
+    await tap(p, ra(e)); if (await wait(p, ASKQ, 600)) await confirm(p);
+    await wait(p, `${ra(e)}?.dataset.act === 'join'`, 5000);
+  }
+  await wait(p, `${ra(GAR)}?.dataset.act === 'blocked' && window.__hass.states['${EVERY}'].state === 'playing' && !${SPK}.inlineRegrouping()`, 6000);
+  await sleep(300);
+  const n1 = (await ma(p, 'players/cmd/set_members')).length;
+  const dis = await ev(p, `${ra(GAR)}?.getAttribute('aria-disabled')`);
+  await tap(p, ra(GAR));
+  await wait(p, ASKQ, 1500);
+  const at = await ev(p, `${SR}.querySelector('.sp-ask, .st.ask')?.textContent ?? ''`);
+  const modalN6 = await ev(p, MODALQ);
+  check('N6 the last room: its Drop is greyed, tapping offers Pause in the chip (same as the panel, no dialog), sends nothing',
+    dis === 'true' && !modalN6 && /last speaker/.test(at) && /Pause/.test(at) && (await ma(p, 'players/cmd/set_members')).length === n1, J({ dis, at, t: await toast(p), s: await st(p, EVERY) }));
+  if (at) await confirm(p, false);
+  await tap(p, `${NOW}.shadowRoot.querySelector('[data-action="speakers"]')`);
+  check('N7 the Speakers button opens the speakers panel', await wait(p, `${SPK}.open && !!${SR}.querySelector('section.sheet')`, 2000));
+  allJoins.push(...(await joins(p)));
+  await p.close();
+}
+{
+  // idle: the buttons stay but are greyed, with the panel's hint
+  const nrow = (e) => `${NOW}.shadowRoot.querySelector('.vr[data-entity="${e}"]')`;
+  const p = await open('&spk=dyn&admin=1&every=dyn&idle=1');
+  await wait(p, `${nrow(GAR)}?.querySelector('.ra')?.dataset.act === 'idle'`, 4000);
+  const a = await ev(p, `[...${NOW}.shadowRoot.querySelectorAll('.rooms .ra')].map((b) => b.dataset.act + ':' + b.getAttribute('aria-disabled') + ':' + b.getAttribute('aria-label'))`);
+  await tap(p, `${nrow(GAR)}.querySelector('.ra')`);
+  const pill = await ev(p, `__card.shadowRoot.querySelector('.pill')?.textContent.replace(/\\s+/g,' ').trim()`);
+  check('N8 idle Everywhere: every room shows a greyed Add; tapping says start playback first, sends nothing; pill "Speakers: Everywhere · idle"',
+    a.length === 3 && a.every((x) => /^idle:true:Add /.test(x)) && /Start playback/.test(await toast(p)) && (await ma(p, 'players/cmd/set_members')).length === 0 && /^Speakers:\s*Everywhere\s*· idle$/.test(pill), J({ a, t: await toast(p), pill }));
+  await p.close();
+}
+for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping: nobody', `&spk=dyn&admin=1&every=dyn&cfg=${encodeURIComponent(J({ grouping: 'nobody' }))}`], ['fixed mode', '&admin=1']]) {
+  const p = await open(q, { width: 390, height: 844, isMobile: true, hasTouch: true });
+  await sleep(1200);
+  const n = await ev(p, `${NOW}.shadowRoot.querySelectorAll('.ra, .spkb').length`);
+  const sl = await ev(p, `${NOW}.shadowRoot.querySelectorAll('.vr jb-slider').length`);
+  const polling = await ev(p, `!!${SPK}.store?.timer`);
+  check(`N9 ${name}: Now Playing is volume only (no Drop/Add, no Speakers button), sliders stay, no background MA poll`, n === 0 && sl >= 1 && !polling, J({ n, sl, polling }));
+  await p.close();
+}
+{
+  // compact at 390x844: one-line room rows, buttons inside the card
+  const p = await open('&spk=dyn&admin=1&every=dyn', { width: 390, height: 844, isMobile: true, hasTouch: true });
+  await wait(p, `${NOW}.shadowRoot.querySelector('.vr[data-entity="${GAR}"] .ra')?.dataset.act === 'drop'`, 4000);
+  const r = await ev(p, `(() => { const s = ${NOW}.shadowRoot, v = s.querySelector('.vol').getBoundingClientRect();
+    return { rows: [...s.querySelectorAll('.rooms .vr')].map((x) => Math.round(x.getBoundingClientRect().height)), inside: [...s.querySelectorAll('.ra, .spkb')].every((b) => { const q = b.getBoundingClientRect(); return q.width >= 30 && q.left >= v.left && q.right <= v.right + 0.5; }) }; })()`);
+  check('N10 390x844: room rows stay one line (≤ 56px) and every button fits inside the volume card', r.rows.length === 3 && r.rows.every((h) => h <= 56) && r.inside, J(r));
+  await p.close();
+}
+
+// ---------------- 0.6.4: quiet status — one small chip top-right, no centred popups for grouping ----------------
+{
+  const GSM = 'syncgroup_everywhere', GW = 'wiim_mock_garage';
+  const nrow = (e) => `${NOW}.shadowRoot.querySelector('.vr[data-entity="${e}"]')`;
+  const ra = (e) => `${nrow(e)}?.querySelector('.ra')`;
+  const CLOCK = `__card.shadowRoot.querySelector('.clock')`;
+  const geo = (p) => ev(p, `(() => { const c = ${CLOCK}.getBoundingClientRect(), k = __card.getBoundingClientRect(); return { cl: c.left, ct: c.top, cr: c.right, cb: c.bottom, kr: k.right, kw: k.width }; })()`);
+  const nChips = (p) => ev(p, `${SR}.querySelectorAll('.st').length`);
+  const popups = (p) => ev(p, `(() => { const r = ${SR}; return !!(r.querySelector('.sp-ask') || r.querySelector('.ask-scrim') || r.querySelector('.toast') || r.querySelector('.undo')); })()`);
+  for (const vp of [{ width: 1920, height: 1080 }, { width: 390, height: 844, isMobile: true, hasTouch: true }]) {
+    const tag = `${vp.width}x${vp.height}`;
+    const p = await open('&spk=dyn&admin=1&every=dyn&grp=slow', vp);
+    await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 4000);
+    const n0 = (await ma(p, 'players/cmd/set_members')).length;
+    await tap(p, ra(GAR));
+    const pop = await popups(p), c1 = await chip(p), g = await geo(p);
+    check(`C1 ${tag} drop the leader (Garage) from Now Playing: no dialog, no toast or Undo bar; one chip says "Regrouping…"`, !pop && c1?.text === 'Regrouping…' && (await nChips(p)) === 1, J({ pop, c1 }));
+    check(`C2 ${tag} the chip sits top-right, under the header clock (does not cover it), right edge lined up with the card`,
+      !!c1 && c1.t >= g.cb - 0.5 && c1.t - g.cb < 40 && c1.r <= g.kr + 0.5 && g.kr - c1.r <= 64 && c1.l > g.kr - Math.max(g.kw * 0.75, 300) && c1.h <= 64, J({ c1, g }));
+    const pe = await ev(p, `[getComputedStyle(${SPK}).pointerEvents, getComputedStyle(${SR}.querySelector('.st')).pointerEvents]`);
+    check(`C3 ${tag} only the chip takes taps (the panel layer stays pointer-events: none)`, pe[0] === 'none' && pe[1] === 'auto', J(pe));
+    await wait(p, `/Garage left/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
+    const c2 = await chip(p);
+    check(`C4 ${tag} after MA confirms: "Garage left · …" with Undo, replacing "Regrouping…" (still one chip)`, /^Garage left/.test(c2?.text ?? '') && c2?.act === 'Undo' && (await nChips(p)) === 1 && !(await popups(p)), J(c2));
+    await tap(p, `${SR}.querySelector('.st [data-action="undo"]')`);
+    await wait(p, `window.__ma.G.${GSM}.members.includes('${GW}')`, 5000);
+    const u = (await ma(p, 'players/cmd/set_members')).slice(n0).at(-1);
+    await wait(p, `${SR}.querySelector('.st .ct')?.textContent === 'Undone'`, 3000);
+    check(`C5 ${tag} Undo in the chip → set_members(add Garage); chip says "Undone"`, J(u?.data.player_ids_to_add) === J([GW]) && (await toast(p)) === 'Undone', J({ u, t: await toast(p) }));
+    const tUndone = Date.now();
+    await sleep(Math.max(0, 2500 - (Date.now() - tUndone)));
+    const at25 = !!(await chip(p));
+    await sleep(2200);
+    const at47 = !!(await chip(p));
+    check(`C6 ${tag} the chip hides by itself after about 4 s (there at 2.5 s, gone by 4.7 s)`, at25 && !at47, J({ at25, at47 }));
+    await p.close();
+  }
+  {
+    // default Undo window (no test override): about 4 s
+    const p = await open('&spk=dyn&admin=1&every=dyn');
+    await p.evaluate(() => { delete window.__jbUndoMs; });
+    await wait(p, `${ra(KIT)}?.dataset.act === 'drop'`, 4000);
+    await tap(p, ra(KIT));
+    await wait(p, `!!${SR}.querySelector('.st [data-action="undo"]')`, 3000);
+    const t0 = Date.now();
+    await sleep(3300);
+    const there = !!(await ev(p, `${SR}.querySelector('.st [data-action="undo"]')`));
+    await sleep(Math.max(0, 4700 - (Date.now() - t0)));
+    const gone = !(await chip(p));
+    check('C7 "Kitchen left · Undo" stays tappable about 4 s by default (there at 3.3 s, gone by 4.7 s)', there && gone, J({ there, gone }));
+    await p.close();
+  }
+  {
+    // last room → the chip offers Pause; Pause pauses the group (queue kept), Undo plays again
+    const p = await open('&spk=dyn&admin=1&every=dyn', { width: 1920, height: 1080 });
+    for (const e of [KIT, LIV]) {
+      await wait(p, `${ra(e)}?.dataset.act === 'drop' && !${nrow(e)}.classList.contains('pending') && !${SPK}.inlineRegrouping()`, 6000);
+      await tap(p, ra(e));
+      await wait(p, `${ra(e)}?.dataset.act === 'join'`, 5000);
+    }
+    await wait(p, `${ra(GAR)}?.dataset.act === 'blocked' && window.__hass.states['${EVERY}'].state === 'playing' && !${SPK}.inlineRegrouping()`, 6000);
+    await sleep(300);
+    const n1 = (await ma(p, 'players/cmd/set_members')).length;
+    await tap(p, ra(GAR));
+    const c = await chip(p);
+    check('C8 last room: chip "Garage is the last speaker in Everywhere · Pause" (no dialog)', /Garage is the last speaker in Everywhere/.test(c?.text ?? '') && c?.act === 'Pause' && !(await popups(p)), J(c));
+    await tap(p, `${SR}.querySelector('.st.ask [data-action="confirm"]')`);
+    await wait(p, `window.__hass.states['${EVERY}'].state === 'paused'`, 3000);
+    await wait(p, `/Everywhere paused/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 3000);
+    const c2 = await chip(p);
+    check('C9 Pause → media_pause on Everywhere, nothing regrouped; chip "Everywhere paused · Undo"', (await st(p, EVERY)) === 'paused' && c2?.act === 'Undo'
+      && (await ma(p, 'players/cmd/set_members')).length === n1 && (await calls(p)).some((x) => x.service === 'media_pause' && x.target?.entity_id === EVERY), J(c2));
+    await tap(p, `${SR}.querySelector('.st [data-action="undo"]')`);
+    check('C10 Undo → media_play: Everywhere plays again', await wait(p, `window.__hass.states['${EVERY}'].state === 'playing'`, 3000));
+    await p.close();
+  }
+  {
+    // confirm_drop: true brings back the 0.6.3 dialog
+    const p = await open(`&spk=dyn&admin=1&every=dyn&cfg=${encodeURIComponent(J({ confirm_drop: true }))}`);
+    await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 4000);
+    const n0 = (await ma(p, 'players/cmd/set_members')).length;
+    await tap(p, ra(GAR));
+    const m = await wait(p, MODALQ, 1500);
+    const title = await askTitle(p);
+    await confirm(p, false); await sleep(200);
+    const none = (await ma(p, 'players/cmd/set_members')).length === n0;
+    check('C11 confirm_drop: true → dropping the leader asks in the centred dialog again ("Drop Garage?"); Cancel sends nothing', m && /Drop Garage\?/.test(title) && none, J({ m, title, none }));
+    await tap(p, ra(GAR)); await wait(p, MODALQ, 1500); await confirm(p);
+    await wait(p, `!window.__ma.G.${GSM}.members.includes('${GW}')`, 5000);
+    check('C12 confirm_drop: true → Drop in the dialog → set_members(remove Garage)', J((await ma(p, 'players/cmd/set_members')).at(-1)?.data.player_ids_to_remove) === J([GW]));
+    await p.close();
+  }
+  {
+    // a failed MA call: the chip in its error style, never a dialog
+    const p = await open('&spk=dyn&admin=1&every=dyn&grp=fail', { width: 1920, height: 1080 });
+    await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 4000);
+    await tap(p, ra(GAR));
+    await wait(p, `${SR}.querySelector('.st')?.dataset.kind === 'error'`, 4000);
+    const c = await chip(p), g = await geo(p);
+    const look = await ev(p, `(() => { const s = getComputedStyle(${SR}.querySelector('.st')); return [s.backgroundColor, s.color, s.fontSize]; })()`);
+    check('C13 set_members fails → error chip "Couldn\'t drop Garage: …" top-right (white on black inverted, ≥ 14px), no dialog; Garage stays in',
+      /^Couldn't drop Garage/.test(c?.text ?? '') && !(await popups(p)) && c.t >= g.cb - 0.5 && look[0] === 'rgb(255, 255, 255)' && look[1] === 'rgb(0, 0, 0)' && parseFloat(look[2]) >= 14
+      && (await maMembers(p, GSM)).includes(GW), J({ c, look }));
+    await tap(p, `${SR}.querySelector('.st [data-action="cancel"]')`);
+    check('C14 the error chip can be dismissed', !(await chip(p)));
+    await p.close();
+  }
+  {
+    // panel open (tablet drawer): the chip stays clear of the panel's close button; takeover questions are chip questions too
+    const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}`, { width: 1280, height: 800 });
+    await openPanel(p); await waitLoaded(p);
+    await wait(p, `${act(GAR)}?.dataset.act === 'take'`, 4000);
+    await tap(p, act(GAR));
+    await wait(p, `!!${SR}.querySelector('.st.ask')`, 1500);
+    const c = await chip(p), x = await rectOf(p, `${SR}.querySelector('.sheet .x')`);
+    check('C15 a takeover asks in the chip (action button, no dialog), clear of the panel\'s close button', !(await ev(p, MODALQ)) && !!c?.act && !!x && (c.r <= x.l || c.t >= x.b), J({ c, x }));
+    await confirm(p, false);
+    check('C16 dismissing the chip question sends nothing', (await ma(p, 'players/cmd/set_members')).length === 0 && !(await chip(p)));
+    await p.close();
+  }
 }
 
 // ---------------- HA 2026.10: an ungrouped MA player reports group_members: [] ----------------
