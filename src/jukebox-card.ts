@@ -20,7 +20,7 @@ import type { HomeAssistant, JukeboxCardConfig, TabId } from './types';
 import { pickBackend, createBackend, backendKey, type MaBackend } from './backend';
 import { defineElement } from './define';
 
-export const VERSION = '0.6.0';
+export const VERSION = '0.6.1';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'now', label: 'Now Playing', icon: 'disc' },
   { id: 'browse', label: 'Browse', icon: 'browse' },
