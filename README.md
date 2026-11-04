@@ -1,4 +1,4 @@
-# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.6.4 — DRAFT
+# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.6.5 — DRAFT
 
 > **Draft for 0.6.0.** This README covers the new integration and the card bundled in it. Sections marked *(legacy)* describe the `mass_queue` backend, which still works.
 
