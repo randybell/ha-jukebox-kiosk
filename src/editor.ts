@@ -4,7 +4,7 @@ import { defineElement } from './define';
 import { CATEGORIES, DEFAULT_CATEGORIES } from './search-categories';
 import { LIBRARY_ROWS, DEFAULT_ROWS, rowName } from './discover';
 import { RADIO_MODES, MODE_LABEL } from './radio-browse';
-import { TILES, configuredTiles } from './library-home';
+import { TILES, configuredTiles, LIBRARY_CATS, DEFAULT_LIBRARY_CATEGORIES, libraryCategories } from './library-home';
 
 /**
  * Visual editor built on HA's <ha-form>. YAML remains the reference (see README).
@@ -96,6 +96,7 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
         // v0.7 (each hidden on the card when the backend can't do it)
         { name: 'search_categories', selector: { select: { multiple: true, reorder: true, mode: 'list', options: CATEGORIES.map((x) => ({ value: x.key, label: x.label })) } } },
         { name: 'search_filters', selector: { boolean: {} } },
+        { name: 'search_sources', selector: { boolean: {} } },
         { name: 'library_first', selector: { boolean: {} } },
         { name: 'search_default_category', selector: { select: { mode: 'dropdown', options: [{ value: 'all', label: 'All' }, ...CATEGORIES.map((x) => ({ value: x.key, label: x.label }))] } } },
         { name: 'discover', selector: { select: { multiple: true, reorder: true, mode: 'list', custom_value: true, options: discoverOptions(c.discover) } } },
@@ -105,9 +106,12 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
       ],
     },
     {
-      // v0.7 Library home (default off). Tile labels set in YAML ({tile, label}) are kept when the list is edited here.
+      // 0.7.2: combined Library tab (default) or the 0.7.1 separate tabs; the category buttons. Tile labels set in YAML
+      // ({tile, label}) are kept when the list is edited here (tiles only apply to the separate layout).
       type: 'expandable', name: 'library', title: 'Library', icon: 'mdi:view-grid-outline', flatten: true,
       schema: [
+        { name: 'library_layout', selector: { select: { mode: 'dropdown', options: [{ value: 'combined', label: 'Combined: one Library tab with search, source picker and category buttons' }, { value: 'separate', label: 'Separate: Library and Search tabs (0.7.1)' }] } } },
+        { name: 'library_categories', selector: { select: { multiple: true, reorder: true, mode: 'list', options: LIBRARY_CATS.map((x) => ({ value: x.id, label: DEFAULT_LIBRARY_CATEGORIES.includes(x.id) ? x.label : `${x.label} (optional)` })) } } },
         { name: 'library_home', selector: { boolean: {} } },
         { name: 'library_tiles', selector: { select: { multiple: true, reorder: true, mode: 'list', options: TILES.map((t) => ({ value: t.id, label: t.optIn ? `${t.label} (optional)` : t.label })) } } },
         { name: 'library_label', selector: { text: {} } },
@@ -156,8 +160,11 @@ export const LABELS: Record<string, string> = {
   radio_browse: 'Radio: "Stations by" (none = off; Radio Browser provider)',
   radio_country: 'Radio country code (e.g. us; empty = Home Assistant\'s country)',
   radio_favorites_only: 'Radio: show favourite stations only (otherwise favourites first, then other library stations)',
-  library_home: 'Library home: a "Library" tab with big shortcut tiles (off = the 0.6 Browse tab)',
-  library_tiles: 'Library tiles (in this order; Search opens the Search tab)',
+  search_sources: 'Source picker next to the search box (All, Library, each Music Assistant provider)',
+  library_layout: 'Library layout',
+  library_categories: 'Library category buttons (in this order)',
+  library_home: 'Separate layout only: open the Library tab on big shortcut tiles',
+  library_tiles: 'Separate layout only: Library tiles (in this order; Search opens the Search tab)',
   library_label: 'Library tab name (empty = Library)',
 };
 const QUIET_KEYS = ['quiet_start', 'quiet_end', 'quiet_max', 'quiet_applies'] as const;
@@ -165,7 +172,7 @@ const hhmm = (t: unknown) => (typeof t === 'string' ? t.slice(0, 5) : undefined)
 /** defaults shown for unset options, never written back unless the user changes them */
 export const SHOWN_DEFAULTS = {
   show_lyrics: true, lyrics_tab: true, screensaver_lyrics: true, lyrics_seek: true, show_autoplay: false,
-  large_buttons: false, radio_favorites_only: false, library_home: true, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
+  large_buttons: false, radio_favorites_only: false, library_home: false, library_layout: 'combined', search_sources: true, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
   coerce_repeat_one: true,
 };
 const roomEntity = (r: RoomConfig | string) => (typeof r === 'string' ? r : r.entity);
@@ -226,6 +233,13 @@ export class JukeboxCardEditor extends LitElement {
       if (!Array.isArray(v.radio_browse) || !v.radio_browse.length) delete v.radio_browse;
       else if (prevC?.radio_browse === true && sameList(v.radio_browse, RADIO_MODES)) v.radio_browse = true;
     }
+    if ('library_categories' in v) {
+      if (!Array.isArray(v.library_categories) || !v.library_categories.length) delete v.library_categories;
+      else {
+        v.library_categories = [...new Set((v.library_categories as string[]).map(String))];
+        if (prevC?.library_categories === undefined && sameList(v.library_categories, DEFAULT_LIBRARY_CATEGORIES)) delete v.library_categories;
+      }
+    }
     if ('library_tiles' in v) {
       // ids from the form; entries that had a YAML label keep it; the shown defaults are not written back
       const prevL = new Map((Array.isArray(prevC?.library_tiles) ? prevC.library_tiles : []).filter((x: any) => x && typeof x === 'object').map((x: any) => [x.tile, x] as const));
@@ -264,6 +278,7 @@ export class JukeboxCardEditor extends LitElement {
     out.search_default_category = c.search_default_category ?? 'all';
     out.discover = c.discover === true ? [...DEFAULT_ROWS] : Array.isArray(c.discover) ? c.discover : [];
     out.library_tiles = configuredTiles(c).map((t) => t.id);
+    out.library_categories = libraryCategories(c);
     out.radio_browse = c.radio_browse === true ? [...RADIO_MODES] : Array.isArray(c.radio_browse) ? c.radio_browse : [];
     return out;
   }

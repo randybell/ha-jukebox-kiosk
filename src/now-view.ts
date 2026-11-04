@@ -2,7 +2,7 @@ import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
 import { providerLabel } from './providers';
-import { libraryTabLabel } from './library-home';
+import { combinedOn, libraryTabLabel } from './library-home';
 import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, status, ART, hash, playerArt, isRadio, RADIO_ART } from './shared';
 import { throttle } from './slider';
 import './slider';
@@ -314,7 +314,7 @@ export class JbNow extends LitElement {
         <div class="badges">${prov ? html`<span class="pv big">${prov}</span>` : nothing}
           <span class="where">${icon('eq', 'i xs')}${stateWord} ${where}</span></div>
         <h1 class="ti">${idle ? 'Nothing playing' : title}</h1>
-        <div class="sub">${idle ? `Pick something in Search or ${libraryTabLabel(this.config)}.` : [a.media_artist, a.media_album_name].filter(Boolean).join(' · ')}</div>
+        <div class="sub">${idle ? combinedOn(this.config) ? `Pick something in ${libraryTabLabel(this.config)}.` : `Pick something in Search or ${libraryTabLabel(this.config)}.` : [a.media_artist, a.media_album_name].filter(Boolean).join(' · ')}</div>
         <div class="prog ${dur ? '' : 'nodur'}">
           <span class="tl" data-v=${fmtTime(pos)}></span>
           <jb-slider class="ps" .value=${dur ? pos / dur : 0} ?disabled=${!dur || idle} .label=${'Seek'}

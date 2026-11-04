@@ -57,8 +57,10 @@ export interface ExtCaps {
   autoplay: boolean;
   /** Autoplay style picker: jukebox_kiosk/autoplay_options + set_autoplay_mode (permission class queue) */
   autoplayMode: boolean;
+  /** 0.7.2 search source picker: MA's searchable providers (searchProviders()) and music/search with `providers` */
+  searchProviders: boolean;
 }
-export const NO_EXT: ExtCaps = { genres: false, radioBrowse: false, discover: false, resume: false, autoplay: false, autoplayMode: false };
+export const NO_EXT: ExtCaps = { genres: false, radioBrowse: false, discover: false, resume: false, autoplay: false, autoplayMode: false, searchProviders: false };
 
 /** Where MA Autoplay takes music from when the queue runs out (MA 2.10.9 per-queue `autoplay_mode`). */
 export type AutoplayMode = 'auto' | 'similar' | 'library' | 'playlist';
@@ -123,6 +125,8 @@ export interface MaBackend {
   autoplayOptions?(entity: string): Promise<AutoplayOptions>;
   /** Pin the Autoplay style for the entity's queue; playlist (a library playlist uri) only with mode playlist. */
   setAutoplayMode?(entity: string, mode: AutoplayMode, playlist?: string): Promise<unknown>;
+  /** 0.7.2: MA's configured music providers that can search (raw: kiosk {providers}, mass_queue MA's list); see search-sources.ts */
+  searchProviders?(): Promise<any>;
   /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. */
   subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;
 }

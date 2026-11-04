@@ -20,11 +20,11 @@ import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type 
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { pickBackend, createBackend, backendKey, type MaBackend } from './backend';
 import { defineElement } from './define';
-import { libraryTabLabel } from './library-home';
+import { libraryTabLabel, combinedOn } from './library-home';
 import { FavStore } from './favorites';
 import { RepeatOneGuard } from './repeat';
 
-export const VERSION = '0.7.1';
+export const VERSION = '0.7.2';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'now', label: 'Now Playing', icon: 'disc' },
   { id: 'browse', label: 'Browse', icon: 'browse' },
@@ -201,7 +201,13 @@ export class JukeboxCard extends LitElement {
       favorite_entity: 'button.everywhere_favorite_current_song', screensaver_minutes: 10, ...config, _favs: this.favs,
     };
     this._config = this.effective();
-    if (first && config.default_tab && this.tabs().some((t) => t.id === config.default_tab)) this._tab = config.default_tab;
+    // 0.7.2 combined Library tab: default_tab: search opens the Library tab ready to type (back-compat)
+    const dt = config.default_tab === 'search' && combinedOn(this._config) ? 'browse' : config.default_tab;
+    if (first && dt && this.tabs().some((t) => t.id === dt)) {
+      this._tab = dt;
+      if (config.default_tab === 'search' && dt === 'browse') this.updateComplete.then(() => this.libHost()?.focusSearch?.());
+    }
+    if (this._tab === 'search' && combinedOn(this._config)) this._tab = 'browse';
     if (!this.tabs().some((t) => t.id === this._tab)) this._tab = 'now';
     this.lyrics.enabled = this._config.show_lyrics !== false;
     this.syncBackend(true);
@@ -237,6 +243,7 @@ export class JukeboxCard extends LitElement {
     this._base = { ...this._base, _backend: this.backend };
     this._config = this.effective();
     this.dataset.backend = this.backend?.kind ?? '';
+    if (this._tab === 'search' && combinedOn(this._config)) this._tab = 'browse';
     if (this._tab !== 'now' && !this.tabs().some((t) => t.id === this._tab)) this._tab = 'now';
     if (refresh && this.hass) this.queue.refreshSoon(0);
     this.startPush();
@@ -305,10 +312,15 @@ export class JukeboxCard extends LitElement {
   /** visible tabs: Lyrics only when lyrics are on and its tab is not turned off */
   private tabs() {
     const c = this._config, caps = this.backend?.caps;
-    return TABS.map((t) => (t.id === 'browse' ? { ...t, label: libraryTabLabel(c) } : t)).filter((t) => t.id !== 'lyrics' || (c?.show_lyrics !== false && c?.lyrics_tab !== false
+    const comb = combinedOn(c);
+    return TABS.map((t) => (t.id === 'browse' ? { ...t, label: libraryTabLabel(c) } : t)).filter((t) => !(comb && t.id === 'search')).filter((t) => t.id !== 'lyrics' || (c?.show_lyrics !== false && c?.lyrics_tab !== false
       // kiosk: hidden when the server says this user may not read lyrics; other backends keep the tab and its setup hint
       && !(this.backend?.kind === 'kiosk' && caps && !caps.lyrics)));
   }
+  /** 0.7.2: the combined Library tab (jb-search with the library list inside), or null in the separate layout */
+  private libHost(): any { return combinedOn(this._config) ? this.renderRoot?.querySelector('jb-search[combined]') : null; }
+  /** the Library list: inside the combined tab, or the separate Library tab */
+  private libBrowse(): any { const h = this.libHost(); return h ? h.browse : this.renderRoot?.querySelector('jb-browse'); }
   getCardSize() { return 12; }
   getGridOptions() { return { columns: 'full', rows: 'auto' }; }
 
@@ -498,8 +510,8 @@ export class JukeboxCard extends LitElement {
   /** Q60: the idle reset clears the Search scope and the Library filters (idle_clear_filters: false keeps them) */
   idleReset() {
     if (this._config?.idle_clear_filters === false) return;
-    (this.renderRoot.querySelector('jb-search') as any)?.idleReset?.();
-    (this.renderRoot.querySelector('jb-browse') as any)?.idleReset?.();
+    (this.renderRoot.querySelector('jb-search') as any)?.idleReset?.(); // combined: also the library filters, the words and the source
+    if (!this.libHost()) (this.renderRoot.querySelector('jb-browse') as any)?.idleReset?.();
   }
   private onActivity = () => { if (!this._saver) this.armIdle(); };
   private wake = (e: Event) => {
@@ -525,7 +537,7 @@ export class JukeboxCard extends LitElement {
   /** A heart anywhere (0.6.2 radio, v0.7 every item): the shared store shows it everywhere; Library reloads that list next time. */
   private onFavs = (e: CustomEvent) => {
     if (e.detail?.uri && typeof e.detail.favorite === 'boolean') this.favs.set(e.detail.uri, e.detail.favorite);
-    (this.renderRoot.querySelector('jb-browse') as any)?.favoritesChanged?.(e.detail?.media_type);
+    this.libBrowse()?.favoritesChanged?.(e.detail?.media_type);
     // a heart in the station sheet also updates the Search row heart for that station
     if (e.detail?.uri) (this.renderRoot.querySelector('jb-search') as any)?.favoriteChanged?.(e.detail.uri, !!e.detail.favorite);
   };
@@ -539,10 +551,16 @@ export class JukeboxCard extends LitElement {
     (this.renderRoot.querySelector('jb-speakers') as JbSpeakers | null)?.notify(text, kind);
   };
   private onNav = (e: CustomEvent) => {
-    const t = e.detail?.tab; if (!this.tabs().some((x) => x.id === t)) return;
+    let t = e.detail?.tab;
+    // 0.7.2 combined: "search" is the Library tab's search box
+    const comb = t === 'search' && combinedOn(this._config);
+    if (comb) t = 'browse';
+    if (!this.tabs().some((x) => x.id === t)) return;
     this._tab = t;
     // v0.7 Library home: the Search tile (and Genres) open Search ready to type, optionally on a category chip
-    if (t === 'search' && e.detail?.focus) this.updateComplete.then(() => (this.renderRoot.querySelector('jb-search') as any)?.focusSearch?.(e.detail?.category));
+    const cat = e.detail?.category === 'genres' ? 'genre' : e.detail?.category;
+    if (comb) this.updateComplete.then(() => this.libHost()?.focusSearch?.(cat));
+    else if (t === 'search' && e.detail?.focus) this.updateComplete.then(() => (this.renderRoot.querySelector('jb-search') as any)?.focusSearch?.(e.detail?.category));
   };
 
   // ---------- Stage (full-screen art + lyrics) ----------
@@ -624,7 +642,8 @@ export class JukeboxCard extends LitElement {
     const { item, type } = e.detail ?? {};
     if (!item) return;
     this._tab = 'browse';
-    (this.renderRoot.querySelector('jb-browse') as any)?.openDetail(item, type);
+    const h = this.libHost();
+    if (h) h.openDetail(item, type); else (this.renderRoot.querySelector('jb-browse') as any)?.openDetail(item, type);
   };
 
   protected willUpdate(changed: PropertyValues) {
@@ -779,8 +798,10 @@ export class JukeboxCard extends LitElement {
         <main class="np ${pic ? 'has-art' : ''}" style=${artStyle}>
           ${bd === 'light' ? html`<canvas class="bdl" width="64" height="40" aria-hidden="true"></canvas>` : nothing}
           ${view('now', html`<jb-now ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
-          ${view('browse', html`<jb-browse ?large=${!!c.large_buttons} .hass=${h} .config=${c} ?active=${this._tab === 'browse'}></jb-browse>`)}
-          ${view('search', html`<jb-search ?large=${!!c.large_buttons} .hass=${h} .config=${c} ?active=${this._tab === 'search'}></jb-search>`)}
+          ${combinedOn(c)
+            ? view('browse', html`<jb-search combined ?large=${!!c.large_buttons} .hass=${h} .config=${c} ?active=${this._tab === 'browse'}></jb-search>`)
+            : html`${view('browse', html`<jb-browse ?large=${!!c.large_buttons} .hass=${h} .config=${c} ?active=${this._tab === 'browse'}></jb-browse>`)}
+          ${view('search', html`<jb-search ?large=${!!c.large_buttons} .hass=${h} .config=${c} ?active=${this._tab === 'search'}></jb-search>`)}`}
           ${view('queue', html`<jb-queue ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'queue'}></jb-queue>`)}
           ${tabs.some((t) => t.id === 'lyrics') ? view('lyrics', html`<jb-lyrics mode="tab" .hass=${h} .config=${c} .store=${this.lyrics} .art=${pic}
             ?active=${this._tab === 'lyrics' && !this._saver && !this._stage}></jb-lyrics>`) : nothing}
@@ -791,7 +812,7 @@ export class JukeboxCard extends LitElement {
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
           ${tabs.map((t) => html`<button class="tab ${this._tab === t.id ? 'active' : ''}" role="tab" tabindex=${this._tab === t.id ? '0' : '-1'} data-tab=${t.id}
               aria-selected=${this._tab === t.id ? 'true' : 'false'}
-              @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { if (t.id === 'browse' && this._tab === 'browse') (this.renderRoot.querySelector('jb-browse') as any)?.goHome?.(); this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
+              @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { if (t.id === 'browse' && this._tab === 'browse') { const lh = this.libHost(); if (lh) lh.home(); else (this.renderRoot.querySelector('jb-browse') as any)?.goHome?.(); } this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
                 ? html`<em class="badge">${this._qcount > 99 ? '99+' : this._qcount}</em>` : nothing}</button>`)}
         </nav>
         ${this._stage ? this.renderStage() : nothing}

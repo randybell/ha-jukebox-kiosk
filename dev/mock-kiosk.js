@@ -6,13 +6,15 @@ import { createV07 } from './mock-v07.js';
 //   jukebox_kiosk/capabilities, /ma {command,args} (music/favorites/* need kcaps library_write, like the library class), /queue_items, /item_tracks,
 //   /unfavorite_current, /subscribe_queue, /set_autoplay, /autoplay_options, /set_autoplay_mode
 // The /ma allowlist mirrors const.py MA_COMMANDS; metadata/get_track_lyrics refuses library tracks like the server.
-const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item)|browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks|in_progress_items)|metadata\/get_track_lyrics)$/;
-const V07 = /^music\/(browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks)$/;
+const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item)|browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks|genres\/library_items|in_progress_items)|metadata\/get_track_lyrics)$/;
+const V07 = /^music\/(browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks|genres\/library_items)$/;
 const MUTATING = /^player_queues\/(play_index|move_item|delete_item|play_media|transfer)$/;
 const FEATURES = { queue: true, queue_play: true, queue_edit: true, undo: true, ma_commands: true, lyrics: true, track_lists: true,
   podcast_episodes: true, unfavorite: true, library_write: false, speakers: true, group_configs: true, queue_push: true,
   // v0.7 (read class): genres, Radio Browser "Stations by…", Discover rows, resume positions
-  genres: true, radio_browse: true, discover: true, resume: true };
+  genres: true, radio_browse: true, discover: true, resume: true,
+  // 0.7.2: the Search source picker (jukebox_kiosk/search_providers)
+  search_providers: true };
 const err = (code, message) => Object.assign(new Error(message), { code });
 // Autoplay style (server: autoplay_options / set_autoplay_mode over MA config/player_queues/*). Fake playlist names only.
 // apsimilar=0: no provider can find similar tracks; apmode=<mode>[:<n>] pins a style (n = playlist index).
@@ -21,7 +23,7 @@ const AP_PLAYLISTS = [['library://playlist/901', 'Sunday Morning Mix'], ['librar
   .map(([uri, name]) => ({ uri, name }));
 const AP_MODES = ['auto', 'similar', 'library', 'playlist'];
 
-export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit, sleep, catalog, user }) {
+export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit, sleep, catalog, user }) {
   const v07 = createV07({ params, catalog, sleep });
   const log = (window.__ws = []);
   const subs = new Map(); // id -> {entity, cb}
@@ -68,6 +70,12 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
     if (command === 'music/search') {
       const types = args.media_types;
       if (Array.isArray(types) && types.length === 1 && types[0] === 'genre') return v07.handle(command, args);
+      if (Array.isArray(args.providers) && args.providers.length) {
+        // genres live in the library: MA returns none for a single music provider
+        const r = await sendCommand(command, args);
+        if (Array.isArray(types) && types.includes('genre')) r.genres = args.providers[0] === 'library' ? (await v07.handle(command, args)).genres : [];
+        return r;
+      }
       return sendCommand(command, args);
     }
     // Search radio heart (0.6.2). Like MA: a favourite always lives in the library, so a provider station is added to it.
@@ -102,6 +110,9 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
     switch (t) {
       case 'capabilities': return { version: '0.6.0', ma_entry_id: 'MA_ENTRY_ID_PLACEHOLDER', ma_connected: true, guest: false, classes: ['library', 'playback', 'queue', 'read', 'speakers'], commands: [], todo_verify: [], features };
       case 'ma': return maCmd(String(msg.command), msg.args ?? {});
+      // like websocket_api.search_providers(): available music/plugin providers with the search feature, by name
+      case 'search_providers': return { providers: DEMO_PROVIDERS.filter((p) => ['music', 'plugin'].includes(p.type) && p.available && p.supported_features.includes('search'))
+        .map((p) => ({ instance_id: p.instance_id, domain: p.domain, name: p.name })).sort((a, b) => a.name.localeCompare(b.name)) };
       case 'queue_items': {
         const ent = msg.entity_id, Q = QS[ent];
         if (!Q) throw err('not_found', `${ent} is not a Music Assistant player`);

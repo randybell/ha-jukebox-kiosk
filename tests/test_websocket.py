@@ -27,7 +27,7 @@ async def test_capabilities_admin(hass: HomeAssistant, hass_ws_client: Any, admi
     res = await _call(ws, type="jukebox_kiosk/capabilities")
     assert res["success"]
     r = res["result"]
-    assert r["backend"] == "kiosk" and r["version"] == "0.7.1" and r["ma_connected"]
+    assert r["backend"] == "kiosk" and r["version"] == "0.7.2" and r["ma_connected"]
     assert not r["guest"] and "admin" in r["classes"]
     assert r["features"]["unfavorite"] and r["features"]["queue_edit"]
     assert "player_queues/play_index" in r["commands"]
@@ -611,3 +611,59 @@ async def test_repeat_one_mapped_to_all_if_ever_forwarded(
                           args={"queue_id": PLAYER_A, "repeat_mode": sent})
         assert res["success"], sent
         assert fake_ma.calls[-1] == ("player_queues/repeat", {"queue_id": PLAYER_A, "repeat_mode": want}), sent
+
+
+# ---- 0.7.2: combined Library tab (search source picker, genres list) ----
+
+
+async def test_v072_search_providers(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    caps = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
+    assert caps["features"]["search_providers"] is True
+    res = await _call(ws, type="jukebox_kiosk/search_providers")
+    assert res["success"]
+    # available music/plugin providers with the search feature only, deduped, sorted by name, 3 keys each
+    assert res["result"]["providers"] == [
+        {"instance_id": "apple_music--demo0001", "domain": "apple_music", "name": "Apple Music"},
+        {"instance_id": "spotify--demo0002", "domain": "spotify", "name": "Spotify"},
+        {"instance_id": "tunein--demo0003", "domain": "tunein", "name": "TuneIn"},
+    ]
+    assert "secret" not in str(res["result"])
+    n = len(fake_ma.calls)
+    await _call(ws, type="jukebox_kiosk/search_providers")
+    assert len(fake_ma.calls) == n  # read from the client's provider list, no MA command
+
+
+async def test_v072_search_providers_empty(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    fake_ma.providers = None
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/search_providers")
+    assert res["success"] and res["result"]["providers"] == []
+
+
+@pytest.mark.parametrize(
+    "options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["playback"]}]
+)
+async def test_v072_search_providers_needs_read(hass: HomeAssistant, hass_ws_client: Any, user_token: Any) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    caps = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
+    assert caps["features"]["search_providers"] is False
+    res = await _call(ws, type="jukebox_kiosk/search_providers")
+    assert not res["success"]
+
+
+async def test_v072_search_limited_and_genre_list(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    user, token = user_token
+    ws = await _ws(hass_ws_client, token)
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/search",
+                      args={"search_query": "mo", "media_types": ["playlist"], "limit": 25, "providers": ["spotify--demo0002"]})
+    assert res["success"]
+    c, args = fake_ma.calls[-1]
+    assert c == "music/search" and args["providers"] == ["spotify--demo0002"] and args["media_types"] == ["playlist"]
+    assert args["user"]["user_id"] == user.id
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/genres/library_items", args={"limit": 500, "offset": 0})
+    assert res["success"]
+    c, args = fake_ma.calls[-1]
+    assert c == "music/genres/library_items" and args["limit"] == 500 and args["user"]["user_id"] == user.id

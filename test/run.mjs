@@ -41,7 +41,7 @@ const FOCUS_MONITOR = () => {
 
 async function open(page, query = '', vp = { width: 1280, height: 800 }) {
   await page.setViewport({ deviceScaleFactor: 1, ...vp });
-  await page.goto(`${BASE}?fresh=1${query.includes('tab=') ? '' : '&tab=search'}${query}`);
+  await page.goto(`${BASE}?layout=separate&fresh=1${query.includes('tab=') ? '' : '&tab=search'}${query}`);
   await page.waitForFunction('window.__ready === true');
   await sleep(150);
 }

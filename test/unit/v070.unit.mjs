@@ -56,7 +56,7 @@ check('C8 labels', C.categoryLabel('audiobooks') === 'Audiobooks' && C.categoryL
 // ---------------- kiosk ext caps ----------------
 check('E1 extFromServer: missing features → all off', J(B.extFromServer(undefined)) === J(B.NO_EXT) && J(B.extFromServer({})) === J(B.NO_EXT));
 check('E2 extFromServer reads genres / radio_browse / discover / resume (booleans only)',
-  J(B.extFromServer({ genres: true, radio_browse: true, discover: 'yes', resume: false })) === J({ genres: true, radioBrowse: true, discover: false, resume: false, autoplay: false, autoplayMode: false }));
+  J(B.extFromServer({ genres: true, radio_browse: true, discover: 'yes', resume: false })) === J({ genres: true, radioBrowse: true, discover: false, resume: false, autoplay: false, autoplayMode: false, searchProviders: false }));
 check('E3 genres falls back to genre_overview', B.extFromServer({ genre_overview: true }).genres === true && B.extFromServer({ genre_overview: true, genres: false }).genres === false);
 
 // ---------------- genres ----------------
@@ -205,8 +205,8 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
 // ---------------- v0.7 Library home + radio_favorites_only ----------------
 {
   const ids = (c) => L.configuredTiles(c).map((t) => t.id);
-  check('LH1 on by default (0.7.1): unset → "Library" (or library_label)', L.libraryHomeOn({}) && L.libraryHomeOn(undefined) && L.libraryTabLabel({}) === 'Library' && L.libraryTabLabel({ library_label: 'Music' }) === 'Music');
-  check('LH1b library_home: false keeps the 0.6 "Browse" (library_label ignored)', !L.libraryHomeOn({ library_home: false }) && L.libraryTabLabel({ library_home: false }) === 'Browse' && L.libraryTabLabel({ library_home: false, library_label: 'Music' }) === 'Browse');
+  check('LH1 0.7.2: tile home off by default; the tab is "Library" (or library_label)', !L.libraryHomeOn({}) && !L.libraryHomeOn(undefined) && L.libraryHomeOn({ library_home: true }) && L.libraryTabLabel({}) === 'Library' && L.libraryTabLabel({ library_label: 'Music' }) === 'Music');
+  check('LH1b 0.7.2: library_home: false is still "Library" (library_label honoured)', !L.libraryHomeOn({ library_home: false }) && L.libraryTabLabel({ library_home: false }) === 'Library' && L.libraryTabLabel({ library_home: false, library_label: 'Music' }) === 'Music');
   check('LH2 on: "Library", or library_label', L.libraryTabLabel({ library_home: true }) === 'Library' && L.libraryTabLabel({ library_home: true, library_label: ' Music ' }) === 'Music'
     && L.libraryTabLabel({ library_home: true, library_label: '  ' }) === 'Library');
   check('LH3 default tiles: Playlists, Artists, Albums, Radio, Search (optional ones hidden)', J(ids({})) === J(['playlist', 'artist', 'album', 'radio', 'search']));
@@ -227,9 +227,9 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
   const ed = (cfg) => { const e = new Ed.JukeboxCardEditor(); e.setConfig(cfg); return e; };
   const base = { type: 'custom:jukebox-card', entity: 'media_player.placeholder', config_entry_id: 'PLACEHOLDER' };
   const e1 = ed(base), f1 = e1.formData();
-  check('LH10 editor shows the default tiles and writes nothing until changed; library_home shown on, radio_favorites_only off',
+  check('LH10 editor shows the default tiles and writes nothing until changed; library_home shown off (0.7.2), radio_favorites_only off',
     J(f1.library_tiles) === J(['playlist', 'artist', 'album', 'radio', 'search']) && !('library_tiles' in e1.toConfig(f1))
-    && f1.library_home === true && !('library_home' in e1.toConfig(f1)) && e1.toConfig({ ...f1, library_home: false }).library_home === false && f1.radio_favorites_only === false, J(f1.library_tiles));
+    && f1.library_home === false && !('library_home' in e1.toConfig(f1)) && e1.toConfig({ ...f1, library_home: true }).library_home === true && f1.radio_favorites_only === false, J(f1.library_tiles));
   const c11 = e1.toConfig({ ...f1, library_tiles: ['radio', 'search', 'radio'] });
   check('LH11 reorder / hide writes the id list (deduped)', J(c11.library_tiles) === J(['radio', 'search']), J(c11.library_tiles));
   const e12 = ed({ ...base, library_tiles: [{ tile: 'playlist', label: 'Mixes' }, 'radio'] });

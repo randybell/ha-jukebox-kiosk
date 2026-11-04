@@ -24,6 +24,15 @@ const up = (path) => folder('..', path.slice(0, path.lastIndexOf('/')) || 'radio
 const regionName = (cc) => { try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(cc.toUpperCase()); } catch { return cc.toUpperCase(); } };
 const cap = (s) => s.replace(/^./, (c) => c.toUpperCase());
 
+/** 0.7.2: MA music/browse <instance_id>:// for the demo providers (Apple Music has folders; TuneIn has none: the card shows "Type to search") */
+function providerBrowse(id, sub) {
+  const dom = id.split('--')[0];
+  if (dom === 'tunein') return [];
+  const f = (name, p) => ({ media_type: 'folder', item_id: p, provider: id, name, path: `${id}://${p}`, uri: `${id}://${p}`, image: null, is_playable: false });
+  if (!sub) return [f('Artists', 'artists'), f('Albums', 'albums'), f('Playlists', 'playlists'), f('Tracks', 'tracks')];
+  if (sub === 'playlists') return [f('..', ''), ...['Morning Mix', 'Placeholder Hits', 'Demo Chill', 'Sample Workout'].map((n, i) => ({ media_type: 'playlist', provider: id, item_id: `p${i}`, uri: `${id}://playlist/p${i}`, name: n, image: svgArt(n, (i * 70) % 360) }))];
+  return [f('..', '')];
+}
 export function createV07({ params, catalog, sleep }) {
   const EMPTY = params.get('v07') === 'empty';
   const lat = Number(params.get('v07lat') ?? 60);
@@ -35,6 +44,8 @@ export function createV07({ params, catalog, sleep }) {
   function browse(path) {
     if (params.get('rbfail') === '1') throw new Error('mock: Radio Browser unavailable');
     if (EMPTY) return path === 'radiobrowser://' ? [] : [up(path)];
+    const pm = /^([a-z_]+--demo\d{4}):\/\/(.*)$/.exec(path);
+    if (pm) return providerBrowse(pm[1], pm[2]);
     const P = 'radiobrowser://';
     if (path === P) return [folder('Popularity', `${P}popularity`), folder('Category', `${P}category`)];
     if (path === `${P}popularity`) return [up(path), folder('Popular', `${P}popularity/popular`), folder('Votes', `${P}popularity/votes`)];
@@ -99,6 +110,13 @@ export function createV07({ params, catalog, sleep }) {
         const f = (key, name, list) => ({ media_type: 'folder', item_id: `genre_${key}`, provider: 'library', name, path: '', items: inGenre(gid, list).slice(0, lim).map(pub) });
         if (gid === String(GENRES.indexOf('Mock Folk') + 1)) return [f('artists', 'Artists', []), f('albums', 'Albums', []), f('tracks', 'Tracks', [])];
         return [f('artists', 'Artists', catalog.artists), f('albums', 'Albums', catalog.albums), f('tracks', 'Tracks', catalog.tracks), f('playlists', 'Playlists', catalog.playlists)];
+      }
+      case 'music/genres/library_items': {
+        const off = Number(args.offset ?? 0), lim = Number(args.limit ?? 25), q = String(args.search ?? '').toLowerCase();
+        let list = genreItems.filter((g) => !q || g.name.toLowerCase().includes(q));
+        if (args.hide_empty) list = list.filter((g) => g.name !== 'Mock Folk');
+        list = [...list].sort((a, b) => (args.order_by === 'timestamp_added_desc' ? Number(b.item_id) - Number(a.item_id) : a.name.localeCompare(b.name)));
+        return list.slice(off, off + lim);
       }
       case 'music/genres/tracks': {
         const gid = String(args.item_id ?? ''), off = Number(args.offset ?? 0), lim = Number(args.limit ?? 100);

@@ -68,6 +68,23 @@ class FakeMa:
         self.ap_core = {"autoplay_mode": "auto", "autoplay_playlist": None}
         self.similar_available = True
         self.ap_playlists = [("library://playlist/1", "Sunday Morning Mix"), ("library://playlist/2", "Kitchen Dance Party")]
+        # MA provider instances (invented ids); the client keeps this list current from providers_updated
+        self.providers = [
+            SimpleNamespace(type="music", domain="spotify", instance_id="spotify--demo0002", name="Spotify", available=True,
+                            supported_features=["search", "browse"], config={"secret": "x"}),
+            SimpleNamespace(type="music", domain="apple_music", instance_id="apple_music--demo0001", name="Apple Music",
+                            available=True, supported_features=["search"]),
+            SimpleNamespace(type="music", domain="filesystem_local", instance_id="filesystem_local--demo0005", name="Local files",
+                            available=False, supported_features=["search"]),
+            SimpleNamespace(type="music", domain="builtin", instance_id="builtin", name="Built-in", available=True,
+                            supported_features=["browse"]),
+            SimpleNamespace(type="player", domain="chromecast", instance_id="chromecast--demo0006", name="Chromecast",
+                            available=True, supported_features=["search"]),
+            {"type": "music", "domain": "tunein", "instance_id": "tunein--demo0003", "name": "TuneIn", "available": True,
+             "supported_features": ["search"]},
+            {"type": "music", "domain": "tunein", "instance_id": "tunein--demo0003", "name": "TuneIn", "available": True,
+             "supported_features": ["search"]},
+        ]
 
     async def send_command(self, command: str, require_schema: int | None = None, **kwargs: Any) -> Any:
         self.calls.append((command, kwargs))

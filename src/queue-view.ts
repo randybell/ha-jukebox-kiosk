@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
-import { libraryTabLabel } from './library-home';
+import { combinedOn, libraryTabLabel } from './library-home';
 import { mediaStyles, noFocus, artTpl, provTpl, PressController, menuPos, menuTpl, confirmTpl, type ConfirmState, type MenuAction, type MenuPos } from './shared';
 import { canJumpQueue } from './speakers/model';
 import { QueueBusy, type QueueItem, type QueueModel, type QueueSnapshot, type RemovedRow } from './queue-model';
@@ -259,7 +259,7 @@ export class JbQueue extends LitElement {
         ${s?.loading ? html`<span class="live busy"></span>` : nothing}${this.autoplayTpl(s)}</div>
       <div class="scroll panel" @scroll=${() => this.press.scrolled()}>
         ${s?.error ? html`<div class="empty"><b>Queue unavailable</b><span>${s.error}</span></div>`
-          : !items.length ? html`<div class="empty"><b>${s?.loading || !s?.at ? 'Loading queue…' : 'The queue is empty'}</b><span>Add music from Search or ${libraryTabLabel(this.config)}.</span></div>`
+          : !items.length ? html`<div class="empty"><b>${s?.loading || !s?.at ? 'Loading queue…' : 'The queue is empty'}</b><span>${combinedOn(this.config) ? `Add music from ${libraryTabLabel(this.config)}.` : `Add music from Search or ${libraryTabLabel(this.config)}.`}</span></div>`
           : html`
             ${past.map((it) => this.row(it, 'past', 0, false, false, jumps))}
             ${now ? html`<h3 class="eyebrow">Now playing</h3>${this.row(now, 'now', 0, false, false, jumps)}` : nothing}
