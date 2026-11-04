@@ -51,7 +51,8 @@ export async function toggleFavorite(it: Partial<MaItem>, type: FavType, on: boo
 
 /** What a view needs from the card's backend for a heart. */
 export interface FavBackend { caps: { libraryWrite: boolean }; send: MaSend }
-export interface FavOutcome { favorite: boolean; message: string; changed: boolean }
+/** `error` = the tap didn't take (refused, failed, or not in the library): the heart is back where it was */
+export interface FavOutcome { favorite: boolean; message: string; changed: boolean; error: boolean }
 
 /**
  * One store per card, shared by Search, Library, detail pages, the station sheet and Now Playing (passed as
@@ -97,22 +98,22 @@ export class FavStore {
    */
   async toggle(it: MaItem, type: FavType, be: FavBackend | undefined, src?: Partial<MaItem>): Promise<FavOutcome> {
     const on = this.isFav(it);
-    if (!be?.caps.libraryWrite) return { favorite: on, message: '', changed: false };
-    if (this.busy.has(it.uri)) return { favorite: on, message: '', changed: false };
+    if (!be?.caps.libraryWrite) return { favorite: on, message: '', changed: false, error: false };
+    if (this.busy.has(it.uri)) return { favorite: on, message: '', changed: false, error: false };
     this.busy.add(it.uri);
     this.put(it.uri, !on); this.emit();
     try {
       const r = await toggleFavorite(src ?? it, type, on, (c, d) => be.send(c, d), this.ids.get(it.uri) ?? '');
       if (r.result === 'notlib') {
         this.put(it.uri, on); this.emit();
-        return { favorite: on, message: `${it.name} isn't in your library`, changed: false };
+        return { favorite: on, message: `${it.name} isn't in your library`, changed: false, error: true };
       }
       if (r.libId) this.ids.set(it.uri, r.libId);
-      return { favorite: !on, message: on ? `Removed ${it.name} from favorites` : `Added ${it.name} to favorites`, changed: true };
+      return { favorite: !on, message: on ? `Removed ${it.name} from favorites` : `Added ${it.name} to favorites`, changed: true, error: false };
     } catch (e) {
       console.warn('[jukebox-card] favorite failed', e);
       this.put(it.uri, on); this.emit();
-      return { favorite: on, message: on ? `Couldn't remove ${it.name} from favorites` : `Couldn't add ${it.name} to favorites`, changed: false };
+      return { favorite: on, message: on ? `Couldn't remove ${it.name} from favorites` : `Couldn't add ${it.name} to favorites`, changed: false, error: true };
     } finally {
       this.busy.delete(it.uri);
     }

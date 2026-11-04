@@ -174,6 +174,8 @@ export class JbSpeakers extends LitElement {
     const l = this._hold.release((v) => v.o.ms ?? chipMs(v.o.kind ?? 'info', !!v.o.undo));
     if (l) this.status(l.v.text, { ...l.v.o, ms: l.ms });
   }
+  /** v0.7: a message from elsewhere in the card (hearts) in this one chip; it never replaces a pending question */
+  notify(text: string, kind: 'info' | 'error' = 'info') { if (text) this.status(text, { kind }); }
   /** Q62 (tests): a question is waiting in the chip */
   get asking() { return this._hold.pending; }
   private toast(t: string) { this.status(t); }
@@ -533,6 +535,8 @@ export class JbSpeakers extends LitElement {
   static styles = [tokens, base, mediaStyles, css`
     :host { position: absolute; inset: 0; z-index: 30; pointer-events: none; container: spk / size; font-family: var(--_font-body); color: var(--_fg); }
     :host([open]) { pointer-events: auto; }
+    /* v0.7: the station sheet (z-index 32) is open: the chip shows above it (the closed panel is only the chip) */
+    :host([lift]:not([open])) { z-index: 33; }
     :host(:not([open])) .scrim, :host(:not([open])) .confirm, :host(:not([open])) .st { pointer-events: auto; }
     .scrim { position: absolute; inset: 0; }
     .sp-scrim { z-index: 1; background: #000000b0; }

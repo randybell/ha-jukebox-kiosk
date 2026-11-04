@@ -1,6 +1,6 @@
 import { html, nothing, type ReactiveController, type ReactiveControllerHost } from 'lit';
 import { icon } from './icons';
-import { noFocus } from './shared';
+import { noFocus, status } from './shared';
 import { favTypeOf, type FavStore, type FavType } from './favorites';
 import type { JukeboxCardConfig, MaItem } from './types';
 
@@ -34,12 +34,14 @@ export class FavController implements ReactiveController {
   hostDisconnected() { this.unsub?.(); this.unsub = undefined; this.store = undefined; }
   get favs() { return this.host.config?._favs; }
   isFav(it: Partial<MaItem>) { return this.favs?.isFav(it) ?? !!it.favorite; }
-  /** toggle; resolves with the status text for the view's toast ('' = nothing to say) */
+  /** toggle (optimistic, rolled back on error); the outcome shows in the card's top-right status chip. Resolves with
+   *  the message ('' = nothing to say). */
   async toggle(it: MaItem, type: FavType, src?: Partial<MaItem>): Promise<string> {
     const s = this.favs, be = this.host.config?._backend;
     if (!s || !be) return '';
     const r = await s.toggle(it, type, be, src);
     if (r.changed) this.host.dispatchEvent(new CustomEvent('jukebox-favorites-changed', { bubbles: true, composed: true, detail: { media_type: type, uri: it.uri, favorite: r.favorite } }));
+    if (r.message) status(this.host, r.message, r.error ? 'error' : 'info');
     return r.message;
   }
 }

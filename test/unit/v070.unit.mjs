@@ -9,7 +9,7 @@ const OUT = new URL('../tmp/unit-v070/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const bundle = await rollup({
   onwarn: (w, def) => { if (w.code !== 'THIS_IS_UNDEFINED') def(w); },
-  input: ['src/search-categories.ts', 'src/genres.ts', 'src/radio-browse.ts', 'src/discover.ts', 'src/backend/index.ts', 'src/editor.ts', 'src/library-home.ts', 'src/radio-fav.ts'],
+  input: ['src/search-categories.ts', 'src/genres.ts', 'src/radio-browse.ts', 'src/discover.ts', 'src/backend/index.ts', 'src/editor.ts', 'src/library-home.ts', 'src/radio-fav.ts', 'src/heart.ts'],
   plugins: [resolve({ exportConditions: ['node'] }), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })],
 });
 await bundle.write({ dir: OUT, format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name]-[hash].mjs' });
@@ -26,6 +26,7 @@ const R = await import(OUT + 'radio-browse.mjs');
 const D = await import(OUT + 'discover.mjs');
 const B = await import(OUT + 'index.mjs');
 const RF = await import(OUT + 'radio-fav.mjs');
+const HT = await import(OUT + 'heart.mjs');
 // src/define.ts registers through window.customElements; in node, lit's DOM shim puts customElements on globalThis
 globalThis.window ??= globalThis;
 const Ed = await import(OUT + 'editor.mjs');
@@ -295,6 +296,19 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
   let err = '';
   try { await RF.resolveLibraryRadioId({ uri: P }, send(new Error('unavailable'))); } catch (e) { err = e.message; }
   check('HL5 lookup errors propagate (the card reverts the heart and says so)', err === 'unavailable', err);
+}
+
+// ---- 0.7.0 hearts: where a heart shows (kiosk library class; `hearts: false` keeps only the radio heart) ----
+{
+  const favs = {};
+  const kio = (lw) => ({ caps: { libraryWrite: lw } });
+  const t = (cfg, type, it) => HT.heartType(cfg, type, it);
+  check('HT1 library class + store → a heart for track / album / artist / playlist / radio / podcast / audiobook rows',
+    ['tracks', 'albums', 'artists', 'playlists', 'radio', 'podcasts', 'audiobooks'].map((g) => t({ _favs: favs, _backend: kio(true) }, g)).join() === 'track,album,artist,playlist,radio,podcast,audiobook');
+  check('HT2 no genre / folder / episode hearts', ['genres', 'folder', 'podcast_episode', ''].every((g) => t({ _favs: favs, _backend: kio(true) }, g) === ''));
+  check('HT3 no library class, no backend or no store → no hearts', t({ _favs: favs, _backend: kio(false) }, 'tracks') === '' && t({ _favs: favs }, 'tracks') === '' && t({ _backend: kio(true) }, 'tracks') === '');
+  check('HT4 hearts: false → only the radio heart stays', t({ _favs: favs, _backend: kio(true), hearts: false }, 'tracks') === '' && t({ _favs: favs, _backend: kio(true), hearts: false }, 'radio') === 'radio');
+  check('HT5 the item\'s own media_type wins over the group', t({ _favs: favs, _backend: kio(true) }, 'tracks', { media_type: 'playlist' }) === 'playlist');
 }
 
 console.log(`\n${total - failures}/${total} v0.7 unit checks passed`);

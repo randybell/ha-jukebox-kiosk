@@ -2,7 +2,7 @@ import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
 import { providerLabel } from './providers';
-import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, ART, hash, playerArt, isRadio, RADIO_ART } from './shared';
+import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, status, ART, hash, playerArt, isRadio, RADIO_ART } from './shared';
 import { throttle } from './slider';
 import './slider';
 import './lyrics/lyrics-view';
@@ -143,22 +143,37 @@ export class JbNow extends LitElement {
     const base = uri && this.config._favs ? this.config._favs.isFav({ uri, favorite: !!cur?.favorite }) : !!cur?.favorite;
     return this.flag('fav:' + uri, base);
   }
+  /** v0.7: through the kiosk integration the heart needs the Library permission (hidden without it); other setups as 0.6 */
+  private canFav() {
+    if ((this.config.favorite_entity ?? 'button.everywhere_favorite_current_song') === '') return false;
+    const be = this.config._backend;
+    return be?.kind !== 'kiosk' || be.caps.libraryWrite;
+  }
+  /** Optimistic: the heart flips at once; when the call fails it flips back and the error shows in the top-right chip. */
   toggleFavorite() {
+    if (!this.canFav()) return;
     const btn = this.config.favorite_entity ?? 'button.everywhere_favorite_current_song';
     const fav = this.isFav();
     const be = this.config._backend;
-    if (fav && be && !be.caps.unfavorite) { this.toast("Can't remove favorites here"); return; }
+    if (fav && be && !be.caps.unfavorite) { status(this, "Can't remove favorites here", 'error'); return; }
     const uri = String(this.ent?.attributes?.media_content_id ?? '');
-    this.flags.set('fav:' + uri, { v: !fav, t: Date.now() + 26000 }); this.requestUpdate();
+    const title = String(this.ent?.attributes?.media_title ?? '').trim();
+    const what = title || 'this track';
+    const k = 'fav:' + uri;
+    this.flags.set(k, { v: !fav, t: Date.now() + 26000 }); this.requestUpdate();
     // ...and the other way round: rows showing this track follow the Now Playing heart (same MA favourite)
-    if (uri.includes('://')) fire(this, 'jukebox-favorites-changed', { media_type: 'track', uri, favorite: !fav });
-    if (fav) {
-      (be ? be.unfavoriteCurrent(this.eid) : this.hass!.callService('mass_queue', 'unfavorite_current_item', { entity: this.eid })).catch((e: any) => console.warn(e));
-      this.toast('Removed from favorites');
-    } else {
-      this.call('button', 'press', {}, btn);
-      this.toast('Added to favorites');
-    }
+    const share = (v: boolean) => { if (uri.includes('://')) fire(this, 'jukebox-favorites-changed', { media_type: 'track', uri, favorite: v }); };
+    share(!fav);
+    const run = fav
+      ? (be ? be.unfavoriteCurrent(this.eid) : this.hass!.callService('mass_queue', 'unfavorite_current_item', { entity: this.eid }))
+      : this.hass!.callService('button', 'press', {}, { entity_id: btn });
+    status(this, fav ? `Removed ${what} from favorites` : `Added ${what} to favorites`);
+    Promise.resolve(run).catch((e: any) => {
+      console.warn('[jukebox-card] favorite failed', e);
+      this.flags.delete(k); this.requestUpdate();
+      share(fav);
+      status(this, fav ? `Couldn't remove ${what} from favorites` : `Couldn't add ${what} to favorites`, 'error');
+    });
   }
 
   // ---------- progress ----------
@@ -276,7 +291,7 @@ export class JbNow extends LitElement {
     // Autoplay indicator only (the toggle lives in the Queue header): flag on, server lists it, MA says it is on, queue not dynamic
     const autoplay = !!this.config?.show_autoplay && !!this.config._backend?.ext?.autoplay && this._snap?.autoplay === true && !this._snap?.dynamic;
     const favOn = this.isFav();
-    const showFav = (this.config.favorite_entity ?? 'button.everywhere_favorite_current_song') !== '';
+    const showFav = this.canFav();
     const tb = (cls: string, ic: string, label: string, fn: () => void, on?: boolean, dot = false, dis = false) =>
       html`<button class="tb ${cls} ${on ? 'on' : ''}" tabindex="-1" aria-label=${label} title=${label} aria-pressed=${on === undefined ? nothing : on ? 'true' : 'false'}
         ?disabled=${dis} @pointerdown=${noFocus} @click=${fn}>${icon(ic)}${dot ? html`<i class="dot"></i>` : nothing}</button>`;

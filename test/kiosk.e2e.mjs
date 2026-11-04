@@ -137,7 +137,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
 }
 // ---------------- 5. limited capabilities hide controls ----------------
 {
-  const caps = encodeURIComponent(J({ queue_play: false, queue_edit: false, undo: false, unfavorite: false, speakers: false, lyrics: false }));
+  const caps = encodeURIComponent(J({ queue_play: false, queue_edit: false, undo: false, unfavorite: false, speakers: false, lyrics: false, library_write: true }));
   const p = await openQ(`&admin=1&kcaps=${caps}`);
   await sleep(300);
   const acts = await ev(p, `[...${QV}.querySelectorAll('.qr .qa')].filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.dataset.action ?? 'more')`);
@@ -147,13 +147,13 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const n = await nws(p);
   await tap(p, `__card.shadowRoot.querySelector('.tab[data-tab="now"]')`); await sleep(300);
   await tap(p, `${NP}.querySelector('.tb.fv')`); await sleep(400);
-  const toast = await ev(p, `${NP}.querySelector('.toast')?.textContent?.trim() ?? __card.shadowRoot.querySelector('.toast')?.textContent?.trim() ?? ''`);
+  const toast = await ev(p, `__card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st .ct')?.textContent?.trim() ?? ''`); // v0.7: the top-right status chip
   check('G3 no unfavorite → heart on a favorite shows "Can\'t remove favorites here", nothing sent', /can.t remove favorites/i.test(toast) && !(await ws(p, n)).some((x) => x.type === 'unfavorite_current'), toast);
   check('G4 speakers feature off → grouping unavailable', (await ev(p, `__card.speakers.available`)) === false);
   await p.close();
 }
 {
-  const p = await open('');
+  const p = await open(`&kcaps=${encodeURIComponent(J({ library_write: true }))}`); // v0.7: the Now Playing heart needs the library class
   const n = await nws(p);
   await tap(p, `${NP}.querySelector('.tb.fv')`); await sleep(500);
   const m = (await ws(p, n)).filter((x) => x.type === 'unfavorite_current');
@@ -197,7 +197,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const rows = (p) => ev(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].map((r) => ({ g: r.dataset.group, uri: r.dataset.uri,
     fav: r.querySelector('[data-act=fav]')?.getAttribute('aria-pressed') ?? null }))`);
   const query = async (p, q) => { await ev(p, `${SV}.setQuery(${J(q)})`); await wait(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].some((r) => r.dataset.group === 'radio')`); await sleep(150); };
-  const toast = (p) => ev(p, `${SV}._toast`);
+  const toast = (p) => ev(p, `__card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st .ct')?.textContent?.trim() ?? ''`); // v0.7: hearts report in the top-right status chip
   const heart = (uri) => `${SV}.shadowRoot.querySelector('.row[data-uri="${uri}"] [data-act=fav]')`;
   const tapHeart = async (p, uri) => { await ev(p, `${heart(uri)}.scrollIntoView({ block: 'center' })`); await sleep(80); await tap(p, heart(uri)); };
 
@@ -287,7 +287,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const rows = (p) => ev(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].filter((r) => r.dataset.group === 'radio').map((r) => ({ uri: r.dataset.uri,
     name: r.querySelector('.t, .name, .title')?.textContent?.trim() ?? r.textContent.trim().slice(0, 40), fav: r.querySelector('[data-act=fav]')?.getAttribute('aria-pressed') ?? null }))`);
   const query = async (p, q) => { await ev(p, `${SV}.setQuery(${J(q)})`); await wait(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].some((r) => r.dataset.group === 'radio')`); await sleep(150); };
-  const toast = (p) => ev(p, `${SV}._toast`);
+  const toast = (p) => ev(p, `__card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st .ct')?.textContent?.trim() ?? ''`); // v0.7: hearts report in the top-right status chip
   const heart = (uri) => `${SV}.shadowRoot.querySelector('.row[data-uri="${uri}"] [data-act=fav]')`;
   const tapHeart = async (p, uri) => { await ev(p, `${heart(uri)}.scrollIntoView({ block: 'center' })`); await sleep(80); await tap(p, heart(uri)); };
   const pressed = (p, uri) => ev(p, `${heart(uri)}.getAttribute('aria-pressed')`);
@@ -344,7 +344,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const sheet = (p) => ev(p, `(() => { const r = ${ST}; const sh = r.querySelector('.sheet'); if (!sh) return null; return { name: r.querySelector('.nm')?.textContent.trim(),
     fields: [...r.querySelectorAll('[data-field]')].map((f) => f.dataset.field + '=' + (f.querySelector('dd') ?? f).textContent.trim()),
     acts: [...r.querySelectorAll('[data-action]')].map((b) => b.dataset.action), fav: r.querySelector('[data-action=fav]')?.getAttribute('aria-pressed') ?? null,
-    toast: r.querySelector('.toast')?.textContent ?? '' }; })()`);
+    toast: __card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st .ct')?.textContent?.trim() ?? '' }; })()`);
   const tileOf = (name) => `[...${BR}.shadowRoot.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent.trim() === ${J(name)})`;
   const tapTile = async (p, name) => { await ev(p, `${tileOf(name)}.scrollIntoView({ block: 'center' })`); await sleep(80); await tap(p, tileOf(name)); await sleep(250); };
   const radioTab = async (p) => { await wait(p, `${BR}.shadowRoot.querySelector('[data-cat=radio]')`); await sleep(200);
@@ -390,6 +390,9 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('S6 heart (on) → item_by_uri lookup → music/favorites/remove_item {media_type radio, library_item_id}; heart off; "Removed …"',
     m.map((x) => x.command).join() === (nightUri.startsWith('library://') ? '' : 'music/item_by_uri,') + 'music/favorites/remove_item'
     && rm.args.media_type === 'radio' && /^\d+$/.test(String(rm.args.library_item_id)) && s.fav === 'false' && /^Removed .+ from favorites$/.test(s.toast), J({ m, s }));
+  const onTop = await ev(p, `(() => { const c = __card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st'); if (!c) return 'no chip'; const r = c.getBoundingClientRect();
+    const hit = __card.shadowRoot.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return hit?.localName ?? 'none'; })()`);
+  check('S6b station sheet heart: the status chip shows above the open sheet (top right)', onTop === 'jb-speakers', onTop);
   // Play replaces the queue, like the old tap's Play now
   await tap(p, `${ST}.querySelector('[data-action=play]')`); await sleep(300);
   const pl = await plays(p);
@@ -457,7 +460,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   c = favCmds(await ws(p, n));
   check('K3 tap again → remove_item {playlist, library id} straight away (no confirmation); heart off; "Removed …"',
     c.length >= 1 && c[c.length - 1][0] === 'favorites/remove_item' && c[c.length - 1][1].media_type === 'playlist' && `library://playlist/${c[c.length - 1][1].library_item_id}` === pl.uri
-    && (await pressedOf(p, tfav)) === 'false' && !(await ev(p, `${BRs}.querySelector('.confirm')`)) && /^Removed .+ from favorites$/.test(await ev(p, `${BR}._toast`)), J(c));
+    && (await pressedOf(p, tfav)) === 'false' && !(await ev(p, `${BRs}.querySelector('.confirm')`)) && /^Removed .+ from favorites$/.test(await ev(p, `__card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st .ct')?.textContent?.trim() ?? ''`)), J(c));
   // Library › Tracks: a row heart; the same track then shows hearted in Search (shared store)
   await ev(p, `${BRs}.querySelector('[data-cat=track]').click()`);
   await wait(p, `${BRs}.querySelectorAll('.row [data-act=fav]').length > 3`);
@@ -513,6 +516,64 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   await wait(p, `${BRs}.querySelectorAll('.tile').length > 3`);
   const off2 = await ev(p, `${BRs}.querySelectorAll('[data-act=fav]').length`);
   check('K9 hearts: false, or no library class → no hearts in Library', off1 === 0 && off2 === 0, J({ off1, off2 }));
+  await p.close();
+
+  // ---- finished hearts (0.7.0): playlists in Search + playlist page, the status chip, Now Playing gating + rollback ----
+  const CHIP = `__card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st')`;
+  const chip = (p) => ev(p, `(() => { const c = ${CHIP}; if (!c) return null; const r = c.getBoundingClientRect(), h = __card.getBoundingClientRect();
+    return { text: c.querySelector('.ct')?.textContent.trim(), kind: c.dataset.kind, top: r.top - h.top, right: h.right - r.right, left: r.left - h.left, w: h.width }; })()`);
+  const viewToasts = (p) => ev(p, `['jb-search', 'jb-browse', 'jb-now', 'jb-station'].map((t) => __card.shadowRoot.querySelector(t)?.shadowRoot?.querySelector('.toast')?.textContent ?? '').filter(Boolean)`);
+  p = await open(`&tab=search${KC}`);
+  await ev(p, `${SV}.setQuery('mock')`);
+  await wait(p, `${SV}.shadowRoot.querySelector('.row[data-group=playlists] [data-act=fav]')`); await sleep(150);
+  const plr = await ev(p, `(() => { const r = ${SV}.shadowRoot.querySelector('.row[data-group=playlists]'); return { uri: r.dataset.uri, fav: r.querySelector('[data-act=fav]').getAttribute('aria-pressed') }; })()`);
+  const plh = `${SV}.shadowRoot.querySelector('.row[data-uri="${plr.uri}"] [data-act=fav]')`;
+  n = await nws(p);
+  await tapEl(p, plh); await sleep(300);
+  c = favCmds(await ws(p, n));
+  const ch1 = await chip(p), vt1 = await viewToasts(p);
+  check('K10 Search playlist row heart → favorites add/remove for the playlist; pressed flips',
+    c.length >= 1 && (plr.fav === 'false' ? J(c[0]) === J(['favorites/add_item', { item: plr.uri }]) : c[c.length - 1][1].media_type === 'playlist') && (await pressedOf(p, plh)) === (plr.fav === 'false' ? 'true' : 'false'), J({ plr, c }));
+  check('K11 heart outcome shows in the top-right status chip (info), not a centre / bottom toast',
+    !!ch1 && ch1.kind === 'info' && /(Added|Removed) .+ (to|from) favorites$/.test(ch1.text) && ch1.top < 140 && ch1.right < 80 && ch1.left > ch1.w / 3 && vt1.length === 0, J({ ch1, vt1 }));
+  // playlist page: header heart, follows the row heart (shared store)
+  await tapEl(p, `${SV}.shadowRoot.querySelector('.row[data-uri="${plr.uri}"] .rt')`);
+  await wait(p, `${SDs}?.querySelector('.detail:not([data-loading]) .da [data-act=fav]')`); await sleep(150);
+  const ph = await pressedOf(p, `${SDs}.querySelector('.da [data-act=fav]')`);
+  check('K12 playlist page: header heart shows the same state as the row heart', ph === (plr.fav === 'false' ? 'true' : 'false'), J({ ph, plr }));
+  // a refused heart: back where it was, error chip with a Dismiss
+  await ev(p, `(${SV}.config._backend.send = () => Promise.reject(new Error('unauthorized')))`);
+  const hb = await pressedOf(p, `${SDs}.querySelector('.da [data-act=fav]')`);
+  await tap(p, `${SDs}.querySelector('.da [data-act=fav]')`); await sleep(250);
+  const ch2 = await chip(p);
+  check('K13 refused → header heart rolls back; error chip "Couldn\'t …" with Dismiss, no popup',
+    (await pressedOf(p, `${SDs}.querySelector('.da [data-act=fav]')`)) === hb && ch2?.kind === 'error' && /^Couldn.t (add|remove) .+ favorites$/.test(ch2.text)
+    && !!(await ev(p, `${CHIP}.querySelector('[data-action=cancel]')`)) && !(await ev(p, `${SDs}.querySelector('.confirm')`)), J({ hb, ch2 }));
+  await p.close();
+
+  // Now Playing: hidden without the library class (kiosk); with it, a failed un-heart rolls back
+  p = await open(`&tab=now`);
+  await wait(p, `${NP}.querySelector('.tb.sh')`); await sleep(200);
+  check('K14 kiosk user without the library class → no Now Playing heart', !(await ev(p, `${NP}.querySelector('.tb.fv')`)));
+  await p.close();
+  p = await open(`&tab=now${KC}`);
+  await wait(p, `${NP}.querySelector('.tb.fv')`); await sleep(200);
+  const npb = `${NP}.querySelector('.tb.fv')`;
+  // the server refuses after a moment (so the optimistic flip can be seen first)
+  await ev(p, `(__card.shadowRoot.querySelector('jb-now').config._backend.unfavoriteCurrent = () => new Promise((_, no) => setTimeout(() => no(new Error('unauthorized')), 400)))`);
+  const b0 = await pressedOf(p, npb);
+  await tap(p, npb);
+  const mid = await pressedOf(p, npb);
+  await sleep(700);
+  const b1 = await pressedOf(p, npb), ch3 = await chip(p);
+  check('K15 Now Playing un-heart fails → flips at once, then back on; error chip "Couldn\'t remove …"',
+    b0 === 'true' && mid === 'false' && b1 === 'true' && ch3?.kind === 'error' && /^Couldn.t remove .+ from favorites$/.test(ch3.text), J({ b0, mid, b1, ch3 }));
+  await p.close();
+  p = await open(`&tab=now${KC}`);
+  await wait(p, `${NP}.querySelector('.tb.fv')`); await sleep(200);
+  await tap(p, npb); await sleep(400);
+  const ch4 = await chip(p);
+  check('K16 Now Playing heart → info chip naming the track (top right), heart off', (await pressedOf(p, npb)) === 'false' && ch4?.kind === 'info' && /^Removed .+ from favorites$/.test(ch4.text) && ch4.top < 140, J(ch4));
   await p.close();
 }
 // ---------------- 0.6.5 repeat one → repeat queue, only with Playback ----------------

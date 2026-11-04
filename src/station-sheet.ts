@@ -10,14 +10,14 @@ import { icon } from './icons';
 import { mediaStyles, noFocus, artTpl, fire, playMedia, playMessage } from './shared';
 import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
 import { defineElement } from './define';
-import { stationInfo, toggleRadioFavorite } from './radio-fav';
+import { stationInfo } from './radio-fav';
 import { FavController } from './heart';
 
 export class JbStation extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, item: { attribute: false },
     large: { type: Boolean, reflect: true }, open: { type: Boolean, reflect: true },
-    _detail: { state: true }, _fav: { state: true }, _busy: { state: true }, _toast: { state: true },
+    _detail: { state: true }, _busy: { state: true }, _toast: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
@@ -26,20 +26,17 @@ export class JbStation extends LitElement {
   large = false;
   open = false;
   private _detail: MaItem | null = null;
-  private _fav: boolean | null = null;
   private _busy = false;
   private _toast = '';
   private _toastTimer?: number;
   private _req = 0;
-  /** library id found by a heart lookup for the open station */
-  private _libId = '';
   private hearts = new FavController(this);
 
   willUpdate(ch: PropertyValues) {
     if (ch.has('item')) {
       const prev = ch.get('item') as MaItem | null | undefined;
       this.open = !!this.item;
-      if (this.item?.uri !== prev?.uri) { this._detail = null; this._fav = null; this._libId = ''; this._busy = false; if (this.item) this.load(this.item); }
+      if (this.item?.uri !== prev?.uri) { this._detail = null; this._busy = false; if (this.item) this.load(this.item); }
     }
   }
   /** music/item_by_uri (read). Only through a backend that can send MA commands; any error keeps the list item's fields. */
@@ -58,7 +55,6 @@ export class JbStation extends LitElement {
   private isFav() {
     const it = this.item;
     const own = !!(this._detail?.favorite ?? it?.favorite);
-    if (this._fav != null) return this._fav;
     return it?.uri && this.config?._favs ? this.config._favs.isFav({ uri: it.uri, favorite: own }) : own;
   }
   private close() { fire(this, 'jukebox-station-close'); }
@@ -66,25 +62,15 @@ export class JbStation extends LitElement {
     this._toast = t; window.clearTimeout(this._toastTimer);
     this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400);
   }
+  /** v0.7: the shared hearts store (optimistic, rolled back on error, outcome in the card's top-right status chip). The
+   *  item_by_uri result is the library copy when the station is in the library: it carries the id the remove needs. */
   private async toggleFav() {
     const it = this.item, be = this.config?._backend;
     if (!it || !be?.caps.libraryWrite || this._busy) return;
-    const on = this.isFav();
-    this._busy = true; this._fav = !on;
-    try {
-      // the item_by_uri result is the library copy when the station is in the library: it carries the id the remove needs
-      const r = await toggleRadioFavorite(this._detail ?? it, on, (c, d) => be.send(c, d), this._libId);
-      if (r.result === 'notlib') { this._fav = on; this.toast(`${it.name} isn't in your library`); return; }
-      if (r.libId) this._libId = r.libId;
-      this._fav = null;
-      this.config?._favs?.set(it.uri, !on, r.libId);
-      this.toast(on ? `Removed ${it.name} from favorites` : `Added ${it.name} to favorites`);
-      fire(this, 'jukebox-favorites-changed', { media_type: 'radio', uri: it.uri, favorite: !on });
-    } catch (e) {
-      console.warn('[jukebox-card] favorite failed', e);
-      this._fav = on;
-      this.toast(on ? `Couldn't remove ${it.name} from favorites` : `Couldn't add ${it.name} to favorites`);
-    } finally { this._busy = false; }
+    const own = !!(this._detail?.favorite ?? it.favorite);
+    this._busy = true;
+    try { await this.hearts.toggle({ ...it, favorite: own }, 'radio', this._detail ?? it); }
+    finally { this._busy = false; }
   }
   /** Play replaces the queue with the station, exactly like the tile's old "Play now" (play_media enqueue play). */
   private async play() {

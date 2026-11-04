@@ -576,8 +576,7 @@ export class JbBrowse extends LitElement {
   private async toggleFav(it: MaItem, type: string) {
     const t = heartType(this.config, type, it);
     if (!t) return;
-    const msg = await this.hearts.toggle(it, t);
-    if (msg) this.toast(msg);
+    await this.hearts.toggle(it, t); // the outcome shows in the card's top-right status chip
   }
   /** tile corner heart (top left; the provider badge is bottom left, Open top right) */
   private tileHeart(it: MaItem, type: string) {

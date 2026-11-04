@@ -104,6 +104,12 @@ export function roomsOf(c: JukeboxCardConfig, hass?: HomeAssistant): Array<Requi
 export function fire(el: HTMLElement, type: string, detail: any = {}) {
   el.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
 }
+/** v0.7: show a message in the card's top-right status chip (the 0.6.4 Speakers chip); 'error' stays until dismissed or
+ *  timed out like the Speakers errors. Never a centre popup. */
+export type StatusKind = 'info' | 'error';
+export function status(el: HTMLElement, text: string, kind: StatusKind = 'info') {
+  if (text) fire(el, 'jukebox-status', { text, kind });
+}
 
 /** Calls in flight, keyed by player|uri|enqueue|radio: a second tap while the first is still on its way is dropped
  *  (no double plays from a double tap or a bouncing touchscreen). */

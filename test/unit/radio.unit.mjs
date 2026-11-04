@@ -98,6 +98,17 @@ check('V6 playlist library uri → remove_item {playlist, 4}, no lookup', J(f.lo
   st.set('library://album/1', true);
   check('V12 store: set() from elsewhere shows on any copy with that uri; ttl expiry falls back to MA\'s flag',
     st.isFav({ uri: 'library://album/1', favorite: false }) === true && (st.ttl = -1, st.isFav({ uri: 'library://album/1', favorite: false }) === false));
+  // 0.7.0: the outcome says whether it's an error (the card shows it as an error chip) and taps while busy are dropped
+  check('V13 store: success outcomes are not errors; a refused one is', o1.error === false && o2.error === false && o3.error === true && o4.error === false, J([o1.error, o2.error, o3.error, o4.error]));
+  st.ttl = 600000;
+  const slow = { caps: { libraryWrite: true }, send: (c) => new Promise((r) => setTimeout(() => r(null), 30)) };
+  const it2 = { uri: 'library://track/77', name: 'Twice', favorite: false };
+  const a = st.toggle(it2, 'track', slow), b = st.toggle(it2, 'track', slow);
+  const [ra, rb] = await Promise.all([a, b]);
+  check('V14 store: a second tap while the first is in flight is ignored (no double add, no flicker)', ra.changed && ra.favorite && !rb.changed && rb.message === '' && st.isFav(it2), J({ ra, rb }));
+  const nl = await st.toggle({ uri: 'apple_music://track/x1', name: 'Gone', favorite: true }, 'track', { caps: { libraryWrite: true }, send: async () => null });
+  check('V15 store: shown as favourite but not in the library → rolled back on, error "isn\'t in your library", nothing removed',
+    nl.error && nl.favorite && !nl.changed && /isn't in your library$/.test(nl.message) && st.isFav({ uri: 'apple_music://track/x1', favorite: true }), J(nl));
   un();
 }
 

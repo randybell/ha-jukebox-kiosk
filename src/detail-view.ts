@@ -313,8 +313,7 @@ export class JbDetail extends LitElement {
   private async toggleFav(it: MaItem, type: string) {
     const t = heartType(this.config, type, it);
     if (!t) return;
-    const msg = await this.hearts.toggle(it, t);
-    if (msg) this.toast(msg);
+    await this.hearts.toggle(it, t); // the outcome shows in the card's top-right status chip
   }
   private heart(it: MaItem, type: string) { return heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type)); }
   /** Album row inside an artist: tap opens the album; icons queue / replace / radio the whole album. */

@@ -324,8 +324,7 @@ export class JbSearch extends LitElement {
   private async toggleFav(it: MaItem, g: GroupKey) {
     const t = this.canFav(it, g);
     if (!t) return;
-    const msg = await this.hearts.toggle(it, t);
-    if (msg) this.toast(msg);
+    await this.hearts.toggle(it, t); // the outcome shows in the card's top-right status chip
   }
   /** A heart elsewhere changed an item's favourite: the shared store already shows it; drop cached results. */
   favoriteChanged(uri: string, favorite: boolean) {

@@ -325,6 +325,7 @@ export class JukeboxCard extends LitElement {
     this.addEventListener('jukebox-played', this.onPlayed as EventListener);
     this.addEventListener('jukebox-nav', this.onNav as EventListener);
     this.addEventListener('jukebox-favorites-changed', this.onFavs as EventListener);
+    this.addEventListener('jukebox-status', this.onStatus as EventListener);
     this.addEventListener('jukebox-open', this.onOpen as EventListener);
     this.addEventListener('jukebox-stage', this.onStage as EventListener);
     this.addEventListener('jukebox-target', this.onTarget as EventListener);
@@ -365,6 +366,7 @@ export class JukeboxCard extends LitElement {
     this.removeEventListener('jukebox-played', this.onPlayed as EventListener);
     this.removeEventListener('jukebox-nav', this.onNav as EventListener);
     this.removeEventListener('jukebox-favorites-changed', this.onFavs as EventListener);
+    this.removeEventListener('jukebox-status', this.onStatus as EventListener);
     this.removeEventListener('jukebox-open', this.onOpen as EventListener);
     this.removeEventListener('jukebox-stage', this.onStage as EventListener);
     this.removeEventListener('jukebox-target', this.onTarget as EventListener);
@@ -526,6 +528,15 @@ export class JukeboxCard extends LitElement {
     (this.renderRoot.querySelector('jb-browse') as any)?.favoritesChanged?.(e.detail?.media_type);
     // a heart in the station sheet also updates the Search row heart for that station
     if (e.detail?.uri) (this.renderRoot.querySelector('jb-search') as any)?.favoriteChanged?.(e.detail.uri, !!e.detail.favorite);
+  };
+  /** v0.7: one top-right status chip for the whole card (the Speakers chip); hearts report here, never a centre popup */
+  lastStatus: { text: string; kind: string } | null = null;
+  private onStatus = (e: CustomEvent) => {
+    const text = String(e.detail?.text ?? ''), kind = e.detail?.kind === 'error' ? 'error' : 'info';
+    if (!text) return;
+    e.stopPropagation();
+    this.lastStatus = { text, kind };
+    (this.renderRoot.querySelector('jb-speakers') as JbSpeakers | null)?.notify(text, kind);
   };
   private onNav = (e: CustomEvent) => {
     const t = e.detail?.tab; if (!this.tabs().some((x) => x.id === t)) return;
@@ -775,7 +786,7 @@ export class JukeboxCard extends LitElement {
             ?active=${this._tab === 'lyrics' && !this._saver && !this._stage}></jb-lyrics>`) : nothing}
           <!-- inside the middle: the fitted header and tab bar stay visible and tappable while the panel is open -->
           <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null} ?large=${!!c.large_buttons}></jb-station>
-          <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?keep=${inlineSpk && this._tab === 'now' && !this._saver} ?large=${!!c.large_buttons}></jb-speakers>
+          <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver} ?large=${!!c.large_buttons}></jb-speakers>
         </main>
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
           ${tabs.map((t) => html`<button class="tab ${this._tab === t.id ? 'active' : ''}" role="tab" tabindex=${this._tab === t.id ? '0' : '-1'} data-tab=${t.id}
