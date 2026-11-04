@@ -1,6 +1,6 @@
 {
   "name": "ha-jukebox-kiosk",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Jukebox Kiosk: Home Assistant integration + bundled Jukebox Card, a kiosk jukebox for Music Assistant (Now Playing, Browse, Search, Queue, Lyrics, Speakers)",
   "repository": {
     "type": "git",
