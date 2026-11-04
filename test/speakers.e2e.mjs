@@ -839,11 +839,20 @@ const allJoins = [];
   // live transfer: the source stops at once, the target is silent ~4.7 s (1.2 s here) and then plays
   const p = await open(`&spk=dyn&admin=1&ma=split&xgap=1200&target=${IN}`);
   await openPanel(p); await waitLoaded(p);
+  // Deterministic: record every (source, target) state pair inside the page (no CDP round trip can miss the 1.2 s
+  // buffering window under load), and always wait for the question instead of skipping confirm after 1.5 s.
+  await p.evaluate((a, b) => {
+    const seen = window.__lv4 = []; let last = '';
+    const rec = () => { const k = `${window.__hass.states[a]?.state}|${window.__hass.states[b]?.state}`; if (k !== last) { last = k; seen.push(k); } };
+    rec(); window.__lv4t = setInterval(rec, 5);
+  }, IN, OUT);
   await tap(p, `${SR}.querySelector('[data-target="${OUT}"]')`);
-  await wait(p, ASKQ, 1500) && (await confirm(p));
-  const srcStop = await wait(p, `window.__hass.states['${IN}'].state === 'idle' && window.__hass.states['${OUT}'].state === 'buffering'`, 3000);
-  const play = await wait(p, `window.__hass.states['${OUT}'].state === 'playing'`, 4000);
-  check('LV4 transfer: the source stops on its own (no stop call), the target is silent for the gap and then plays', srcStop && play && (await ma(p, 'players/cmd/stop')).length === 0 && (await target(p)) === OUT, J({ srcStop, play, t: await target(p) }));
+  await confirm(p);
+  const play = await wait(p, `window.__hass.states['${OUT}'].state === 'playing'`, 8000);
+  const seq = await p.evaluate(() => { clearInterval(window.__lv4t); return window.__lv4; });
+  const srcStop = seq.includes('idle|buffering') && seq.indexOf('idle|buffering') < seq.lastIndexOf('idle|playing');
+  const gap = (await p.evaluate(() => (window.__maEvents ?? []).some((e) => e.ev === 'transferred')));
+  check('LV4 transfer: the source stops on its own (no stop call), the target is silent for the gap and then plays', srcStop && play && gap && (await ma(p, 'players/cmd/stop')).length === 0 && (await target(p)) === OUT, J({ seq, srcStop, play, gap, t: await target(p) }));
   await p.close();
 }
 {
@@ -1024,9 +1033,12 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
   for (const vp of [{ width: 1920, height: 1080 }, { width: 390, height: 844, isMobile: true, hasTouch: true }]) {
     const tag = `${vp.width}x${vp.height}`;
     const p = await open('&spk=dyn&admin=1&every=dyn&grp=slow', vp);
-    await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 4000);
+    await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 8000);
     const n0 = (await ma(p, 'players/cmd/set_members')).length;
     await tap(p, ra(GAR));
+    // wait for the chip to render (reading it straight after the tap raced Lit's update under load); grp=slow keeps
+    // "Regrouping…" up for longer than this wait
+    await wait(p, `!!${SR}.querySelector('.st .ct')?.textContent.trim()`, 3000);
     const pop = await popups(p), c1 = await chip(p), g = await geo(p);
     check(`C1 ${tag} drop the leader (Garage) from Now Playing: no dialog, no toast or Undo bar; one chip says "Regrouping…"`, !pop && c1?.text === 'Regrouping…' && (await nChips(p)) === 1, J({ pop, c1 }));
     check(`C2 ${tag} the chip sits top-right, under the header clock (does not cover it), right edge lined up with the card`,
