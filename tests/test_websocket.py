@@ -27,7 +27,7 @@ async def test_capabilities_admin(hass: HomeAssistant, hass_ws_client: Any, admi
     res = await _call(ws, type="jukebox_kiosk/capabilities")
     assert res["success"]
     r = res["result"]
-    assert r["backend"] == "kiosk" and r["version"] == "0.6.4" and r["ma_connected"]
+    assert r["backend"] == "kiosk" and r["version"] == "0.6.5" and r["ma_connected"]
     assert not r["guest"] and "admin" in r["classes"]
     assert r["features"]["unfavorite"] and r["features"]["queue_edit"]
     assert "player_queues/play_index" in r["commands"]
@@ -324,3 +324,34 @@ async def test_verified_followup_commands_forwarded(
         c, args = fake_ma.calls[-1]
         assert c == cmd and args["summary"] is False and args["limit"] == 500
         assert args["user"] == {"provider": "homeassistant", "user_id": user.id, "required": False}
+
+
+async def test_repeat_queue_command_not_forwarded(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    """0.6.5: there is no repeat path through the integration (the card uses media_player.repeat_set)."""
+    ws = await _ws(hass_ws_client, user_token[1])
+    for mode in ("one", "all", "off"):
+        res = await _call(ws, type="jukebox_kiosk/ma", command="player_queues/repeat",
+                          args={"queue_id": PLAYER_A, "repeat_mode": mode})
+        assert not res["success"] and res["error"]["code"] == "not_allowed", mode
+    caps = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
+    assert not any("repeat" in c for c in caps["commands"])
+    assert fake_ma.calls == []
+
+
+async def test_repeat_one_mapped_to_all_if_ever_forwarded(
+    hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If a repeat command is ever allowlisted, 'one' still goes to MA as 'all'."""
+    from custom_components.jukebox_kiosk import const, websocket_api
+    from custom_components.jukebox_kiosk.const import MaCommand, PermClass
+
+    table = {**const.MA_COMMANDS, "player_queues/repeat": MaCommand(PermClass.PLAYBACK, "client")}
+    monkeypatch.setattr(websocket_api, "MA_COMMANDS", table)
+    ws = await _ws(hass_ws_client, admin_token[1])
+    for sent, want in (("one", "all"), ("ONE", "all"), ("all", "all"), ("off", "off")):
+        res = await _call(ws, type="jukebox_kiosk/ma", command="player_queues/repeat",
+                          args={"queue_id": PLAYER_A, "repeat_mode": sent})
+        assert res["success"], sent
+        assert fake_ma.calls[-1] == ("player_queues/repeat", {"queue_id": PLAYER_A, "repeat_mode": want}), sent

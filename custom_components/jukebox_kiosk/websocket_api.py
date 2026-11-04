@@ -30,6 +30,9 @@ from .const import (
     PLAYER_LIST_ARG_KEYS,
     QUEUE_EVENTS,
     QUEUE_LIMIT_MAX,
+    REPEAT_ALL,
+    REPEAT_ARG_KEYS,
+    REPEAT_ONE,
     RESERVED_ARG_KEYS,
     TODO_VERIFY,
     TRACK_PAGE_DEFAULT,
@@ -121,6 +124,14 @@ def _guard_lyrics_track(track: Any) -> None:
         raise KioskError("library_track", "Pass the provider track, not the library track")
 
 
+def _no_repeat_one(args: dict[str, Any]) -> None:
+    """Repeat 'one' is never forwarded: it is mapped to 'all' (0.6.5)."""
+    for key in REPEAT_ARG_KEYS:
+        val = args.get(key)
+        if isinstance(val, str) and val.lower() == REPEAT_ONE:
+            args[key] = REPEAT_ALL
+
+
 def _impersonation(client: MusicAssistantClient, user: User | None) -> dict[str, Any]:
     if user is None or impersonation_arg is None:
         return {}
@@ -164,6 +175,7 @@ async def forward(
         args[key] = value
     if command == "metadata/get_track_lyrics":
         _guard_lyrics_track(args.get("track"))
+    _no_repeat_one(args)
     _entry_, policy, client = _context(hass)
     check_class(user, policy, spec.perm)
     _check_players(hass, user, args, control=spec.perm is not PermClass.READ)

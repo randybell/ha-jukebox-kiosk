@@ -341,13 +341,69 @@ await clickEl(page, `${NP}.querySelector('.tb.pp')`);           // (optimistic p
 await clickEl(page, `${NP}.querySelector('.tb.pr')`);
 await clickEl(page, `${NP}.querySelector('.tb.nx')`);
 await clickEl(page, `${NP}.querySelector('.tb.sh')`);
-for (let i = 0; i < 3; i++) { await clickEl(page, `${NP}.querySelector('.tb.rp')`); await sleep(150); }
+for (let i = 0; i < 4; i++) { await clickEl(page, `${NP}.querySelector('.tb.rp')`); await sleep(150); }
 let cs = actions(await calls(page, n0));
 const tp = cs.map((c) => `${c.s}${c.data.shuffle !== undefined ? ':' + c.data.shuffle : ''}${c.data.repeat ? ':' + c.data.repeat : ''}`);
-check('9a transport: pause, play, prev, next, shuffle_set, repeat_set off→all→one→off', tp.join(',') === 'media_pause,media_play,media_previous_track,media_next_track,shuffle_set:true,repeat_set:all,repeat_set:one,repeat_set:off', tp.join(','));
+check('9a transport: pause, play, prev, next, shuffle_set, repeat_set off→all→off→all→off (0.6.5: never one)', tp.join(',') === 'media_pause,media_play,media_previous_track,media_next_track,shuffle_set:true,repeat_set:all,repeat_set:off,repeat_set:all,repeat_set:off', tp.join(','));
 check('9b every transport call targets media_player.everywhere only', cs.every((c) => tgt(c) === EV), [...new Set(cs.map(tgt))].join(' | '));
 s = await page.evaluate((np) => { const r = eval(np); return { sh: r.querySelector('.tb.sh').classList.contains('on'), dot: !!r.querySelector('.tb.sh .dot'), rp: r.querySelector('.tb.rp').classList.contains('on') }; }, NP);
 check('9c shuffle on shows white + dot; repeat off is inactive', s.sh && s.dot && !s.rp, JSON.stringify(s));
+// ---------- 9r. 0.6.5 repeat is a queue setting: off ↔ all ("Repeat queue"), a player on 'one' ----------
+{
+  const REPEAT_D = 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z';
+  const rpBtn = (pg) => pg.evaluate((np) => { const b = eval(np).querySelector('.tb.rp'), h = eval(np).querySelector('.tb.sh'); return { on: b.classList.contains('on'), pressed: b.getAttribute('aria-pressed'), label: b.getAttribute('aria-label'), title: b.title, d: b.querySelector('path')?.getAttribute('d'), sh: h.getAttribute('aria-label') }; }, NP);
+  const reps = (cs) => cs.filter((c) => c.s === 'repeat_set');
+  const pg = await browser.newPage();
+  pg.on('pageerror', (e) => pageErrors.push(e.message));
+  await hermetic(pg);
+  await open(pg, '&latency=20&tab=now&repeat=one');
+  let b = await rpBtn(pg);
+  check('9r1 player on repeat one is shown as repeat queue (on, normal repeat icon, label/tooltip "Repeat queue"); shuffle labelled "Shuffle queue"',
+    b.on && b.pressed === 'true' && b.label === 'Repeat queue' && b.title === 'Repeat queue' && b.d === REPEAT_D && b.sh === 'Shuffle queue', JSON.stringify(b));
+  let r = reps(await calls(pg));
+  check('9r2 nothing is sent before the debounce', r.length === 0, JSON.stringify(r));
+  await sleep(2000);
+  r = reps(await calls(pg));
+  check('9r3 state one → exactly one repeat_set {repeat: all} on the active player', r.length === 1 && r[0].data.repeat === 'all' && tgt(r[0]) === EV, JSON.stringify(r));
+  check('9r4 the player is now on all, still shown as on', (await pg.evaluate(() => window.__hass.states['media_player.everywhere'].attributes.repeat)) === 'all' && (await rpBtn(pg)).on);
+  let n1 = await ncalls(pg);
+  await clickEl(pg, `${NP}.querySelector('.tb.rp')`); await sleep(150);
+  await clickEl(pg, `${NP}.querySelector('.tb.rp')`); await sleep(150);
+  check('9r5 taps after the fix toggle off → all (no one)', reps(await calls(pg, n1)).map((c) => c.data.repeat).join() === 'off,all');
+
+  // MA keeps reporting one (repeat_set ignored) and many state updates arrive: still one send, no loop
+  await open(pg, '&latency=20&tab=now&repeat=one&stickyrepeat=1');
+  for (let i = 0; i < 25; i++) { await pg.evaluate((i) => window.__setAttrs('media_player.everywhere', { repeat: 'one', media_position: 10 + i, media_position_updated_at: new Date().toISOString() }), i); await sleep(120); }
+  await pg.evaluate(() => window.__setAttrs('media_player.everywhere', { repeat: 'all' })); await sleep(50);
+  await pg.evaluate(() => window.__setAttrs('media_player.everywhere', { repeat: 'one' })); await sleep(2200);
+  r = reps(await calls(pg));
+  check('9r6 player stuck on one (25 updates over 3 s, then all→one again) → still exactly one repeat_set all (no loop)', r.length === 1 && r[0].data.repeat === 'all', JSON.stringify(r.map((c) => c.data)));
+  b = await rpBtn(pg);
+  check('9r7 a stuck one is still drawn as repeat queue', b.on && b.d === REPEAT_D);
+
+  // coerce_repeat_one: false → shown as all, nothing sent; a tap turns it off
+  await open(pg, `&latency=20&tab=now&repeat=one&cfg=${encodeURIComponent(JSON.stringify({ coerce_repeat_one: false }))}`);
+  await sleep(2200);
+  check('9r8 coerce_repeat_one false → nothing sent, shown as repeat queue', reps(await calls(pg)).length === 0 && (await rpBtn(pg)).on);
+  await clickEl(pg, `${NP}.querySelector('.tb.rp')`); await sleep(150);
+  check('9r9 coerce off: a tap sends repeat_set off', reps(await calls(pg)).map((c) => c.data.repeat).join() === 'off');
+
+  // queue-level only: shuffle / repeat (and the coerce) go to the active target, never to member speakers
+  await open(pg, '&latency=20&tab=now&spk=dyn&admin=1&target=media_player.indoor');
+  const active = await pg.evaluate(() => __card._config.entity);
+  n1 = await ncalls(pg);
+  await clickEl(pg, `${NP}.querySelector('.tb.sh')`); await sleep(150);
+  await clickEl(pg, `${NP}.querySelector('.tb.rp')`); await sleep(150);
+  await pg.evaluate(() => { for (const id of ['media_player.living_room', 'media_player.kitchen', 'media_player.garage', 'media_player.everywhere']) window.__setAttrs(id, { repeat: 'one' }); });
+  await sleep(300);
+  await pg.evaluate(() => window.__setAttrs('media_player.indoor', { repeat: 'one' }));
+  await sleep(2200);
+  cs = (await calls(pg, n1)).filter((c) => c.s === 'repeat_set' || c.s === 'shuffle_set');
+  check('9r10 dynamic target Indoor: shuffle_set, repeat_set and the repeat-one fix target only the active queue player (never members or other groups)',
+    active === 'media_player.indoor' && cs.length === 3 && cs.every((c) => tgt(c) === 'media_player.indoor') && cs.map((c) => `${c.s}:${c.data.shuffle ?? c.data.repeat}`).join() === 'shuffle_set:true,repeat_set:all,repeat_set:all',
+    `${active} ${JSON.stringify(cs.map((c) => [c.s, c.data, tgt(c)]))}`);
+  await pg.close();
+}
 // seek: click at 50% of the seek bar
 n0 = await ncalls(page);
 r = await rectOf(page, `${NP}.querySelector('.ps')`);

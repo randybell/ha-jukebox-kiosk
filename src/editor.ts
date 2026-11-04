@@ -46,6 +46,7 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
         { name: 'backdrop', selector: { select: { options: ['auto', 'full', 'light', 'static', 'off'], mode: 'dropdown' } } },
         { name: 'accent', selector: { select: { options: ['mono', 'fixed', 'art'], mode: 'dropdown' } } },
         { name: 'large_buttons', selector: { boolean: {} } },
+        { name: 'coerce_repeat_one', selector: { boolean: {} } },
       ],
     },
     {
@@ -102,6 +103,7 @@ export const LABELS: Record<string, string> = {
   lyrics_seek: 'Long-press a synced line to jump there',
   lyrics_offset_ms: 'Synced lyrics offset (+ shows lines sooner)',
   large_buttons: 'Large buttons (bigger touch targets and text)',
+  coerce_repeat_one: 'Switch a player on "repeat one" back to repeat all (the card itself only offers off / all)',
   speaker_mode: 'Speaker mode',
   targets: 'Groups to play on (dynamic; empty = every Music Assistant group)',
   grouping: 'Who may change speakers (a UI lock, not security)',
@@ -121,6 +123,7 @@ const hhmm = (t: unknown) => (typeof t === 'string' ? t.slice(0, 5) : undefined)
 const SHOWN_DEFAULTS = {
   show_lyrics: true, lyrics_tab: true, screensaver_lyrics: true, lyrics_seek: true,
   large_buttons: false, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
+  coerce_repeat_one: true,
 };
 const roomEntity = (r: RoomConfig | string) => (typeof r === 'string' ? r : r.entity);
 
