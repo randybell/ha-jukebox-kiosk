@@ -141,11 +141,11 @@ export interface JukeboxCardConfig {
   discover?: boolean | string[];
   /** v0.7 (default false): Browse › Radio "My stations" lists favourite stations only (otherwise favourites first, then the other library stations). */
   radio_favorites_only?: boolean;
-  /** v0.7 (default off): the Browse tab becomes "Library" and opens on a grid of shortcut tiles. */
+  /** v0.7 (default on since 0.7.1): the tab is "Library" and opens on a grid of shortcut tiles; false = the 0.6 Browse tab. */
   library_home?: boolean;
   /** v0.7: Library tiles in order; an id or {tile, label}. Unset = playlist, artist, album, radio, search (+ discover when `discover` is set). */
   library_tiles?: Array<LibraryTileId | { tile: LibraryTileId; label?: string }>;
-  /** v0.7: the Library tab's name with `library_home` (default "Library"). */
+  /** v0.7: the Library tab's name (default "Library"; ignored with `library_home: false`). */
   library_label?: string;
   /** Clock and title */
   title?: string;

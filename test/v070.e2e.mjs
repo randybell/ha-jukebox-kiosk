@@ -43,7 +43,7 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
 
 // ---------------- 1. flags off: nothing new ----------------
 {
-  const p = await open('&tab=browse');
+  const p = await open('&tab=browse&lhome=0');
   await wait(p, `${BR}.querySelectorAll('.tile').length > 0`);
   const cats = await ev(p, `[...${BR}.querySelectorAll('.cats .fc')].map((b) => b.dataset.cat)`);
   check('F1 defaults: no Discover chip, no Stations-by row, no v0.7 MA reads', !cats.includes('discover') && !(await ev(p, `!!${BR}.querySelector('.modes')`))
@@ -104,7 +104,7 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
 }
 // ---------------- 4. radio "Stations by…" ----------------
 {
-  const p = await open('&tab=browse', { radio_browse: ['popular', 'country', 'tag'], radio_country: 'de' });
+  const p = await open('&tab=browse&lhome=0', { radio_browse: ['popular', 'country', 'tag'], radio_country: 'de' });
   await wait(p, `${BR}.querySelector('.cats .fc[data-cat="radio"]')`);
   await tap(p, `${BR}.querySelector('.cats .fc[data-cat="radio"]')`);
   await wait(p, `${BR}.querySelector('.modes')`);
@@ -153,15 +153,15 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   await p.close();
 }
 {
-  const p = await open('&tab=browse&rbfail=1', { radio_browse: true });
+  const p = await open('&tab=browse&lhome=0&rbfail=1', { radio_browse: true });
   await tap(p, `${BR}.querySelector('.cats .fc[data-cat="radio"]')`);
   await tap(p, `${BR}.querySelector('.modes .fc[data-rmode="popular"]')`);
   await wait(p, `${BR}.querySelector('.rberr')`);
   check('R12 Radio Browser down, no cached copy → error + Retry', await ev(p, `!!${BR}.querySelector('[data-action="rb-retry"]')`));
   await p.close();
-  const q = await open('&tab=browse', { radio_browse: true });
+  const q = await open('&tab=browse&lhome=0', { radio_browse: true });
   await q.evaluate(() => localStorage.setItem('jukebox-card:rb:v1:radiobrowser://popularity/popular', JSON.stringify({ t: 1, d: { folders: [], stations: [{ media_type: 'radio', uri: 'radiobrowser://radio/00000000-0000-0000-0000-000000000001', name: 'Saved Placeholder FM' }] } })));
-  await q.goto(q.url().replace('&tab=browse', '&tab=browse&rbfail=1').replace('fresh=1', 'fresh=0'));
+  await q.goto(q.url().replace('&tab=browse&lhome=0', '&tab=browse&lhome=0&rbfail=1').replace('fresh=1', 'fresh=0'));
   await q.waitForFunction('window.__ready === true');
   await tap(q, `${BR}.querySelector('.cats .fc[data-cat="radio"]')`);
   await tap(q, `${BR}.querySelector('.modes .fc[data-rmode="popular"]')`);
@@ -169,14 +169,14 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('R13 refresh fails → the stale saved list is shown (+ toast)', /Saved Placeholder FM/.test(await ev(q, `${BR}.querySelector('.grid.radio').textContent`))
     && /saved list/.test(await ev(q, `${BR}.textContent`) ?? ''));
   await q.close();
-  const g = await open('&tab=browse&kcaps=' + encodeURIComponent(J({ radio_browse: false })), { radio_browse: true });
+  const g = await open('&tab=browse&lhome=0&kcaps=' + encodeURIComponent(J({ radio_browse: false })), { radio_browse: true });
   await tap(g, `${BR}.querySelector('.cats .fc[data-cat="radio"]')`);
   check('R14 backend without radio_browse: no mode chips', !(await ev(g, `!!${BR}.querySelector('.modes')`)));
   await g.close();
 }
 // ---------------- 5. Discover ----------------
 {
-  const p = await open('&tab=browse', { discover: true });
+  const p = await open('&tab=browse&lhome=0', { discover: true });
   await wait(p, `${BR}.querySelector('.drow')`);
   const cats = await ev(p, `[...${BR}.querySelectorAll('.cats .fc')].map((b) => b.dataset.cat)`);
   check('D1 Discover is the first chip and selected by default', cats[0] === 'discover' && (await ev(p, `${BR}.querySelector('.cats .fc.on')?.dataset.cat`)) === 'discover', J(cats));
@@ -199,26 +199,26 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   await p.close();
 }
 {
-  const p = await open('&tab=browse', { discover: ['favorite_radio', 'mock_stream--XXXXXXXX:stations_for_you', 'never_played_tracks', 'no_such_row'] });
+  const p = await open('&tab=browse&lhome=0', { discover: ['favorite_radio', 'mock_stream--XXXXXXXX:stations_for_you', 'never_played_tracks', 'no_such_row'] });
   await wait(p, `${BR}.querySelectorAll('.drow .hs:not(.skel)').length >= 2`, 6000);
   await sleep(300);
   const rows = await ev(p, `[...${BR}.querySelectorAll('.drow')].map((r) => r.dataset.row)`);
   check('D8 custom list: provider:id rows, empty rows hidden, unknown rows skipped', J(rows) === J(['favorite_radio', 'stations_for_you']), J(rows));
   await p.close();
-  const q = await open('&tab=browse&recfail=1', { discover: true });
+  const q = await open('&tab=browse&lhome=0&recfail=1', { discover: true });
   await wait(q, `/Discover unavailable/.test(${BR}.textContent)`);
   check('D9 recommendations fail → message + Retry', await ev(q, `!!${BR}.querySelector('[data-action="disc-retry"]')`));
   await q.close();
-  const e = await open('&tab=browse&v07=empty', { discover: true });
+  const e = await open('&tab=browse&lhome=0&v07=empty', { discover: true });
   await ev(e, `${BR}.querySelector('.scroll').scrollTo({ top: 99999 })`);
   await wait(e, `/Nothing to discover yet/.test(${BR}.textContent)`, 6000);
   check('D10 every row empty → "Nothing to discover yet"', /Nothing to discover yet/.test(await ev(e, `${BR}.textContent`)));
   await e.close();
-  const k = await open('&tab=browse&kcaps=' + encodeURIComponent(J({ discover: false })), { discover: true });
+  const k = await open('&tab=browse&lhome=0&kcaps=' + encodeURIComponent(J({ discover: false })), { discover: true });
   await wait(k, `${BR}.querySelectorAll('.tile').length > 0`);
   check('D11 backend without discover: chip hidden, library category shown', !(await ev(k, `!!${BR}.querySelector('.fc[data-cat="discover"]')`)) && (await maOf(k, 'music/recommendations')).length === 0);
   await k.close();
-  const m = await open('&tab=browse', { discover: true }, { width: 390, height: 844 });
+  const m = await open('&tab=browse&lhome=0', { discover: true }, { width: 390, height: 844 });
   await wait(m, `${BR}.querySelector('.drow .hs:not(.skel) .tile')`);
   const w = await ev(m, `${BR}.querySelector('.drow .hs .tile').getBoundingClientRect().width`);
   const ov = await ev(m, `document.documentElement.scrollWidth <= 390`);
@@ -306,11 +306,20 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
 }
 // ---------------- 7. Library home prototype, flag library_home ----------------
 {
-  const p = await open('&tab=browse');
+  const p = await open('&tab=browse', { library_home: false });
   await wait(p, `${BR}.querySelectorAll('.tile').length > 0`);
-  check('LH1 flag off: tab says Browse, chip row, no tile grid', (await ev(p, `__card.shadowRoot.querySelector('.tab[data-tab="browse"] span').textContent`)) === 'Browse'
+  check('LH1 library_home: false: tab says Browse, chip row, no tile grid', (await ev(p, `__card.shadowRoot.querySelector('.tab[data-tab="browse"] span').textContent`)) === 'Browse'
     && !(await ev(p, `!!${BR}.querySelector('.home')`)) && (await ev(p, `${BR}.querySelectorAll('.cats .fc').length`)) > 0);
   await p.close();
+  {
+    // 0.7.1 default: no library_home in the config → "Library" + the tile grid, and no "Browse" anywhere in the card's visible text
+    const d = await open('&tab=browse');
+    await wait(d, `${BR}.querySelectorAll('.lt').length > 0`);
+    const navs = await ev(d, `[...__card.shadowRoot.querySelectorAll('.tab span')].map((s) => s.textContent.trim())`);
+    const txt = await ev(d, `(() => { const out = []; const walk = (r) => { for (const el of r.querySelectorAll('*')) { if (el.shadowRoot) walk(el.shadowRoot); } out.push(r.textContent ?? ''); for (const el of r.querySelectorAll('[aria-label],[title]')) out.push((el.getAttribute('aria-label') ?? '') + ' ' + (el.getAttribute('title') ?? '')); }; walk(__card.shadowRoot); return out.join(' '); })()`);
+    check('LH1d default (unset): tab "Library" with the home tiles, never "Browse" in the nav, labels or text', navs.includes('Library') && !navs.includes('Browse') && !/\bBrowse\b(?! by)/.test(txt), J(navs));
+    await d.close();
+  }
   const LH = { library_home: true };
   const q = await open('&tab=browse', LH);
   await wait(q, `${BR}.querySelectorAll('.lt').length > 0`);
