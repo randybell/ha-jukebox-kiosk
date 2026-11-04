@@ -156,7 +156,7 @@ export const LABELS: Record<string, string> = {
   radio_browse: 'Radio: "Stations by" (none = off; Radio Browser provider)',
   radio_country: 'Radio country code (e.g. us; empty = Home Assistant\'s country)',
   radio_favorites_only: 'Radio: show favourite stations only (otherwise favourites first, then other library stations)',
-  library_home: 'Library home: the Browse tab becomes "Library" with big shortcut tiles',
+  library_home: 'Library home: a "Library" tab with big shortcut tiles (off = the 0.6 Browse tab)',
   library_tiles: 'Library tiles (in this order; Search opens the Search tab)',
   library_label: 'Library tab name (empty = Library)',
 };
@@ -165,7 +165,7 @@ const hhmm = (t: unknown) => (typeof t === 'string' ? t.slice(0, 5) : undefined)
 /** defaults shown for unset options, never written back unless the user changes them */
 export const SHOWN_DEFAULTS = {
   show_lyrics: true, lyrics_tab: true, screensaver_lyrics: true, lyrics_seek: true, show_autoplay: false,
-  large_buttons: false, radio_favorites_only: false, library_home: false, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
+  large_buttons: false, radio_favorites_only: false, library_home: true, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
   coerce_repeat_one: true,
 };
 const roomEntity = (r: RoomConfig | string) => (typeof r === 'string' ? r : r.entity);

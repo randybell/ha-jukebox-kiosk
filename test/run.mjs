@@ -476,7 +476,7 @@ s = await page.evaluate((q) => eval(q).querySelector('.qr.now')?.dataset.id, QV)
 check('11e after play, tapped item becomes now playing', s === id1, s);
 
 // ---------- 12. browse ----------
-await open(page, '&latency=20&tab=browse');
+await open(page, '&latency=20&tab=browse&lhome=0');
 await page.waitForFunction((b) => eval(b).querySelectorAll('.tile').length > 0, {}, BV);
 s = await page.evaluate((b) => ({ cats: [...eval(b).querySelectorAll('.cats [data-cat]')].map((e) => e.dataset.cat), badges: [...new Set([...eval(b).querySelectorAll('.tile .pv')].map((e) => e.textContent.trim()))] }), BV);
 cs = await calls(page);
@@ -623,7 +623,7 @@ await page.keyboard.press('Escape');
   const realAlbum = fx.get_album_tracks.raw.result.response.tracks;
 
   // 16a-c: real get_album_tracks / get_playlist_tracks shapes
-  await open(pg, '&latency=20&tab=browse');
+  await open(pg, '&latency=20&tab=browse&lhome=0');
   let n = await ncalls(pg);
   await detail({ media_type: 'album', uri: 'library://album/1448', name: 'Hotel California', artists: [{ name: 'Eagles' }] }, 'album'); await sleep(300);
   let rs = await rows(); let cs = (await pcalls(n)).filter((c) => c.d === 'mass_queue');
@@ -638,7 +638,7 @@ await page.keyboard.press('Escape');
 
   // 16e-g: playlist paging (Long Drive = 120 unique tracks) in the three server behaviours
   const longDrive = async (q) => {
-    await open(pg, `&latency=20&tab=browse${q}`);
+    await open(pg, `&latency=20&tab=browse&lhome=0${q}`);
     await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="playlist"]')`); await sleep(300);
     const nn = await ncalls(pg);
     await pg.evaluate((b) => [...eval(b).shadowRoot.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent === 'Long Drive').querySelector('.open').click(), BR);
@@ -658,7 +658,7 @@ await page.keyboard.press('Escape');
   check('16h header for a 120-track playlist shows hours/minutes', /^120 tracks · (\d+ h )?\d+ min$/.test(ld.meta), ld.meta);
 
   // 16i: legacy queue_config_entry_id + editor rename
-  await open(pg, '&latency=20&tab=browse&legacyq=1');
+  await open(pg, '&latency=20&tab=browse&lhome=0&legacyq=1');
   n = await ncalls(pg);
   await detail({ media_type: 'album', uri: 'library://album/1448', name: 'Hotel California' }, 'album'); await sleep(300);
   cs = (await pcalls(n)).filter((c) => c.s === 'get_album_tracks');
@@ -697,7 +697,7 @@ await page.keyboard.press('Escape');
 
   // 16q-w: radio
   // 0.6.1: Radio never lists a keyword search; an empty library shows a hint with a Search shortcut
-  await open(pg, '&latency=20&tab=browse&radio=1');
+  await open(pg, '&latency=20&tab=browse&lhome=0&radio=1');
   await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});
   n = await ncalls(pg);
   await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="radio"]')`); await sleep(700);
@@ -710,7 +710,7 @@ await page.keyboard.press('Escape');
   await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-act="search-stations"]')`); await sleep(300);
   check('16r2 "Search stations" opens the Search tab', await pg.evaluate(() => __card.shadowRoot.querySelector('.tab.active')?.dataset.tab === 'search'));
   // favourites first, then the other library stations (a provider may sync followed stations into the library without favorite)
-  await open(pg, '&latency=20&tab=browse&radio=lib&radiofav=3');
+  await open(pg, '&latency=20&tab=browse&lhome=0&radio=lib&radiofav=3');
   await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});
   await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="radio"]')`); await sleep(700);
   g = await pg.evaluate((b) => { const r = eval(b).shadowRoot; const names = (s) => [...r.querySelectorAll(`.grid[data-src="${s}"] .tile b`)].map((x) => x.textContent);
@@ -720,13 +720,13 @@ await page.keyboard.press('Escape');
   g = await pg.evaluate((b) => ({ secs: eval(b).shadowRoot.querySelectorAll('.sec').length, tiles: eval(b).shadowRoot.querySelectorAll('.tile').length }), BR);
   check('16r4 Favorites chip on → favourites only', g.secs === 0 && g.tiles === 3, JSON.stringify(g));
   // radio_favorites_only (v0.7, default false): My stations lists favourites only
-  await open(pg, '&latency=20&tab=browse&radio=lib&radiofav=3&cfg=' + encodeURIComponent(JSON.stringify({ radio_favorites_only: true })));
+  await open(pg, '&latency=20&tab=browse&lhome=0&radio=lib&radiofav=3&cfg=' + encodeURIComponent(JSON.stringify({ radio_favorites_only: true })));
   await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});
   await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="radio"]')`); await sleep(700);
   g = await pg.evaluate((b) => { const r = eval(b).shadowRoot; return { secs: [...r.querySelectorAll('.sec')].map((x) => x.dataset.sec), tiles: r.querySelectorAll('.tile').length }; }, BR);
   check('16r5 radio_favorites_only: My stations = the 3 favourites, no "More stations"', !g.secs.includes('more') && g.tiles === 3, JSON.stringify(g));
   // the station tile checks below run on library stations
-  await open(pg, '&latency=20&tab=browse&radio=lib');
+  await open(pg, '&latency=20&tab=browse&lhome=0&radio=lib');
   await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});
   await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="radio"]')`); await sleep(700);
   g = await pg.evaluate((b) => { const r = eval(b).shadowRoot; return { tiles: [...r.querySelectorAll('.tile')].map((t) => ({ name: t.querySelector('b').textContent, pv: t.querySelector('.pv')?.textContent.trim(), img: t.querySelector('img')?.getAttribute('src') ?? '', uri: t.dataset.uri })) }; }, BR);
@@ -753,7 +753,7 @@ await page.keyboard.press('Escape');
   let mi = await pg.evaluate((b) => [...eval(b).shadowRoot.querySelectorAll('.menu .mi')].map((e) => e.dataset.action), BR);
   check('16w station menu: next/add/replace, no "Start radio"', !mi.includes('radio') && ['next', 'add', 'replace'].every((x) => mi.includes(x)), mi.join(','));
   await pg.keyboard.press('Escape');
-  await open(pg, '&latency=20&tab=browse&radio=lib');
+  await open(pg, '&latency=20&tab=browse&lhome=0&radio=lib');
   await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});
   n = await ncalls(pg);
   await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="radio"]')`); await sleep(600);
@@ -772,7 +772,7 @@ await page.keyboard.press('Escape');
   check('16z Search radio results trimmed + badged Radio', g.names.length > 0 && g.names.every((x) => x === x.trim() && !/\t/.test(x)) && g.pv.join() === 'Radio', JSON.stringify(g));
 
   // Phone: durations stay visible in rows (moved into the subtitle line so the four row icons fit)
-  await open(pg, '&latency=20&tab=browse', { width: 390, height: 844, isMobile: true, hasTouch: true });
+  await open(pg, '&latency=20&tab=browse&lhome=0', { width: 390, height: 844, isMobile: true, hasTouch: true });
   await detail({ media_type: 'album', uri: 'library://album/1448', name: 'Hotel California' }, 'album'); await sleep(400);
   const ph = await pg.evaluate((b) => { const r = eval(b).querySelector('.detail .row'); const du = [...r.querySelectorAll('.du, .du2')].find((e) => getComputedStyle(e).display !== 'none'), pv = r.querySelector('.pv'); return { du: du && getComputedStyle(du).display !== 'none' && du.getBoundingClientRect().width > 0 ? du.textContent.trim() : '', pv: pv ? getComputedStyle(pv).display : 'none', over: r.scrollWidth - r.clientWidth }; }, BDs);
   check('16za 390px phone: track rows keep the duration (under the title; provider badge hidden), no overflow', ph.du === '6:31' && ph.pv === 'none' && ph.over <= 1, JSON.stringify(ph));
@@ -1006,7 +1006,7 @@ await page.keyboard.press('Escape');
   await tapEl(`${SVR}.querySelector('.confirm [data-action="cancel"]')`, true);
   // Browse: album detail on the phone + 1280
   for (const vp of [{ width: 390, height: 844, isMobile: true, hasTouch: true }, { width: 1280, height: 800 }]) {
-    await open(pg, '&latency=40&tab=browse', vp);
+    await open(pg, '&latency=40&tab=browse&lhome=0', vp);
     await pg.waitForFunction((b) => eval(b).querySelectorAll('.tile').length > 0, {}, BV);
     await tapEl(`${BV}.querySelector('[data-cat="album"]')`, vp.hasTouch);
     await sleep(300);

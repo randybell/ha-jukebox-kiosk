@@ -101,7 +101,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
 }
 // ---------------- 3. detail track lists (server paging) ----------------
 {
-  const p = await open('&tab=browse');
+  const p = await open('&tab=browse&lhome=0');
   const rows = () => ev(p, `[...(${BDs}?.querySelectorAll('.detail .list.tracks .row') ?? [])].map((r) => r.querySelector('b')?.textContent)`);
   let n = await nws(p);
   await p.evaluate((b) => eval(b).openDetail({ media_type: 'album', uri: 'library://album/1448', name: 'Hotel California', artists: [{ name: 'Eagles' }] }, 'album'), BR);
@@ -252,14 +252,15 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   // favourite it again, then Browse > Radio (empty library before) lists it under Favorites
   await tapHeart(p, lib.uri); await sleep(200);
   await ev(p, `__card._tab = 'browse'`); await sleep(200);
-  await wait(p, `${BR}.shadowRoot.querySelector('[data-cat=radio]')`);
-  await sleep(300); await ev(p, `${BR}.shadowRoot.querySelector('[data-cat=radio]').click()`);
+  // 0.7.1: the default Library home → the Radio tile (the 0.6 chip row with library_home: false is covered by R9)
+  await wait(p, `${BR}.shadowRoot.querySelector('.lt[data-tile=radio]')`);
+  await sleep(300); await ev(p, `${BR}.shadowRoot.querySelector('.lt[data-tile=radio]').click()`);
   const ok = await wait(p, `${BR}.shadowRoot.querySelector('[data-src=favorites]')?.children.length === 1`);
   check('R7 Browse › Radio → My stations shows the new favourite under Favorites', ok, J(await ev(p, `({ cats: [...${BR}.shadowRoot.querySelectorAll('[data-cat]')].map((b) => b.dataset.cat + (b.classList.contains('on') ? '*' : '')), cat: ${BR}._cat, secs: [...${BR}.shadowRoot.querySelectorAll('[data-src]')].map((g) => g.dataset.src + ':' + g.children.length), empty: ${BR}.shadowRoot.querySelector('[data-empty]')?.dataset.empty })`)));
   await p.close();
 
   // Browse › Radio already open (empty: "No stations yet"), then a heart in Search → Radio reloads with the favourite
-  p = await open(`&tab=browse&radio=1&stations=fake&kcaps=${encodeURIComponent(J({ library_write: true }))}`);
+  p = await open(`&tab=browse&lhome=0&radio=1&stations=fake&kcaps=${encodeURIComponent(J({ library_write: true }))}`);
   await wait(p, `${BR}.shadowRoot.querySelector('[data-cat=radio]')`); await sleep(200);
   await ev(p, `${BR}.shadowRoot.querySelector('[data-cat=radio]').click()`);
   const empty = await wait(p, `${BR}.shadowRoot.querySelector('[data-empty=stations]')`);
@@ -351,7 +352,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
     await ev(p, `${BR}.shadowRoot.querySelector('[data-cat=radio]').click()`); await wait(p, `${BR}.shadowRoot.querySelector('.grid.radio .tile')`); await sleep(150); };
   const LIB = `&kcaps=${encodeURIComponent(J({ library_write: true }))}`;
 
-  let p = await open(`&tab=browse&radio=lib&stations=fake&radiofav=1${LIB}`);
+  let p = await open(`&tab=browse&lhome=0&radio=lib&stations=fake&radiofav=1${LIB}`);
   await radioTab(p);
   let n = await nws(p);
   await tapTile(p, 'Mockingbird FM');
@@ -401,7 +402,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   await p.close();
 
   // guest without the library class: no heart
-  p = await open('&tab=browse&radio=lib&stations=fake');
+  p = await open('&tab=browse&lhome=0&radio=lib&stations=fake');
   await radioTab(p);
   await tapTile(p, 'Mockingbird FM'); await sleep(300);
   s = await sheet(p);
@@ -443,7 +444,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const tapEl = async (p, expr) => { await ev(p, `(${expr}).scrollIntoView({ block: 'center' })`); await sleep(80); await tap(p, expr); };
 
   // Library home: Playlists tiles carry a corner heart
-  let p = await open(`&tab=browse${KC}`);
+  let p = await open(`&tab=browse&lhome=0${KC}`);
   await wait(p, `${BRs}.querySelectorAll('.tile .tfav').length > 3`);
   const tiles = await ev(p, `[...${BRs}.querySelectorAll('.tile')].map((t) => ({ uri: t.dataset.uri, type: t.dataset.type, fav: t.querySelector('.tfav')?.getAttribute('aria-pressed') ?? null }))`);
   check('K1 Library › Playlists: a corner heart on every tile, pressed = MA favourite', tiles.length > 3 && tiles.every((t) => t.fav !== null) && tiles.some((t) => t.fav === 'false'), J(tiles.slice(0, 4)));
@@ -508,11 +509,11 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   await p.close();
 
   // hearts: false → no hearts on Library tiles (0.6 behaviour); no library class → none either
-  p = await open(`&tab=browse${KC}&cfg=${encodeURIComponent(J({ hearts: false }))}`);
+  p = await open(`&tab=browse&lhome=0${KC}&cfg=${encodeURIComponent(J({ hearts: false }))}`);
   await wait(p, `${BRs}.querySelectorAll('.tile').length > 3`);
   const off1 = await ev(p, `${BRs}.querySelectorAll('[data-act=fav]').length`);
   await p.close();
-  p = await open(`&tab=browse`);
+  p = await open(`&tab=browse&lhome=0`);
   await wait(p, `${BRs}.querySelectorAll('.tile').length > 3`);
   const off2 = await ev(p, `${BRs}.querySelectorAll('[data-act=fav]').length`);
   check('K9 hearts: false, or no library class → no hearts in Library', off1 === 0 && off2 === 0, J({ off1, off2 }));

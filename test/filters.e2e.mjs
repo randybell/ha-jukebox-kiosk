@@ -151,7 +151,7 @@ for (const kiosk of [false, true]) {
 // ---------------- 3. Library tab ----------------
 for (const kiosk of [false, true]) {
   const be = kiosk ? 'kiosk' : 'HA';
-  const p = await open(`&tab=browse${kiosk ? '&kiosk=1' : ''}`);
+  const p = await open(`&tab=browse&lhome=0${kiosk ? '&kiosk=1' : ''}`);
   await wait(p, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
   await tap(p, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
   await wait(p, `${BR}.querySelectorAll('.list .row').length > 0`);
@@ -207,7 +207,7 @@ for (const kiosk of [false, true]) {
   await p.close();
 }
 {
-  const p = await open('&tab=browse', { search_filters: false });
+  const p = await open('&tab=browse&lhome=0', { search_filters: false });
   await wait(p, `${BR}.querySelectorAll('.tile').length > 0`);
   check('LB12 search_filters: false → no Filter button in Library', !(await ev(p, `!!${BR}.querySelector('[data-act="filter"]')`)));
   await p.close();
@@ -222,7 +222,7 @@ for (const kiosk of [false, true]) {
   check('PH1 phone: the chip row fits 390 px, chips ≥ 40 px tall', fit.right <= 390 && fit.h >= 40, J(fit));
   check('PH2 phone: the on-screen keyboard stays while scoped', await ev(p, `!!${SV}.querySelector('jb-keyboard') && ${SV}.querySelector('jb-keyboard').getBoundingClientRect().height > 100`));
   await p.close();
-  const q = await open('&tab=browse', {}, PHONE);
+  const q = await open('&tab=browse&lhome=0', {}, PHONE);
   await wait(q, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
   await tap(q, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
   await tap(q, `${BR}.querySelector('[data-act="filter"]')`);
@@ -257,7 +257,7 @@ for (const kiosk of [false, true]) {
   check('Q60-4 idle_clear_filters: false → the scope chip stays across the screensaver', idle2 && (await ev(k, `!!${SV}.querySelector('.sc[data-scope="artist"]')`)));
   await k.close();
   // Library: text filter, then idle
-  const b = await open('&tab=browse&saver=0.1');
+  const b = await open('&tab=browse&lhome=0&saver=0.1');
   await wait(b, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
   await tap(b, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
   await tap(b, `${BR}.querySelector('[data-act="filter"]')`);

@@ -66,6 +66,8 @@
       ...(params.get('backdrop') ? { backdrop: params.get('backdrop') } : {}),
       font_base: '../custom_components/jukebox_kiosk/www/fonts',
       ...spk,
+      // lhome=0: the 0.6 Browse tab (library_home: false; the default is the Library home since 0.7.1)
+      ...(params.get('lhome') === '0' ? { library_home: false } : {}),
       ...extra,
     });
     card.hass = hass;

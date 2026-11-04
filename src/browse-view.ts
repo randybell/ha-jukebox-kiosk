@@ -666,7 +666,7 @@ export class JbBrowse extends LitElement {
     const modes = this._cat === 'radio' ? this.rmodes() : [];
     const libTools = this._cat !== DISCOVER_CAT.type && !(this._cat === 'radio' && this._rmode !== 'library');
     const trail0 = this._cat === 'radio' && this._rmode !== 'library' ? `Radio · ${MODE_LABEL[this._rmode]}`
-      : lart ? `${cat.label} · ${lart.name}` : `Browse ${cat.label}${this.lq() ? ` “${this.lq()}”` : ''}`;
+      : lart ? `${cat.label} · ${lart.name}` : `${this.homeOn() ? `${this.homeLabel()} ·` : 'Browse'} ${cat.label}${this.lq() ? ` “${this.lq()}”` : ''}`;
     const filt = libTools && this.filtersOn();
     // filter keyboard open: wide screens put box + chips + keyboard on the left and the list on the right (like Search);
     // narrower screens stack box, chips, list, keyboard (CSS order on .lkcol's children)

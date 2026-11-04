@@ -1,4 +1,4 @@
-// v0.7 (flag `library_home`, default off): the Library tab's landing screen, a grid of big shortcut tiles
+// v0.7 (flag `library_home`; default on since 0.7.1, false = the 0.6 Browse tab): the Library tab's landing screen, a grid of big shortcut tiles
 // (Playlists, Artists, Albums, Radio, Search by default; Tracks, Podcasts, Audiobooks, Genres, Discover opt-in).
 // Pure helpers only (tile list, labels, availability), so they can be unit tested without a DOM.
 import type { ExtCaps } from './backend/types';
@@ -27,8 +27,9 @@ export const DEFAULT_TILES: TileId[] = TILES.filter((t) => !t.optIn).map((t) => 
 const isId = (x: unknown): x is TileId => typeof x === 'string' && (TILE_IDS as string[]).includes(x);
 export const tileDef = (id: TileId) => TILES.find((t) => t.id === id)!;
 
-export const libraryHomeOn = (c: Partial<JukeboxCardConfig> | undefined) => !!c?.library_home;
-/** Tab label: "Library" with the flag on (or `library_label`), else the 0.6 "Browse". */
+/** On unless `library_home: false` (0.7.1: the default changed from off to on). */
+export const libraryHomeOn = (c: Partial<JukeboxCardConfig> | undefined) => c?.library_home !== false;
+/** Tab label: "Library" (or `library_label`), or the 0.6 "Browse" with `library_home: false`. */
 export const libraryTabLabel = (c: Partial<JukeboxCardConfig> | undefined) =>
   libraryHomeOn(c) ? (String(c?.library_label ?? '').trim() || 'Library') : 'Browse';
 
