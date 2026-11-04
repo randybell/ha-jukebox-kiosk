@@ -1,4 +1,4 @@
-// 0.7.0 release screenshots (mock data only) → $JB_SHOTS (default test/shots/070/), <n>-<name>-<w>x<h>.png
+// 0.7.x release screenshots (0.7.1: the Library home is the default, so the nav says Library) (mock data only) → $JB_SHOTS (default test/shots/070/), <n>-<name>-<w>x<h>.png
 // 1 Search scoped to an artist (chip + Clear filters) · 2 library-first results · 3 Library home tiles · 4 Library filter
 // 5 hearts on rows (one filled, chip top-right) · 6 Now Playing heart + Repeat queue · 7 radio station sheet with heart
 // Usage: (serve the project root) JB_URL=http://127.0.0.1:8811/dev/index.html node test/shots-070.mjs
@@ -32,7 +32,9 @@ for (const vp of [{ width: 1920, height: 1080 }, { width: 390, height: 844 }]) {
   const ev = (p, e) => p.evaluate((x) => eval(x), e);
   const wait = (p, f, t = 6000) => p.waitForFunction(f, { timeout: t, polling: 40 }).then(() => true, () => { console.log('timeout', tag, f); return false; });
   const tap = async (p, e) => { const r = await ev(p, `(() => { const el = ${e}; el.scrollIntoView({ block: 'nearest' }); const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`); await p.mouse.click(r.x, r.y); await sleep(150); };
-  const shot = async (p, n) => { await sleep(500); const f = `${OUT}${n}-${tag}.png`; await p.screenshot({ path: f }); done.push(f); };
+  const shot = async (p, n) => { await sleep(500);
+    const nav = await ev(p, `[...__card.shadowRoot.querySelectorAll('.tab span')].map((x) => x.textContent.trim()).join('|')`);
+    if (!nav.includes('Library') || nav.includes('Browse')) errors.push(`${n}-${tag}: nav ${nav}`); const f = `${OUT}${n}-${tag}.png`; await p.screenshot({ path: f }); done.push(f); };
   const tracksChip = `[...${SV}.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Tracks')`;
 
   // 2) library-first global search, then 1) scoped to the artist (chip + Clear filters)
@@ -52,15 +54,15 @@ for (const vp of [{ width: 1920, height: 1080 }, { width: 390, height: 844 }]) {
   await p.close();
 
   // 3) Library home tiles
-  p = await open('&tab=browse&names=fake&stations=fake', { library_home: true });
+  p = await open('&tab=browse&names=fake&stations=fake');
   await wait(p, `${BR}.querySelectorAll('.lt').length === 5`);
   await shot(p, '3-library-home');
   await p.close();
 
   // 4) Library filter: artist page → Filter by → tracks → type
   p = await open('&tab=browse&jjgrey=1');
-  await wait(p, `${BR}.querySelector('.cats .fc[data-cat="artist"]')`);
-  await tap(p, `${BR}.querySelector('.cats .fc[data-cat="artist"]')`);
+  await wait(p, `${BR}.querySelector('.lt[data-tile="artist"]')`);
+  await tap(p, `${BR}.querySelector('.lt[data-tile="artist"]')`);
   await wait(p, `[...${BR}.querySelectorAll('.tile[data-type="artist"] b')].some((b) => b.textContent === 'JJ Grey')`);
   await tap(p, `[...${BR}.querySelectorAll('.tile[data-type="artist"]')].find((x) => x.querySelector('b').textContent === 'JJ Grey')`);
   await wait(p, `${BD}?.querySelector('[data-action="scope"]')`);
@@ -97,8 +99,8 @@ for (const vp of [{ width: 1920, height: 1080 }, { width: 390, height: 844 }]) {
 
   // 7) radio station sheet with the heart (a favourite station)
   p = await open(`&tab=browse&radio=lib&stations=fake&radiofav=1${LIB}`);
-  await wait(p, `${BR}.querySelector('[data-cat=radio]')`); await sleep(200);
-  await ev(p, `${BR}.querySelector('[data-cat=radio]').click()`);
+  await wait(p, `${BR}.querySelector('.lt[data-tile=radio]')`); await sleep(200);
+  await ev(p, `${BR}.querySelector('.lt[data-tile=radio]').click()`);
   await wait(p, `${BR}.querySelector('.grid.radio .tile')`); await sleep(150);
   const tile = `[...${BR}.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent.trim() === 'Mockingbird FM')`;
   await ev(p, `${tile}.scrollIntoView({ block: 'center' })`); await sleep(80);
