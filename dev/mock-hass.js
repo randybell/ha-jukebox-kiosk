@@ -317,7 +317,7 @@ function syncNowPlaying(resetPos = true, EVERY = 'media_player.everywhere') {
 }
 setState(EVERY, params.get('idle') === '1' ? 'idle' : params.get('paused') === '1' ? 'paused' : 'playing', {
   friendly_name: 'Everywhere', group_members: Object.keys(ROOMS), app_id: 'music_assistant', active_queue: 'syncgroup_everywhere',
-  volume_level: 0.55, is_volume_muted: false, shuffle: false, repeat: 'off', supported_features: 4127295, mass_player_type: 'group', mass_player_id: null,
+  volume_level: 0.55, is_volume_muted: false, shuffle: params.get('shuffle') === '1', repeat: params.get('repeat') ?? 'off', supported_features: 4127295, mass_player_type: 'group', mass_player_id: null,
 });
 syncNowPlaying();
 if (st(EVERY).state !== 'idle') setState(EVERY, null, { media_position: 128, media_position_updated_at: new Date(Date.now() - 2000).toISOString() });
@@ -443,7 +443,8 @@ async function callService(domain, service, data = {}, target, notifyOnError, re
         case 'media_previous_track': { const Q = qOf(id); if (Q) { if (posNow(a, e.state) < 3 && Q.index > 0) Q.index--; syncNowPlaying(true, id); } break; }
         case 'media_seek': setState(id, null, { media_position: +data.seek_position, media_position_updated_at: new Date().toISOString() }); break;
         case 'shuffle_set': setState(id, null, { shuffle: !!data.shuffle }); break;
-        case 'repeat_set': if (!['off', 'all', 'one'].includes(data.repeat)) throw new Error('bad repeat'); setState(id, null, { repeat: data.repeat }); break;
+        // HA itself accepts 'one'; the card must never send it. ?stickyrepeat=1 ignores repeat_set (MA re-reporting 'one')
+        case 'repeat_set': if (!['off', 'all', 'one'].includes(data.repeat)) throw new Error('bad repeat'); if (params.get('stickyrepeat') !== '1') setState(id, null, { repeat: data.repeat }); break;
         default: throw new Error(`mock-hass: unhandled media_player.${service}`);
       }
     }
@@ -579,6 +580,8 @@ function sendCommand(command, d) {
   }
 }
 /** test hook: pretend a radio station (or anything else) is now playing artist/title */
+/** tests: change attributes of one entity and push a new hass (e.g. a player reporting repeat 'one' again) */
+window.__setAttrs = (id, attrs, state = null) => { setState(id, state, attrs); commit(); };
 window.__setNowPlaying = ({ artist = '', title = '', radio = true, uri, duration = null, position = 0 } = {}) => {
   setState(EVERY, 'playing', { media_title: title, media_artist: artist, media_album_name: radio ? 'Mock Radio FM' : '', media_content_id: uri ?? (radio ? 'library://radio/7' : undefined),
     media_content_type: radio ? 'radio' : 'music', media_duration: duration, media_position: position, media_position_updated_at: new Date().toISOString() });

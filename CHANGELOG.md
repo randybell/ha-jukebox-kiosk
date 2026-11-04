@@ -2,6 +2,14 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
+## 0.6.5 — 2026-11-03
+
+### Fixed
+- **Repeat one is never an option.** Repeat is a queue setting with two states: off and all ("Repeat queue", the whole queue). The button toggles off ↔ all; the old off → all → one → off cycle is gone, and the repeat-one icon was removed. A stray tap can no longer leave a group looping one song.
+- **A player stuck on repeat one is fixed automatically.** If the player reports repeat "one" (for example set from another app), the card shows it as repeat queue and sends one `media_player.repeat_set {repeat: all}` to that player: once per detection after about 1.5 s, at most once a minute (so it can't loop if Music Assistant keeps reporting "one"), and only for a user with Playback permission. New option `coerce_repeat_one` (default `true`) turns this off.
+- **Shuffle and repeat are queue-level only.** Both always go to the active target (the group or player the card is playing on, e.g. Everywhere), never to member speakers; the buttons are labelled "Shuffle queue" and "Repeat queue".
+- The integration maps a forwarded repeat "one" to "all" if a repeat command is ever allowlisted (none is today; `player_queues/repeat` stays refused).
+
 ## 0.6.4 — 2026-11-01
 
 ### Changed

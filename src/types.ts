@@ -163,6 +163,8 @@ export interface JukeboxCardConfig {
   leader_drop?: 'allow' | 'block'; // default 'allow' (0.6.3)
   /** 0.6.4: true brings back the centred confirm dialogs for drop / last room / takeovers. Default false: status chip only. */
   confirm_drop?: boolean;
+  /** 0.6.5: a player that reports repeat 'one' is shown as 'all' and gets one repeat_set 'all' (needs Playback). Default true. */
+  coerce_repeat_one?: boolean;
   presets?: PresetConfig[];
   quiet_hours?: QuietHours;
   /** Bigger touch targets and text. Default false. */

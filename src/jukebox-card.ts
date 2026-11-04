@@ -22,6 +22,7 @@ import { pickBackend, createBackend, backendKey, type MaBackend } from './backen
 import { defineElement } from './define';
 import { libraryTabLabel } from './library-home';
 import { FavStore } from './favorites';
+import { RepeatOneGuard } from './repeat';
 
 export const VERSION = '0.6.4';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
@@ -54,6 +55,7 @@ function validateSpeakers(c: JukeboxCardConfig) {
   oneOf('guest_access', ['volume', 'none']);
   oneOf('leader_drop', ['block', 'allow']);
   if (!bool(c.confirm_drop)) throw new Error('jukebox-card: confirm_drop must be true or false.');
+  if (!bool(c.coerce_repeat_one)) throw new Error('jukebox-card: coerce_repeat_one must be true or false.');
   if (!bool(c.large_buttons)) throw new Error('jukebox-card: large_buttons must be true or false.');
   if (c.grouping_users !== undefined && (!Array.isArray(c.grouping_users) || !c.grouping_users.every((u) => typeof u === 'string')))
     throw new Error('jukebox-card: grouping_users must be a list of user names or ids.');
@@ -142,6 +144,11 @@ export class JukeboxCard extends LitElement {
   readonly favs = new FavStore();
   /** Music Assistant backend (kiosk / mass_queue / native), shared by queue, lyrics, speakers and the views */
   backend?: MaBackend;
+  /** 0.6.5 coerce_repeat_one: a player on repeat 'one' gets one repeat_set 'all' per detection (debounced, never a loop) */
+  readonly repeatGuard = new RepeatOneGuard({
+    send: (entity) => this.hass?.callService('media_player', 'repeat_set', { repeat: 'all' }, { entity_id: entity }),
+    allowed: (entity) => this.mayCoerceRepeat(entity),
+  });
   private _bkey = '';
   private _bunsub?: () => void;
   private _push?: { key: string; off?: () => void };
@@ -365,6 +372,7 @@ export class JukeboxCard extends LitElement {
     this.removeEventListener('jukebox-station', this.onStation as EventListener);
     this.removeEventListener('jukebox-station-close', this.onStationClose as EventListener);
     this.speakers.stopPolling();
+    this.repeatGuard.dispose();
     document.removeEventListener('fullscreenchange', this.onFsChange);
     document.removeEventListener('webkitfullscreenchange', this.onFsChange);
     window.removeEventListener('keydown', this.onKey);
@@ -620,10 +628,26 @@ export class JukeboxCard extends LitElement {
       this.speakers.hass = this.hass;
       const id = this._config.entity!;
       const a = this.hass.states[id], b = old?.states[id];
+      if (a !== b || !old) this.repeatGuard.observe(id, a?.attributes?.repeat, this._config.coerce_repeat_one !== false);
       if (!old) this.queue.refreshSoon(0);
       else if (a !== b && (a?.state !== b?.state || a?.attributes?.media_content_id !== b?.attributes?.media_content_id
         || a?.attributes?.media_title !== b?.attributes?.media_title || a?.attributes?.shuffle !== b?.attributes?.shuffle)) this.queue.refreshSoon();
     }
+  }
+  /**
+   * Only for the player this card controls, and only for a user with Playback permission: on the kiosk backend that
+   * is the playback class from jukebox_kiosk/capabilities (if the server never answered, nothing is sent); the other
+   * backends have no permission classes, so HA's own service permissions apply.
+   */
+  private async mayCoerceRepeat(entity: string): Promise<boolean> {
+    if (!this.hass || this._config?.coerce_repeat_one === false || this._config?.entity !== entity) return false;
+    const be = this.backend;
+    if (be?.kind === 'kiosk') {
+      await be.ready;
+      const now = this.backend;
+      return now === be && !!(be as any).info && be.caps.queuePlay;
+    }
+    return true;
   }
   /** dynamic mode: a remembered target missing from hass.states is forgotten once, with a notice (it used to fall back silently) */
   private dropLostTarget() {

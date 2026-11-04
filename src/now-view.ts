@@ -22,10 +22,10 @@ export interface InlineSpeakers extends HTMLElement {
 }
 import { defineElement } from './define';
 import { FavController } from './heart';
+import { shownRepeat, nextRepeat } from './repeat';
 
 const VOL_THROTTLE_MS = 200;
 const HOLD_MS = 4000; // keep optimistic values this long unless the entity confirms sooner
-const REPEAT_NEXT: Record<string, string> = { off: 'all', all: 'one', one: 'off' };
 
 interface Pending<T> { v: T; t: number }
 
@@ -129,9 +129,10 @@ export class JbNow extends LitElement {
     this.flags.set('shuffle', { v, t: Date.now() }); this.requestUpdate();
     this.call('media_player', 'shuffle_set', { shuffle: v }, this.eid);
   }
+  /** 0.6.5: off <-> all only; 'one' is never sent (a player on 'one' is shown as all, so a tap turns repeat off) */
   cycleRepeat() {
-    const cur = this.flag('repeat', (this.ent?.attributes?.repeat as string) ?? 'off');
-    const v = REPEAT_NEXT[cur] ?? 'off';
+    const cur = this.flag('repeat', shownRepeat(this.ent?.attributes?.repeat));
+    const v = nextRepeat(cur);
     this.flags.set('repeat', { v, t: Date.now() }); this.requestUpdate();
     this.call('media_player', 'repeat_set', { repeat: v }, this.eid);
   }
@@ -264,7 +265,7 @@ export class JbNow extends LitElement {
     const prov = providerLabel(a.media_content_id);
     const playing = this.isPlaying();
     const shuffle = this.flag('shuffle', !!a.shuffle);
-    const repeat = this.flag('repeat', (a.repeat as string) ?? 'off');
+    const repeat = this.flag('repeat', shownRepeat(a.repeat));
     const { pos, dur } = this.position();
     const where = (a.friendly_name as string) ?? 'Everywhere';
     const stateWord = playing ? 'Playing on' : e?.state === 'paused' || this.flag('state', e?.state) === 'paused' ? 'Paused on' : 'Ready on';
@@ -277,7 +278,7 @@ export class JbNow extends LitElement {
     const favOn = this.isFav();
     const showFav = (this.config.favorite_entity ?? 'button.everywhere_favorite_current_song') !== '';
     const tb = (cls: string, ic: string, label: string, fn: () => void, on?: boolean, dot = false, dis = false) =>
-      html`<button class="tb ${cls} ${on ? 'on' : ''}" tabindex="-1" aria-label=${label} aria-pressed=${on === undefined ? nothing : on ? 'true' : 'false'}
+      html`<button class="tb ${cls} ${on ? 'on' : ''}" tabindex="-1" aria-label=${label} title=${label} aria-pressed=${on === undefined ? nothing : on ? 'true' : 'false'}
         ?disabled=${dis} @pointerdown=${noFocus} @click=${fn}>${icon(ic)}${dot ? html`<i class="dot"></i>` : nothing}</button>`;
     const showLyr = !idle && this.config.show_lyrics !== false && !!this.lyrics;
     return html`<div class="nw ${idle ? 'idle' : ''}" data-state=${e?.state ?? 'unknown'}>
@@ -305,11 +306,11 @@ export class JbNow extends LitElement {
           <span class="tr">${dur ? fmtTime(dur) : a.media_content_type === 'radio' || !dur ? 'LIVE' : ''}</span>
         </div>
         <div class="tp">
-          ${tb('sh', 'shuffle', 'Shuffle', () => this.toggleShuffle(), shuffle, shuffle)}
+          ${tb('sh', 'shuffle', 'Shuffle queue', () => this.toggleShuffle(), shuffle, shuffle)}
           ${tb('pr', 'prev', 'Previous', () => this.prev())}
           ${tb('pp', playing ? 'pause' : 'play', playing ? 'Pause' : 'Play', () => this.playPause())}
           ${tb('nx', 'next', 'Next', () => this.next())}
-          ${tb('rp', repeat === 'one' ? 'repeat1' : 'repeat', `Repeat ${repeat}`, () => this.cycleRepeat(), repeat !== 'off', repeat !== 'off')}
+          ${tb('rp', 'repeat', 'Repeat queue', () => this.cycleRepeat(), repeat !== 'off', repeat !== 'off')}
           ${showFav ? tb('fv', favOn ? 'heart' : 'heartline', favOn ? 'Remove from favorites' : 'Add to favorites', () => this.toggleFavorite(), favOn, false, idle) : nothing}
         </div>
         ${nextIt ? html`<button class="upn panel" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
