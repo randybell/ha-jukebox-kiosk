@@ -13,13 +13,13 @@ The card's element is still `custom:jukebox-card`, so existing dashboards keep w
 
 ## Screenshots
 
-*(0.7.2)* **One Library tab for browsing and searching.** A search box with the on-screen keyboard and a source picker (All, Library, then your Music Assistant providers) sit on top; Playlists, Artists, Songs, Genres and Radio sit under it. An empty box lists your library; typing searches that category, library first.
+*(0.7.2)* **One Library tab for browsing and searching.** A search box with the on-screen keyboard sits on top, with a row of source buttons right under it (All, Library, then your Music Assistant providers; tap several to combine them); Playlists, Artists, Songs, Genres and Radio sit under it. An empty box lists your library; typing searches that category, library first.
 
 | Library (empty box) | Typing, source All |
 |---|---|
 | ![Library](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-1280x800.png) | ![Library search, All](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-search-1280x800.png) |
-| **Source picker** | **Typing, one provider (820x1180)** |
-| ![Source picker](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-sources-1280x800.png) | ![Library search, Spotify only](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-provider-820x1180.png) |
+| **Source buttons, two providers on** | **Typing, one provider (820x1180)** |
+| ![Source buttons](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-sources-1280x800.png) | ![Library search, Spotify only](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-provider-820x1180.png) |
 
 ![Now Playing at 1920x1080](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-1920x1080.png)
 
@@ -230,11 +230,13 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 ### Library (search and browse in one tab, 0.7.2)
 
 - **One tab.** Since 0.7.2 the **Library** tab (`library_label`) is where you browse and search; there is no Search tab and no tile home by default (`library_layout: combined`).
-- **Top: search box + source picker.** The box uses the on-screen keyboard and searches on every keystroke (see [How search behaves](#how-search-behaves)). The picker next to it lists **All** (default), **Library**, then the search-capable music providers configured in Music Assistant (by their display name, built when the card starts; unavailable providers are left out). `search_sources: false` hides the picker.
+- **Top: search box, source buttons right under it.** The box uses the on-screen keyboard and searches on every keystroke (see [How search behaves](#how-search-behaves)). The always-visible button row lists **All** (default), **Library**, then the search-capable music providers configured in Music Assistant (by their display name, built when the card starts; unavailable providers are left out). It wraps when there are many (one horizontally scrolling row on phones and short landscape screens); no dropdown.
+  - **Multi-select.** Tapping a provider while All is on selects just that provider; tapping more adds them; tapping a selected one turns it off; when none is left it goes back to **All**. Tapping **All** clears the others. The status line and placeholder name the selection (e.g. "Apple Music + TuneIn").
+  - `search_sources: false` hides the buttons.
 - **Under it: category buttons.** Playlists (default), Artists, Songs, Genres, Radio. Albums, Podcasts and Audiobooks only through `library_categories`, which also sets the order.
-- **Empty box, source All or Library:** the library list of the selected category (Favorites toggle and sort chip as before). Genres lists `music/genres/library_items`; a genre opens its page.
-- **Typed text:** results for the selected category and source only. With **All**, library matches come first ("In your library"), then provider results ("From your providers"); **Library** shows library matches only; a provider sends `music/search` with `providers: [<that provider>]`.
-- **Provider with an empty box:** that provider's folders (`music/browse <provider>://`, admins) or an inline hint "Type to search <provider>" — never a popup.
+- **Empty box, All or Library alone:** the library list of the selected category (Favorites toggle and sort chip as before). Genres lists `music/genres/library_items`; a genre opens its page.
+- **Typed text:** results for the selected category and source only. With **All**, library matches come first ("In your library"), then provider results ("From your providers"); **Library** shows library matches only; providers send one `music/search` with all of them in `providers`; **Library** plus providers shows library matches first, then those providers.
+- **Provider with an empty box:** one provider shows its folders (`music/browse <provider>://`, admins) or an inline hint "Type to search <provider>"; several providers show the inline hint ("Type to search Apple Music + TuneIn") — never a popup.
 - **Filters.** "Search in <artist / album>" adds the artist/album chip and **Clear filters** next to the box. Clear filters also empties the box and puts the source back to All; so does the screensaver with `idle_clear_filters` (default on).
 - **Old configs.** `default_tab: search`, a saved Search tab or any "search" shortcut opens the Library tab with the keyboard up. `library_home: true` from 0.7.1 is ignored (no tiles). `library_layout: separate` brings back the 0.7.1 Library + Search tabs exactly (tile home with `library_home: true`, the 0.7.1 chip row).
 
@@ -385,9 +387,9 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `hearts` | `true` | *(0.7)* A favourite heart on Search and Library rows and tiles, on playlist rows and on album, artist and playlist pages. See [Favourites (hearts)](#favourites-hearts). Needs the Jukebox Kiosk backend and the `library` class. `false` keeps the 0.6 hearts only (Search radio rows, the station sheet and Now Playing) |
 | `show_autoplay` | `false` | *(0.7)* Autoplay (Music Assistant "don't stop the music") toggle in the Queue header plus an indicator on Now Playing. Jukebox Kiosk backend, class `queue` |
 | `radio_favorites_only` | `false` | *(0.7)* Browse › Radio **My stations** lists favourite stations only. Default: favourites first, then the other library stations |
-| `library_layout` | `combined` | *(0.7.2)* `combined`: one Library tab with the search box, source picker and category buttons (no Search tab). `separate`: the 0.7.1 Library + Search tabs |
+| `library_layout` | `combined` | *(0.7.2)* `combined`: one Library tab with the search box, source buttons and category buttons (no Search tab). `separate`: the 0.7.1 Library + Search tabs |
 | `library_categories` | `[playlist, artist, track, genre, radio]` | *(0.7.2)* Category buttons in order; also `album`, `podcast`, `audiobook` |
-| `search_sources` | `true` | *(0.7.2)* The source picker (All, Library, Music Assistant providers) next to the search box. Jukebox Kiosk and mass_queue backends |
+| `search_sources` | `true` | *(0.7.2)* The source buttons under the search box (All, Library, Music Assistant providers; multi-select). Jukebox Kiosk and mass_queue backends |
 | `library_home` | `false` | *(0.7; only with `library_layout: separate`; was `true` in 0.7.1)* The Library tab opens on big shortcut tiles |
 | `library_tiles` | see right | *(0.7; only with `library_layout: separate` and `library_home: true`)* Tiles in order: `playlist`, `artist`, `album`, `radio`, `search`, `track`, `podcast`, `audiobook`, `genre`, `discover`; each an id or `{tile, label}`. Unset = playlist, artist, album, radio, search (plus discover when `discover` is set) |
 | `library_label` | `Library` | *(0.7)* The Library tab's name |

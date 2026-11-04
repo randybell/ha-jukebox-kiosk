@@ -118,8 +118,8 @@ export interface JukeboxCardConfig {
   /** v0.7 search filters (default on): "Search in <artist>" on artist / album pages, scope chips + Clear filters in
    *  Search, a text filter and artist filter in the Library. false = 0.6 behaviour. */
   search_filters?: boolean;
-  /** 0.7.2 (default on): a Source picker at the top of Search: All (library first, then every provider), Library, or one
-   *  music provider configured in Music Assistant (listed by MA's names). false = always All, no picker. */
+  /** 0.7.2 (default on): a row of source buttons under the search box: All (library first, then every provider), or any
+   *  mix of Library and the music providers configured in Music Assistant (listed by MA's names). false = always All, no buttons. */
   search_sources?: boolean;
   /** v0.7 (default on): Search shows Music Assistant library matches first in each category, then provider results
    *  with library duplicates removed. false = MA's own order. */
@@ -147,7 +147,7 @@ export interface JukeboxCardConfig {
   /** v0.7 (default off since 0.7.2; 0.7.1 had it on): with `library_layout: separate` only, true = the Library tab opens
    *  on a grid of shortcut tiles instead of the list with the category buttons. Ignored in the combined layout. */
   library_home?: boolean;
-  /** 0.7.2: 'combined' (default) = one Library tab: the search box with the source picker on top, the category buttons
+  /** 0.7.2: 'combined' (default) = one Library tab: the search box with the source buttons under it on top, the category buttons
    *  under it, the library list while the box is empty and search results (that category, that source) once you type.
    *  'separate' = the 0.7.1 layout: a Library tab and a Search tab (only there does `library_home` / the tile grid apply). */
   library_layout?: 'combined' | 'separate';

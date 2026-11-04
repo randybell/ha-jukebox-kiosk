@@ -1,6 +1,6 @@
 /**
- * 0.7.2 Search source picker: All (library first, then every provider, as before), Library, or one music provider
- * configured in Music Assistant. The provider list comes from MA through the backend (never a fixed list):
+ * 0.7.2 Search source buttons (a row under the search box, multi-select): All (library first, then every provider, as
+ * before), or any mix of Library and the music providers configured in Music Assistant. The provider list comes from MA through the backend (never a fixed list):
  *   kiosk       jukebox_kiosk/search_providers (the integration reads MA's provider instances)
  *   mass_queue  MA's `providers` command through send_command
  *   native      no list (the core services can't search one provider): the picker is hidden
@@ -20,7 +20,7 @@ export const SOURCE_ALL = 'all';
 export const SOURCE_LIBRARY = 'library';
 export const LIBRARY_SOURCE: SearchSource = { id: SOURCE_LIBRARY, name: 'Library', domain: 'library' };
 
-/** `search_sources: false` hides the picker (Search then always searches All, as in 0.7.1) */
+/** `search_sources: false` hides the source buttons (Search then always searches All, as in 0.7.1) */
 export const sourcesOn = (c?: Partial<JukeboxCardConfig>) => c?.search_sources !== false;
 
 const plain = (v: any): string => (v == null ? '' : String(typeof v === 'object' && 'value' in v ? v.value : v));
@@ -49,7 +49,7 @@ export function parseSearchProviders(raw: any): SearchSource[] {
   return out.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id.localeCompare(b.id));
 }
 
-/** The picker's entries after All: Library first, then MA's providers. */
+/** The source buttons after All: Library first, then MA's providers. */
 export const pickerSources = (providers: SearchSource[]): SearchSource[] => [LIBRARY_SOURCE, ...providers];
 
 /** Status / placeholder name for a source id ('all providers' for All). */
@@ -72,3 +72,34 @@ export function fromSource(it: MaItem, id: string, providers: SearchSource[]): b
   // a provider with one instance: its items may carry the domain only
   return !!domain && providers.filter((p) => p.domain === domain).length === 1 && (prov === domain || maps.some((m) => m?.provider_domain === domain));
 }
+
+/** The selection is a list of source ids; an empty list means All. */
+export type SourceSel = readonly string[];
+
+/**
+ * One tap on a source button. All clears the selection (= All). A provider while All is on: that provider alone.
+ * Another provider: added. A selected provider: removed; when none is left the selection is All again.
+ * The result keeps the button order (Library first, then providers as listed).
+ */
+export function toggleSource(sel: SourceSel, id: string, providers: SearchSource[] = []): string[] {
+  if (!id || id === SOURCE_ALL) return [];
+  const next = sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id];
+  const order = pickerSources(providers).map((p) => p.id);
+  const pos = (x: string) => { const i = order.indexOf(x); return i < 0 ? order.length : i; };
+  return [...next].sort((a, b) => pos(a) - pos(b));
+}
+
+/** Button / status label: 'All', or the names joined with ' + ' ("Apple Music + TuneIn"). */
+export function sourcesLabel(sel: SourceSel, providers: SearchSource[]): string {
+  if (!sel.length) return 'All';
+  return sel.map((id) => (id === SOURCE_LIBRARY ? 'Library' : providers.find((p) => p.id === id)?.name ?? id)).join(' + ');
+}
+
+/** Library and the providers of a selection, for music/search's `providers` (empty selection = All). */
+export function splitSources(sel: SourceSel): { library: boolean; providers: string[] } {
+  return { library: sel.includes(SOURCE_LIBRARY), providers: sel.filter((x) => x !== SOURCE_LIBRARY && x !== SOURCE_ALL) };
+}
+
+/** Does a result come from any selected source? (All keeps everything.) */
+export const fromSources = (it: MaItem, sel: SourceSel, providers: SearchSource[]): boolean =>
+  !sel.length || sel.some((id) => fromSource(it, id, providers));

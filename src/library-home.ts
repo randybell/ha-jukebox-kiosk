@@ -29,7 +29,7 @@ export const tileDef = (id: TileId) => TILES.find((t) => t.id === id)!;
 
 /** The tile home only with an explicit `library_home: true` (0.7.2: off by default again; 0.7.1 had it on). */
 export const libraryHomeOn = (c: Partial<JukeboxCardConfig> | undefined) => c?.library_home === true;
-/** 0.7.2: one combined Library tab (search box + source picker + category buttons) instead of Library + Search tabs.
+/** 0.7.2: one combined Library tab (search box + source buttons + category buttons) instead of Library + Search tabs.
  *  Always on unless `library_layout: separate` (the 0.7.1 Library + Search tabs; `library_home` only applies there). */
 export const combinedOn = (c: Partial<JukeboxCardConfig> | undefined) => c?.library_layout !== 'separate';
 /** Tab label: always "Library" (or `library_label`), with or without the tile home. */

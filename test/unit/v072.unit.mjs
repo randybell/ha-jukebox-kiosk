@@ -1,5 +1,5 @@
 // 0.7.2 unit checks: the combined Library tab switch (library_layout + 'search' tab back-compat), the category button
-// row (incl. Genres), the source picker's provider parsing / filtering, and the editor fields.
+// row (incl. Genres), the source buttons' provider parsing, multi-select and filtering, and the editor fields.
 // Bundled on the fly; no browser, no network, invented placeholder ids only. Usage: node test/unit/v072.unit.mjs
 import { rollup } from 'rollup';
 import typescript from '@rollup/plugin-typescript';
@@ -61,15 +61,27 @@ const raw = [
 const p2 = S.parseSearchProviders(raw);
 check('P2 raw MA providers (mass_queue): only available music/plugin providers with search', J(p2.map((p) => p.id)) === J(['radiobrowser--demo0004', 'spotify--demo0002']), J(p2));
 check('P3 garbage → []', J(S.parseSearchProviders(null)) === '[]' && J(S.parseSearchProviders({ providers: 'x' })) === '[]' && J(S.parseSearchProviders([null, 1, {}])) === '[]');
-check('P4 picker: All is separate; then Library, then providers', J(S.pickerSources(p1).map((x) => x.id)) === J(['library', ...p1.map((p) => p.id)]) && S.SOURCE_ALL === 'all');
+check('P4 buttons: All is separate; then Library, then providers', J(S.pickerSources(p1).map((x) => x.id)) === J(['library', ...p1.map((p) => p.id)]) && S.SOURCE_ALL === 'all');
 check('P5 names for status / placeholder', S.sourceName('all', p1) === 'all providers' && S.sourceName('library', p1) === 'your library' && S.sourceName('tunein--demo0003', p1) === 'TuneIn');
-check('P6 search_sources defaults on; false hides the picker', S.sourcesOn({}) && S.sourcesOn(undefined) && !S.sourcesOn({ search_sources: false }));
+check('P6 search_sources defaults on; false hides the source buttons', S.sourcesOn({}) && S.sourcesOn(undefined) && !S.sourcesOn({ search_sources: false }));
 const it = (uri, extra = {}) => ({ uri, name: 'x', ...extra });
 check('P7 fromSource: All keeps everything; Library = library:// only', S.fromSource(it('spotify--demo0002://track/1'), 'all', p1)
   && S.fromSource(it('library://track/1'), 'library', p1) && !S.fromSource(it('spotify--demo0002://track/1'), 'library', p1));
 check('P8 fromSource: provider by instance prefix or provider mapping; others dropped', S.fromSource(it('spotify--demo0002://track/1'), 'spotify--demo0002', p1)
   && S.fromSource(it('library://track/2', { provider_mappings: [{ provider_instance: 'spotify--demo0002' }] }), 'spotify--demo0002', p1)
   && !S.fromSource(it('apple_music--demo0001://track/3'), 'spotify--demo0002', p1));
+// multi-select (an empty selection = All)
+const T = (sel, id) => S.toggleSource(sel, id, p1);
+const SP = 'spotify--demo0002', TI = 'tunein--demo0003', AM = 'apple_music--demo0001';
+check('M1 default All; tapping a provider while All is on selects only it', J(T([], SP)) === J([SP]));
+check('M2 tapping another provider adds it (kept in button order)', J(T([TI], SP)) === J([SP, TI]) && J(T([SP], 'library')) === J(['library', SP]));
+check('M3 tapping a selected provider unselects it', J(T([SP, TI], SP)) === J([TI]));
+check('M4 unselecting the last one goes back to All', J(T([TI], TI)) === '[]');
+check('M5 tapping All clears every provider', J(T([SP, TI, 'library'], 'all')) === '[]' && J(T([], 'all')) === '[]');
+check('M6 label: All, or names joined with " + "', S.sourcesLabel([], p1) === 'All' && S.sourcesLabel([AM, TI], p1) === 'Apple Music + TuneIn' && S.sourcesLabel(['library', SP], p1) === 'Library + Spotify');
+check('M7 providers param split: Library vs providers', J(S.splitSources(['library', SP, TI])) === J({ library: true, providers: [SP, TI] }) && J(S.splitSources([SP])) === J({ library: false, providers: [SP] }));
+check('M8 fromSources: any selected source matches; [] keeps everything', S.fromSources(it('tunein--demo0003://radio/1'), [SP, TI], p1)
+  && !S.fromSources(it('apple_music--demo0001://track/1'), [SP, TI], p1) && S.fromSources(it('apple_music--demo0001://track/1'), [], p1));
 check('P9 kiosk feature search_providers → ext.searchProviders', B.extFromServer({ search_providers: true }).searchProviders === true && B.extFromServer({}).searchProviders === false);
 
 // ---------------- editor ----------------

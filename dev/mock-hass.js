@@ -263,11 +263,20 @@ export const DEMO_PROVIDERS = [
   { instance_id: 'chromecast--demo0006', domain: 'chromecast', name: 'Chromecast', type: 'player', available: true, supported_features: [] },
 ];
 window.__provSearchLog = [];
-/** MA music/search with providers=[instance_id | 'library']: only that source's items (catalog items whose uri has the
- *  provider's domain; demo providers without catalog items get re-labelled copies so the screenshots have results) */
+/** MA music/search with providers=[instance_id | 'library', ...]: only those sources' items (catalog items whose uri has
+ *  the provider's domain; demo providers without catalog items get re-labelled copies so the screenshots have results).
+ *  Several providers: their results one after another, per media type. */
 function providerSearch(d) {
-  const id = String(d.providers[0]);
-  window.__provSearchLog.push({ id, q: d.search_query, types: d.media_types });
+  const ids = d.providers.map(String);
+  window.__provSearchLog.push({ id: ids.join(','), ids, q: d.search_query, types: d.media_types });
+  const out = {};
+  for (const id of ids) {
+    const r = providerSearchOne(d, id);
+    for (const k of KEYS) out[k] = [...(out[k] ?? []), ...(r[k] ?? [])];
+  }
+  return out;
+}
+function providerSearchOne(d, id) {
   const types = Array.isArray(d.media_types) && d.media_types.length ? d.media_types.filter((t) => TYPE2KEY[t]) : undefined;
   const all = search(String(d.search_query ?? ''), 200, types ?? Object.keys(TYPE2KEY), '', id === 'library');
   const out = {}; const lim = d.limit ?? 8;

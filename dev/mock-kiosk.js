@@ -73,7 +73,7 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
       if (Array.isArray(args.providers) && args.providers.length) {
         // genres live in the library: MA returns none for a single music provider
         const r = await sendCommand(command, args);
-        if (Array.isArray(types) && types.includes('genre')) r.genres = args.providers[0] === 'library' ? (await v07.handle(command, args)).genres : [];
+        if (Array.isArray(types) && types.includes('genre')) r.genres = args.providers.includes('library') ? (await v07.handle(command, args)).genres : [];
         return r;
       }
       return sendCommand(command, args);
