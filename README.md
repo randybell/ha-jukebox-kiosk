@@ -1,4 +1,4 @@
-# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.6.5 — DRAFT
+# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.7.0 — DRAFT
 
 > **Draft for 0.6.0.** This README covers the new integration and the card bundled in it. Sections marked *(legacy)* describe the `mass_queue` backend, which still works.
 
@@ -73,7 +73,7 @@ Admins can do everything. In the integration's options (**Settings → Devices &
 | `read` | queue, search, browse, lyrics | ✅ |
 | `playback` | play and add music, jump in the queue | ✅ |
 | `queue` | reorder, remove, undo | ✅ |
-| `library` | favourite / unfavourite (the heart on Now Playing and on Search radio results), playlists | ✅ |
+| `library` | favourite / unfavourite (every heart: Now Playing, Search and Library rows, playlists, the radio station sheet), playlists | ✅ |
 | `speakers` | Music Assistant grouping: join / drop speakers (`players/cmd/set_members`), Move (`player_queues/transfer`), stop a group (`players/cmd/stop`) | — |
 | `admin` | `jukebox_kiosk/raw` diagnostics | never for guests |
 
@@ -239,6 +239,14 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 - **Search's Open action** jumps to the same detail page.
 - **Target.** Every `play_media` goes to the configured player (example: `media_player.everywhere`). Room players are volume targets.
 
+### Favourites (hearts)
+
+*(0.7)* With the Jukebox Kiosk backend, a heart sits on Search and Library rows and tiles (tracks, albums, artists, playlists, radio), on playlist rows and in the header of album, artist and playlist pages, on Now Playing and on the radio station sheet. A filled heart means the item is a Music Assistant favourite; tapping it adds or removes it through the integration (`music/favorites/add_item` / `remove_item`). Every heart for the same item updates at once.
+
+- Needs the `library` permission class. Without it (for example a guest you removed it from) the hearts are hidden, including the one on Now Playing. With the legacy `mass_queue` backend only the Now Playing heart is shown.
+- No confirmation when you remove a heart. The heart flips immediately; if Music Assistant refuses or the call fails it flips back and the top-right status chip shows the error (with ✕). Successful changes show a short "Added … to favorites" in the same chip. There are no popups in the middle of the screen.
+- `hearts: false` hides the 0.7 row, tile and page hearts. `favorite_entity: ''` hides the Now Playing heart.
+
 ### Screensaver
 
 - **Start.** After `screensaver_minutes` with no touches or keys, a full-screen overlay appears: the current art with a slow Ken Burns zoom, and a big clock, date and the current track, all drifting slowly (240 s loop) to avoid burn-in.
@@ -332,6 +340,9 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `limit` | `8` (1–50) | Search results per type. 1-character queries always use 5 |
 | `default_tab` | `now` | `now`, `browse`, `search`, `queue` or `lyrics`. A tab that is turned off (or unknown) is ignored and Now Playing opens |
 | `library_only` | `false` | Search only the MA library |
+| `search_filters` | `true` | v0.7 filters. An artist page in Search offers **Search in JJ Grey** (an album page: **Search in** that album); the next searches stay inside it, shown as a removable chip (`Artist: JJ Grey ✕`) with **Clear filters**. Library gets a **Filter** button (type to narrow the list) and **Filter by** on artist pages (that artist's albums / tracks). `false` hides all of it |
+| `idle_clear_filters` | `true` | When the screensaver comes on (`screensaver_minutes`), the Search scope chips (`Artist: … ✕`) and the Library filters are cleared, so the next person starts from everything. `false` keeps them until ✕ / Clear filters |
+| `library_first` | `true` | Search lists your library matches first ("In your library"), then provider results ("From your providers") with copies of library items removed. Applies to scoped searches too. `false` keeps Music Assistant's order |
 | `slow_ms` | `800` | Search replies slower than this switch on in-flight limiting |
 | `accent` | `mono` | Only `mono` exists so far |
 | `font_base` | `fonts/` next to the `.js` | Location of the woff2 files. `false` uses system fonts |
@@ -355,9 +366,29 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `presets` | `[]` | `[{name, members: [room entities], volumes?: {entity: percent}, target?}]` (`dynamic`) |
 | `quiet_hours` | — | `{start: 'HH:MM', end: 'HH:MM', max_volume: percent, applies?: guests\|everyone}` caps volume sliders; `start === end` means all day. Guests only by default |
 | `large_buttons` | `false` | Bigger touch targets and text everywhere |
+| `hearts` | `true` | *(0.7)* A favourite heart on Search and Library rows and tiles, on playlist rows and on album, artist and playlist pages. See [Favourites (hearts)](#favourites-hearts). Needs the Jukebox Kiosk backend and the `library` class. `false` keeps the 0.6 hearts only (Search radio rows, the station sheet and Now Playing) |
+| `show_autoplay` | `false` | *(0.7)* Autoplay (Music Assistant "don't stop the music") toggle in the Queue header plus an indicator on Now Playing. Jukebox Kiosk backend, class `queue` |
+| `radio_favorites_only` | `false` | *(0.7)* Browse › Radio **My stations** lists favourite stations only. Default: favourites first, then the other library stations |
+| `library_home` | `false` | *(0.7)* The Browse tab becomes **Library** and opens on big shortcut tiles (Playlists, Artists, Albums, Radio, Search by default) |
+| `library_tiles` | see right | *(0.7, with `library_home`)* Tiles in order: `playlist`, `artist`, `album`, `radio`, `search`, `track`, `podcast`, `audiobook`, `genre`, `discover`; each an id or `{tile, label}`. Unset = playlist, artist, album, radio, search (plus discover when `discover` is set) |
+| `library_label` | `Library` | *(0.7, with `library_home`)* The Library tab's name |
+| `search_categories` | unset | *(0.7, off by default)* Search category chips, in order: `tracks`, `artists`, `albums`, `playlists`, `radio`, `podcasts`, `audiobooks`, `genres`. Unset keeps the 0.6 search. `genres` needs the Jukebox Kiosk backend |
+| `search_default_category` | `all` | *(0.7)* Chip selected when Search opens |
+| `discover` | off | *(0.7)* `true` or a list of Music Assistant recommendation rows (`recently_played`, `favorite_radio`, `provider:item_id`, ...) shown as a **Discover** chip on Browse. Jukebox Kiosk backend only |
+| `radio_browse` | off | *(0.7)* `true` or a list of `popular`, `country`, `language`, `tag`: "Stations by" modes on Browse → Radio (Radio Browser provider). Hidden on the native backend |
+| `radio_country` | HA's country | *(0.7)* Two-letter code the Country mode opens on |
 
 The visual editor covers entity, config entry, rooms (an entity list that keeps existing names), favorite entity and mass_queue entry; a **Display** section (screensaver presets Off / 1 / 5 / 10 / 15 / 30 / 60 min plus Custom, screensaver lyrics, default tab, backdrop, accent); a **Lyrics** section (lyrics, Lyrics tab, long-press seek, offset); and an Advanced section (browse limit and the rest). Options you leave at their defaults are not written to YAML, and existing 0.3.x configs load unchanged.
 
+
+## Known issues
+
+- **Apple Music: removing a heart can mark the song as disliked.** In Music Assistant 2.10.9, un-favouriting an Apple Music item is sent to Apple Music as a *Dislike*. The card doesn't work around it; it is expected to be fixed in Music Assistant 2.11. Until then, remove Apple Music favourites in the Music app if this matters to you.
+- While the status chip is asking a speakers question (for example "Garage stops what it is playing. · Add"), a heart message ("Added … to favorites", or a heart error) is held behind it. If the question is answered quickly the message shows afterwards; otherwise it is dropped. The heart itself (and a rollback after an error) still updates immediately.
+
+## Planned for a later version
+
+Not in 0.7.0: joining a speaker to a dynamic group so playback resumes on it, an admin form to add a radio station by URL, playlist dedupe, and "Playing from <playlist>" with a heart on Now Playing.
 
 ## Troubleshooting
 

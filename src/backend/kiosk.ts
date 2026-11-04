@@ -7,7 +7,7 @@
  *   jukebox_kiosk/unfavorite_current, jukebox_kiosk/subscribe_queue
  */
 import type { HomeAssistant } from '../types';
-import { BackendError, Emitter, type Caps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
+import { AUTOPLAY_MODES, BackendError, Emitter, NO_EXT, type AutoplayMode, type AutoplayOptions, type Caps, type ExtCaps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
 
 export const KIOSK_DOMAIN = 'jukebox_kiosk';
 export const KIOSK_PAGE_SIZE = 100;
@@ -27,11 +27,21 @@ export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
     libraryWrite: b('library_write'),
   };
 }
+/**
+ * v0.7 flags. Server keys: genres, radio_browse, discover, resume. A 0.6.0 server already sends
+ * genre_overview (same permission class), so genres falls back to it; the others stay off until the server says so.
+ */
+export function extFromServer(f: Record<string, unknown> | undefined): ExtCaps {
+  const b = (k: string, d = false) => (f && typeof f[k] === 'boolean' ? (f[k] as boolean) : d);
+  return { genres: b('genres', b('genre_overview')), radioBrowse: b('radio_browse'), discover: b('discover'), resume: b('resume'), autoplay: b('autoplay'), autoplayMode: b('autoplay_mode') };
+}
 const code = (e: any): string => String(e?.code ?? '');
 
 export class KioskBackend implements MaBackend {
   readonly kind = 'kiosk' as const;
   caps: Caps = { ...OPTIMISTIC };
+  /** v0.7 features stay hidden until the server lists them (nothing flashes in and out) */
+  ext: ExtCaps = { ...NO_EXT };
   info: any = undefined;
   ready: Promise<void>;
   private em = new Emitter();
@@ -56,6 +66,7 @@ export class KioskBackend implements MaBackend {
     try {
       this.info = await this.ws({ type: 'capabilities' });
       this.caps = capsFromServer(this.info?.features);
+      this.ext = extFromServer(this.info?.features);
     } catch (e) {
       console.warn('[jukebox-card] jukebox_kiosk/capabilities failed', e);
       return; // keep optimistic caps; each call reports its own error
@@ -74,6 +85,8 @@ export class KioskBackend implements MaBackend {
       bufferIndex: typeof r?.index_in_buffer === 'number' ? r.index_in_buffer : undefined,
       total: typeof r?.total === 'number' ? r.total : undefined,
       currentItemId: r?.current_item_id != null ? String(r.current_item_id) : undefined,
+      autoplay: typeof r?.autoplay === 'boolean' ? r.autoplay : undefined,
+      dynamic: typeof r?.dynamic === 'boolean' ? r.dynamic : undefined,
     };
   }
   async queueAction(entity: string, action: QueueAction, queueItemId: string, queueId?: string) {
@@ -94,6 +107,24 @@ export class KioskBackend implements MaBackend {
   }
   unfavoriteCurrent(entity: string) {
     return this.ws({ type: 'unfavorite_current', entity_id: entity });
+  }
+  setAutoplay(entity: string, enabled: boolean) {
+    return this.ws({ type: 'set_autoplay', entity_id: entity, enabled });
+  }
+  async autoplayOptions(entity: string): Promise<AutoplayOptions> {
+    const r = await this.ws<any>({ type: 'autoplay_options', entity_id: entity });
+    const isMode = (m: unknown): m is AutoplayMode => AUTOPLAY_MODES.includes(m as AutoplayMode);
+    const pl = (p: any) => (p && typeof p.uri === 'string' ? { uri: p.uri, name: String(p.name || p.uri) } : null);
+    return {
+      mode: isMode(r?.mode) ? r.mode : 'auto',
+      followsDefault: !!r?.follows_default,
+      playlist: pl(r?.playlist),
+      modes: (Array.isArray(r?.modes) ? r.modes : []).filter((m: any) => isMode(m?.mode)).map((m: any) => ({ mode: m.mode, available: m.available !== false })),
+      playlists: (Array.isArray(r?.playlists) ? r.playlists : []).map(pl).filter(Boolean),
+    };
+  }
+  setAutoplayMode(entity: string, mode: AutoplayMode, playlist?: string) {
+    return this.ws({ type: 'set_autoplay_mode', entity_id: entity, mode, ...(mode === 'playlist' && playlist ? { playlist } : {}) });
   }
   async subscribeQueue(entity: string, cb: (ev: { event: string; queue_id?: string }) => void) {
     const conn = this.hass.connection;

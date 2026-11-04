@@ -347,7 +347,9 @@ const allJoins = [];
   await wait(p, `window.__ma.G.syncgroup_mock_outdoor.members.includes('wiim_mock_kitchen') && ${act(LIV)}?.dataset.act === 'take'`, 5000);
   await wait(p, `window.__hass.states['${IN}'].state === 'playing'`, 4000);
   await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.group_members?.length === 1`, 3000);
-  await sleep(150); // let the panel re-render after the store update, so the tap doesn't land on a row being replaced
+  // wait for Kitchen's take to finish (0.6.4: its late "Kitchen joined Outdoor · Undo" answered a question asked meanwhile
+  // with "no"; fixed in 0.6.5 / Q62, the race itself is covered by Q62-E5/E6 below)
+  await wait(p, `!${row(KIT)}?.classList.contains('pending') && ${SR}.querySelector('.st .ct')?.textContent.includes('Kitchen joined')`, 5000);
   await tap(p, act(LIV));
   await wait(p, ASKQ);
   const ll = await askLines(p);
@@ -837,11 +839,20 @@ const allJoins = [];
   // live transfer: the source stops at once, the target is silent ~4.7 s (1.2 s here) and then plays
   const p = await open(`&spk=dyn&admin=1&ma=split&xgap=1200&target=${IN}`);
   await openPanel(p); await waitLoaded(p);
+  // Deterministic: record every (source, target) state pair inside the page (no CDP round trip can miss the 1.2 s
+  // buffering window under load), and always wait for the question instead of skipping confirm after 1.5 s.
+  await p.evaluate((a, b) => {
+    const seen = window.__lv4 = []; let last = '';
+    const rec = () => { const k = `${window.__hass.states[a]?.state}|${window.__hass.states[b]?.state}`; if (k !== last) { last = k; seen.push(k); } };
+    rec(); window.__lv4t = setInterval(rec, 5);
+  }, IN, OUT);
   await tap(p, `${SR}.querySelector('[data-target="${OUT}"]')`);
-  await wait(p, ASKQ, 1500) && (await confirm(p));
-  const srcStop = await wait(p, `window.__hass.states['${IN}'].state === 'idle' && window.__hass.states['${OUT}'].state === 'buffering'`, 3000);
-  const play = await wait(p, `window.__hass.states['${OUT}'].state === 'playing'`, 4000);
-  check('LV4 transfer: the source stops on its own (no stop call), the target is silent for the gap and then plays', srcStop && play && (await ma(p, 'players/cmd/stop')).length === 0 && (await target(p)) === OUT, J({ srcStop, play, t: await target(p) }));
+  await confirm(p);
+  const play = await wait(p, `window.__hass.states['${OUT}'].state === 'playing'`, 8000);
+  const seq = await p.evaluate(() => { clearInterval(window.__lv4t); return window.__lv4; });
+  const srcStop = seq.includes('idle|buffering') && seq.indexOf('idle|buffering') < seq.lastIndexOf('idle|playing');
+  const gap = (await p.evaluate(() => (window.__maEvents ?? []).some((e) => e.ev === 'transferred')));
+  check('LV4 transfer: the source stops on its own (no stop call), the target is silent for the gap and then plays', srcStop && play && gap && (await ma(p, 'players/cmd/stop')).length === 0 && (await target(p)) === OUT, J({ seq, srcStop, play, gap, t: await target(p) }));
   await p.close();
 }
 {
@@ -1022,9 +1033,12 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
   for (const vp of [{ width: 1920, height: 1080 }, { width: 390, height: 844, isMobile: true, hasTouch: true }]) {
     const tag = `${vp.width}x${vp.height}`;
     const p = await open('&spk=dyn&admin=1&every=dyn&grp=slow', vp);
-    await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 4000);
+    await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 8000);
     const n0 = (await ma(p, 'players/cmd/set_members')).length;
     await tap(p, ra(GAR));
+    // wait for the chip to render (reading it straight after the tap raced Lit's update under load); grp=slow keeps
+    // "Regrouping…" up for longer than this wait
+    await wait(p, `!!${SR}.querySelector('.st .ct')?.textContent.trim()`, 3000);
     const pop = await popups(p), c1 = await chip(p), g = await geo(p);
     check(`C1 ${tag} drop the leader (Garage) from Now Playing: no dialog, no toast or Undo bar; one chip says "Regrouping…"`, !pop && c1?.text === 'Regrouping…' && (await nChips(p)) === 1, J({ pop, c1 }));
     check(`C2 ${tag} the chip sits top-right, under the header clock (does not cover it), right edge lined up with the card`,
@@ -1130,6 +1144,63 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
     check('C16 dismissing the chip question sends nothing', (await ma(p, 'players/cmd/set_members')).length === 0 && !(await chip(p)));
     await p.close();
   }
+}
+
+// ---------------- 0.6.5 (Q62): a pending chip question survives state updates and late status messages ----------------
+{
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}`, { width: 1280, height: 800 });
+  await p.evaluate(() => { window.__jbAskMs = 20000; });
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${act(GAR)}?.dataset.act === 'take'`, 4000);
+  const n0 = (await ma(p, 'players/cmd/set_members')).length;
+  await tap(p, act(GAR));
+  await wait(p, `!!${SR}.querySelector('.st.ask')`, 1500);
+  const q0 = (await chip(p))?.text;
+  // hass state pushes while the question waits (volume, position and a room's state), as Home Assistant sends them
+  for (let i = 0; i < 6; i++) {
+    await ev(p, `(() => { const h = __card.hass, s = { ...h.states };
+      for (const id of ['${LIV}', '${KIT}', '${GAR}', '${IN}']) if (s[id]) s[id] = { ...s[id], attributes: { ...s[id].attributes, volume_level: ${0.2 + i * 0.05}, media_position: ${10 + i} }, last_updated: new Date().toISOString() };
+      __card.hass = { ...h, states: s }; })()`);
+    await sleep(120);
+  }
+  const c1 = await chip(p);
+  check('Q62-E1 hass state updates while the chip asks: the question stays (same text, still asking), nothing sent',
+    c1?.kind === 'ask' && c1.text === q0 && (await ev(p, `${SPK}.asking`)) && (await ma(p, 'players/cmd/set_members')).length === n0, J({ q0, c1 }));
+  // a late status from an earlier change lands meanwhile (0.6.4: it replaced the chip and answered "no")
+  await ev(p, `${SPK}.status('Kitchen joined Indoor', { undo: { label: 'Kitchen joined', run: async () => {} } })`);
+  await sleep(150);
+  const c2 = await chip(p);
+  check('Q62-E2 a late "joined · Undo" message waits behind the question instead of answering it', c2?.kind === 'ask' && c2.text === q0 && (await ev(p, `${SPK}.asking`)), J(c2));
+  await confirm(p);
+  await wait(p, `window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_garage')`, 5000);
+  const sm = (await ma(p, 'players/cmd/set_members')).at(-1);
+  check('Q62-E3 answering yes after the updates still takes the speaker (set_members add Garage)', (await ma(p, 'players/cmd/set_members')).length > n0 && J(sm?.data.player_ids_to_add) === J(['wiim_mock_garage']), J(sm));
+  const seen = await wait(p, `[...${SR}.querySelectorAll('.st .ct')].some((x) => /Kitchen joined Indoor|Garage joined/.test(x.textContent))`, 3000);
+  check('Q62-E4 the held message (or the new result) shows after the answer', seen, J(await chip(p)));
+  await p.close();
+}
+{
+  // the real race (S12 before the test waited): take Kitchen, then ask about Living Room while Kitchen is still joining
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${OUT}`);
+  await p.evaluate(() => { window.__jbAskMs = 20000; });
+  await tap(p, `${NOW}.shadowRoot.querySelector('.pp')`);
+  await wait(p, ASKQ); await confirm(p);
+  await wait(p, `window.__hass.states['${OUT}'].state === 'playing'`);
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${act(KIT)}?.dataset.act === 'take' && ${act(LIV)}?.dataset.act === 'take'`, 4000);
+  await tap(p, act(KIT)); await confirm(p);
+  // straight away, while Kitchen's join is in flight
+  await tap(p, act(LIV));
+  const asked = await wait(p, `!!${SR}.querySelector('.st.ask')`, 2000);
+  // Kitchen's "joined" lands now
+  await wait(p, `!${row(KIT)}?.classList.contains('pending') && window.__ma.G.syncgroup_mock_outdoor.members.includes('wiim_mock_kitchen')`, 5000);
+  await sleep(400);
+  const c = await chip(p);
+  check('Q62-E5 the Living Room question survives Kitchen\'s late "joined" result (0.6.4 answered it "no")', asked && c?.kind === 'ask' && /Living Room/.test(c.text), J(c));
+  await confirm(p);
+  const ok = await wait(p, `window.__ma.G.syncgroup_mock_outdoor.members.includes('wiim_mock_living')`, 5000);
+  check('Q62-E6 confirming it then takes Living Room as well', ok, J(await maMembers(p, 'syncgroup_mock_outdoor')));
+  await p.close();
 }
 
 // ---------------- HA 2026.10: an ungrouped MA player reports group_members: [] ----------------

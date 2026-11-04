@@ -1,11 +1,11 @@
 import type { HomeAssistant, JukeboxCardConfig } from '../types';
-import { KioskBackend, KIOSK_DOMAIN, capsFromServer } from './kiosk';
+import { KioskBackend, KIOSK_DOMAIN, capsFromServer, extFromServer } from './kiosk';
 import { MassQueueBackend } from './mass-queue';
 import { NativeBackend } from './native';
 import type { BackendKind, MaBackend } from './types';
 
 export * from './types';
-export { KioskBackend, MassQueueBackend, NativeBackend, KIOSK_DOMAIN, capsFromServer };
+export { KioskBackend, MassQueueBackend, NativeBackend, KIOSK_DOMAIN, capsFromServer, extFromServer };
 
 export const massQueueEntryId = (c: Partial<JukeboxCardConfig>) => c.mass_queue_entry_id || c.queue_config_entry_id || '';
 /**

@@ -1,22 +1,45 @@
+import { createV07 } from './mock-v07.js';
 // Mock of the jukebox_kiosk integration's WebSocket API (custom_components/jukebox_kiosk/websocket_api.py) for the dev
 // harness: ?kiosk=1 adds hass.config.components ['music_assistant', 'jukebox_kiosk'], hass.callWS and hass.connection.
 // kcaps=<json> overrides capability flags (e.g. {"queue_edit":false,"lyrics":false}); kfail=<type> makes that message type
 // throw. Every message is logged in window.__ws ({type, ...}). Placeholder ids only.
-//   jukebox_kiosk/capabilities, /ma {command,args} (music/favorites/* need kcaps library_write, like the library class), /queue_items, /item_tracks, /unfavorite_current, /subscribe_queue
+//   jukebox_kiosk/capabilities, /ma {command,args} (music/favorites/* need kcaps library_write, like the library class), /queue_items, /item_tracks,
+//   /unfavorite_current, /subscribe_queue, /set_autoplay, /autoplay_options, /set_autoplay_mode
 // The /ma allowlist mirrors const.py MA_COMMANDS; metadata/get_track_lyrics refuses library tracks like the server.
-const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item))|metadata\/get_track_lyrics)$/;
+const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item)|browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks|in_progress_items)|metadata\/get_track_lyrics)$/;
+const V07 = /^music\/(browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks)$/;
 const MUTATING = /^player_queues\/(play_index|move_item|delete_item|play_media|transfer)$/;
 const FEATURES = { queue: true, queue_play: true, queue_edit: true, undo: true, ma_commands: true, lyrics: true, track_lists: true,
-  podcast_episodes: true, unfavorite: true, library_write: false, speakers: true, group_configs: true, queue_push: true };
+  podcast_episodes: true, unfavorite: true, library_write: false, speakers: true, group_configs: true, queue_push: true,
+  // v0.7 (read class): genres, Radio Browser "Stations by…", Discover rows, resume positions
+  genres: true, radio_browse: true, discover: true, resume: true };
 const err = (code, message) => Object.assign(new Error(message), { code });
+// Autoplay style (server: autoplay_options / set_autoplay_mode over MA config/player_queues/*). Fake playlist names only.
+// apsimilar=0: no provider can find similar tracks; apmode=<mode>[:<n>] pins a style (n = playlist index).
+const AP_PLAYLISTS = [['library://playlist/901', 'Sunday Morning Mix'], ['library://playlist/902', 'Kitchen Dance Party'],
+  ['library://playlist/903', 'Rainy Day Jazz'], ['library://playlist/904', 'Road Trip Singalong'], ['library://playlist/905', 'Quiet Focus']]
+  .map(([uri, name]) => ({ uri, name }));
+const AP_MODES = ['auto', 'similar', 'library', 'playlist'];
 
-export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit, sleep }) {
+export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit, sleep, catalog, user }) {
+  const v07 = createV07({ params, catalog, sleep });
   const log = (window.__ws = []);
   const subs = new Map(); // id -> {entity, cb}
   let sid = 0;
   const kcaps = params.get('kcaps') ? JSON.parse(params.get('kcaps')) : {};
   const kfail = params.get('kfail') ?? '';
   const features = { ...FEATURES, ...kcaps };
+  const apSimilar = params.get('apsimilar') !== '0';
+  const [apM0, apN0] = (params.get('apmode') ?? '').split(':');
+  const apState = (Q) => (Q.ap ??= { mode: AP_MODES.includes(apM0) ? apM0 : 'global', playlist: apM0 === 'playlist' ? AP_PLAYLISTS[Number(apN0) || 0].uri : null });
+  const apOpts = (ent) => {
+    const Q = QS[ent];
+    if (!Q) throw err('not_found', `${ent} is not a Music Assistant player`);
+    const a = apState(Q), follows = a.mode === 'global';
+    const pl = AP_PLAYLISTS.find((p) => p.uri === a.playlist) ?? null;
+    return { queue_id: st(ent).attributes.active_queue, mode: follows ? 'auto' : a.mode, follows_default: follows, playlist: follows ? null : pl,
+      modes: AP_MODES.map((m) => ({ mode: m, available: m !== 'similar' || apSimilar })), playlists: AP_PLAYLISTS };
+  };
   const entOf = (qid) => Object.keys(QS).find((k) => st(k)?.attributes?.active_queue === qid);
   const push = (qid) => { for (const s of subs.values()) if (!qid || st(s.entity)?.attributes?.active_queue === qid) s.cb({ event: 'queue_updated', queue_id: qid }); };
   window.__kioskPush = (entity = 'media_player.everywhere') => push(st(entity)?.attributes?.active_queue);
@@ -38,13 +61,22 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
     // like const.py: allow_update_metadata may never be true, and item_by_uri always gets it forced to False
     if (args && args.allow_update_metadata) throw err('invalid_args', 'allow_update_metadata must be false');
     if (command === 'music/item_by_uri') return sendCommand(command, { ...args, allow_update_metadata: false });
-    if (command === 'music/search') return sendCommand(command, args);
+    if (V07.test(command)) {
+      if (command === 'music/browse' && !user?.is_admin && !String(args.path ?? '').startsWith('radiobrowser://')) throw err('invalid_args', 'path must start with radiobrowser:// for guests');
+      return v07.handle(command, args);
+    }
+    if (command === 'music/search') {
+      const types = args.media_types;
+      if (Array.isArray(types) && types.length === 1 && types[0] === 'genre') return v07.handle(command, args);
+      return sendCommand(command, args);
+    }
     // Search radio heart (0.6.2). Like MA: a favourite always lives in the library, so a provider station is added to it.
     if (command.startsWith('music/favorites/')) {
       if (!features.library_write) throw err('unauthorized', 'Unauthorized');
       const it = command.endsWith('add_item') ? byUri(String(args.item ?? '')) : byUri(`library://${args.media_type}/${args.library_item_id}`);
       if (!it) throw err('not_found', 'Item not found');
-      if (command.endsWith('add_item')) { it.favorite = true; it._inlib = true; } else it.favorite = false;
+      if (command.endsWith('add_item')) { it.favorite = true; it._inlib = true; delete it._nolib; } else it.favorite = false;
+      window.__favLog?.push([command.split('/').pop(), command.endsWith('add_item') ? String(args.item) : `${args.media_type}/${args.library_item_id}`]);
       commit();
       return null;
     }
@@ -76,7 +108,30 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
         const cur = Math.max(0, Q.index), off = Math.max(0, cur - (msg.limit_before ?? 1));
         const lim = (cur - off) + 1 + (msg.limit_after ?? 100);
         return { queue_id: st(ent).attributes.active_queue, current_index: Q.index < 0 ? null : Q.index, index_in_buffer: Q.index < 0 ? null : bufOf(Q),
-          current_item_id: Q.items[Q.index]?.queue_item_id ?? null, total: Q.items.length, offset: off, items: Q.items.slice(off, off + lim).map(qPub) };
+          current_item_id: Q.items[Q.index]?.queue_item_id ?? null, total: Q.items.length, offset: off, items: Q.items.slice(off, off + lim).map(qPub),
+          ...(features.autoplay ? { autoplay: !!Q.autoplay, dynamic: false } : {}) };
+      }
+      case 'set_autoplay': {
+        if (!features.autoplay) throw err('unauthorized', 'Unauthorized');
+        const Q = QS[msg.entity_id];
+        if (!Q) throw err('not_found', `${msg.entity_id} is not a Music Assistant player`);
+        Q.autoplay = !!msg.enabled;
+        return { queue_id: st(msg.entity_id).attributes.active_queue, autoplay: Q.autoplay };
+      }
+      case 'autoplay_options': {
+        if (!features.autoplay_mode) throw err('unauthorized', 'Unauthorized');
+        return apOpts(msg.entity_id);
+      }
+      case 'set_autoplay_mode': {
+        if (!features.autoplay_mode) throw err('unauthorized', 'Unauthorized');
+        const o = apOpts(msg.entity_id), Q = QS[msg.entity_id];
+        if (!o.modes.some((m) => m.mode === msg.mode && m.available)) throw err('unsupported', `Autoplay style ${msg.mode} is not available`);
+        if (msg.mode === 'playlist' && !AP_PLAYLISTS.some((p) => p.uri === msg.playlist)) throw err('invalid_args', 'Only playlists in the library can be used');
+        if (msg.mode !== 'playlist' && msg.playlist) throw err('invalid_args', 'playlist is only used with the playlist style');
+        Q.ap = { mode: msg.mode, playlist: msg.mode === 'playlist' ? msg.playlist : apState(Q).playlist };
+        push(o.queue_id);
+        const pl = msg.mode === 'playlist' ? AP_PLAYLISTS.find((p) => p.uri === msg.playlist) : null;
+        return { queue_id: o.queue_id, mode: msg.mode, follows_default: false, playlist: pl };
       }
       case 'item_tracks': {
         if (!features.track_lists) throw err('unauthorized', 'Unauthorized');
@@ -111,6 +166,6 @@ export function createKiosk({ params, maApi, QS, st, qPub, sendCommand, maItem, 
     },
   };
   return {
-    extras: { config: { components: ['music_assistant', 'jukebox_kiosk'] }, callWS, connection },
+    extras: { config: { components: ['music_assistant', 'jukebox_kiosk'], country: params.get('country') ?? 'US' }, callWS, connection },
   };
 }

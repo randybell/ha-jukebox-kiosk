@@ -20,9 +20,11 @@ import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type 
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { pickBackend, createBackend, backendKey, type MaBackend } from './backend';
 import { defineElement } from './define';
+import { libraryTabLabel } from './library-home';
+import { FavStore } from './favorites';
 import { RepeatOneGuard } from './repeat';
 
-export const VERSION = '0.6.5';
+export const VERSION = '0.7.0';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'now', label: 'Now Playing', icon: 'disc' },
   { id: 'browse', label: 'Browse', icon: 'browse' },
@@ -138,6 +140,8 @@ export class JukeboxCard extends LitElement {
   private _pn = -1;
   /** Music Assistant players (dynamic mode only; fixed mode never calls it) */
   readonly speakers = new SpeakerStore();
+  /** v0.7 hearts: one favourites store for every view (passed down as config._favs) */
+  readonly favs = new FavStore();
   /** Music Assistant backend (kiosk / mass_queue / native), shared by queue, lyrics, speakers and the views */
   backend?: MaBackend;
   /** 0.6.5 coerce_repeat_one: a player on repeat 'one' gets one repeat_set 'all' per detection (debounced, never a loop) */
@@ -194,7 +198,7 @@ export class JukeboxCard extends LitElement {
     const first = !this._config;
     this._base = {
       entity: 'media_player.everywhere', accent: 'mono', limit: 8,
-      favorite_entity: 'button.everywhere_favorite_current_song', screensaver_minutes: 10, ...config,
+      favorite_entity: 'button.everywhere_favorite_current_song', screensaver_minutes: 10, ...config, _favs: this.favs,
     };
     this._config = this.effective();
     if (first && config.default_tab && this.tabs().some((t) => t.id === config.default_tab)) this._tab = config.default_tab;
@@ -301,7 +305,7 @@ export class JukeboxCard extends LitElement {
   /** visible tabs: Lyrics only when lyrics are on and its tab is not turned off */
   private tabs() {
     const c = this._config, caps = this.backend?.caps;
-    return TABS.filter((t) => t.id !== 'lyrics' || (c?.show_lyrics !== false && c?.lyrics_tab !== false
+    return TABS.map((t) => (t.id === 'browse' ? { ...t, label: libraryTabLabel(c) } : t)).filter((t) => t.id !== 'lyrics' || (c?.show_lyrics !== false && c?.lyrics_tab !== false
       // kiosk: hidden when the server says this user may not read lyrics; other backends keep the tab and its setup hint
       && !(this.backend?.kind === 'kiosk' && caps && !caps.lyrics)));
   }
@@ -321,6 +325,7 @@ export class JukeboxCard extends LitElement {
     this.addEventListener('jukebox-played', this.onPlayed as EventListener);
     this.addEventListener('jukebox-nav', this.onNav as EventListener);
     this.addEventListener('jukebox-favorites-changed', this.onFavs as EventListener);
+    this.addEventListener('jukebox-status', this.onStatus as EventListener);
     this.addEventListener('jukebox-open', this.onOpen as EventListener);
     this.addEventListener('jukebox-stage', this.onStage as EventListener);
     this.addEventListener('jukebox-target', this.onTarget as EventListener);
@@ -361,6 +366,7 @@ export class JukeboxCard extends LitElement {
     this.removeEventListener('jukebox-played', this.onPlayed as EventListener);
     this.removeEventListener('jukebox-nav', this.onNav as EventListener);
     this.removeEventListener('jukebox-favorites-changed', this.onFavs as EventListener);
+    this.removeEventListener('jukebox-status', this.onStatus as EventListener);
     this.removeEventListener('jukebox-open', this.onOpen as EventListener);
     this.removeEventListener('jukebox-stage', this.onStage as EventListener);
     this.removeEventListener('jukebox-target', this.onTarget as EventListener);
@@ -487,7 +493,13 @@ export class JukeboxCard extends LitElement {
     window.clearTimeout(this._idleTimer);
     const m = this._config?.screensaver_minutes ?? 10;
     if (!m || !this.isConnected) return;
-    this._idleTimer = window.setTimeout(() => { this._saver = 'on'; }, m * 60_000);
+    this._idleTimer = window.setTimeout(() => { this._saver = 'on'; this.idleReset(); }, m * 60_000);
+  }
+  /** Q60: the idle reset clears the Search scope and the Library filters (idle_clear_filters: false keeps them) */
+  idleReset() {
+    if (this._config?.idle_clear_filters === false) return;
+    (this.renderRoot.querySelector('jb-search') as any)?.idleReset?.();
+    (this.renderRoot.querySelector('jb-browse') as any)?.idleReset?.();
   }
   private onActivity = () => { if (!this._saver) this.armIdle(); };
   private wake = (e: Event) => {
@@ -510,13 +522,28 @@ export class JukeboxCard extends LitElement {
     this._tab = ids[i]; this._spk = false;
     this.updateComplete.then(() => (this.renderRoot.querySelector(`.tab[data-tab="${ids[i]}"]`) as HTMLElement | null)?.focus());
   };
-  /** Search radio heart (0.6.2): Browse > Radio reloads My stations next time it shows. */
+  /** A heart anywhere (0.6.2 radio, v0.7 every item): the shared store shows it everywhere; Library reloads that list next time. */
   private onFavs = (e: CustomEvent) => {
+    if (e.detail?.uri && typeof e.detail.favorite === 'boolean') this.favs.set(e.detail.uri, e.detail.favorite);
     (this.renderRoot.querySelector('jb-browse') as any)?.favoritesChanged?.(e.detail?.media_type);
     // a heart in the station sheet also updates the Search row heart for that station
     if (e.detail?.uri) (this.renderRoot.querySelector('jb-search') as any)?.favoriteChanged?.(e.detail.uri, !!e.detail.favorite);
   };
-  private onNav = (e: CustomEvent) => { const t = e.detail?.tab; if (this.tabs().some((x) => x.id === t)) this._tab = t; };
+  /** v0.7: one top-right status chip for the whole card (the Speakers chip); hearts report here, never a centre popup */
+  lastStatus: { text: string; kind: string } | null = null;
+  private onStatus = (e: CustomEvent) => {
+    const text = String(e.detail?.text ?? ''), kind = e.detail?.kind === 'error' ? 'error' : 'info';
+    if (!text) return;
+    e.stopPropagation();
+    this.lastStatus = { text, kind };
+    (this.renderRoot.querySelector('jb-speakers') as JbSpeakers | null)?.notify(text, kind);
+  };
+  private onNav = (e: CustomEvent) => {
+    const t = e.detail?.tab; if (!this.tabs().some((x) => x.id === t)) return;
+    this._tab = t;
+    // v0.7 Library home: the Search tile (and Genres) open Search ready to type, optionally on a category chip
+    if (t === 'search' && e.detail?.focus) this.updateComplete.then(() => (this.renderRoot.querySelector('jb-search') as any)?.focusSearch?.(e.detail?.category));
+  };
 
   // ---------- Stage (full-screen art + lyrics) ----------
   private onStage = (e: CustomEvent) => { if (e.detail?.open === false) this.closeStage(); else this.openStage(); };
@@ -759,12 +786,12 @@ export class JukeboxCard extends LitElement {
             ?active=${this._tab === 'lyrics' && !this._saver && !this._stage}></jb-lyrics>`) : nothing}
           <!-- inside the middle: the fitted header and tab bar stay visible and tappable while the panel is open -->
           <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null} ?large=${!!c.large_buttons}></jb-station>
-          <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?keep=${inlineSpk && this._tab === 'now' && !this._saver} ?large=${!!c.large_buttons}></jb-speakers>
+          <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver} ?large=${!!c.large_buttons}></jb-speakers>
         </main>
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
           ${tabs.map((t) => html`<button class="tab ${this._tab === t.id ? 'active' : ''}" role="tab" tabindex=${this._tab === t.id ? '0' : '-1'} data-tab=${t.id}
               aria-selected=${this._tab === t.id ? 'true' : 'false'}
-              @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
+              @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { if (t.id === 'browse' && this._tab === 'browse') (this.renderRoot.querySelector('jb-browse') as any)?.goHome?.(); this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
                 ? html`<em class="badge">${this._qcount > 99 ? '99+' : this._qcount}</em>` : nothing}</button>`)}
         </nav>
         ${this._stage ? this.renderStage() : nothing}

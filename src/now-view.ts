@@ -2,7 +2,7 @@ import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
 import { providerLabel } from './providers';
-import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, ART, hash, playerArt, isRadio, RADIO_ART } from './shared';
+import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, status, ART, hash, playerArt, isRadio, RADIO_ART } from './shared';
 import { throttle } from './slider';
 import './slider';
 import './lyrics/lyrics-view';
@@ -21,6 +21,7 @@ export interface InlineSpeakers extends HTMLElement {
   onState(fn: () => void): () => void;
 }
 import { defineElement } from './define';
+import { FavController } from './heart';
 import { shownRepeat, nextRepeat } from './repeat';
 
 const VOL_THROTTLE_MS = 200;
@@ -53,6 +54,7 @@ export class JbNow extends LitElement {
   private _unsub?: () => void;
   private vol = new Map<string, Pending<number>>();
   private mute = new Map<string, Pending<boolean>>();
+  private hearts = new FavController(this);
   private flags = new Map<string, Pending<any>>(); // shuffle / repeat / state / favorite
   private seek?: Pending<number> & { upd?: string };
   private senders = new Map<string, ReturnType<typeof throttle<[number]>>>();
@@ -136,21 +138,42 @@ export class JbNow extends LitElement {
   }
   private isFav() {
     const cur = this._snap && this._snap.current >= 0 ? this._snap.items[this._snap.current] : undefined;
-    return this.flag('fav:' + (this.ent?.attributes?.media_content_id ?? ''), !!cur?.favorite);
+    const uri = String(this.ent?.attributes?.media_content_id ?? '');
+    // v0.7 hearts: a heart on this track elsewhere (Search, Library, an album page) shows here too
+    const base = uri && this.config._favs ? this.config._favs.isFav({ uri, favorite: !!cur?.favorite }) : !!cur?.favorite;
+    return this.flag('fav:' + uri, base);
   }
+  /** v0.7: through the kiosk integration the heart needs the Library permission (hidden without it); other setups as 0.6 */
+  private canFav() {
+    if ((this.config.favorite_entity ?? 'button.everywhere_favorite_current_song') === '') return false;
+    const be = this.config._backend;
+    return be?.kind !== 'kiosk' || be.caps.libraryWrite;
+  }
+  /** Optimistic: the heart flips at once; when the call fails it flips back and the error shows in the top-right chip. */
   toggleFavorite() {
+    if (!this.canFav()) return;
     const btn = this.config.favorite_entity ?? 'button.everywhere_favorite_current_song';
     const fav = this.isFav();
     const be = this.config._backend;
-    if (fav && be && !be.caps.unfavorite) { this.toast("Can't remove favorites here"); return; }
-    this.flags.set('fav:' + (this.ent?.attributes?.media_content_id ?? ''), { v: !fav, t: Date.now() + 26000 }); this.requestUpdate();
-    if (fav) {
-      (be ? be.unfavoriteCurrent(this.eid) : this.hass!.callService('mass_queue', 'unfavorite_current_item', { entity: this.eid })).catch((e: any) => console.warn(e));
-      this.toast('Removed from favorites');
-    } else {
-      this.call('button', 'press', {}, btn);
-      this.toast('Added to favorites');
-    }
+    if (fav && be && !be.caps.unfavorite) { status(this, "Can't remove favorites here", 'error'); return; }
+    const uri = String(this.ent?.attributes?.media_content_id ?? '');
+    const title = String(this.ent?.attributes?.media_title ?? '').trim();
+    const what = title || 'this track';
+    const k = 'fav:' + uri;
+    this.flags.set(k, { v: !fav, t: Date.now() + 26000 }); this.requestUpdate();
+    // ...and the other way round: rows showing this track follow the Now Playing heart (same MA favourite)
+    const share = (v: boolean) => { if (uri.includes('://')) fire(this, 'jukebox-favorites-changed', { media_type: 'track', uri, favorite: v }); };
+    share(!fav);
+    const run = fav
+      ? (be ? be.unfavoriteCurrent(this.eid) : this.hass!.callService('mass_queue', 'unfavorite_current_item', { entity: this.eid }))
+      : this.hass!.callService('button', 'press', {}, { entity_id: btn });
+    status(this, fav ? `Removed ${what} from favorites` : `Added ${what} to favorites`);
+    Promise.resolve(run).catch((e: any) => {
+      console.warn('[jukebox-card] favorite failed', e);
+      this.flags.delete(k); this.requestUpdate();
+      share(fav);
+      status(this, fav ? `Couldn't remove ${what} from favorites` : `Couldn't add ${what} to favorites`, 'error');
+    });
   }
 
   // ---------- progress ----------
@@ -265,8 +288,10 @@ export class JbNow extends LitElement {
     const up = this.queue?.upNext ?? [];
     const nextIt = up[0];
     const more = Math.max(0, (this.queue?.remaining ?? up.length) - 1);
+    // Autoplay indicator only (the toggle lives in the Queue header): flag on, server lists it, MA says it is on, queue not dynamic
+    const autoplay = !!this.config?.show_autoplay && !!this.config._backend?.ext?.autoplay && this._snap?.autoplay === true && !this._snap?.dynamic;
     const favOn = this.isFav();
-    const showFav = (this.config.favorite_entity ?? 'button.everywhere_favorite_current_song') !== '';
+    const showFav = this.canFav();
     const tb = (cls: string, ic: string, label: string, fn: () => void, on?: boolean, dot = false, dis = false) =>
       html`<button class="tb ${cls} ${on ? 'on' : ''}" tabindex="-1" aria-label=${label} title=${label} aria-pressed=${on === undefined ? nothing : on ? 'true' : 'false'}
         ?disabled=${dis} @pointerdown=${noFocus} @click=${fn}>${icon(ic)}${dot ? html`<i class="dot"></i>` : nothing}</button>`;
@@ -304,8 +329,10 @@ export class JbNow extends LitElement {
           ${showFav ? tb('fv', favOn ? 'heart' : 'heartline', favOn ? 'Remove from favorites' : 'Add to favorites', () => this.toggleFavorite(), favOn, false, idle) : nothing}
         </div>
         ${nextIt ? html`<button class="upn panel" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
-            <span class="eyebrow">Up next</span><b>${nextIt.media_title}</b>${provTpl(nextIt.media_content_id)}
-            <span class="more">${more ? `+ ${more} more` : ''}</span></button>` : nothing}
+            <span class="eyebrow">${autoplay ? 'Up next · Autoplay' : 'Up next'}</span><b>${nextIt.media_title}</b>${provTpl(nextIt.media_content_id)}
+            <span class="more">${more ? `+ ${more} more` : ''}</span></button>`
+          : autoplay && cur ? html`<button class="upn panel ap" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
+            <span class="eyebrow">Autoplay</span><b>Autoplay will add more when this ends</b></button>` : nothing}
         <div class="vol panel ${this.spk ? 'acts' : ''}">
           ${this.volRow(this.eid, where, true)}
           ${rooms.length ? html`<div class="rooms">${rooms.map((r) => this.volRow(r.entity, r.name, false, this.spk?.inline(r.entity)))}</div>` : nothing}

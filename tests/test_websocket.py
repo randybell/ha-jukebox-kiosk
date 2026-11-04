@@ -27,7 +27,7 @@ async def test_capabilities_admin(hass: HomeAssistant, hass_ws_client: Any, admi
     res = await _call(ws, type="jukebox_kiosk/capabilities")
     assert res["success"]
     r = res["result"]
-    assert r["backend"] == "kiosk" and r["version"] == "0.6.5" and r["ma_connected"]
+    assert r["backend"] == "kiosk" and r["version"] == "0.7.0" and r["ma_connected"]
     assert not r["guest"] and "admin" in r["classes"]
     assert r["features"]["unfavorite"] and r["features"]["queue_edit"]
     assert "player_queues/play_index" in r["commands"]
@@ -95,6 +95,31 @@ async def test_search_radio_heart_commands(hass: HomeAssistant, hass_ws_client: 
     res = await _call(ws, type="jukebox_kiosk/ma", command="music/favorites/remove_item", args={"media_type": "radio", "library_item_id": "7"})
     assert res["success"], res
     assert fake_ma.calls[-1] == ("music/favorites/remove_item", {"media_type": "radio", "library_item_id": "7"})
+
+
+async def test_radio_heart_lookup_then_remove(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    """v0.7 heart: un-hearting a provider station first looks up its library copy (music/item_by_uri, Read class,
+    allow_update_metadata forced False), then removes the favourite by library id (Library class). No new command."""
+    ws = await _ws(hass_ws_client, user_token[1])
+    uri = "radiobrowser://radio/00000000-0000-0000-0000-000000000001"
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/item_by_uri", args={"uri": uri})
+    assert res["success"], res
+    assert fake_ma.calls[-1] == ("music/item_by_uri", {"uri": uri, "allow_update_metadata": False})
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/favorites/remove_item", args={"media_type": "radio", "library_item_id": "7"})
+    assert res["success"], res
+    assert fake_ma.calls[-1] == ("music/favorites/remove_item", {"media_type": "radio", "library_item_id": "7"})
+
+
+@pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["read", "playback", "queue"]}])
+async def test_radio_heart_lookup_is_read_class_only(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    """Without the Library class the lookup (a read) still works, but the remove is refused and never reaches MA."""
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/item_by_uri", args={"uri": "radiobrowser://radio/00000000-0000-0000-0000-000000000001"})
+    assert res["success"], res
+    n = len(fake_ma.calls)
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/favorites/remove_item", args={"media_type": "radio", "library_item_id": "7"})
+    assert not res["success"] and res["error"]["code"] == "unauthorized"
+    assert len(fake_ma.calls) == n
 
 
 @pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["read", "playback", "queue"]}])
@@ -324,6 +349,237 @@ async def test_verified_followup_commands_forwarded(
         c, args = fake_ma.calls[-1]
         assert c == cmd and args["summary"] is False and args["limit"] == 500
         assert args["user"] == {"provider": "homeassistant", "user_id": user.id, "required": False}
+
+
+async def test_v07_discover_search_features(hass: HomeAssistant, hass_ws_client: Any, user_token: Any) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    r = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
+    for flag in ("genres", "radio_browse", "discover", "resume"):
+        assert r["features"][flag] is True, flag
+    for cmd in ("music/browse", "music/recommendations", "music/recommendations/items", "music/in_progress_items",
+                "music/genres/overview", "music/genres/tracks", "music/search"):
+        assert cmd in r["commands"], cmd
+
+
+@pytest.mark.parametrize(
+    "options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["playback"]}]
+)
+async def test_v07_features_off_without_read(hass: HomeAssistant, hass_ws_client: Any, user_token: Any) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    r = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
+    for flag in ("genres", "radio_browse", "discover", "resume"):
+        assert r["features"][flag] is False, flag
+
+
+async def test_v07_discover_reads_forwarded(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/recommendations", args={})
+    assert res["success"] and fake_ma.calls[-1] == ("music/recommendations", {})
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/recommendations/items",
+                      args={"provider": "recommendations", "item_id": "recently_played"})
+    assert res["success"]
+    assert fake_ma.calls[-1] == ("music/recommendations/items", {"provider": "recommendations", "item_id": "recently_played"})
+    res = await _call(ws, type="jukebox_kiosk/ma", command="music/search",
+                      args={"search_query": "ja", "media_types": ["genre"], "limit": 5, "library_only": True})
+    assert res["success"]
+    c, args = fake_ma.calls[-1]
+    assert c == "music/search" and args["media_types"] == ["genre"] and "user" in args
+
+
+async def test_v07_browse_guest_radio_only(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    for path in ("radiobrowser://", "radiobrowser://category/country/xx", "radiobrowser://popularity/popular"):
+        res = await _call(ws, type="jukebox_kiosk/ma", command="music/browse", args={"path": path})
+        assert res["success"], path
+        assert fake_ma.calls[-1] == ("music/browse", {"path": path})
+    n = len(fake_ma.calls)
+    for args in ({}, {"path": None}, {"path": ""}, {"path": "filesystem_local--x://"}, {"path": "builtin://"},
+                 {"path": "RADIOBROWSER://"}, {"path": 5}, {"path": " radiobrowser://"}):
+        res = await _call(ws, type="jukebox_kiosk/ma", command="music/browse", args=args)
+        assert not res["success"] and res["error"]["code"] == "invalid_args", args
+    assert len(fake_ma.calls) == n
+
+
+async def test_v07_browse_admin_any_path(
+    hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa
+) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    for args in ({}, {"path": "builtin://"}, {"path": "radiobrowser://tag/jazz"}):
+        res = await _call(ws, type="jukebox_kiosk/ma", command="music/browse", args=args)
+        assert res["success"], args
+        assert fake_ma.calls[-1] == ("music/browse", args)
+
+
+# ---- Autoplay ("Don't stop the music"), MA 2.10.9 player_queues/autoplay
+
+
+async def test_capabilities_autoplay_follows_queue_class(hass: HomeAssistant, hass_ws_client: Any, user_token: Any) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    r = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
+    assert r["features"]["autoplay"] is True
+    assert "player_queues/autoplay" not in r["commands"] and "player_queues/dont_stop_the_music" not in r["commands"]
+
+
+async def test_queue_items_autoplay_state(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    r = (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
+    assert r["autoplay"] is True and r["dynamic"] is False and r["queue_id"] == SYNCGROUP
+    fake_ma.autoplay_key = "dont_stop_the_music_enabled"
+    assert (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]["autoplay"] is True
+    fake_ma.autoplay_key = None
+    assert "autoplay" not in (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
+
+
+async def test_set_autoplay_targets_entity_queue(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay", entity_id=ENTITY_G, enabled=True)
+    assert res["success"], res
+    assert res["result"] == {"queue_id": SYNCGROUP, "autoplay": True}
+    assert fake_ma.calls == [("player_queues/autoplay", {"queue_id": SYNCGROUP, "autoplay_enabled": True})]
+
+
+async def test_set_autoplay_legacy_alias_fallback(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    fake_ma.autoplay_error = "Invalid command: player_queues/autoplay"
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay", entity_id=ENTITY_A, enabled=False)
+    assert res["success"], res
+    assert [c for c, _ in fake_ma.calls] == ["player_queues/autoplay", "player_queues/dont_stop_the_music"]
+    assert fake_ma.calls[-1][1] == {"queue_id": PLAYER_A, "dont_stop_the_music_enabled": False}
+
+
+async def test_set_autoplay_other_errors_not_retried(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    fake_ma.autoplay_error = "boom"
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay", entity_id=ENTITY_A, enabled=True)
+    assert res["error"]["code"] == "ma_error"
+    assert [c for c, _ in fake_ma.calls] == ["player_queues/autoplay"]
+
+
+async def test_set_autoplay_needs_bool(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay", entity_id=ENTITY_A, enabled="yes")
+    assert not res["success"] and fake_ma.calls == []
+
+
+async def test_autoplay_not_forwarded_by_ma(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    for cmd in ("player_queues/autoplay", "player_queues/dont_stop_the_music"):
+        res = await _call(ws, type="jukebox_kiosk/ma", command=cmd, args={"queue_id": PLAYER_B, "autoplay_enabled": True})
+        assert res["error"]["code"] == "not_allowed", cmd
+    assert fake_ma.calls == []
+
+
+@pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["read", "playback"]}])
+async def test_set_autoplay_needs_queue_class(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    assert (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]["features"]["autoplay"] is False
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay", entity_id=ENTITY_G, enabled=True)
+    assert res["error"]["code"] == "unauthorized"
+    assert fake_ma.calls == []
+
+
+# ---- Autoplay style (MA 2.10.9 config/player_queues/get_entries|get_value|save)
+
+
+async def test_autoplay_options_follows_default(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    assert (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]["features"]["autoplay_mode"] is True
+    res = await _call(ws, type="jukebox_kiosk/autoplay_options", entity_id=ENTITY_G)
+    r = res["result"]
+    assert r["queue_id"] == SYNCGROUP and r["mode"] == "auto" and r["follows_default"] is True and r["playlist"] is None
+    assert [m["mode"] for m in r["modes"]] == ["auto", "similar", "library", "playlist"]  # never "global"
+    assert all(m["available"] for m in r["modes"])
+    assert r["playlists"] == [{"uri": "library://playlist/1", "name": "Sunday Morning Mix"},
+                              {"uri": "library://playlist/2", "name": "Kitchen Dance Party"}]
+    assert ("config/core/get_value", {"domain": "player_queues", "key": "autoplay_mode"}) in fake_ma.calls
+    assert all(c[0] != "config/player_queues/save" for c in fake_ma.calls)
+
+
+async def test_autoplay_options_pinned_and_similar_unavailable(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    fake_ma.ap_mode, fake_ma.ap_playlist, fake_ma.similar_available = "playlist", "library://playlist/2", False
+    ws = await _ws(hass_ws_client, user_token[1])
+    r = (await _call(ws, type="jukebox_kiosk/autoplay_options", entity_id=ENTITY_A))["result"]
+    assert r["mode"] == "playlist" and r["follows_default"] is False
+    assert r["playlist"] == {"uri": "library://playlist/2", "name": "Kitchen Dance Party"}
+    assert {m["mode"]: m["available"] for m in r["modes"]}["similar"] is False
+    assert all(c[0] != "config/core/get_value" for c in fake_ma.calls)
+
+
+async def test_set_autoplay_mode_saves_two_keys(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay_mode", entity_id=ENTITY_G, mode="playlist",
+                      playlist="library://playlist/1")
+    assert res["result"] == {"queue_id": SYNCGROUP, "mode": "playlist", "follows_default": False,
+                             "playlist": {"uri": "library://playlist/1", "name": "Sunday Morning Mix"}}
+    saves = [c for c in fake_ma.calls if c[0] == "config/player_queues/save"]
+    assert saves == [("config/player_queues/save", {"queue_id": SYNCGROUP, "values": {
+        "autoplay_mode": "playlist", "autoplay_playlist": "library://playlist/1"}})]
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay_mode", entity_id=ENTITY_G, mode="library")
+    assert res["result"]["mode"] == "library" and res["result"]["playlist"] is None
+    assert fake_ma.calls[-1] == ("config/player_queues/save", {"queue_id": SYNCGROUP, "values": {"autoplay_mode": "library"}})
+
+
+@pytest.mark.parametrize(
+    ("args", "code"),
+    [
+        ({"mode": "playlist"}, "invalid_args"),
+        ({"mode": "playlist", "playlist": "spotify://playlist/x"}, "invalid_args"),
+        ({"mode": "library", "playlist": "library://playlist/1"}, "invalid_args"),
+        ({"mode": "global"}, "invalid_format"),
+        ({"mode": "venue"}, "invalid_format"),
+        ({"mode": "auto", "queue_id": PLAYER_B}, "invalid_format"),
+    ],
+)
+async def test_set_autoplay_mode_rejects(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa, args: dict[str, Any], code: str
+) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay_mode", entity_id=ENTITY_A, **args)
+    assert res["error"]["code"] == code
+    assert all(c[0] != "config/player_queues/save" for c in fake_ma.calls)
+
+
+async def test_set_autoplay_mode_similar_needs_provider(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    fake_ma.similar_available = False
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay_mode", entity_id=ENTITY_A, mode="similar")
+    assert res["error"]["code"] == "unsupported"
+    assert all(c[0] != "config/player_queues/save" for c in fake_ma.calls)
+
+
+async def test_autoplay_mode_unsupported_server(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    fake_ma.ap_mode = None
+    ws = await _ws(hass_ws_client, user_token[1])
+    assert (await _call(ws, type="jukebox_kiosk/autoplay_options", entity_id=ENTITY_A))["error"]["code"] == "unsupported"
+    res = await _call(ws, type="jukebox_kiosk/set_autoplay_mode", entity_id=ENTITY_A, mode="auto")
+    assert res["error"]["code"] == "unsupported"
+
+
+async def test_autoplay_config_not_forwarded_by_ma(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, admin_token[1])
+    for cmd in ("config/player_queues/save", "config/player_queues/get_entries", "config/player_queues/get_value",
+                "config/core/get_value"):
+        res = await _call(ws, type="jukebox_kiosk/ma", command=cmd, args={"queue_id": PLAYER_B})
+        assert res["error"]["code"] == "not_allowed", cmd
+    assert fake_ma.calls == []
+
+
+@pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["read", "playback"]}])
+async def test_autoplay_mode_needs_queue_class(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    assert (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]["features"]["autoplay_mode"] is False
+    for msg in ({"type": "jukebox_kiosk/autoplay_options"}, {"type": "jukebox_kiosk/set_autoplay_mode", "mode": "auto"}):
+        res = await _call(ws, entity_id=ENTITY_G, **msg)
+        assert res["error"]["code"] == "unauthorized"
+    assert fake_ma.calls == []
 
 
 async def test_repeat_queue_command_not_forwarded(

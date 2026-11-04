@@ -97,6 +97,9 @@ class MaCommand:
     # Args always sent with these values, whatever the caller passed. A caller that
     # passes a different value is refused (see forward()).
     forced: tuple[tuple[str, object], ...] = ()
+    # For non-admin callers: (arg, allowed prefixes). The arg must be a string that
+    # starts with one of the prefixes, or the call is refused. Admins are exempt.
+    guest_arg_prefixes: tuple[tuple[str, tuple[str, ...]], ...] = ()
     note: str = ""
 
 
@@ -107,6 +110,8 @@ _LIBRARY_ITEMS_ARGS: Final = (
     "keyword-only summary=True, collapse_collections, reachable_via. summary=False returns full items "
     "with fully_played / resume_position_ms"
 )
+
+RADIO_BROWSE_PREFIX: Final = "radiobrowser://"
 
 R, P, Q, L, S = (
     PermClass.READ,
@@ -144,7 +149,13 @@ MA_COMMANDS: Final[dict[str, MaCommand]] = {
         "but the LIBRARY copy (provider 'library') when the track is in the library",
     ),
     "music/search": MaCommand(R, "checked", impersonate=True, note="result has a genres key"),
-    "music/browse": MaCommand(R, "checked", note="path; skip leading '..' entries"),
+    "music/browse": MaCommand(
+        R,
+        "checked",
+        guest_arg_prefixes=(("path", (RADIO_BROWSE_PREFIX,)),),
+        note="path; skip leading '..' entries. Non-admins may only browse the Radio Browser tree "
+        "(the root also lists builtin and provider libraries, a filesystem provider lists file names)",
+    ),
     "music/albums/album_tracks": MaCommand(R, "client"),
     "music/artists/artist_tracks": MaCommand(R, "client"),
     "music/playlists/playlist_tracks": MaCommand(R, "client"),
@@ -222,6 +233,19 @@ PLAYER_ARG_KEYS: Final = (
 PLAYER_LIST_ARG_KEYS: Final = ("player_ids_to_add", "player_ids_to_remove")
 
 QUEUE_EVENTS: Final = ("queue_updated", "queue_items_updated")
+# MA Autoplay (called "Don't stop the music" before MA 2.10). Sent only by jukebox_kiosk/set_autoplay, for the queue of an
+# entity the user may control; not in MA_COMMANDS, so `ma` callers can't name an arbitrary queue_id. Both need MA scope
+# QUEUES_CONTROL (same as move_item/delete_item). The legacy name is an alias in 2.10.9 and the only name before it.
+AUTOPLAY_COMMAND: Final = "player_queues/autoplay"
+AUTOPLAY_LEGACY_COMMAND: Final = "player_queues/dont_stop_the_music"
+# Autoplay style (MA 2.10.9 per-queue config, controllers/config/queues.py). Read with config/player_queues/get_entries
+# + get_value (scope CONFIG_PLAYERS_READ), written with config/player_queues/save (CONFIG_PLAYERS_WRITE, which MA's
+# Home Assistant service user holds). Only these two keys are ever written, only for the queue of an entity the user
+# may control, and only with the values below; none of these commands is in MA_COMMANDS.
+AUTOPLAY_MODE_KEY: Final = "autoplay_mode"
+AUTOPLAY_PLAYLIST_KEY: Final = "autoplay_playlist"
+AUTOPLAY_MODES: Final = ("auto", "similar", "library", "playlist")
+AUTOPLAY_MODE_GLOBAL: Final = "global"  # per-queue value meaning "follow MA's global Autoplay setting"
 
 # 0.6.5: "repeat one" is never set through this integration. No allowlisted command takes a repeat mode today
 # (player_queues/repeat is not forwarded; the card uses media_player.repeat_set), but if one ever does, a forwarded

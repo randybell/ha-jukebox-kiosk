@@ -8,12 +8,14 @@ import {
   playMedia, playMessage, drillable, canRadio, rowActsTpl, foldedActions, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
 } from './shared';
 import './detail-view';
-import type { DetailEntry } from './detail-view';
+import { loadDetail, type DetailEntry } from './detail-view';
+import { PoolCache, scopedResults, libraryFirstAll, isLib, scopeKey, scopeName, type Scope, type ScopePool } from './search-scope';
 import type { KeyDetail } from './keyboard';
 import './keyboard';
-import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, SearchResults } from './types';
+import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, SearchCategory, SearchResults } from './types';
 import { defineElement } from './define';
-import { toggleRadioFavorite } from './radio-fav';
+import { categoriesOn, resolveCategories, serviceTypes, defaultCategory } from './search-categories';
+import { FavController, heartTpl, heartType } from './heart';
 
 const GROUPS: Array<{ key: GroupKey; label: string; type: string }> = [
   { key: 'artists', label: 'Artists', type: 'artist' },
@@ -23,6 +25,8 @@ const GROUPS: Array<{ key: GroupKey; label: string; type: string }> = [
   { key: 'radio', label: 'Radio', type: 'radio' },
   { key: 'podcasts', label: 'Podcasts', type: 'podcast' },
   { key: 'audiobooks', label: 'Audiobooks', type: 'audiobook' },
+  // v0.7: only with search_categories containing 'genres' and a backend that can search them
+  { key: 'genres', label: 'Genres', type: 'genre' },
 ];
 const SEARCH_TYPES = ['artist', 'album', 'track', 'playlist', 'radio', 'audiobook', 'podcast'];
 const RECENTS_KEY = 'jukebox-card:recents:v1';
@@ -63,17 +67,14 @@ export class JbSearch extends LitElement {
     _stack: { state: true },
     _confirm: { state: true },
     _sel: { state: true },
-    _favs: { state: true },
+    _scope: { state: true },
+    _pool: { state: true },
+    _poolErr: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
   active = false;
   private _query = '';
-  /** Search radio heart (0.6.2): favourite state changed in this card, by uri (overrides the result's own flag). */
-  private _favs: Record<string, boolean> = {};
-  private _favBusy = new Set<string>();
-  /** library ids found by the heart lookup, per search-result uri */
-  private _favIds: Record<string, string> = {};
   private _results: SearchResults | null = null;
   private _shownQuery = '';
   private _loading = false;
@@ -93,19 +94,31 @@ export class JbSearch extends LitElement {
   private _resScroll = 0;
   private _kbBefore = false;
   /** A row tap never plays: artists / albums / playlists (podcasts with mass_queue) open a detail, anything else is highlighted. */
+  private hearts = new FavController(this);
   private press = new PressController<{ it: MaItem; g: GroupKey }>(this, (p) => this.tap(p.it, p.g), (p) => this.tap(p.it, p.g));
   private _chipTimer?: number;
   private _chipFired = false;
   private _seqShown = 0;
+  /** v0.7: configured search categories (null = 0.6 behaviour) */
+  private _cats: SearchCategory[] | null = null;
+  private _catsKey = '';
+  /** v0.7 search filters: artist (› album) scope; queries then search only inside it */
+  private _scope: Scope | null = null;
+  /** the scope's own items (artist page tracks + albums), for the empty-query list */
+  private _pool: ScopePool | null = null;
+  private _poolErr = '';
+  private pools = new PoolCache();
 
   engine = new SearchEngine({
     fetch: (q, limit) => this.fetchSearch(q, limit),
+    scope: () => scopeKey(this._scope),
     onResults: (q, res, info) => {
       this._seqShown = info.seq;
       this._results = res;
       this._shownQuery = res ? q : '';
       this._error = '';
-      if (res && this._filter !== 'all' && !res[this._filter]?.length) this._filter = 'all';
+      // 0.6: a filter with no results falls back to All. With configured categories the chip the user picked stays put.
+      if (res && !this._cats && this._filter !== 'all' && !res[this._filter]?.length) this._filter = 'all';
       this.dispatchEvent(new CustomEvent('jukebox-search-results', {
         detail: { query: q, seq: info.seq, cached: info.cached, count: res ? this.count(res) : 0 }, bubbles: true, composed: true,
       }));
@@ -132,21 +145,97 @@ export class JbSearch extends LitElement {
     if (changed.has('config') && this.config) {
       this.engine.setLimit(this.config.limit ?? 8);
       this.engine.setSlowMs(this.config.slow_ms ?? 800);
+      const cats = categoriesOn(this.config) ? resolveCategories(this.config, this.config._backend?.ext) : null;
+      const key = cats ? cats.join(',') : '';
+      if (key !== this._catsKey) {
+        this._cats = cats; this._catsKey = key;
+        this.engine.clearCache();
+        this._filter = cats ? defaultCategory(this.config, cats) : 'all';
+        if (this._query) this.engine.query(this._query);
+      }
     }
   }
 
   // ---------- data ----------
+  private filtersOn() { return this.config?.search_filters !== false; }
+  private libFirstOn() { return this.config?.library_first !== false; }
   private async fetchSearch(name: string, limit: number): Promise<SearchResults> {
     if (!this.hass) throw new Error('hass not ready');
+    const scope = this._scope;
+    if (scope) return this.fetchScoped(scope, name, limit);
+    const out = await this.fetchGlobal(name, limit);
+    return this.libFirstOn() ? libraryFirstAll(out).results : out;
+  }
+  /** Scoped query: the artist's own items filtered here (instant once cached) + MA's search for the words with the
+   *  artist filter, kept only when the artist matches. Library first, provider copies of library items dropped. */
+  private async fetchScoped(scope: Scope, name: string, limit: number): Promise<SearchResults> {
+    const extra = scope.album || !scope.artist ? Promise.resolve({} as SearchResults)
+      : this.hass!.callService('music_assistant', 'search', {
+        config_entry_id: this.config.config_entry_id, name, limit, media_type: ['album', 'track'],
+        artist: scope.artist.name, library_only: this.config.library_only ?? false,
+      }, undefined, false, true).then(normaliseResponse).catch((e: unknown) => { console.warn('[jukebox-card] scoped search failed', e); return {} as SearchResults; });
+    const [pool, ex] = await Promise.all([this.poolFor(scope), extra]);
+    return scopedResults(scope, pool, name, ex, Math.max(limit, 50));
+  }
+  private poolFor(scope: Scope): Promise<ScopePool> {
+    const it = scope.album ?? scope.artist!;
+    const type = scope.album ? 'album' : 'artist';
+    return this.pools.get(scopeKey(scope), () => loadDetail(this.hass!, this.config, it, type).then((d) => {
+      if (d.error && !d.tracks.length && !d.albums.length) throw new Error(d.error);
+      return { albums: d.albums, tracks: d.tracks };
+    }));
+  }
+  /** Apply (or clear, with null) the scope; the current query re-runs inside it. */
+  setScope(scope: Scope | null) {
+    if (scopeKey(scope) === scopeKey(this._scope)) return;
+    this._scope = scope; this._pool = null; this._poolErr = '';
+    this._menu = null; this._confirm = null; this._sel = '';
+    if (scope) {
+      const k = scopeKey(scope);
+      this.poolFor(scope).then((p) => { if (scopeKey(this._scope) === k) this._pool = p; })
+        .catch((e) => { if (scopeKey(this._scope) === k) this._poolErr = `Couldn't load ${scopeName(scope)}. Check Music Assistant.`; console.warn('[jukebox-card] scope failed', e); });
+    }
+    const f = this.scopeGroups();
+    if (f && this._filter !== 'all' && !f.includes(this._filter)) this._filter = 'all';
+    if (this._query) { this._results = null; this.engine.query(this._query); }
+    fire(this, 'jukebox-search-scope', { scope: scope ? { artist: scope.artist?.name ?? '', album: scope.album?.name ?? '' } : null });
+  }
+  /** Clear filters: the scope and the category chip (the typed words stay). */
+  clearFilters() {
+    this.setScope(null);
+    this._filter = this._cats ? defaultCategory(this.config, this._cats) : 'all';
+  }
+  /** Q60: idle reset (the screensaver came on): drop the scope chips; false when there was nothing to clear */
+  idleReset(): boolean {
+    if (!this._scope) return false;
+    this.clearFilters();
+    return true;
+  }
+  /** groups a scope can show (null = no scope) */
+  private scopeGroups(): GroupKey[] | null {
+    return !this._scope ? null : this._scope.album ? ['tracks'] : ['albums', 'tracks'];
+  }
+  private async fetchGlobal(name: string, limit: number): Promise<SearchResults> {
+    const cats = this._cats;
+    const types = cats ? serviceTypes(cats) : SEARCH_TYPES;
     const data: Record<string, any> = {
       config_entry_id: this.config.config_entry_id,
       name,
       limit,
-      media_type: SEARCH_TYPES,
+      media_type: types,
       library_only: this.config.library_only ?? false,
     };
-    const r = await this.hass.callService('music_assistant', 'search', data, undefined, false, true);
-    return normaliseResponse(r);
+    // v0.7: genres are library-only in MA and the HA service can't return them; ask MA directly, in parallel
+    const be = this.config._backend;
+    const genres = cats?.includes('genres') && be?.ext.genres
+      ? be.send('music/search', { search_query: name, media_types: ['genre'], limit, library_only: true })
+        .then((g: any) => (Array.isArray(g?.genres) ? g.genres : []).filter((x: any) => x && x.uri && x.name).map(normItem))
+        .catch((e: unknown) => { console.warn('[jukebox-card] genre search failed', e); return [] as MaItem[]; })
+      : null;
+    const svc = types.length ? this.hass!.callService('music_assistant', 'search', data, undefined, false, true).then(normaliseResponse) : Promise.resolve({} as SearchResults);
+    const [out, g] = await Promise.all([svc, genres]);
+    if (g) out.genres = g;
+    return out;
   }
 
   private count(r: SearchResults) { return GROUPS.reduce((n, g) => n + (r[g.key]?.length ?? 0), 0); }
@@ -176,7 +265,7 @@ export class JbSearch extends LitElement {
     if (path.some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)))) return;
     let handled = true;
     if (e.key === 'Backspace') this.setQuery(this._query.slice(0, -1));
-    else if (e.key === 'Escape') { if (this._confirm) this._confirm = null; else if (this._menu) this.closeMenu(); else if (this._stack.length) this.back(); else this.setQuery(''); }
+    else if (e.key === 'Escape') { if (this._confirm) this._confirm = null; else if (this._menu) this.closeMenu(); else if (this._stack.length) this.back(); else if (!this._query && this._scope) this.clearFilters(); else this.setQuery(''); }
     else if (e.key === 'Enter') this.openTop();
     else if (e.key.length === 1 && /[\p{L}\p{N}\p{P}\p{S} ]/u.test(e.key)) this.setQuery(this._query + e.key.toUpperCase());
     else handled = false;
@@ -226,50 +315,22 @@ export class JbSearch extends LitElement {
     this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400);
   }
 
-  // ---------- radio heart (0.6.2) ----------
-  /** Only Search radio results, only through the kiosk integration, only with the library permission class. */
-  private canFav(g: GroupKey) { return g === 'radio' && !!this.config._backend?.caps.libraryWrite; }
-  private isFav(it: MaItem) { return this._favs[it.uri] ?? !!it.favorite; }
-  /** MA stores favourites on library items: a provider station is added to the library and marked favourite in one call.
-   *  Removing needs the library id: a provider result has it looked up first with music/item_by_uri (read class, ported from
-   *  the design branch), so un-hearting works for it too. Shared with the station sheet (radio-fav.ts). */
-  private async toggleFav(it: MaItem) {
-    const be = this.config._backend;
-    if (!be?.caps.libraryWrite || this._favBusy.has(it.uri)) return;
-    const on = this.isFav(it);
-    this._favBusy.add(it.uri);
-    this._favs = { ...this._favs, [it.uri]: !on };
-    try {
-      const r = await toggleRadioFavorite(it, on, (c, d) => be.send(c, d), this._favIds[it.uri]);
-      if (r.result === 'notlib') {
-        this._favs = { ...this._favs, [it.uri]: on };
-        this.toast(`${it.name} isn't in your library`);
-        return;
-      }
-      if (r.libId) this._favIds[it.uri] = r.libId;
-      this.toast(on ? `Removed ${it.name} from favorites` : `Added ${it.name} to favorites`);
-      this.engine.clearCache();
-      fire(this, 'jukebox-favorites-changed', { media_type: 'radio', uri: it.uri, favorite: !on });
-    } catch (e) {
-      console.warn('[jukebox-card] favorite failed', e);
-      this._favs = { ...this._favs, [it.uri]: on };
-      this.toast(on ? `Couldn't remove ${it.name} from favorites` : `Couldn't add ${it.name} to favorites`);
-    } finally {
-      this._favBusy.delete(it.uri);
-    }
+  // ---------- hearts (0.6.2 radio rows; v0.7 every result row but genres) ----------
+  /** Only through the kiosk integration with the library permission class; `hearts: false` keeps the 0.6.2 radio-only heart. */
+  private canFav(it: MaItem, g: GroupKey) { return heartType(this.config, this.mediaType(it, g), it); }
+  /** MA stores favourites on library items: a provider result is added to the library and marked favourite in one call.
+   *  Removing needs the library id: a provider result has it looked up first with music/item_by_uri (read class), so
+   *  un-hearting works for it too. The store is shared with Library, detail pages, the station sheet and Now Playing. */
+  private async toggleFav(it: MaItem, g: GroupKey) {
+    const t = this.canFav(it, g);
+    if (!t) return;
+    await this.hearts.toggle(it, t); // the outcome shows in the card's top-right status chip
   }
-  /** A heart elsewhere (the station sheet) changed a station's favourite: show it on the row, drop cached results. */
+  /** A heart elsewhere changed an item's favourite: the shared store already shows it; drop cached results. */
   favoriteChanged(uri: string, favorite: boolean) {
-    if (this._favs[uri] === favorite) return;
-    this._favs = { ...this._favs, [uri]: favorite };
+    this.config._favs?.set(uri, favorite);
     this.engine.clearCache();
     this.requestUpdate();
-  }
-  private favTpl(it: MaItem) {
-    const on = this.isFav(it);
-    return html`<button class="ra-b fav ${on ? 'on' : ''}" data-act="fav" tabindex="-1" aria-pressed=${on ? 'true' : 'false'}
-      title=${on ? 'In favorites' : 'Add to favorites'} aria-label=${on ? `Remove ${it.name} from favorites` : `Add ${it.name} to favorites`}
-      @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); this.toggleFav(it); }}>${icon(on ? 'heart' : 'heartline')}</button>`;
   }
 
   // ---------- taps, menus, detail stack ----------
@@ -278,7 +339,7 @@ export class JbSearch extends LitElement {
     const type = this.mediaType(it, g);
     if (drillable(type, this.config)) { this.openDetail(it, type); return; }
     // a station opens the station sheet (details, heart, Play); a tap never plays (0.6.3)
-    if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.isFav(it) } }); return; }
+    if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.hearts.isFav(it) } }); return; }
     this._sel = this._sel === it.uri ? '' : it.uri;
   }
   /** Row icons. Add / Play next run at once; Replace queue and Start radio (enqueue replace) ask first. */
@@ -324,7 +385,39 @@ export class JbSearch extends LitElement {
   }
   private onNav(e: CustomEvent) {
     e.stopPropagation();
-    if (e.detail.op === 'back') this.back(); else this.openDetail(e.detail.item, e.detail.type);
+    if (e.detail.op === 'back') this.back();
+    else if (e.detail.op === 'scope') this.scopeFromDetail(e.detail.item, e.detail.type, e.detail.data);
+    else this.openDetail(e.detail.item, e.detail.type);
+  }
+
+  /** "Search in JJ Grey" on an artist page (or "Search in <album>" on an album page): scope, back to an empty query. */
+  private scopeFromDetail(it: MaItem, type: string, data?: { albums: MaItem[]; tracks: MaItem[] }) {
+    let scope: Scope;
+    if (type === 'album') {
+      const parent = [...this._stack].reverse().find((x) => x.type === 'artist')?.item;
+      const a0 = it.artists?.[0];
+      scope = { artist: parent ?? (a0 ? { media_type: 'artist', uri: a0.uri ?? '', name: a0.name } : undefined), album: it };
+    } else scope = { artist: it };
+    if (data) this.pools.put(scopeKey(scope), { albums: data.albums ?? [], tracks: data.tracks ?? [] });
+    this.addRecent(this._shownQuery || this._query);
+    this._stack = [];
+    this._kbHidden = false;
+    this._query = '';
+    this.engine.query('');
+    this.setScope(scope);
+  }
+  private scopeLabel = (it: MaItem, type: string) => (!this.filtersOn() || (this._scope?.album && type === 'album' && this._scope.album.uri === it.uri)
+    || (type === 'artist' && !this._scope?.album && this._scope?.artist?.uri === it.uri) ? '' : `Search in ${it.name}`);
+  private scopeTpl() {
+    const s = this._scope; if (!s) return nothing;
+    const chip = (k: 'artist' | 'album', label: string, name: string) => html`<button class="sc" data-scope=${k} tabindex="-1"
+      aria-label=${`Remove filter ${label}: ${name}`} @pointerdown=${noFocus}
+      @click=${() => this.setScope(k === 'artist' || !s.artist ? null : { artist: s.artist })}><span class="scl">${label}:</span><b>${name}</b>${icon('close', 'i scx')}</button>`;
+    return html`<div class="scope" role="group" aria-label="Search filters">
+      ${s.artist ? chip('artist', 'Artist', s.artist.name) : nothing}
+      ${s.album ? chip('album', 'Album', s.album.name) : nothing}
+      <button class="fc clr" data-action="clear-filters" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.clearFilters()}>Clear filters</button>
+    </div>`;
   }
 
   // ---------- render ----------
@@ -336,6 +429,7 @@ export class JbSearch extends LitElement {
     if (g === 'radio') return it.metadata && (it.metadata as any).description ? (it.metadata as any).description : 'Radio station';
     if (g === 'podcasts') return ['Podcast', (it as any).publisher ?? artistNames(it)].filter(Boolean).join(' · ');
     if (g === 'audiobooks') return ['Audiobook', artistNames(it)].filter(Boolean).join(' · ');
+    if (g === 'genres') return 'Genre';
     return artistNames(it);
   }
 
@@ -344,17 +438,17 @@ export class JbSearch extends LitElement {
     const type = this.mediaType(it, g);
     const drill = drillable(type, this.config);
     const p = this.press.handlers(it.uri, { it, g });
-    const fav = this.canFav(g);
+    const fav = this.canFav(it, g);
     return html`<div class="row ${drill ? 'drill' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''} ${this._sel === it.uri ? 'sel' : ''}"
         data-uri=${it.uri} data-group=${g} data-type=${type} aria-label=${drill ? `Open ${it.name}` : it.name}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
-      ${artTpl(it, g === 'artists' ? 'th circ' : 'th')}
+      ${g === 'genres' ? html`<span class="ar th gen" aria-hidden="true">${icon('genre')}</span>` : artTpl(it, g === 'artists' ? 'th circ' : 'th')}
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b>
         <small>${provTpl(it.uri, it.provider, it.media_type)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, g)}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
-      ${fav ? this.favTpl(it) : nothing}
-      ${rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, g, a, el))}
+      ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, g)) : nothing}
+      ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, g, a, el))}
     </div>`;
   }
 
@@ -362,12 +456,36 @@ export class JbSearch extends LitElement {
     return html`<div class="grp ${g.key}">
       <h3>${g.label}<em>${items.length}</em>${!full ? html`<button class="sa" tabindex="-1"
         @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => (this._filter = g.key)}>See all</button>` : nothing}</h3>
-      <div class="list">${items.map((it) => this.row(it, g.key))}</div>
+      <div class="list">${this.libRows(items, g.key)}</div>
     </div>`;
+  }
+  /** Library first: "In your library" rows, then "From your providers" (duplicates already removed) */
+  private libRows(items: MaItem[], g: GroupKey) {
+    const n = this.libFirstOn() && g !== 'genres' ? items.findIndex((x) => !isLib(x)) : -2;
+    if (n === -2 || n === 0) return items.map((it) => this.row(it, g));
+    const lib = n === -1 ? items : items.slice(0, n);
+    const rest = n === -1 ? [] : items.slice(n);
+    return html`<div class="lsec" data-sec="library">${icon('browse', 'i xs')}In your library</div>${lib.map((it) => this.row(it, g))}
+      ${rest.length ? html`<div class="lsec" data-sec="providers">${icon('search', 'i xs')}From your providers</div>${rest.map((it) => this.row(it, g))}` : nothing}`;
   }
 
   private renderResults() {
-    const r = this._results;
+    const sc = this._scope;
+    const r = sc && !this._query ? (this._pool ? scopedResults(sc, this._pool, '') : null) : this._results;
+    const name = scopeName(sc);
+    const clr = html`<button class="fc clr" data-action="clear-filters" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.clearFilters()}>Clear filters</button>`;
+    if (sc) {
+      if (this._poolErr && !this._query) return html`<div class="empty"><b>${this._poolErr}</b>${clr}</div>`;
+      if (!r) return html`<div class="empty"><span>${this._query ? 'Searching' : 'Loading'} ${name}…</span></div>`;
+      const f = this.effFilter();
+      const n = f === 'all' ? this.count(r) : r[f]?.length ?? 0;
+      if (!n) {
+        const what = f === 'all' ? 'matches' : GROUPS.find((x) => x.key === f)!.label.toLowerCase();
+        return html`<div class="empty scoped"><b>No ${what} in ${name}</b><span>${this._query ? html`for “${this._shownQuery || this._query}”. Try fewer letters, or clear the filter to search everything.` : 'Nothing found for this filter.'}</span>${clr}</div>`;
+      }
+      if (f !== 'all') return this.group(GROUPS.find((x) => x.key === f)!, r[f] ?? [], true);
+      return html`${(['albums', 'tracks'] as GroupKey[]).filter((k) => r[k]?.length).map((k) => this.group(GROUPS.find((x) => x.key === k)!, r[k]!, false))}`;
+    }
     if (!this._query && !r) {
       return html`<div class="empty"><b>Start typing</b><span>Results update on every key, across every music provider.</span></div>`;
     }
@@ -375,9 +493,33 @@ export class JbSearch extends LitElement {
     if (!this.count(r)) return html`<div class="empty"><b>No results for “${this._shownQuery}”</b><span>Try fewer letters or another spelling.</span></div>`;
     if (this._filter !== 'all') {
       const g = GROUPS.find((x) => x.key === this._filter)!;
+      if (this._cats && !r[g.key]?.length) return html`<div class="empty"><b>No ${g.label.toLowerCase()} for “${this._shownQuery}”</b><span>Try All, or fewer letters.</span></div>`;
       return this.group(g, r[g.key] ?? [], true);
     }
-    return html`${GROUPS.filter((g) => r[g.key]?.length).map((g) => this.group(g, r[g.key]!, false))}`;
+    return html`${this.groups().filter((g) => r[g.key]?.length).map((g) => this.group(g, r[g.key]!, false))}`;
+  }
+
+  /** the category in effect: a scope only has albums / tracks, so another chosen category shows All inside the scope */
+  private effFilter(): GroupKey | 'all' {
+    const f = this.scopeGroups();
+    return f && this._filter !== 'all' && !f.includes(this._filter) ? 'all' : this._filter;
+  }
+  /** groups in display order: the configured category order, or 0.6's fixed order */
+  private groups() {
+    return this._cats ? this._cats.map((k) => GROUPS.find((g) => g.key === k)!).filter(Boolean) : GROUPS;
+  }
+  /** v0.7: the category chips are always shown (All + each configured category with its count) */
+  private catChips(r: SearchResults | null) {
+    const sg = this.scopeGroups();
+    const keys: Array<GroupKey | 'all'> = ['all', ...this._cats!.filter((k) => !sg || sg.includes(k))];
+    const cur = this.effFilter();
+    return html`<div class="filters cats" role="tablist" aria-label="Search categories">
+      ${keys.map((k) => {
+        const n = !r ? -1 : k === 'all' ? this.count(r) : r[k]?.length ?? 0;
+        return html`<button class="fc ${cur === k ? 'on' : ''} ${n === 0 ? 'zero' : ''}" role="tab" aria-selected=${cur === k ? 'true' : 'false'}
+          data-cat=${k} tabindex="-1" @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => (this._filter = k)}>${k === 'all' ? 'All' : GROUPS.find((g) => g.key === k)!.label}${n > 0 ? html`<em>${n}</em>` : nothing}</button>`;
+      })}
+    </div>`;
   }
 
   private renderMenu() {
@@ -385,11 +527,20 @@ export class JbSearch extends LitElement {
     return menuTpl(m.pos, { item: m.item, sub: this.sub(m.item, m.group) || providerLabel(m.item.uri) }, m.actions, () => this.closeMenu());
   }
 
+  /** v0.7 Library home: open ready to type (on-screen keyboard shown), optionally on a category chip such as genre. */
+  focusSearch(cat?: string) {
+    this._kbHidden = false;
+    if (cat && GROUPS.some((g) => g.key === cat) && (!this._cats || this._cats.includes(cat as SearchCategory))) this._filter = cat as GroupKey;
+  }
   render() {
-    const r = this._results;
+    const sc = this._scope;
+    const r = sc && !this._query ? (this._pool ? scopedResults(sc, this._pool, '') : null) : this._results;
     const count = r ? this.count(r) : 0;
     const present = r ? GROUPS.filter((g) => r[g.key]?.length) : [];
+    const name = scopeName(sc);
     const status = this._error ? this._error
+      : sc ? (!this._query ? (r ? `${count} in ${name} · type to search inside it` : `Loading ${name}…`)
+        : !r ? `Searching ${name}…` : count ? `${count} result${count === 1 ? '' : 's'} in ${name} for “${this._shownQuery}”` : `No matches in ${name}`)
       : !this._query ? 'Type to search all providers'
       : !r ? 'Searching…'
       : count ? `${count} result${count === 1 ? '' : 's'} for “${this._shownQuery}” · all providers`
@@ -400,24 +551,25 @@ export class JbSearch extends LitElement {
           <div class="qbar" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this._kbHidden = false; }}>
             ${icon('search', 'i qi')}
             <div class="q" role="searchbox" aria-label="Search music" aria-readonly="true" aria-live="polite" data-query=${this._query}>
-              ${this._query ? html`<span class="qt">${this._query}</span>` : html`<span class="ph">Search artists, songs, radio…</span>`}<i class="caret" aria-hidden="true"></i>
+              ${this._query ? html`<span class="qt">${this._query}</span>` : html`<span class="ph">${sc ? `Search in ${name}…` : 'Search artists, songs, radio…'}</span>`}<i class="caret" aria-hidden="true"></i>
             </div>
             ${this._query ? html`<button class="qx" tabindex="-1" aria-label="Clear search"
               @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => this.setQuery('')}>${icon('close')}</button>` : nothing}
             <span class="hair ${this._loading ? 'on' : ''}" aria-hidden="true"></span>
           </div>
+          ${this.scopeTpl()}
           <div class="qmeta" data-loading=${this._loading ? '1' : '0'}><span class="live ${this._loading ? 'busy' : ''}"></span>${status}</div>
         </div>
-        ${this._recents.length ? html`<div class="recents" aria-label="Recent searches"><span class="rl">${icon('history', 'i xs')}Recent</span>
+        ${this._recents.length && !sc ? html`<div class="recents" aria-label="Recent searches"><span class="rl">${icon('history', 'i xs')}Recent</span>
           ${this._recents.map((q) => html`<button class="chip" tabindex="-1"
               @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this._chipFired = false; this._chipTimer = window.setTimeout(() => { this._chipFired = true; this.removeRecent(q); }, 700); }}
               @pointerup=${() => window.clearTimeout(this._chipTimer)} @pointerleave=${() => window.clearTimeout(this._chipTimer)}
               @click=${() => { if (!this._chipFired) this.setQuery(q.toUpperCase()); }}>${q}</button>`)}
         </div>` : html`<div class="recents"></div>`}
-        <section class="res" aria-label="Search results" data-shown-query=${this._shownQuery} data-seq=${this._seqShown}>
-          ${this._stack.length ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${this._stack[this._stack.length - 1]}
-              .trail=${[`Search “${this._shownQuery || this._query}”`, ...this._stack.slice(0, -1).map((x) => x.item.name)]} @jb-nav=${this.onNav}></jb-detail>`
-          : html`${present.length > 1 ? html`<div class="filters">
+        <section class="res" aria-label="Search results" data-shown-query=${this._shownQuery} data-seq=${this._seqShown} data-scope=${name}>
+          ${this._stack.length ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${this._stack[this._stack.length - 1]} .scopeLabel=${this.scopeLabel}
+              .trail=${[sc ? `Search in ${name}${this._query ? ` “${this._query}”` : ''}` : `Search “${this._shownQuery || this._query}”`, ...this._stack.slice(0, -1).map((x) => x.item.name)]} @jb-nav=${this.onNav}></jb-detail>`
+          : html`${this._cats ? this.catChips(r) : present.length > 1 && !sc ? html`<div class="filters">
             ${(['all', ...present.map((g) => g.key)] as Array<GroupKey | 'all'>).map((k) => html`<button class="fc ${this._filter === k ? 'on' : ''}" tabindex="-1"
               @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => (this._filter = k)}>${k === 'all' ? 'All' : GROUPS.find((g) => g.key === k)!.label}</button>`)}
           </div>` : nothing}
@@ -434,14 +586,6 @@ export class JbSearch extends LitElement {
 
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
-    .ra-b.fav { flex: none; color: var(--_inactive); }
-    .ra-b.fav.on { color: var(--_active); }
-    /* a radio row with the heart has one more column (0.6.2) */
-    .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto; }
-    @container np (max-width: 520px) {
-      .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: 6px; }
-      .row.hasfav .ra-b { width: 40px; }
-    }
     .sx {
       position: relative; z-index: 1; height: 100%; display: grid; gap: 12px; padding: 14px var(--_pad) 12px;
       grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
@@ -483,6 +627,23 @@ export class JbSearch extends LitElement {
     .filters::-webkit-scrollbar { display: none; }
     .fc { flex: none; height: 34px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 700; color: var(--_inactive); border: 1px solid #ffffff33; }
     .fc.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
+    /* v0.7 category chips: count after the label, empty categories dimmed but still tappable */
+    .fc em { font-style: normal; font-weight: 600; margin-left: 6px; opacity: .7; font-variant-numeric: tabular-nums; }
+    .fc.zero:not(.on) { opacity: .45; }
+    /* v0.7 search filters: scope chips under the query, Clear filters, library-first section labels */
+    .scope { display: flex; align-items: center; gap: 8px; margin-top: 10px; min-width: 0; flex-wrap: wrap; }
+    .sc { display: inline-flex; align-items: center; gap: 6px; height: 44px; max-width: 100%; padding: 0 8px 0 16px; border-radius: 999px;
+      background: var(--_active); color: var(--_on-accent); font-size: 15px; font-weight: 600; min-width: 0; }
+    .sc .scl { opacity: .8; flex: none; }
+    .sc b { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .sc .scx { width: 28px; height: 28px; padding: 5px; border-radius: 50%; background: #0000001f; flex: none; }
+    .fc.clr { height: 44px; padding: 0 16px; font-size: 14px; color: #fff; border-color: #ffffff59; }
+    .empty .fc.clr { margin-top: 14px; }
+    .lsec { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--_inactive); }
+    .lsec[data-sec="providers"] { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ffffff1f; }
+    .ar.gen { display: grid; place-items: center; background: #ffffff14; color: #fff; box-shadow: 0 0 0 1px #ffffff33; }
+    .ar.gen .i { width: 22px; height: 22px; }
+    .ra.go { width: 48px; height: 48px; display: grid; place-items: center; color: var(--_inactive); }
     .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: 14px;
       padding: 12px 14px 24px; border-radius: var(--_radius); background: var(--_surface); border: 1px solid var(--_surface-border);
       -webkit-backdrop-filter: var(--jb-panel-filter, blur(14px)); backdrop-filter: var(--jb-panel-filter, blur(14px)); touch-action: pan-y; }
@@ -526,6 +687,9 @@ export class JbSearch extends LitElement {
       .kbd { --jb-kb-handle-h: 22px; --jb-kb-handle-label: none; }
       .scroll { padding: 10px; gap: 12px; }
       .fc { height: 30px; padding: 0 11px; font-size: 12px; }
+      .scope { margin-top: 8px; gap: 6px; }
+      .sc { height: 40px; font-size: 14px; padding-left: 13px; }
+      .fc.clr { height: 40px; padding: 0 13px; font-size: 13px; }
     }
     .sx.kb-hidden .res .scroll { padding-bottom: calc(10px + var(--jb-fab-space, 0px)); scroll-padding-bottom: var(--jb-fab-space, 0px); }
   `];

@@ -2,6 +2,34 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
+## 0.7.0 — 2026-11-04
+
+### Added
+- **Hearts everywhere (`hearts`, default `true`).** A favourite heart on Search and Library rows and tiles (tracks, albums, artists, playlists, radio), on playlist rows, in the header of album, artist and playlist pages, on Now Playing and on the radio station sheet. Hearts use Music Assistant favourites through the integration (`music/favorites/add_item` / `remove_item`; removing looks up the library id first). Every heart for the same item updates together. They need the `library` class; without it they are hidden, including on Now Playing. There is no confirmation when you remove a heart. The heart flips at once and flips back if Music Assistant refuses or the call fails. `hearts: false` keeps only the 0.6 hearts.
+- **Search filters (`search_filters`, default `true`).** Artist and album pages in Search offer **Search in …**. The next searches stay inside it, shown as a removable chip (`Artist: … ✕`) with **Clear filters**. The Library gets a **Filter** button (type to narrow the list) and **Filter by** on artist pages.
+- **Library first (`library_first`, default `true`).** Search lists your library matches first ("In your library"), then provider results ("From your providers") with copies of library items removed.
+- **Idle reset clears filters (`idle_clear_filters`, default `true`).** When the screensaver comes on, the Search scope chips and the Library filters are cleared.
+- **Library home (`library_home`, default off).** The Browse tab becomes **Library** (`library_label`) and opens on big shortcut tiles (`library_tiles`).
+- **Autoplay (`show_autoplay`, default off).** Music Assistant's "don't stop the music" toggle in the Queue header, with a style picker (long-press), class `queue`.
+- *(Off by default)* Search categories (`search_categories`, `search_default_category`) including genres, podcasts and audiobooks; genre pages; Browse › Radio "Stations by" country, language, tag (`radio_browse`, `radio_country`); a **Discover** chip with Music Assistant recommendation rows (`discover`).
+- `radio_favorites_only` (default `false`): Browse › Radio **My stations** shows favourite stations only.
+
+### Changed
+- **Heart messages use the top-right status chip.** "Added … to favorites" shows in the 0.6.4 chip; a refused or failed heart shows there in the error style with ✕. The chip stays above the radio station sheet. Views no longer show their own heart toasts.
+- A pending speakers question in the chip is no longer replaced (and answered "no") by a late status message; that message is held until the question is answered or times out.
+
+### Includes 0.6.5
+- Repeat is queue-level off ↔ all only, and `coerce_repeat_one` (default `true`). One implementation, merged from 0.6.5.
+
+### Known issues
+- Music Assistant 2.10.9 sends an Apple Music un-favourite as a *Dislike*. The card has no workaround; expected to be fixed in Music Assistant 2.11.
+
+### Planned for a later version
+- Joining a speaker to a dynamic group so that playback resumes on it.
+- An admin form to add a radio station by URL.
+- Playlist dedupe.
+- "Playing from <playlist>" with a heart on Now Playing.
+
 ## 0.6.5 — 2026-11-03
 
 ### Fixed

@@ -7,6 +7,17 @@ import { QueueBusy, type QueueItem, type QueueModel, type QueueSnapshot, type Re
 /** MA refused or ignored a change on a played / buffered track (live 2.10.9: 500 "<n> is already played/buffered", delete ignored) */
 const BUSY = 'That track is already loading';
 import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
+import type { AutoplayMode, AutoplayOptions } from './backend/types';
+
+/** Neutral labels: Autoplay only continues this queue when it runs out. */
+const AP_MODE: Record<AutoplayMode, { label: string; desc: string }> = {
+  auto: { label: 'Automatic', desc: 'Similar music when it can, otherwise from your library' },
+  similar: { label: 'Similar music', desc: 'Tracks like the ones in this queue' },
+  library: { label: 'My library', desc: 'A mix from your music library' },
+  playlist: { label: 'A playlist', desc: 'Choose one of your playlists' },
+};
+interface ApSheet { opts?: AutoplayOptions; view: 'modes' | 'playlists'; busy: string; error: string }
+const AP_HOLD_MS = 500;
 import { defineElement } from './define';
 
 const asArt = (q: QueueItem) => ({ name: q.media_title || '?', image: q.media_image });
@@ -14,7 +25,7 @@ const asArt = (q: QueueItem) => ({ name: q.media_title || '?', image: q.media_im
 export class JbQueue extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, queue: { attribute: false }, active: { type: Boolean },
-    _snap: { state: true }, _menu: { state: true }, _toast: { state: true }, _confirm: { state: true }, _undo: { state: true },
+    _snap: { state: true }, _menu: { state: true }, _toast: { state: true }, _confirm: { state: true }, _undo: { state: true }, _ap: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
@@ -27,6 +38,10 @@ export class JbQueue extends LitElement {
   private _confirm: ConfirmState | null = null;
   /** 'Removed <title>. Undo' for about 5 s after a row Remove */
   private _undo: RemovedRow | null = null;
+  /** Autoplay style sheet (chevron or long-press on the Autoplay pill) */
+  private _ap: ApSheet | null = null;
+  private _apHold?: number;
+  private _apHeld = false;
   private _undoTimer?: number;
   private _toastTimer?: number;
   private _unsub?: () => void;
@@ -43,6 +58,87 @@ export class JbQueue extends LitElement {
   private async run(p: Promise<any> | undefined, ok: string) {
     this._menu = null; this.press.release();
     try { await p; if (ok) this.toast(ok); } catch (e) { this.toast(e instanceof QueueBusy ? BUSY : 'Queue action failed'); }
+  }
+  /** Autoplay pill: only with show_autoplay, a kiosk server that lists it, and a known state for this queue.
+   *  With the autoplay_mode feature a chevron (or a long-press on the pill) opens the style sheet. */
+  private autoplayTpl(s: QueueSnapshot | undefined) {
+    if (!this.config?.show_autoplay || !this.config._backend?.ext?.autoplay || typeof s?.autoplay !== 'boolean') return nothing;
+    const on = s.autoplay, dyn = !!s.dynamic, modes = this.apModes;
+    const hold = modes && !dyn ? {
+      down: () => { this._apHeld = false; window.clearTimeout(this._apHold); this._apHold = window.setTimeout(() => { this._apHeld = true; this.openAp(); }, AP_HOLD_MS); },
+      up: () => window.clearTimeout(this._apHold),
+    } : { down: () => undefined, up: () => undefined };
+    return html`<span class="apg ${modes ? 'split' : ''}"><button class="ap ${on ? 'on' : ''}" data-action="autoplay" tabindex="-1" aria-pressed=${on ? 'true' : 'false'} ?disabled=${dyn}
+      title=${dyn ? 'This queue already keeps playing' : on ? 'Autoplay is on: more music is added when the queue runs out' : 'Autoplay is off'}
+      @pointerdown=${(e: PointerEvent) => { noFocus(e); hold.down(); }} @pointerup=${hold.up} @pointerleave=${hold.up} @pointercancel=${hold.up}
+      @contextmenu=${(e: Event) => e.preventDefault()}
+      @click=${() => { if (this._apHeld) { this._apHeld = false; return; } this.toggleAutoplay(!on); }}>${icon('autoplay', 'i xs')}Autoplay</button>${modes ? html`<button
+      class="ap apc ${on ? 'on' : ''}" data-action="autoplay-mode" tabindex="-1" aria-label="Autoplay settings" aria-haspopup="dialog" title="Autoplay settings" ?disabled=${dyn}
+      @pointerdown=${noFocus} @click=${() => this.openAp()}>${icon('chev', 'i xs')}</button>` : nothing}</span>`;
+  }
+  private get apModes() { return !!this.config?._backend?.ext?.autoplayMode && !!this.queue?.backend?.autoplayOptions; }
+  private async toggleAutoplay(on: boolean) {
+    try { await this.queue?.setAutoplay(on); this.toast(on ? 'Autoplay on' : 'Autoplay off'); }
+    catch { this.toast("Couldn't change Autoplay"); }
+  }
+  private async openAp() {
+    if (!this.queue) return;
+    const sheet: ApSheet = { view: 'modes', busy: 'load', error: '' };
+    this._ap = sheet;
+    try { const opts = await this.queue.autoplayOptions(); if (this._ap === sheet) this._ap = { ...sheet, opts, busy: '' }; }
+    catch { if (this._ap === sheet) this._ap = { ...sheet, busy: '', error: "Couldn't read the Autoplay settings" }; }
+  }
+  private async pickAp(mode: AutoplayMode, playlist?: { uri: string; name: string }) {
+    const ap = this._ap;
+    if (!ap?.opts || ap.busy) return;
+    if (mode === 'playlist' && !playlist) { this._ap = { ...ap, view: 'playlists', error: '' }; return; }
+    this._ap = { ...ap, busy: playlist?.uri ?? mode, error: '' };
+    try {
+      await this.queue!.setAutoplayMode(mode, playlist?.uri);
+      this._ap = null;
+      this.toast(`Autoplay from: ${mode === 'playlist' ? playlist!.name : AP_MODE[mode].label}`);
+      this.queue?.refreshSoon(800);
+    } catch {
+      if (this._ap) this._ap = { ...this._ap, busy: '', error: "Couldn't change the Autoplay setting" };
+    }
+  }
+  private apSheetTpl() {
+    const ap = this._ap;
+    if (!ap) return nothing;
+    const close = () => (this._ap = null);
+    const o = ap.opts, on = this._snap?.autoplay === true;
+    const radio = (sel: boolean, busy: boolean) => html`<span class="rb ${sel ? 'sel' : ''}">${busy ? html`<span class="spin"></span>` : sel ? html`<span class="dot"></span>` : nothing}</span>`;
+    const body = !o ? html`<div class="aps-msg">${ap.error || 'Loading…'}</div>`
+      : ap.view === 'playlists' ? html`
+        <div class="aps-list" role="radiogroup" aria-label="Playlists">
+          ${o.playlists.length ? o.playlists.map((p) => {
+            const sel = o.mode === 'playlist' && o.playlist?.uri === p.uri;
+            return html`<button class="apo" role="radio" aria-checked=${sel ? 'true' : 'false'} data-playlist=${p.uri} tabindex="-1" ?disabled=${!!ap.busy}
+              @pointerdown=${noFocus} @click=${() => this.pickAp('playlist', p)}>${radio(sel, ap.busy === p.uri)}${icon('plist', 'i pi')}<span><b>${p.name}</b></span></button>`;
+          }) : html`<div class="aps-msg">No playlists in your library yet</div>`}
+        </div>`
+      : html`
+        <div class="aps-list" role="radiogroup" aria-label="Autoplay from">
+          ${o.modes.filter((m) => m.available).map(({ mode }) => {
+            const sel = o.mode === mode;
+            const desc = mode === 'playlist' && o.mode === 'playlist' && o.playlist ? o.playlist.name : AP_MODE[mode].desc;
+            return html`<button class="apo" role="radio" aria-checked=${sel ? 'true' : 'false'} data-mode=${mode} tabindex="-1" ?disabled=${!!ap.busy}
+              @pointerdown=${noFocus} @click=${() => this.pickAp(mode)}>${radio(sel, ap.busy === mode)}<span><b>${AP_MODE[mode].label}</b><small>${desc}</small></span>
+              ${mode === 'playlist' ? icon('open', 'i go') : nothing}</button>`;
+          })}
+        </div>
+        <p class="aps-note">${o.followsDefault ? "Using Music Assistant's default for this speaker. " : ''}${on ? 'Used when the queue runs out.' : 'Autoplay is off. This is used when you turn it on.'}</p>`;
+    return html`<div class="scrim dim" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); close(); }}></div>
+      <div class="aps" role="dialog" aria-modal="true" aria-labelledby="aps-t" data-view=${ap.view}>
+        <div class="aps-h">
+          ${ap.view === 'playlists' ? html`<button class="qa" data-action="ap-back" tabindex="-1" aria-label="Back" @pointerdown=${noFocus}
+            @click=${() => (this._ap = { ...ap, view: 'modes', error: '' })}>${icon('back')}</button>` : nothing}
+          <b id="aps-t">${ap.view === 'playlists' ? 'Choose a playlist' : 'Autoplay from'}</b>
+          <button class="qa" data-action="ap-close" tabindex="-1" aria-label="Close" @pointerdown=${noFocus} @click=${close}>${icon('close')}</button>
+        </div>
+        ${body}
+        ${o && ap.error ? html`<div class="aps-err" role="alert">${ap.error}</div>` : nothing}
+      </div>`;
   }
   /** Play now icon: confirm first (it stops the current song for everyone), then player_queues/play_index */
   private askPlayNow(it: QueueItem) {
@@ -71,7 +167,10 @@ export class JbQueue extends LitElement {
       this.toast(where === 'ok' ? `${r.title} is back` : `${r.title} is back, at the end of the queue (couldn't restore its place)`);
     } catch { this.toast(`Couldn't undo: ${r.title} wasn't added back`); }
   }
-  private onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && this._confirm) { this._confirm = null; e.stopPropagation(); } };
+  private onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && this._ap) { this._ap = null; e.stopPropagation(); return; }
+    if (e.key === 'Escape' && this._confirm) { this._confirm = null; e.stopPropagation(); }
+  };
   private play(it: QueueItem) { this.run(this.queue?.play(it.queue_item_id), `Playing ${it.media_title}`); }
   private openMenu(it: QueueItem, el: HTMLElement) {
     const root = this.renderRoot.querySelector('.qx') as HTMLElement;
@@ -156,7 +255,7 @@ export class JbQueue extends LitElement {
     const nb = cur >= 0 ? Math.max(0, Math.min(next.length, (this.queue?.locked ?? cur) - cur)) : 0;
     return html`<div class="qx" @keydown=${this.onKey}>
       <div class="head"><h2>Queue</h2><span class="cnt">${remaining ? `${remaining} up next` : ''}</span>
-        ${s?.loading ? html`<span class="live busy"></span>` : nothing}</div>
+        ${s?.loading ? html`<span class="live busy"></span>` : nothing}${this.autoplayTpl(s)}</div>
       <div class="scroll panel" @scroll=${() => this.press.scrolled()}>
         ${s?.error ? html`<div class="empty"><b>Queue unavailable</b><span>${s.error}</span></div>`
           : !items.length ? html`<div class="empty"><b>${s?.loading || !s?.at ? 'Loading queue…' : 'The queue is empty'}</b><span>Add music from Search or Browse.</span></div>`
@@ -171,6 +270,7 @@ export class JbQueue extends LitElement {
       ${this._undo ? html`<div class="undo" role="status"><span>Removed ${this._undo.title}.</span>
         <button class="ub" data-action="undo" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.undo()}>Undo</button></div>` : nothing}
       ${confirmTpl(this._confirm, () => (this._confirm = null))}
+      ${this.apSheetTpl()}
       ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
     </div>`;
   }
@@ -181,6 +281,37 @@ export class JbQueue extends LitElement {
     .head { display: flex; align-items: baseline; gap: 12px; }
     h2 { font-family: var(--_font-display); font-size: 28px; font-weight: 800; }
     .cnt { font-size: 14px; color: var(--_muted); }
+    .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
+      border: 1px solid var(--_divider); background: transparent; color: var(--_muted); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .ap.on { background: var(--_active); color: var(--_on-accent); border-color: transparent; }
+    .ap:disabled { opacity: .45; cursor: default; }
+    .apg { margin-left: auto; align-self: center; display: inline-flex; }
+    .apg .ap { margin-left: 0; }
+    .apg.split .ap:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: 10px; }
+    .apg.split .apc { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding: 0 10px; box-shadow: inset 1px 0 0 var(--_divider); }
+    .apg.split .apc.on { box-shadow: inset 1px 0 0 #0003; }
+    .aps { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100% - 24px)); max-height: calc(100% - 40px);
+      padding: 14px 14px 16px; border-radius: 18px; background: #0a0a0af7; border: 1px solid #ffffffd9; box-shadow: 0 24px 60px #000d; display: flex; flex-direction: column; gap: 10px; }
+    .aps-h { display: flex; align-items: center; gap: 6px; min-height: 44px; }
+    .aps-h b { flex: 1; font-family: var(--_font-display); font-size: 20px; font-weight: 800; padding-left: 6px; }
+    .aps-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; scrollbar-width: none; }
+    .apo { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 8px 12px; border-radius: 12px; text-align: left; color: var(--_fg); font: inherit; }
+    .apo:active { background: #ffffff1f; }
+    .apo:disabled { opacity: .6; }
+    .apo[aria-checked="true"] { background: #ffffff14; }
+    .apo span:not(.rb):not(.dot):not(.spin) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .apo b { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .apo small { font-size: 13px; color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .apo .go { width: 22px; height: 22px; color: var(--_inactive); }
+    .apo .pi { width: 24px; height: 24px; color: var(--_muted); }
+    .rb { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--_inactive); display: grid; place-items: center; }
+    .rb.sel { border-color: var(--_active); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--_active); }
+    .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff6; border-top-color: #fff; animation: spin 700ms linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg) } }
+    .aps-note { font-size: 13px; color: var(--_muted); padding: 0 8px; }
+    .aps-msg { color: var(--_muted); font-size: 14px; padding: 18px 8px; text-align: center; }
+    .aps-err { color: #ffb4a9; font-size: 14px; padding: 0 8px; }
     .live { width: 7px; height: 7px; border-radius: 50%; background: #fff; align-self: center; animation: pulse 800ms ease-in-out infinite alternate; }
     @keyframes pulse { from { opacity: 1 } to { opacity: .35 } }
     .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 10px 12px 20px; display: flex; flex-direction: column; touch-action: pan-y; }
@@ -225,6 +356,8 @@ export class JbQueue extends LitElement {
       .qr.jx .qa.mo { display: grid; }
       .qr.jx .acts { gap: 0; }
       .qr.past.jx .qa[data-action="playnow"] { display: grid; }
+      /* the style sheet becomes a bottom sheet */
+      .aps { top: auto; bottom: 0; transform: translateX(-50%); width: 100%; border-radius: 18px 18px 0 0; border-width: 1px 0 0; max-height: 80%; padding-bottom: 20px; }
     }
   `];
 }

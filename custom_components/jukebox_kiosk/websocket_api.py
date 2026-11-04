@@ -8,6 +8,7 @@ we can enforce per-command permission classes, and it does not write a
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +23,12 @@ from homeassistant.exceptions import HomeAssistantError, Unauthorized
 from . import format as fmt
 from .client import MaUnavailable, async_get_ma_client
 from .const import (
+    AUTOPLAY_COMMAND,
+    AUTOPLAY_LEGACY_COMMAND,
+    AUTOPLAY_MODE_GLOBAL,
+    AUTOPLAY_MODE_KEY,
+    AUTOPLAY_MODES,
+    AUTOPLAY_PLAYLIST_KEY,
     DOMAIN,
     LOGGER,
     MA_COMMANDS,
@@ -175,6 +182,11 @@ async def forward(
         args[key] = value
     if command == "metadata/get_track_lyrics":
         _guard_lyrics_track(args.get("track"))
+    if spec.guest_arg_prefixes and not (user and user.is_admin):
+        for key, prefixes in spec.guest_arg_prefixes:
+            value = args.get(key)
+            if not isinstance(value, str) or not value.startswith(prefixes):
+                raise KioskError("invalid_args", f"{key} must start with {' or '.join(prefixes)} for {command}")
     _no_repeat_one(args)
     _entry_, policy, client = _context(hass)
     check_class(user, policy, spec.perm)
@@ -257,6 +269,15 @@ async def ws_capabilities(hass: HomeAssistant, connection: websocket_api.ActiveC
                 "speakers": has(PermClass.SPEAKERS),
                 "group_configs": has(PermClass.READ),
                 "queue_push": has(PermClass.READ),
+                # v0.7 Discover & Search
+                "genres": has(PermClass.READ),
+                "radio_browse": has(PermClass.READ),
+                "discover": has(PermClass.READ),
+                "resume": has(PermClass.READ),
+                # Autoplay ("Don't stop the music"): jukebox_kiosk/set_autoplay + queue_items.autoplay
+                "autoplay": has(PermClass.QUEUE),
+                # Autoplay style picker: jukebox_kiosk/autoplay_options + set_autoplay_mode (same class as the toggle)
+                "autoplay_mode": has(PermClass.QUEUE),
             },
         },
     )
@@ -301,9 +322,16 @@ async def ws_queue_items(hass: HomeAssistant, connection: websocket_api.ActiveCo
     limit = (cur - offset) + 1 + msg["limit_after"]
     items = await _send(client, "player_queues/items", queue_id=queue_id, limit=limit, offset=offset) or []
     current_item = queue.get("current_item") or {}
+    extra: dict[str, Any] = {}
+    autoplay = _autoplay_state(queue)
+    if autoplay is not None:
+        extra["autoplay"] = autoplay
+    if isinstance(queue.get("is_dynamic"), bool):
+        extra["dynamic"] = queue["is_dynamic"]
     connection.send_result(
         msg["id"],
         {
+            **extra,
             "queue_id": queue_id,
             "current_index": current,
             "index_in_buffer": queue.get("index_in_buffer"),
@@ -311,6 +339,154 @@ async def ws_queue_items(hass: HomeAssistant, connection: websocket_api.ActiveCo
             "total": queue.get("items"),
             "offset": offset,
             "items": [fmt.format_queue_item(i) for i in items if isinstance(i, dict)],
+        },
+    )
+
+
+def _autoplay_state(queue: dict[str, Any]) -> bool | None:
+    """MA 2.10.9 `autoplay_enabled`; older servers only send `dont_stop_the_music_enabled`."""
+    for key in ("autoplay_enabled", "dont_stop_the_music_enabled"):
+        if isinstance(queue.get(key), bool):
+            return bool(queue[key])
+    return None
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/set_autoplay",
+        probatio.Required("entity_id"): str,
+        probatio.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+@_wrap
+async def ws_set_autoplay(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Turn MA Autoplay (formerly "Don't stop the music") on or off for the entity's active queue.
+
+    The queue always comes from an HA entity the user may control, never from the caller. MA 2.10.9 names the command
+    player_queues/autoplay; older servers only know player_queues/dont_stop_the_music (still an alias in 2.10.9)."""
+    _e, policy, client = _context(hass)
+    user = connection.user
+    check_class(user, policy, PermClass.QUEUE)
+    check_entity(user, msg["entity_id"], control=True)
+    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    enabled = msg["enabled"]
+    try:
+        await _send(client, AUTOPLAY_COMMAND, queue_id=queue_id, autoplay_enabled=enabled)
+    except KioskError as err:
+        if err.code != "ma_error" or not re.search(rf"invalid command:?\s*{re.escape(AUTOPLAY_COMMAND)}", str(err), re.I):
+            raise
+        await _send(client, AUTOPLAY_LEGACY_COMMAND, queue_id=queue_id, dont_stop_the_music_enabled=enabled)
+    connection.send_result(msg["id"], {"queue_id": queue_id, "autoplay": enabled})
+
+
+def _entry_options(entries: Any, key: str) -> list[dict[str, Any]] | None:
+    """Options of one config entry from config/player_queues/get_entries (None when MA doesn't list the key)."""
+    for entry in entries if isinstance(entries, list) else []:
+        if isinstance(entry, dict) and entry.get("key") == key:
+            return [o for o in entry.get("options") or [] if isinstance(o, dict)]
+    return None
+
+
+async def _autoplay_options(client: MusicAssistantClient, queue_id: str) -> dict[str, Any]:
+    """Current Autoplay style for a queue, the styles MA offers and the library playlists for the playlist style."""
+    entries = await _send(client, "config/player_queues/get_entries", queue_id=queue_id)
+    mode_opts = _entry_options(entries, AUTOPLAY_MODE_KEY)
+    if mode_opts is None:
+        raise KioskError("unsupported", "This Music Assistant has no Autoplay style setting")
+    offered = {str(o.get("value")): not o.get("disabled") for o in mode_opts}
+    modes = [{"mode": m, "available": offered[m]} for m in AUTOPLAY_MODES if m in offered]
+    playlists = [
+        {"uri": str(o["value"]), "name": str(o.get("title") or o["value"])}
+        for o in _entry_options(entries, AUTOPLAY_PLAYLIST_KEY) or []
+        if isinstance(o.get("value"), str)
+    ]
+    raw = await _send(client, "config/player_queues/get_value", queue_id=queue_id, key=AUTOPLAY_MODE_KEY)
+    follows = raw in (None, AUTOPLAY_MODE_GLOBAL) or raw not in AUTOPLAY_MODES
+    if follows:
+        try:
+            effective = await _send(client, "config/core/get_value", domain="player_queues", key=AUTOPLAY_MODE_KEY)
+            playlist = await _send(client, "config/core/get_value", domain="player_queues", key=AUTOPLAY_PLAYLIST_KEY)
+        except KioskError:
+            effective, playlist = "auto", None
+    else:
+        effective = raw
+        playlist = await _send(client, "config/player_queues/get_value", queue_id=queue_id, key=AUTOPLAY_PLAYLIST_KEY)
+    names = {p["uri"]: p["name"] for p in playlists}
+    return {
+        "queue_id": queue_id,
+        "mode": effective if effective in AUTOPLAY_MODES else "auto",
+        "follows_default": follows,
+        "playlist": {"uri": playlist, "name": names.get(playlist, "")} if isinstance(playlist, str) and playlist else None,
+        "modes": modes,
+        "playlists": playlists,
+    }
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/autoplay_options",
+        probatio.Required("entity_id"): str,
+    }
+)
+@websocket_api.async_response
+@_wrap
+async def ws_autoplay_options(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Autoplay style for the entity's queue: current style, which styles MA can do, and the library playlists."""
+    _e, policy, client = _context(hass)
+    user = connection.user
+    check_class(user, policy, PermClass.QUEUE)
+    check_entity(user, msg["entity_id"], control=True)
+    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    connection.send_result(msg["id"], await _autoplay_options(client, queue_id))
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/set_autoplay_mode",
+        probatio.Required("entity_id"): str,
+        probatio.Required("mode"): probatio.In(AUTOPLAY_MODES),
+        probatio.Optional("playlist"): str,
+    }
+)
+@websocket_api.async_response
+@_wrap
+async def ws_set_autoplay_mode(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Pin the Autoplay style of the entity's queue (MA config/player_queues/save, two keys only).
+
+    MA itself does not check the values (config/player_queues/save accepts any string), so we do: the style must be one
+    MA offers as enabled ('similar' is disabled when no provider can find similar tracks) and the playlist must be one
+    of MA's library playlists. MA reads the style at every refill, so it applies to the next batch, no restart."""
+    _e, policy, client = _context(hass)
+    user = connection.user
+    check_class(user, policy, PermClass.QUEUE)
+    check_entity(user, msg["entity_id"], control=True)
+    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    opts = await _autoplay_options(client, queue_id)
+    mode = msg["mode"]
+    if not any(m["mode"] == mode and m["available"] for m in opts["modes"]):
+        raise KioskError("unsupported", f"Autoplay style {mode} is not available")
+    values: dict[str, Any] = {AUTOPLAY_MODE_KEY: mode}
+    if mode == "playlist":
+        uri = msg.get("playlist")
+        if not uri:
+            raise KioskError("invalid_args", "Pick a playlist")
+        if uri not in {p["uri"] for p in opts["playlists"]}:
+            raise KioskError("invalid_args", "Only playlists in the library can be used")
+        values[AUTOPLAY_PLAYLIST_KEY] = uri
+    elif "playlist" in msg:
+        raise KioskError("invalid_args", "playlist is only used with the playlist style")
+    await _send(client, "config/player_queues/save", queue_id=queue_id, values=values)
+    names = {p["uri"]: p["name"] for p in opts["playlists"]}
+    connection.send_result(
+        msg["id"],
+        {
+            "queue_id": queue_id,
+            "mode": mode,
+            "follows_default": False,
+            "playlist": {"uri": values[AUTOPLAY_PLAYLIST_KEY], "name": names[values[AUTOPLAY_PLAYLIST_KEY]]}
+            if mode == "playlist"
+            else None,
         },
     )
 
@@ -434,6 +610,9 @@ HANDLERS = (
     ws_capabilities,
     ws_ma,
     ws_queue_items,
+    ws_set_autoplay,
+    ws_autoplay_options,
+    ws_set_autoplay_mode,
     ws_item_tracks,
     ws_unfavorite_current,
     ws_subscribe_queue,

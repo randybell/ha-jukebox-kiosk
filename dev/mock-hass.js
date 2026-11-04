@@ -26,7 +26,8 @@
 // music_assistant.search with `artist` / `album`: MA prefixes the query ("artist - name"); the mock keeps only items by that artist.
 // Speakers (0.5.0): dev/mock-ma.js adds media_player.indoor / media_player.outdoor (dynamic MA groups, each with its own queue)
 // and the players/*, player_queues/* and config/players/* send_command calls (logged in __maLog; writes also in __calls). See mock-ma.js for params.
-// admin=1 (the user is an admin), user=<name>, uid=<user id>.
+// admin=1 (the user is an admin), user=<name>, uid=<user id>. nolib=1: get_library is refused (a guest without library reads).
+// jjgrey=1: the v0.7 search-filters artist (JJ Grey, library + Apple Music, one duplicate track) and look-alikes.
 // HA media_player.join / unjoin throw (their ids don't match MA's speakers; the card must use MA set_members).
 
 import { createMa } from './mock-ma.js';
@@ -177,8 +178,56 @@ const CATALOG = {
   audiobooks: PODS ? [{ media_type: 'audiobook', uri: 'library://audiobook/7', name: 'The Mock Chronicles', version: '', image: art('Mock Chronicles'), favorite: false, explicit: null,
     authors: ['A. N. Author'], _added: 4 }] : [],
 };
+// names=fake: every artist / album / track / playlist name that is not already a placeholder becomes an invented one
+// (deterministic, for screenshots). Ids and uris are kept so drill-downs and fixtures still line up.
+if (params.get('names') === 'fake') {
+  const ADJ = ['Velvet', 'Paper', 'Copper', 'Silver', 'Hollow', 'Golden', 'Quiet', 'Neon', 'Amber', 'Cobalt', 'Willow', 'Marble', 'Saffron', 'Indigo', 'Juniper', 'Lantern', 'Harbor', 'Meadow'];
+  const NOUN = ['Lanterns', 'Foxes', 'Orchard', 'Tides', 'Satellites', 'Kites', 'Rivers', 'Echoes', 'Comets', 'Pines', 'Harbors', 'Sparrows', 'Atlas', 'Gardens', 'Signals', 'Postcards', 'Islands', 'Embers'];
+  const SONG = ['Morning', 'Window', 'Highway', 'Letters', 'Summer', 'Lights', 'Rain', 'Dancing', 'Shadows', 'Waves', 'Sunday', 'Static', 'Paper', 'Horizon', 'Little', 'Blue', 'Slow', 'City'];
+  const SONG2 = ['Song', 'Avenue', 'Weather', 'Parade', 'Signal', 'Garden', 'Machine', 'Postcard', 'Lullaby', 'Daydream', 'Tide', 'Echo', 'Hours', 'Motel', 'Theory', 'Glow', 'Drive', 'Bells'];
+  const keep = (n) => /mock|placeholder|lorem|ipsum|various artists/i.test(n);
+  const used = new Set(), memo = new Map();
+  const make = (kind, n, a, b, fmt) => {
+    const key = kind + '|' + n; if (memo.has(key)) return memo.get(key);
+    if (keep(n)) { memo.set(key, n); return n; }
+    let i = h(key), out;
+    do { out = fmt(a[i % a.length], b[(i >>> 5) % b.length]); i += 7; } while (used.has(out));
+    used.add(out); memo.set(key, out); return out;
+  };
+  const fa = (n) => make('artist', n, ADJ, NOUN, (x, y) => `The ${x} ${y}`);
+  const fl = (n) => make('album', n, ADJ, SONG2, (x, y) => `${x} ${y}`);
+  const ft = (n) => make('track', n, SONG, SONG2, (x, y) => `${x} ${y}`);
+  const fp = (n) => make('playlist', n, SONG, SONG2, (x, y) => `${x} ${y} Mix`);
+  for (const [k, v] of Object.entries(A)) { const n = fa(k); if (n !== k) { v.name = n; v.image = art(n); A[n] = v; delete A[k]; } }
+  for (const it of CATALOG.artists) if (!A[it.name]) { it.name = fa(it.name); it.image = art(it.name); }
+  for (const it of [...CATALOG.albums, ...CATALOG.tracks, ...CATALOG.playlists]) it._orig = it.name;
+  for (const it of CATALOG.albums) { it.name = fl(it.name); it.image = art(it.name); it.artists = it.artists.map((x) => ({ ...x, name: fa(x.name) })); }
+  for (const it of CATALOG.tracks) {
+    it.name = ft(it.name); it.artists = it.artists.map((x) => ({ ...x, name: fa(x.name) }));
+    const al = fl(it.album.name); it.album = { ...it.album, name: al, image: art(al) }; it.image = art(al);
+  }
+  for (const it of CATALOG.playlists) { it.name = fp(it.name); it.image = art(it.name); }
+}
 // the real export's ids, so drill-down into "Hotel California" serves the real mass_queue response (9 tracks with durations)
-CATALOG.albums.find((x) => x.name === 'Hotel California').uri = 'library://album/1448';
+CATALOG.albums.find((x) => (x._orig ?? x.name) === 'Hotel California').uri = 'library://album/1448';
+// jjgrey=1 (v0.7 search filters): a public artist name with invented albums/tracks, in the library and on Apple Music
+// ("Low Tide Lantern" is on both: the provider copy must be dropped), plus look-alike words by other artists
+if (params.get('jjgrey') === '1') {
+  const J = 'JJ Grey';
+  CATALOG.artists.push(artist(J, 'library', true), { media_type: 'artist', uri: 'apple_music://artist/JJ%20Grey', name: J, version: '', image: art(J), favorite: false, explicit: null, _added: 5 },
+    artist('Grey Harbor', 'apple_music'), artist('Lantern Choir'));
+  A[J] = CATALOG.artists.find((x) => x.name === J && x.uri.startsWith('library://'));
+  CATALOG.albums.push(album('Porch Light', J, 'library', true), album('Swamp Radio', J), album('Gulf Coast Sessions', J, 'apple_music'),
+    album('Porch Light Blues', 'Grey Harbor', 'apple_music'));
+  CATALOG.tracks.push(
+    track('Low Tide Lantern', J, 'Porch Light', 245), track('Screen Door', J, 'Porch Light', 212), track('Cypress Morning', J, 'Porch Light', 301),
+    track('Bayou Static', J, 'Swamp Radio', 228), track('Lantern Swing', J, 'Swamp Radio', 199),
+    track('Low Tide Lantern', J, 'Porch Light', 245, 'apple_music'), track('Gulf Wind', J, 'Gulf Coast Sessions', 265, 'apple_music'),
+    track('Pelican Run', J, 'Gulf Coast Sessions', 233, 'apple_music'), track('Lantern on the Levee', J, 'Gulf Coast Sessions', 280, 'apple_music'),
+    track('Porch Light Blues', 'Grey Harbor', 'Porch Light Blues', 240, 'apple_music'), track('Lantern', 'Lantern Choir', 'Evensong', 190));
+  // the Apple Music-only items are not in the library: get_library leaves them out (search and the artist page still list them)
+  for (const k of ['artists', 'albums', 'tracks']) for (const it of CATALOG[k]) if (it.uri.startsWith('apple_music://')) it._nolib = true;
+}
 const KEYS = ['artists', 'albums', 'tracks', 'playlists', 'radio', 'audiobooks', 'podcasts'];
 const TYPE2KEY = { artist: 'artists', album: 'albums', track: 'tracks', playlist: 'playlists', radio: 'radio', audiobook: 'audiobooks', podcast: 'podcasts' };
 const pub = (it) => JSON.parse(JSON.stringify(it, (k, v) => (k.startsWith('_') ? undefined : v)));
@@ -192,7 +241,7 @@ const asLibRadio = (it) => (it.media_type === 'radio' && it._inlib ? { ...libVie
 // radiohit=provider (heart lookup): search keeps returning the provider copy (radiobrowser://…) even for library stations
 const RADIO_HIT_PROVIDER = params.get('radiohit') === 'provider';
 
-function search(name, limit, types, by = '') {
+function search(name, limit, types, by = '', libOnly = false) {
   const q = name.trim().toLowerCase();
   const byOk = (it) => !by || (it.artists ?? []).some((a) => a.name.toLowerCase() === by.toLowerCase()) || it.name.toLowerCase() === by.toLowerCase();
   // MA's Radio Browser search also matches tags/genre, so "radio" or "rock" finds stations without it in the name
@@ -201,7 +250,7 @@ function search(name, limit, types, by = '') {
   const want = new Set((types ?? Object.keys(TYPE2KEY)).map((t) => TYPE2KEY[t]));
   const out = {};
   const asLib = RADIO_HIT_PROVIDER ? (it) => it : asLibRadio;
-  for (const key of KEYS) out[key] = want.has(key) ? CATALOG[key].filter((it) => hay(it).includes(q) && byOk(it)).sort((a, b) => score(a) - score(b)).slice(0, limit).map(asLib).map(pub) : [];
+  for (const key of KEYS) out[key] = want.has(key) ? CATALOG[key].filter((it) => hay(it).includes(q) && byOk(it) && (!libOnly || it.uri.startsWith('library://') || it._inlib)).sort((a, b) => score(a) - score(b)).slice(0, limit).map(asLib).map(pub) : [];
   return out;
 }
 function library({ media_type, favorite, search: s, limit = 25, offset = 0, order_by = 'name' }) {
@@ -209,7 +258,7 @@ function library({ media_type, favorite, search: s, limit = 25, offset = 0, orde
   if (!key) throw new Error(`invalid media_type ${media_type}`);
   // Everything in the mock catalog is "in the library"; MA reports library items with library:// uris.
   // radio=1: stations are only in the library once favourited through the Search heart (0.6.2, kiosk mock)
-  let items = EMPTY ? [] : key === 'radio' && !RADIO_LIB ? CATALOG.radio.filter((i) => i._inlib).map(libView) : CATALOG[key].map(libView);
+  let items = EMPTY ? [] : key === 'radio' && !RADIO_LIB ? CATALOG.radio.filter((i) => i._inlib).map(libView) : CATALOG[key].filter((i) => !i._nolib).map(libView);
   if (favorite) items = items.filter((i) => i.favorite);
   if (s) items = items.filter((i) => i.name.toLowerCase().includes(String(s).toLowerCase()));
   const cmp = {
@@ -232,7 +281,7 @@ const qItem = (t) => ({ queue_item_id: `${(++qn).toString(16).padStart(4, '0')}a
 const libTracks = CATALOG.tracks;
 const startList = ['So What', 'Teardrop', 'Dreams', 'Get Lucky', 'Hotel California', 'La Femme d\'Argent', 'Come Together', 'Instant Crush', 'The Chain', 'Angel', 'Porcelain', 'Rolling in the Deep', 'Yellow', 'Three Little Birds'];
 export const Q = (window.__queue = {
-  items: params.get('idle') === '1' ? [] : [libTracks.find((t) => t.name === 'Mockingbird Lane'), ...startList.map((n) => libTracks.find((t) => t.name === n))].map(qItem),
+  items: params.get('idle') === '1' ? [] : [libTracks.find((t) => t.name === 'Mockingbird Lane'), ...startList.map((n) => libTracks.find((t) => (t._orig ?? t.name) === n))].map(qItem),
   index: params.get('idle') === '1' ? -1 : 1,
 });
 /** one queue per MA group entity (Everywhere's is Q / window.__queue; mock-ma adds Indoor and Outdoor) */
@@ -296,7 +345,7 @@ const tracksFor = (it) => {
   if (it.media_type === 'track') return [it];
   if (it.media_type === 'album') return libTracks.filter((t) => t.album?.name === it.name);
   if (it.media_type === 'artist') return libTracks.filter((t) => t.artists.some((a) => a.name === it.name));
-  if (it.media_type === 'playlist' && it.name === 'Long Drive') return LONG_DRIVE;
+  if (it.media_type === 'playlist' && (it._orig ?? it.name) === 'Long Drive') return LONG_DRIVE;
   if (it.media_type === 'playlist') return libTracks.filter((_, i) => (h(it.name) + i) % 4 === 0).slice(0, 12);
   if (it.media_type === 'radio') return [it];
   return [];
@@ -316,7 +365,7 @@ async function callService(domain, service, data = {}, target, notifyOnError, re
     const ms = delayFor(data.name ?? '');
     await sleep(ms);
     if (mock.fail) throw new Error('mock failure');
-    const response = realSample ? structuredClone(realSample) : search(data.name ?? '', data.limit ?? 5, data.media_type, data.artist ?? '');
+    const response = realSample ? structuredClone(realSample) : search(data.name ?? '', data.limit ?? 5, data.media_type, data.artist ?? '', !!data.library_only);
     call.ms = Math.round(ms); call.replyAt = Math.round(performance.now());
     return { context: ctx, response };
   }
@@ -334,6 +383,7 @@ async function callService(domain, service, data = {}, target, notifyOnError, re
   if (domain === 'music_assistant' && service === 'get_library') {
     needResp();
     if (!data.config_entry_id) throw new Error('config_entry_id missing');
+    if (params.get('nolib') === '1') throw Object.assign(new Error('Unauthorized'), { code: 'unauthorized' });
     return { context: ctx, response: library(data) };
   }
   if (domain === 'music_assistant' && service === 'get_queue') {
@@ -489,7 +539,7 @@ const LYRICS_TABLE = {
 window.__lyricsCalls = () => window.__lyricsLog;
 /** sanitized MA item_by_uri shape: placeholder ids, provider apple_music--XXXXXXXX */
 function maItem(t) {
-  const lyr = LYRNONE ? undefined : LYRICS_TABLE[t.name];
+  const lyr = LYRNONE ? undefined : LYRICS_TABLE[t._orig ?? t.name];
   return { item_id: String(h(t.uri) % 100000), provider: 'library', name: t.name, version: t.version ?? '', duration: t._duration ?? 0, media_type: 'track', uri: t.uri,
     artists: (t.artists ?? []).map((a) => ({ ...a, item_id: String(h(a.name) % 9000), provider: 'library' })), album: t.album ?? null, favorite: !!t.favorite,
     provider_mappings: [{ item_id: 'XXXXXXXX', provider_domain: 'apple_music', provider_instance: 'apple_music--XXXXXXXX', available: true }],
@@ -502,7 +552,16 @@ function sendCommand(command, d) {
       if (!t) throw new Error(`MediaNotFoundError: ${d.uri}`);
       // like MA's RadioController.get(): the library copy when the station is in the library, else the provider item
       if (t.media_type === 'radio') { window.__itemByUriLog?.push(d.uri); return pub({ ...asLibRadio(t), ...stationDetail(t) }); }
-      return maItem(t);
+      window.__itemByUriLog?.push(d.uri);
+      // v0.7 hearts: like MA's controllers, the library copy (library uri + library item_id) when the item is in the library
+      const inLib = t.uri.startsWith('library://') || t._inlib || (t._lib && !t._nolib);
+      if (!t.media_type || t.media_type === 'track') {
+        const m = maItem(t);
+        if (inLib) return { ...m, uri: libUri(t), item_id: libUri(t).split('/').pop() };
+        return { ...m, provider: t.provider ?? t.uri.split('://')[0], item_id: t.uri.split('/').pop() };
+      }
+      return inLib ? pub({ ...libView(t), provider: 'library', item_id: libUri(t).split('/').pop() })
+        : pub({ ...t, provider: t.provider ?? t.uri.split('://')[0], item_id: t.uri.split('/').pop() });
     }
     case 'metadata/get_track_lyrics': {
       if (!d.track || typeof d.track !== 'object') throw new Error('track required');
@@ -538,7 +597,7 @@ window.__playTrack = (name, position = 60) => {
 
 const USER = { ...(params.get('uid') ? { id: params.get('uid') } : {}), name: params.get('user') ?? 'Kiosk', is_admin: params.get('admin') === '1' };
 // kiosk=1: the jukebox_kiosk integration is loaded (dev/mock-kiosk.js); the card's backend: auto then picks it
-const kiosk = params.get('kiosk') === '1' ? createKiosk({ params, maApi: ma, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit: () => commit(), sleep }) : null;
+const kiosk = params.get('kiosk') === '1' ? createKiosk({ params, maApi: ma, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit: () => commit(), sleep, catalog: CATALOG, user: USER }) : null;
 function makeHass() {
   return { states: { ...states }, user: USER, locale: { language: 'en-US' }, language: 'en-US', callService, ...(kiosk ? kiosk.extras : {}) };
 }

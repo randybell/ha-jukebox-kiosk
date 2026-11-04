@@ -104,6 +104,12 @@ export function roomsOf(c: JukeboxCardConfig, hass?: HomeAssistant): Array<Requi
 export function fire(el: HTMLElement, type: string, detail: any = {}) {
   el.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
 }
+/** v0.7: show a message in the card's top-right status chip (the 0.6.4 Speakers chip); 'error' stays until dismissed or
+ *  timed out like the Speakers errors. Never a centre popup. */
+export type StatusKind = 'info' | 'error';
+export function status(el: HTMLElement, text: string, kind: StatusKind = 'info') {
+  if (text) fire(el, 'jukebox-status', { text, kind });
+}
 
 /** Calls in flight, keyed by player|uri|enqueue|radio: a second tap while the first is still on its way is dropped
  *  (no double plays from a double tap or a bouncing touchscreen). */
@@ -169,7 +175,7 @@ export class PressController<T> implements ReactiveController {
     return {
       down: (e: PointerEvent) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-        if ((e.target as HTMLElement).closest('.mo, .qa, .ra, .ra-b')) return;
+        if ((e.target as HTMLElement).closest('.mo, .qa, .ra, .ra-b, [data-act="fav"]')) return;
         e.preventDefault();
         const el = e.currentTarget as HTMLElement;
         this.cancel();
@@ -317,7 +323,9 @@ export function confirmTpl(c: ConfirmState | null, close: () => void) {
 /** Types that open a detail view on tap (podcasts only when the backend lists episodes: kiosk or mass_queue). */
 export const drillable = (type: string, config: JukeboxCardConfig) =>
   type === 'artist' || type === 'album' || type === 'playlist'
-  || (type === 'podcast' && (config._backend ? config._backend.caps.podcastEpisodes : !!(config.mass_queue_entry_id || config.queue_config_entry_id)));
+  || (type === 'podcast' && (config._backend ? config._backend.caps.podcastEpisodes : !!(config.mass_queue_entry_id || config.queue_config_entry_id)))
+  // v0.7: a genre opens its overview (artists / albums / playlists / tracks) when the backend can read it
+  || (type === 'genre' && !!config._backend?.ext?.genres);
 
 /* ---------------- shared CSS for art, tiles, rows, badges, menus, toasts ---------------- */
 export const mediaStyles = css`
@@ -367,6 +375,10 @@ export const mediaStyles = css`
   .ra-b:active { background: #ffffff26; }
   .ra-b .i { width: 24px; height: 24px; }
   .ra-more { display: none; }
+  /* hearts (0.6.2 radio, v0.7 every row): one more column */
+  .ra-b.fav { flex: none; color: var(--_inactive); }
+  .ra-b.fav.on { color: var(--_active); }
+  .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto; }
   @container np (max-width: 520px) {
     .row { grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 8px; }
     .row .du { display: none; }
@@ -374,6 +386,8 @@ export const mediaStyles = css`
     .ar.th { width: 40px; height: 40px; }
     .ra-b { width: 44px; height: 44px; }
     .ra-b .i { width: 22px; height: 22px; }
+    .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: 6px; }
+    .row.hasfav .ra-b { width: 40px; }
   }
   @container rows (max-width: 330px) {
     .ra-b.x2 { display: none; }

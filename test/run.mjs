@@ -719,6 +719,12 @@ await page.keyboard.press('Escape');
   await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="favorites"]')`); await sleep(500);
   g = await pg.evaluate((b) => ({ secs: eval(b).shadowRoot.querySelectorAll('.sec').length, tiles: eval(b).shadowRoot.querySelectorAll('.tile').length }), BR);
   check('16r4 Favorites chip on → favourites only', g.secs === 0 && g.tiles === 3, JSON.stringify(g));
+  // radio_favorites_only (v0.7, default false): My stations lists favourites only
+  await open(pg, '&latency=20&tab=browse&radio=lib&radiofav=3&cfg=' + encodeURIComponent(JSON.stringify({ radio_favorites_only: true })));
+  await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});
+  await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="radio"]')`); await sleep(700);
+  g = await pg.evaluate((b) => { const r = eval(b).shadowRoot; return { secs: [...r.querySelectorAll('.sec')].map((x) => x.dataset.sec), tiles: r.querySelectorAll('.tile').length }; }, BR);
+  check('16r5 radio_favorites_only: My stations = the 3 favourites, no "More stations"', !g.secs.includes('more') && g.tiles === 3, JSON.stringify(g));
   // the station tile checks below run on library stations
   await open(pg, '&latency=20&tab=browse&radio=lib');
   await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});

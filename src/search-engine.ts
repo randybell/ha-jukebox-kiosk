@@ -20,6 +20,8 @@ export interface EngineOptions {
   ttlMs?: number;
   maxEntries?: number;
   now?: () => number;
+  /** v0.7: the current search scope (artist filter), part of the cache key so scoped and global results never mix */
+  scope?: () => string;
 }
 
 interface Pending { query: string; key: string; seq: number }
@@ -50,14 +52,16 @@ export class SearchEngine {
   }
 
   setLimit(limit: number) { if (limit && limit !== this.o.limit) { this.o.limit = limit; this.cache.clear(); } }
-  /** Forget cached results (a favourite changed, so the next search should get MA's fresh copies). */
+  /** Forget cached results (v0.7: the searched categories changed; a favourite changed, so the next search gets MA's fresh copies). */
   clearCache() { this.cache.clear(); }
   setSlowMs(ms: number) { if (ms) this.o.slowMs = ms; }
   get loading() { return this.inFlight > 0 || this.pending !== null; }
 
   /** Call on every keystroke with the full current query. */
   query(raw: string): void {
-    const key = normaliseQuery(raw);
+    const q = normaliseQuery(raw);
+    const sc = this.o.scope?.() ?? '';
+    const key = q && sc ? `${sc}\u0001${q}` : q;
     const seq = ++this.reqSeq;
     if (!key) {
       // Clear: invalidate anything in flight and drop the pending query.
@@ -86,7 +90,7 @@ export class SearchEngine {
     this.send(p);
   }
 
-  private limitFor(key: string) { return key.length <= 1 ? Math.min(this.o.shortLimit, this.o.limit) : this.o.limit; }
+  private limitFor(key: string) { key = key.slice(key.indexOf('\u0001') + 1); return key.length <= 1 ? Math.min(this.o.shortLimit, this.o.limit) : this.o.limit; }
   private cacheKey(key: string) { return `${this.limitFor(key)}|${key}`; }
 
   private getCached(key: string): SearchResults | null {

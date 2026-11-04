@@ -14,7 +14,7 @@ export interface HomeAssistant {
   locale?: { language?: string };
   language?: string;
   /** loaded integrations (backend: auto looks for jukebox_kiosk) */
-  config?: { components?: string[] };
+  config?: { components?: string[]; country?: string | null; language?: string };
   callWS?<T = any>(msg: Record<string, unknown>): Promise<T>;
   connection?: {
     sendMessagePromise<T = any>(msg: Record<string, unknown>): Promise<T>;
@@ -88,6 +88,9 @@ export interface JukeboxCardConfig {
   lyrics_tab?: boolean;
   /** Lyrics lines on the screensaver. Default true (when show_lyrics is on). */
   screensaver_lyrics?: boolean;
+  /** Autoplay (MA "don't stop the music") toggle in the Queue header plus an indicator on Now Playing.
+   *  Needs the Jukebox Kiosk integration (0.7+) and permission class queue. Default false. */
+  show_autoplay?: boolean;
   /** Long-press a synced line to seek there. Default true. */
   lyrics_seek?: boolean;
   /** Shift synced lyrics: positive shows lines sooner. Default 500 (HA reports whole seconds). -5000..5000. */
@@ -112,6 +115,38 @@ export interface JukeboxCardConfig {
   slow_ms?: number;
   /** Search library only. Default false (all providers). */
   library_only?: boolean;
+  /** v0.7 search filters (default on): "Search in <artist>" on artist / album pages, scope chips + Clear filters in
+   *  Search, a text filter and artist filter in the Library. false = 0.6 behaviour. */
+  search_filters?: boolean;
+  /** v0.7 (default on): Search shows Music Assistant library matches first in each category, then provider results
+   *  with library duplicates removed. false = MA's own order. */
+  library_first?: boolean;
+  /** v0.7 hearts (default true): a favourite heart on Search / Library rows and tiles and on album, artist and playlist
+   *  pages (kiosk integration, `library` class). false = 0.6 (radio rows in Search, the station sheet and Now Playing only). */
+  hearts?: boolean;
+  /** v0.7 (Q60): the screensaver (idle) also clears the Search scope chips and the Library filters (default true) */
+  idle_clear_filters?: boolean;
+  /**
+   * v0.7 (default off). Search categories shown as chips, in this order. Unset = 0.6 behaviour
+   * (every type, chips only when results span several types). Genres need the kiosk backend.
+   */
+  search_categories?: SearchCategory[];
+  /** v0.7: the chip selected when the Search tab opens. Default 'all'. */
+  search_default_category?: SearchCategory | 'all';
+  /** v0.7 (default off): Browse › Radio gets "Stations by…" (Radio Browser: popular, country, language, tag). */
+  radio_browse?: boolean | RadioBrowseMode[];
+  /** v0.7: two-letter country for "Stations by country". Default: HA's configured country. */
+  radio_country?: string;
+  /** v0.7 (default off): a Discover category first in Browse with these recommendation rows, in this order. true = the default rows. */
+  discover?: boolean | string[];
+  /** v0.7 (default false): Browse › Radio "My stations" lists favourite stations only (otherwise favourites first, then the other library stations). */
+  radio_favorites_only?: boolean;
+  /** v0.7 (default off): the Browse tab becomes "Library" and opens on a grid of shortcut tiles. */
+  library_home?: boolean;
+  /** v0.7: Library tiles in order; an id or {tile, label}. Unset = playlist, artist, album, radio, search (+ discover when `discover` is set). */
+  library_tiles?: Array<LibraryTileId | { tile: LibraryTileId; label?: string }>;
+  /** v0.7: the Library tab's name with `library_home` (default "Library"). */
+  library_label?: string;
   /** Clock and title */
   title?: string;
   /** fixed (default): always play on `entity`, the Speakers panel is a volume mixer. dynamic: pick the target, group and move. */
@@ -136,6 +171,8 @@ export interface JukeboxCardConfig {
   large_buttons?: boolean;
   /** @internal the card's Music Assistant backend (set by the card, shared with every view) */
   _backend?: import('./backend/types').MaBackend;
+  /** v0.7 hearts: the card's shared favourites store (set by the card) */
+  _favs?: import('./favorites').FavStore;
   /** @internal set by the card in dynamic mode only: resolves false when the user cancels a start that would take speakers */
   _guard?: (entity: string) => Promise<boolean>;
 }
@@ -160,5 +197,9 @@ export interface MaItem {
   [k: string]: any;
 }
 
-export type GroupKey = 'artists' | 'albums' | 'tracks' | 'playlists' | 'radio' | 'podcasts' | 'audiobooks';
+export type GroupKey = 'artists' | 'albums' | 'tracks' | 'playlists' | 'radio' | 'podcasts' | 'audiobooks' | 'genres';
+export type SearchCategory = 'tracks' | 'artists' | 'albums' | 'playlists' | 'radio' | 'podcasts' | 'audiobooks' | 'genres';
+export type RadioBrowseMode = 'popular' | 'country' | 'language' | 'tag';
 export type SearchResults = Partial<Record<GroupKey, MaItem[]>>;
+/** v0.7 Library home tile ids */
+export type LibraryTileId = 'playlist' | 'artist' | 'album' | 'radio' | 'search' | 'track' | 'podcast' | 'audiobook' | 'genre' | 'discover';

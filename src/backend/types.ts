@@ -40,6 +40,42 @@ export const NO_CAPS: Caps = {
   trackLists: false, podcastEpisodes: false, lyrics: false, speakers: false, unfavorite: false, queuePush: false, libraryWrite: false,
 };
 
+/**
+ * v0.7 Discover & Search features, kept apart from Caps so 0.6 code and tests are untouched. Each one is hidden unless
+ * the backend can do it AND the card config turns it on.
+ */
+export interface ExtCaps {
+  /** genre search, genre detail (music/search media_types [genre], music/genres/overview) */
+  genres: boolean;
+  /** Radio Browser folders (music/browse radiobrowser://...) */
+  radioBrowse: boolean;
+  /** recommendation rows (music/recommendations, music/recommendations/items) */
+  discover: boolean;
+  /** podcast / audiobook resume points (in_progress_items, resume_position_ms) */
+  resume: boolean;
+  /** MA Autoplay ("don't stop the music") toggle: jukebox_kiosk/set_autoplay (permission class queue) */
+  autoplay: boolean;
+  /** Autoplay style picker: jukebox_kiosk/autoplay_options + set_autoplay_mode (permission class queue) */
+  autoplayMode: boolean;
+}
+export const NO_EXT: ExtCaps = { genres: false, radioBrowse: false, discover: false, resume: false, autoplay: false, autoplayMode: false };
+
+/** Where MA Autoplay takes music from when the queue runs out (MA 2.10.9 per-queue `autoplay_mode`). */
+export type AutoplayMode = 'auto' | 'similar' | 'library' | 'playlist';
+export const AUTOPLAY_MODES: readonly AutoplayMode[] = ['auto', 'similar', 'library', 'playlist'];
+/** jukebox_kiosk/autoplay_options */
+export interface AutoplayOptions {
+  /** effective style (MA's global setting when follows_default) */
+  mode: AutoplayMode;
+  /** the queue has no own style and follows MA's global Autoplay setting */
+  followsDefault: boolean;
+  playlist: { uri: string; name: string } | null;
+  /** styles MA offers; available=false when no provider can do it (similar without a similar-tracks provider) */
+  modes: { mode: AutoplayMode; available: boolean }[];
+  /** library playlists for the playlist style */
+  playlists: { uri: string; name: string }[];
+}
+
 /** A queue window in the mass_queue get_queue_items row shape. */
 export interface QueueWindow {
   items: any[];
@@ -48,6 +84,10 @@ export interface QueueWindow {
   bufferIndex?: number;
   total?: number;
   currentItemId?: string;
+  /** MA queue autoplay state (kiosk 0.7+ server), undefined when unknown */
+  autoplay?: boolean;
+  /** MA queue is_dynamic (radio/endless sources): autoplay does nothing there */
+  dynamic?: boolean;
 }
 export type QueueAction = 'play' | 'up' | 'down' | 'next' | 'remove';
 export type TrackListType = 'album' | 'artist' | 'playlist' | 'podcast';
@@ -61,6 +101,8 @@ export class BackendError extends Error {
 export interface MaBackend {
   readonly kind: BackendKind;
   caps: Caps;
+  /** v0.7 features (see ExtCaps) */
+  ext: ExtCaps;
   /** resolves when caps are final (kiosk asks the server once) */
   ready: Promise<void>;
   /** called when caps change */
@@ -75,6 +117,12 @@ export interface MaBackend {
   itemTracks(type: TrackListType, uri: string, page: number): Promise<TrackPage>;
   /** Remove the playing track from favorites. */
   unfavoriteCurrent(entity: string): Promise<unknown>;
+  /** Turn MA Autoplay on/off for the entity's queue (kiosk only). */
+  setAutoplay?(entity: string, enabled: boolean): Promise<unknown>;
+  /** Autoplay style for the entity's queue (kiosk only). */
+  autoplayOptions?(entity: string): Promise<AutoplayOptions>;
+  /** Pin the Autoplay style for the entity's queue; playlist (a library playlist uri) only with mode playlist. */
+  setAutoplayMode?(entity: string, mode: AutoplayMode, playlist?: string): Promise<unknown>;
   /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. */
   subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;
 }
