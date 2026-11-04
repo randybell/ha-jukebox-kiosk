@@ -2,6 +2,11 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
+## 0.7.1 — 2026-11-04
+
+### Changed
+- The Browse tab is now Library by default (`library_home` defaults to `true`; set `false` for the old Browse). The tab, the Library back button, the empty-queue and idle Now Playing hints and the editor follow the new default, and `library_label` renames the tab as before.
+
 ## 0.7.0 — 2026-11-04
 
 ### Added
