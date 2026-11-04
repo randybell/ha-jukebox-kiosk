@@ -16,7 +16,7 @@ import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, Searc
 import { defineElement } from './define';
 import { categoriesOn, resolveCategories, serviceTypes, defaultCategory } from './search-categories';
 import { FavController, heartTpl, heartType } from './heart';
-import { SOURCE_ALL, SOURCE_LIBRARY, sourcesOn, parseSearchProviders, pickerSources, sourceName, fromSource, type SearchSource } from './search-sources';
+import { SOURCE_ALL, SOURCE_LIBRARY, sourcesOn, parseSearchProviders, pickerSources, toggleSource, sourcesLabel, splitSources, fromSources, type SearchSource } from './search-sources';
 import { libraryCategories, libraryCatLabel } from './library-home';
 import './browse-view';
 import type { JbBrowse } from './browse-view';
@@ -83,13 +83,13 @@ export class JbSearch extends LitElement {
     _pool: { state: true },
     _poolErr: { state: true },
     combined: { type: Boolean, reflect: true },
-    _src: { state: true }, _srcOpen: { state: true }, _providers: { state: true }, _lcat: { state: true }, _pb: { state: true },
+    _srcs: { state: true }, _providers: { state: true }, _lcat: { state: true }, _pb: { state: true },
   };
-  /** 0.7.2: the combined Library tab (search box + source picker + category buttons + the library list) */
+  /** 0.7.2: the combined Library tab (search box + source buttons + category buttons + the library list) */
   combined = false;
   /** search source: 'all' (library first, then every provider), 'library', or an MA provider instance id */
-  private _src = SOURCE_ALL;
-  private _srcOpen = false;
+  /** selected sources (Library / provider instance ids); empty = All */
+  private _srcs: string[] = [];
   private _providers: SearchSource[] = [];
   private _provState: 'idle' | 'loading' | 'done' = 'idle';
   /** combined tab: the selected category button (mirrors the embedded jb-browse) */
@@ -136,7 +136,7 @@ export class JbSearch extends LitElement {
 
   engine = new SearchEngine({
     fetch: (q, limit) => this.fetchSearch(q, limit),
-    scope: () => `${scopeKey(this._scope)}|${this.srcOn() ? this._src : SOURCE_ALL}${this.combined ? `|${this._lcat}` : ''}`,
+    scope: () => `${scopeKey(this._scope)}|${this.srcOn() ? this.source : SOURCE_ALL}${this.combined ? `|${this._lcat}` : ''}`,
     onResults: (q, res, info) => {
       this._seqShown = info.seq;
       this._results = res;
@@ -170,7 +170,7 @@ export class JbSearch extends LitElement {
     // combined tab: the library list shows first; the keyboard opens when the search box is tapped (landscape keeps it on the left)
     if (changed.has('combined') && this.combined && !this._kbInit) { this._kbInit = true; this._kbHidden = true; }
     if (this.active && this.config && this.srcAvail() && this._provState === 'idle') this.loadProviders();
-    if (changed.has('config') && this.config && !this.srcAvail() && this._src !== SOURCE_ALL) { this._src = SOURCE_ALL; this._pb = null; }
+    if (changed.has('config') && this.config && !this.srcAvail() && this._srcs.length) { this._srcs = []; this._pb = null; }
     if (changed.has('config') && this.config) {
       this.engine.setLimit(this.config.limit ?? 8);
       this.engine.setSlowMs(this.config.slow_ms ?? 800);
@@ -185,10 +185,12 @@ export class JbSearch extends LitElement {
     }
   }
 
-  // ---------- 0.7.2 source picker ----------
+  // ---------- 0.7.2 source buttons (multi-select) ----------
   /** the backend can list and search single providers, and the config doesn't turn the picker off */
   private srcAvail() { return sourcesOn(this.config) && !!this.config?._backend?.ext?.searchProviders && !!this.config._backend.searchProviders; }
-  private srcOn() { return this.srcAvail() && this._src !== SOURCE_ALL; }
+  private srcOn() { return this.srcAvail() && this._srcs.length > 0; }
+  /** the one non-library provider selected (empty-box browse), else '' */
+  private pbSrc() { return this._srcs.length === 1 && this._srcs[0] !== SOURCE_LIBRARY ? this._srcs[0] : ''; }
   private async loadProviders() {
     const be = this.config._backend;
     if (!be?.searchProviders) return;
@@ -197,45 +199,49 @@ export class JbSearch extends LitElement {
     catch (e) { console.warn('[jukebox-card] search providers failed', e); this._providers = []; }
     this._provState = 'done';
   }
-  /** Pick a source: the current words search again there; nothing typed shows that provider's browse (or a hint). */
-  setSource(id: string) {
-    this._srcOpen = false;
-    if (id === this._src) return;
-    this._src = id; this._pb = null; this._menu = null; this._sel = '';
+  /** One tap on a source button (multi-select; All clears the others; nothing left = All). */
+  tapSource(id: string) { this.setSources(toggleSource(this._srcs, id, this._providers)); }
+  /** Set the selected sources ([] = All): the current words search again there; nothing typed with one provider shows
+   *  its browse (or a hint), several providers show the hint to type. */
+  setSources(ids: string[]) {
+    const next = ids.filter((x) => x && x !== SOURCE_ALL);
+    if (next.join(',') === this._srcs.join(',')) return;
+    this._srcs = next; this._pb = null; this._menu = null; this._sel = '';
     if (this._stack.length) this.closeDetails(false);
-    if (id !== SOURCE_ALL && id !== SOURCE_LIBRARY && this.combined) this.loadPb(`${id}://`, []);
+    const one = this.pbSrc();
+    if (one && this.combined) this.loadPb(`${one}://`, []);
     if (this._query) { this._results = null; this.engine.query(this._query); }
-    fire(this, 'jukebox-search-source', { source: id });
+    fire(this, 'jukebox-search-source', { source: this.source, sources: [...next] });
   }
-  get source() { return this._src; }
-  private srcLabel(id = this._src) {
-    return id === SOURCE_ALL ? 'All' : id === SOURCE_LIBRARY ? 'Library' : this._providers.find((p) => p.id === id)?.name ?? id;
-  }
-  private srcPickerTpl() {
+  /** back-compat: one id selects just that source ('all' = All) */
+  setSource(id: string) { this.setSources(id && id !== SOURCE_ALL ? [id] : []); }
+  /** 'all', or the selected ids joined with ',' */
+  get source() { return this._srcs.length ? this._srcs.join(',') : SOURCE_ALL; }
+  get sources(): string[] { return [...this._srcs]; }
+  private srcLabel() { return sourcesLabel(this._srcs, this._providers); }
+  /** the always-visible row of source buttons under the search box: All, Library, then MA's providers */
+  private srcRowTpl() {
     if (!this.srcAvail()) return nothing;
-    return html`<div class="srcw">
-      <button class="srcb ${this._src !== SOURCE_ALL ? 'on' : ''}" data-act="source" tabindex="-1" aria-haspopup="listbox" aria-expanded=${this._srcOpen ? 'true' : 'false'}
-        aria-label=${`Search source: ${this.srcLabel()}`} @pointerdown=${noFocus} @click=${() => { this._srcOpen = !this._srcOpen; this.closeMenu(); }}>
-        <span class="srcl">${this.srcLabel()}</span>${icon(this._srcOpen ? 'chevup' : 'chev', 'i xs srcc')}</button>
-      ${this._srcOpen ? html`<div class="srcveil" @pointerdown=${(e: Event) => { e.preventDefault(); this._srcOpen = false; }}></div>
-        <div class="srcm" role="listbox" aria-label="Search source">
-          ${[{ id: SOURCE_ALL, name: 'All', domain: '' }, ...pickerSources(this._providers)].map((p) => html`<button class="srco ${this._src === p.id ? 'on' : ''}" role="option"
-            aria-selected=${this._src === p.id ? 'true' : 'false'} data-src=${p.id} tabindex="-1" @pointerdown=${noFocus} @click=${() => this.setSource(p.id)}>
-            <span>${p.name}</span><small>${p.id === SOURCE_ALL ? 'Library first, then every provider' : p.id === SOURCE_LIBRARY ? 'Music Assistant library' : (providerLabel(`${p.domain}://`) || p.domain).toLowerCase() === p.name.toLowerCase() ? 'Music provider' : providerLabel(`${p.domain}://`) || p.domain}</small>
-            </button>`)}
-          ${this._provState === 'loading' ? html`<div class="srcn">Loading providers…</div>` : nothing}
-        </div>` : nothing}
+    const all = !this._srcs.length;
+    return html`<div class="srcs" role="group" aria-label="Search sources">
+      ${[{ id: SOURCE_ALL, name: 'All', domain: '' }, ...pickerSources(this._providers)].map((p) => {
+        const on = p.id === SOURCE_ALL ? all : this._srcs.includes(p.id);
+        return html`<button class="fc src ${on ? 'on' : ''}" data-src=${p.id} aria-pressed=${on ? 'true' : 'false'} tabindex="-1"
+          title=${p.id === SOURCE_ALL ? 'Library first, then every provider' : p.id === SOURCE_LIBRARY ? 'Music Assistant library' : providerLabel(`${p.domain}://`) || p.domain}
+          @pointerdown=${noFocus} @click=${() => { this.closeMenu(); this.tapSource(p.id); }}>${p.name}</button>`;
+      })}
+      ${this._provState === 'loading' ? html`<span class="srcn">Loading providers…</span>` : nothing}
     </div>`;
   }
 
   // ---------- 0.7.2 provider browse (a provider picked, nothing typed) ----------
   async loadPb(path: string, trail: ProvBrowse['trail']) {
-    const be = this.config?._backend, src = this._src;
+    const be = this.config?._backend, src = this.pbSrc();
     if (!be) return;
     this._pb = { src, path, trail, loading: true, error: '', folders: [], items: [] };
     try {
       const r = await be.send('music/browse', { path });
-      if (this._pb?.path !== path || this._src !== src) return;
+      if (this._pb?.path !== path || this.pbSrc() !== src) return;
       const rows: any[] = Array.isArray(r) ? r : Array.isArray(r?.items) ? r.items : [];
       const folders: ProvBrowse['folders'] = []; const items: MaItem[] = [];
       for (const x of rows) {
@@ -252,11 +258,13 @@ export class JbSearch extends LitElement {
   }
   private renderPb() {
     const pb = this._pb, name = this.srcLabel();
-    const hint = html`<div class="empty" data-empty="provider"><b>Type to search ${name}</b><span>Results come from ${name} only. Pick All in the source list to search everywhere.</span></div>`;
-    if (!pb || pb.src !== this._src) { if (!pb) this.loadPb(`${this._src}://`, []); return html`<div class="empty"><span>Loading ${name}…</span></div>`; }
+    const hint = html`<div class="empty" data-empty="provider"><b>Type to search ${name}</b><span>Results come from ${name} only. Tap All to search everywhere.</span></div>`;
+    const one = this.pbSrc();
+    if (!one) return hint;
+    if (!pb || pb.src !== one) { if (!pb) this.loadPb(`${one}://`, []); return html`<div class="empty"><span>Loading ${name}…</span></div>`; }
     if (pb.loading) return html`<div class="empty"><span>Loading ${name}…</span></div>`;
     const up = pb.trail.length ? html`<div class="pbh"><button class="fc tog" data-act="pb-up" tabindex="-1" @pointerdown=${noFocus}
-        @click=${() => { const t = pb.trail.slice(0, -1); this.loadPb(t.length ? t[t.length - 1].path : `${this._src}://`, t); }}>${icon('back', 'i xs')}Back</button>
+        @click=${() => { const t = pb.trail.slice(0, -1); this.loadPb(t.length ? t[t.length - 1].path : `${one}://`, t); }}>${icon('back', 'i xs')}Back</button>
         <b>${pb.trail[pb.trail.length - 1].name}</b></div>` : nothing;
     if (pb.error || (!pb.folders.length && !pb.items.length)) return pb.trail.length ? html`${up}<div class="empty"><b>Nothing here</b></div>` : hint;
     return html`${up}${pb.trail.length ? nothing : html`<div class="lsec" data-sec="provider">${icon('browse', 'i xs')}Browse ${name} · or type to search it</div>`}
@@ -296,7 +304,7 @@ export class JbSearch extends LitElement {
     </div>`;
   }
   /** Back to the list (tapping the Library tab again): leaves detail pages, keeps the words and filters */
-  home() { this.closeMenu(); this._srcOpen = false; if (this._stack.length) this.closeDetails(false); this.browse?.toList(); }
+  home() { this.closeMenu(); if (this._stack.length) this.closeDetails(false); this.browse?.toList(); }
   private onBrowseCat = (e: CustomEvent) => { const c = e.detail?.cat; if (c && c !== this._lcat) this._lcat = c; else this.requestUpdate(); };
   private onLibScope = (e: CustomEvent) => { const d = e.detail; this.scopeFromDetail(d.item, d.type, d.data, false); };
   /** which search types the current category / categories ask for */
@@ -310,13 +318,22 @@ export class JbSearch extends LitElement {
     const cats = this._cats;
     return { types: cats ? serviceTypes(cats) : SEARCH_TYPES, genres: !!cats?.includes('genres') };
   }
-  /** One source (Library or a provider): MA's music/search with providers=[id] (the HA service can't limit providers). */
+  /** The selected sources: MA's music/search with `providers` (the HA service can't limit providers). Library alone =
+   *  providers ['library']; providers = all of them in one call; Library + providers = both, library first. */
   private async fetchSource(name: string, limit: number): Promise<SearchResults> {
     const { types, genres } = this.searchTypes();
     const media = [...types, ...(genres ? ['genre'] : [])];
     if (!media.length) return {};
-    const r = await this.config._backend!.send('music/search', { search_query: name, media_types: media, limit, providers: [this._src] });
-    return normaliseResponse(r);
+    const { library, providers } = splitSources(this._srcs);
+    const ask = (ids: string[]) => this.config._backend!.send('music/search', { search_query: name, media_types: media, limit, providers: ids }).then(normaliseResponse);
+    if (!providers.length) return ask([SOURCE_LIBRARY]);
+    if (!library) return ask(providers);
+    const [lib, prov] = await Promise.all([ask([SOURCE_LIBRARY]), ask(providers)]);
+    const out: SearchResults = {};
+    for (const k of new Set([...Object.keys(lib), ...Object.keys(prov)]) as Set<GroupKey>) {
+      (out as any)[k] = [...((lib as any)[k] ?? []), ...(k === 'genres' ? [] : ((prov as any)[k] ?? []))];
+    }
+    return libraryFirstAll(out).results;
   }
 
   // ---------- data ----------
@@ -328,9 +345,9 @@ export class JbSearch extends LitElement {
     if (scope) {
       const r = await this.fetchScoped(scope, name, limit);
       if (!this.srcOn()) return r;
-      // a source picked: keep the artist's items that come from it
+      // sources picked: keep the artist's items that come from one of them
       const out: SearchResults = {};
-      for (const [k, v] of Object.entries(r)) (out as any)[k] = (v as MaItem[]).filter((it) => fromSource(it, this._src, this._providers));
+      for (const [k, v] of Object.entries(r)) (out as any)[k] = (v as MaItem[]).filter((it) => fromSources(it, this._srcs, this._providers));
       return out;
     }
     if (this.srcOn()) return this.fetchSource(name, limit);
@@ -377,8 +394,7 @@ export class JbSearch extends LitElement {
     this.setScope(null);
     this._filter = this._cats ? defaultCategory(this.config, this._cats) : 'all';
     if (this.combined) {
-      this._srcOpen = false;
-      this.setSource(SOURCE_ALL);
+      this.setSources([]);
       this.setQuery('');
       this.browse?.clearFilters();
     }
@@ -387,7 +403,7 @@ export class JbSearch extends LitElement {
    *  false when there was nothing to clear */
   idleReset(): boolean {
     const lib = this.combined ? !!this.browse?.idleReset() : false;
-    if (!this._scope && !(this.combined && (this._query || this._src !== SOURCE_ALL))) return lib;
+    if (!this._scope && !(this.combined && (this._query || this._srcs.length))) return lib;
     this.clearFilters();
     return true;
   }
@@ -667,7 +683,7 @@ export class JbSearch extends LitElement {
     }
     if (this.combined) {
       if (!this._query) return nothing;
-      if (!r) return html`<div class="empty"><span>Searching ${sourceName(this._src, this._providers)}…</span></div>`;
+      if (!r) return html`<div class="empty"><span>Searching ${this.srcOn() ? this.srcLabel() : 'all providers'}…</span></div>`;
       const f = this.effFilter();
       if (f === 'all') return this.count(r) ? html`${GROUPS.filter((g) => r[g.key]?.length).map((g) => this.group(g, r[g.key]!, true))}`
         : html`<div class="empty"><b>No results for “${this._shownQuery}”</b><span>Try fewer letters or another spelling.</span></div>`;
@@ -730,7 +746,7 @@ export class JbSearch extends LitElement {
     if (cat && GROUPS.some((g) => g.key === cat) && (!this._cats || this._cats.includes(cat as SearchCategory))) this._filter = cat as GroupKey;
   }
   /** combined tab: the library list shows while nothing is typed, there is no artist filter and the source is All / Library */
-  private libShown() { return this.combined && !this._stack.length && !this._scope && !this._query && (this._src === SOURCE_ALL || this._src === SOURCE_LIBRARY || !this.srcAvail()); }
+  private libShown() { return this.combined && !this._stack.length && !this._scope && !this._query && (!this._srcs.length || (this._srcs.length === 1 && this._srcs[0] === SOURCE_LIBRARY) || !this.srcAvail()); }
   render() {
     const sc = this._scope;
     const r = sc && !this._query ? (this._pool ? scopedResults(sc, this._pool, '') : null) : this._results;
@@ -740,13 +756,13 @@ export class JbSearch extends LitElement {
     const status = this._error ? this._error
       : sc ? (!this._query ? (r ? `${count} in ${name} · type to search inside it` : `Loading ${name}…`)
         : !r ? `Searching ${name}…` : count ? `${count} result${count === 1 ? '' : 's'} in ${name} for “${this._shownQuery}”` : `No matches in ${name}`)
-      : this.combined && !this._query ? (this.srcOn() ? `${this.srcLabel()} · type to search it` : `${libraryCatLabel(this._lcat)} in your library · type to search all providers`)
+      : this.combined && !this._query ? (this.srcOn() ? `${this.srcLabel()} · type to search ${this._srcs.length > 1 ? 'them' : 'it'}` : `${libraryCatLabel(this._lcat)} in your library · type to search all providers`)
       : !this._query ? (this.srcOn() ? `Type to search ${this.srcLabel()}` : 'Type to search all providers')
       : !r ? 'Searching…'
       : count ? `${count} result${count === 1 ? '' : 's'} for “${this._shownQuery}” · ${this.srcOn() ? this.srcLabel() : 'all providers'}`
       : `No results for “${this._shownQuery}”`;
     return html`
-      <div class="sx ${this._kbHidden ? 'kb-hidden' : ''}">
+      <div class="sx ${this._kbHidden ? 'kb-hidden' : ''} ${this.srcAvail() ? 'srcs-on' : ''}">
         <div class="qwrap">
           <div class="qrow">
           <div class="qbar" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this._kbHidden = false; }}>
@@ -758,8 +774,8 @@ export class JbSearch extends LitElement {
               @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => this.setQuery('')}>${icon('close')}</button>` : nothing}
             <span class="hair ${this._loading ? 'on' : ''}" aria-hidden="true"></span>
           </div>
-          ${this.srcPickerTpl()}
           </div>
+          ${this.srcRowTpl()}
           ${this.scopeTpl()}
           <div class="qmeta" data-loading=${this._loading ? '1' : '0'}><span class="live ${this._loading ? 'busy' : ''}"></span>${status}</div>
         </div>
@@ -803,20 +819,16 @@ export class JbSearch extends LitElement {
     }
     .qwrap { grid-area: q; min-width: 0; }
     .qrow { display: flex; gap: 10px; align-items: stretch; min-width: 0; } .qrow .qbar { flex: 1; min-width: 0; }
-    .srcw { position: relative; flex: none; }
-    .srcb { height: 60px; min-width: 120px; max-width: 240px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 14px 0 18px;
-      border-radius: 16px; border: 1.5px solid #ffffff59; background: var(--jb-panel-solid, #00000080); color: #fff; font: inherit; font-size: 15px; font-weight: 800;
-      letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
-    .srcb.on, .srcb[aria-expanded="true"] { border-color: #fff; background: #fff; color: #000; }
-    .srcl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .srcveil { position: fixed; inset: 0; z-index: 30; background: transparent; }
-    .srcm { position: absolute; right: 0; top: 66px; z-index: 31; width: 300px; max-height: 420px; overflow: auto; padding: 6px; border-radius: 16px;
-      background: #000; border: 1.5px solid #fff; box-shadow: 0 18px 40px #000c; display: grid; gap: 2px; }
-    .srco { display: grid; grid-template-columns: 1fr; text-align: left; gap: 2px; padding: 12px 14px; border-radius: 10px; border: 0; background: transparent; color: #fff;
-      font: inherit; cursor: pointer; }
-    .srco span { font-size: 17px; font-weight: 800; letter-spacing: .04em; } .srco small { font-size: 12px; color: #ffffffa0; letter-spacing: .06em; text-transform: uppercase; }
-    .srco.on { background: #fff; color: #000; } .srco.on small { color: #000a; }
-    .srcn { padding: 10px 14px; color: #ffffffa0; font-size: 13px; }
+    /* 0.7.2 source buttons: always visible under the search box, Black Frame chips, touch-sized; wrap when there are many */
+    .srcs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; min-width: 0; }
+    .srcs .fc.src { height: auto; min-height: 44px; padding: 0 18px; font: inherit; font-size: 14px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+      background: transparent; color: #fff; border: 1.5px solid #ffffff59; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .srcs .fc.src.on { background: #fff; color: #000; border-color: #fff; }
+    /* phones: one horizontally scrolling row so the buttons never push the results off screen */
+    @container np (max-width: 600px) { .srcs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .srcs::-webkit-scrollbar { display: none; } .srcs .fc.src { flex: none; } }
+    /* short phones: shorter keys pay for the button row so a results row stays visible above the keyboard */
+    @container np (max-width: 520px) and (max-height: 720px) { .sx.srcs-on { --kh: 38px; --kgap: 4px; } .srcs { margin-top: 6px; } }
+    .srcn { align-self: center; padding: 0 6px; color: #ffffffa0; font-size: 13px; }
     .lcats { margin-bottom: 10px; }
     .lib { flex: 1; min-height: 0; display: flex; flex-direction: column; } .lib[hidden] { display: none; } .lib jb-browse { flex: 1; min-height: 0; }
     .lsec { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #ffffffb0; }
@@ -890,18 +902,21 @@ export class JbSearch extends LitElement {
       .sx { grid-template-columns: minmax(400px, 40%) minmax(0, 1fr); grid-template-rows: auto auto 1fr; column-gap: clamp(16px, 2.5cqw, 32px);
         grid-template-areas: "q res" "rec res" "kb res";
         --kh: clamp(56px, calc((100cqh - 200px) / 5 - 12px), 88px); --kgap: 10px; --kfs: clamp(22px, 2cqw, 26px); }
+      /* the source buttons (two rows here) take room from the keys */
+      .sx.srcs-on { --kh: clamp(44px, calc((100cqh - 300px) / 5 - 12px), 88px); }
       .kbd { align-self: end; --jb-kb-handle-display: none; }
       .sx.kb-hidden .kbd { display: block; }
       .kb-open { display: none; }
       .sx.kb-hidden { --jb-fab-space: 0px; }
     }
     @container np (orientation: landscape) and (max-height: 520px) {
-      .sx { --kh: 46px; --kgap: 6px; } .recents { display: none; }
+      .sx, .sx.srcs-on { --kh: 46px; --kgap: 6px; } .recents { display: none; }
+      .srcs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-top: 8px; } .srcs::-webkit-scrollbar { display: none; } .srcs .fc.src { flex: none; }
     }
     /* very short landscape (phone on its side under the HA toolbar): keyboard alone on the left at full height,
        query above the results on the right, keys sized to the space so no row is clipped */
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
-      .sx { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "kb q" "kb res"; row-gap: 8px; padding-top: 8px; padding-bottom: 8px;
+      .sx, .sx.srcs-on { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "kb q" "kb res"; row-gap: 8px; padding-top: 8px; padding-bottom: 8px;
         --kgap: 4px; --kh: clamp(28px, calc((100cqh - 50px) / 5 - 1px), 46px); }
       .kbd { align-self: center; }
       .qbar { height: 48px; } .qmeta { margin-top: 4px; }

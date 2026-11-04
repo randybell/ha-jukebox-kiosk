@@ -110,7 +110,7 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
       // ({tile, label}) are kept when the list is edited here (tiles only apply to the separate layout).
       type: 'expandable', name: 'library', title: 'Library', icon: 'mdi:view-grid-outline', flatten: true,
       schema: [
-        { name: 'library_layout', selector: { select: { mode: 'dropdown', options: [{ value: 'combined', label: 'Combined: one Library tab with search, source picker and category buttons' }, { value: 'separate', label: 'Separate: Library and Search tabs (0.7.1)' }] } } },
+        { name: 'library_layout', selector: { select: { mode: 'dropdown', options: [{ value: 'combined', label: 'Combined: one Library tab with search, source buttons and category buttons' }, { value: 'separate', label: 'Separate: Library and Search tabs (0.7.1)' }] } } },
         { name: 'library_categories', selector: { select: { multiple: true, reorder: true, mode: 'list', options: LIBRARY_CATS.map((x) => ({ value: x.id, label: DEFAULT_LIBRARY_CATEGORIES.includes(x.id) ? x.label : `${x.label} (optional)` })) } } },
         { name: 'library_home', selector: { boolean: {} } },
         { name: 'library_tiles', selector: { select: { multiple: true, reorder: true, mode: 'list', options: TILES.map((t) => ({ value: t.id, label: t.optIn ? `${t.label} (optional)` : t.label })) } } },
@@ -160,7 +160,7 @@ export const LABELS: Record<string, string> = {
   radio_browse: 'Radio: "Stations by" (none = off; Radio Browser provider)',
   radio_country: 'Radio country code (e.g. us; empty = Home Assistant\'s country)',
   radio_favorites_only: 'Radio: show favourite stations only (otherwise favourites first, then other library stations)',
-  search_sources: 'Source picker next to the search box (All, Library, each Music Assistant provider)',
+  search_sources: 'Source buttons under the search box (All, Library, each Music Assistant provider; tap several to combine)',
   library_layout: 'Library layout',
   library_categories: 'Library category buttons (in this order)',
   library_home: 'Separate layout only: open the Library tab on big shortcut tiles',

@@ -534,7 +534,7 @@ check('12k detail row Play next icon → play_media track enqueue next', b4.leng
 await open(page, '&latency=20&real=1');
 for (const c of 'EAGLES') await tapKey(page, keyIdFor(c));
 await waitShown(page, 'EAGLES'); await sleep(200);
-s = await page.evaluate((sv) => { const r = eval(sv).shadowRoot; return { badges: [...new Set([...r.querySelectorAll('.pv')].map((e) => e.textContent.trim()))], chips: [...r.querySelectorAll('[data-type], .fc')].map((e) => (e.dataset.type || e.textContent).trim().toLowerCase()), groups: [...r.querySelectorAll('.grp')].map((g) => g.className) }; }, H.sv);
+s = await page.evaluate((sv) => { const r = eval(sv).shadowRoot; return { badges: [...new Set([...r.querySelectorAll('.pv')].map((e) => e.textContent.trim()))], chips: [...r.querySelectorAll('[data-type], .fc:not(.src)')].map((e) => (e.dataset.type || e.textContent).trim().toLowerCase()), groups: [...r.querySelectorAll('.grp')].map((g) => g.className) }; }, H.sv);
 check('13a real=1 "eagles" export parses; Library + Apple Music badges from URI scheme', s.badges.includes('Library') && s.badges.includes('Apple Music'), s.badges.join(','));
 check('13b empty Radio / Audiobooks / Podcasts hidden in Search', !s.chips.some((c) => /radio|podcast|audiobook/.test(c)) && !s.groups.some((g) => /radio|podcast|audiobook/.test(g)), `${s.chips.join(',')} | ${s.groups.join(',')}`);
 

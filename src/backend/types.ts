@@ -57,7 +57,7 @@ export interface ExtCaps {
   autoplay: boolean;
   /** Autoplay style picker: jukebox_kiosk/autoplay_options + set_autoplay_mode (permission class queue) */
   autoplayMode: boolean;
-  /** 0.7.2 search source picker: MA's searchable providers (searchProviders()) and music/search with `providers` */
+  /** 0.7.2 search source buttons: MA's searchable providers (searchProviders()) and music/search with `providers` */
   searchProviders: boolean;
 }
 export const NO_EXT: ExtCaps = { genres: false, radioBrowse: false, discover: false, resume: false, autoplay: false, autoplayMode: false, searchProviders: false };
