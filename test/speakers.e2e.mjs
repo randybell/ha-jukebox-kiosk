@@ -347,6 +347,7 @@ const allJoins = [];
   await wait(p, `window.__ma.G.syncgroup_mock_outdoor.members.includes('wiim_mock_kitchen') && ${act(LIV)}?.dataset.act === 'take'`, 5000);
   await wait(p, `window.__hass.states['${IN}'].state === 'playing'`, 4000);
   await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.group_members?.length === 1`, 3000);
+  await sleep(150); // let the panel re-render after the store update, so the tap doesn't land on a row being replaced
   await tap(p, act(LIV));
   await wait(p, ASKQ);
   const ll = await askLines(p);

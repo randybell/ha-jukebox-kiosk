@@ -1,4 +1,4 @@
-# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.6.4 — DRAFT
+# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.6.5 — DRAFT
 
 > **Draft for 0.6.0.** This README covers the new integration and the card bundled in it. Sections marked *(legacy)* describe the `mass_queue` backend, which still works.
 
@@ -180,9 +180,10 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
   | Previous | `media_previous_track` |
   | Play / pause | `media_play` or `media_pause`, chosen from the state |
   | Next | `media_next_track` |
-  | Shuffle | `shuffle_set {shuffle}` |
-  | Repeat | `repeat_set {repeat}`, cycling off → all → one → off |
+  | Shuffle queue | `shuffle_set {shuffle}` on the player the card is playing on (its Music Assistant queue) |
+  | Repeat queue | `repeat_set {repeat}` on the same player, toggling off ↔ all; "all" repeats the whole queue. Repeat one is never offered or sent |
 
+  Shuffle and repeat are queue settings: they always go to the active target (the group or player the card is playing on, e.g. Everywhere), never to individual member speakers, and there is no per-track or per-row shuffle or repeat. If the player ever reports repeat "one" (set somewhere else), the card shows it as repeat queue and, with `coerce_repeat_one` on (the default), sends a single `repeat_set {repeat: all}` to that player: once per detection, about 1.5 s after it is seen, at most once a minute, and only for a user with Playback permission. A message is never shown for this.
   Active shuffle and repeat are white with a dot under them; inactive ones are light white. The UI updates optimistically and reconciles when HA reports the new state.
 - **Heart.** If the current song isn't a favorite, the heart sends `button.press` to `favorite_entity`. If it already is (from mass_queue's `favorite` flag), it sends `mass_queue.unfavorite_current_item {entity}` (this may only work for library items).
 - **Up next strip.** It shows the next queue item and "+ N more". Tapping it opens the Queue tab.
@@ -349,6 +350,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `grouping_users` | `[]` | Extra users (name or user id) treated like admins for the above |
 | `guest_access` | `volume` | Everyone else in the Speakers panel: `volume` or `none` (read only) |
 | `leader_drop` | `allow` | Dropping the leader of a playing group: `allow` (MA re-forms the group on the other rooms after about 6 s of silence; the panel shows "Regrouping…"), or `block` (hand off with Move) |
+| `coerce_repeat_one` | `true` | A player that reports repeat "one" is switched back to repeat all (the whole queue) with one `media_player.repeat_set`, once per detection with a one-minute cooldown, only for the card's active player and only for users with Playback. `false` sends nothing (repeat "one" is still shown as repeat queue, and the card never offers it) |
 | `confirm_drop` | `false` | `true` asks in a centred dialog before a drop, a takeover or pausing the last room (the 0.6.3 behaviour). `false` (default) drops on tap and shows a small status chip top-right with Undo; a takeover or last-room question is asked in the chip |
 | `presets` | `[]` | `[{name, members: [room entities], volumes?: {entity: percent}, target?}]` (`dynamic`) |
 | `quiet_hours` | — | `{start: 'HH:MM', end: 'HH:MM', max_volume: percent, applies?: guests\|everyone}` caps volume sliders; `start === end` means all day. Guests only by default |

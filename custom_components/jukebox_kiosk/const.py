@@ -223,6 +223,13 @@ PLAYER_LIST_ARG_KEYS: Final = ("player_ids_to_add", "player_ids_to_remove")
 
 QUEUE_EVENTS: Final = ("queue_updated", "queue_items_updated")
 
+# 0.6.5: "repeat one" is never set through this integration. No allowlisted command takes a repeat mode today
+# (player_queues/repeat is not forwarded; the card uses media_player.repeat_set), but if one ever does, a forwarded
+# repeat 'one' is sent as 'all'.
+REPEAT_ARG_KEYS: Final = ("repeat", "repeat_mode")
+REPEAT_ONE: Final = "one"
+REPEAT_ALL: Final = "all"
+
 
 def is_denied(command: str) -> bool:
     """Return True for commands that are never forwarded."""

@@ -417,6 +417,26 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('S12 the row Add icon still works as before (play_media enqueue add), no sheet', pa.length === 1 && pa[0].enqueue === 'add' && pa[0].media_id === st && !(await sheet(p)), J(pa));
   await p.close();
 }
+// ---------------- 0.6.5 repeat one → repeat queue, only with Playback ----------------
+{
+  const reps = (p) => ev(p, `window.__calls.filter((c) => c.service === 'repeat_set').map((c) => ({ r: c.data.repeat, e: [c.target?.entity_id].flat().join() }))`);
+  const shown = (p) => ev(p, `(() => { const b = ${NP}.querySelector('.tb.rp'); return b.classList.contains('on') && b.getAttribute('aria-label') === 'Repeat queue'; })()`);
+  let p = await open('&repeat=one'); // plain kiosk user, default guest classes include playback
+  await sleep(2200);
+  let r = await reps(p);
+  check('RP1 kiosk user with Playback: player on one → shown as repeat queue, exactly one repeat_set all on the target', (await shown(p)) && r.length === 1 && r[0].r === 'all' && r[0].e === EV, J(r));
+  await p.close();
+  p = await open(`&repeat=one&kcaps=${encodeURIComponent(J({ queue_play: false }))}`); // no Playback class
+  await sleep(2200);
+  r = await reps(p);
+  check('RP2 kiosk user without Playback: shown as repeat queue, nothing sent', (await shown(p)) && r.length === 0, J(r));
+  await p.close();
+  p = await open('&repeat=one&kfail=capabilities'); // the server never says what the user may do
+  await sleep(2200);
+  r = await reps(p);
+  check('RP3 capabilities unknown (server error) → nothing sent', r.length === 0, J(r));
+  await p.close();
+}
 check('no page errors', pageErrors.length === 0, J(pageErrors.slice(0, 3)));
 await browser.close();
 console.log(`\n${total - failures}/${total} kiosk checks passed`);
