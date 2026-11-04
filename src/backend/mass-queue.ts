@@ -28,11 +28,13 @@ export class MassQueueBackend implements MaBackend {
       send: has, queue: true, queuePlay: true, queueEdit: true, undo: has, queueBuffer: has,
       trackLists: has, podcastEpisodes: has, lyrics: has, speakers: has, unfavorite: true, queuePush: false, libraryWrite: false,
     };
-    this.ext = { genres: has, radioBrowse: has, discover: has, resume: has, autoplay: false, autoplayMode: false };
+    this.ext = { genres: has, radioBrowse: has, discover: has, resume: has, autoplay: false, autoplayMode: false, searchProviders: has };
   }
   onChange(fn: () => void) { return this.em.on(fn); }
   private get hass() { const h = this.hassRef(); if (!h) throw new BackendError('failed', 'no hass'); return h; }
 
+  /** 0.7.2: MA's provider instances (filtered to searchable music providers by parseSearchProviders) */
+  searchProviders() { return this.send('providers', {}); }
   async send(command: string, data: Record<string, unknown> = {}) {
     if (!this.entryId) throw new BackendError('config', 'mass_queue_entry_id is not set');
     return unwrapResponse(await this.hass.callService('mass_queue', 'send_command', { config_entry_id: this.entryId, command, data }, undefined, false, true));

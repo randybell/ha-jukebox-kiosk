@@ -118,6 +118,9 @@ export interface JukeboxCardConfig {
   /** v0.7 search filters (default on): "Search in <artist>" on artist / album pages, scope chips + Clear filters in
    *  Search, a text filter and artist filter in the Library. false = 0.6 behaviour. */
   search_filters?: boolean;
+  /** 0.7.2 (default on): a Source picker at the top of Search: All (library first, then every provider), Library, or one
+   *  music provider configured in Music Assistant (listed by MA's names). false = always All, no picker. */
+  search_sources?: boolean;
   /** v0.7 (default on): Search shows Music Assistant library matches first in each category, then provider results
    *  with library duplicates removed. false = MA's own order. */
   library_first?: boolean;
@@ -141,11 +144,19 @@ export interface JukeboxCardConfig {
   discover?: boolean | string[];
   /** v0.7 (default false): Browse › Radio "My stations" lists favourite stations only (otherwise favourites first, then the other library stations). */
   radio_favorites_only?: boolean;
-  /** v0.7 (default on since 0.7.1): the tab is "Library" and opens on a grid of shortcut tiles; false = the 0.6 Browse tab. */
+  /** v0.7 (default off since 0.7.2; 0.7.1 had it on): with `library_layout: separate` only, true = the Library tab opens
+   *  on a grid of shortcut tiles instead of the list with the category buttons. Ignored in the combined layout. */
   library_home?: boolean;
+  /** 0.7.2: 'combined' (default) = one Library tab: the search box with the source picker on top, the category buttons
+   *  under it, the library list while the box is empty and search results (that category, that source) once you type.
+   *  'separate' = the 0.7.1 layout: a Library tab and a Search tab (only there does `library_home` / the tile grid apply). */
+  library_layout?: 'combined' | 'separate';
+  /** 0.7.2: the Library tab's category buttons, in order. Default playlist, artist, track (Songs), genre, radio.
+   *  Also available: album, podcast, audiobook. (`discover` adds a Discover button first, as before.) */
+  library_categories?: LibraryCategory[];
   /** v0.7: Library tiles in order; an id or {tile, label}. Unset = playlist, artist, album, radio, search (+ discover when `discover` is set). */
   library_tiles?: Array<LibraryTileId | { tile: LibraryTileId; label?: string }>;
-  /** v0.7: the Library tab's name (default "Library"; ignored with `library_home: false`). */
+  /** The Library tab's name (default "Library"). */
   library_label?: string;
   /** Clock and title */
   title?: string;
@@ -203,3 +214,5 @@ export type RadioBrowseMode = 'popular' | 'country' | 'language' | 'tag';
 export type SearchResults = Partial<Record<GroupKey, MaItem[]>>;
 /** v0.7 Library home tile ids */
 export type LibraryTileId = 'playlist' | 'artist' | 'album' | 'radio' | 'search' | 'track' | 'podcast' | 'audiobook' | 'genre' | 'discover';
+/** 0.7.2 Library tab category buttons */
+export type LibraryCategory = 'playlist' | 'artist' | 'album' | 'track' | 'genre' | 'radio' | 'podcast' | 'audiobook';

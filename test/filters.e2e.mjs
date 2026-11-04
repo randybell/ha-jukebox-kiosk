@@ -26,7 +26,7 @@ async function open(query = '', cfg = {}, vp = { width: 1280, height: 800 }) {
   await hermetic(page);
   page.on('pageerror', (e) => pageErrors.push(e.message));
   await page.setViewport({ deviceScaleFactor: 1, ...vp });
-  await page.goto(`${BASE}?fresh=1&latency=30&jjgrey=1${query}&cfg=${encodeURIComponent(J(cfg))}`);
+  await page.goto(`${BASE}?layout=separate&fresh=1&latency=30&jjgrey=1${query}&cfg=${encodeURIComponent(J(cfg))}`);
   await page.waitForFunction('window.__ready === true');
   await sleep(200);
   return page;

@@ -66,8 +66,10 @@
       ...(params.get('backdrop') ? { backdrop: params.get('backdrop') } : {}),
       font_base: '../custom_components/jukebox_kiosk/www/fonts',
       ...spk,
-      // lhome=0: the 0.6 Browse tab (library_home: false; the default is the Library home since 0.7.1)
+      // lhome=0: library_home: false (0.7.2 default; 0.7.1 had the tile home on)
       ...(params.get('lhome') === '0' ? { library_home: false } : {}),
+      // layout=separate|combined: 0.7.2 library_layout (default: combined, one Library tab with the search box)
+      ...(params.get('layout') ? { library_layout: params.get('layout') } : {}),
       ...extra,
     });
     card.hass = hass;

@@ -33,7 +33,7 @@ export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
  */
 export function extFromServer(f: Record<string, unknown> | undefined): ExtCaps {
   const b = (k: string, d = false) => (f && typeof f[k] === 'boolean' ? (f[k] as boolean) : d);
-  return { genres: b('genres', b('genre_overview')), radioBrowse: b('radio_browse'), discover: b('discover'), resume: b('resume'), autoplay: b('autoplay'), autoplayMode: b('autoplay_mode') };
+  return { genres: b('genres', b('genre_overview')), radioBrowse: b('radio_browse'), discover: b('discover'), resume: b('resume'), autoplay: b('autoplay'), autoplayMode: b('autoplay_mode'), searchProviders: b('search_providers') };
 }
 const code = (e: any): string => String(e?.code ?? '');
 
@@ -76,6 +76,8 @@ export class KioskBackend implements MaBackend {
   send(command: string, data: Record<string, unknown> = {}) {
     return this.ws({ type: 'ma', command, args: data });
   }
+  /** 0.7.2: jukebox_kiosk/search_providers ({providers: [{instance_id, domain, name}]}) */
+  searchProviders() { return this.ws<any>({ type: 'search_providers' }); }
   async queueWindow(entity: string, limitAfter: number): Promise<QueueWindow> {
     const r = await this.ws<any>({ type: 'queue_items', entity_id: entity, limit_before: 1, limit_after: limitAfter });
     return {

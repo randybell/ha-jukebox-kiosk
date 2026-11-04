@@ -253,6 +253,33 @@ function search(name, limit, types, by = '', libOnly = false) {
   for (const key of KEYS) out[key] = want.has(key) ? CATALOG[key].filter((it) => hay(it).includes(q) && byOk(it) && (!libOnly || it.uri.startsWith('library://') || it._inlib)).sort((a, b) => score(a) - score(b)).slice(0, limit).map(asLib).map(pub) : [];
   return out;
 }
+// 0.7.2 Search source picker: demo MA provider instances (invented instance ids; MA's display names)
+export const DEMO_PROVIDERS = [
+  { instance_id: 'apple_music--demo0001', domain: 'apple_music', name: 'Apple Music', type: 'music', available: true, supported_features: ['search', 'browse', 'library_tracks'] },
+  { instance_id: 'spotify--demo0002', domain: 'spotify', name: 'Spotify', type: 'music', available: true, supported_features: ['search', 'browse'] },
+  { instance_id: 'tunein--demo0003', domain: 'tunein', name: 'TuneIn', type: 'music', available: true, supported_features: ['search', 'browse'] },
+  { instance_id: 'radiobrowser--demo0004', domain: 'radiobrowser', name: 'Radio Browser', type: 'music', available: true, supported_features: ['search', 'browse'] },
+  { instance_id: 'filesystem_local--demo0005', domain: 'filesystem_local', name: 'Local files', type: 'music', available: false, supported_features: ['search', 'browse'] },
+  { instance_id: 'chromecast--demo0006', domain: 'chromecast', name: 'Chromecast', type: 'player', available: true, supported_features: [] },
+];
+window.__provSearchLog = [];
+/** MA music/search with providers=[instance_id | 'library']: only that source's items (catalog items whose uri has the
+ *  provider's domain; demo providers without catalog items get re-labelled copies so the screenshots have results) */
+function providerSearch(d) {
+  const id = String(d.providers[0]);
+  window.__provSearchLog.push({ id, q: d.search_query, types: d.media_types });
+  const types = Array.isArray(d.media_types) && d.media_types.length ? d.media_types.filter((t) => TYPE2KEY[t]) : undefined;
+  const all = search(String(d.search_query ?? ''), 200, types ?? Object.keys(TYPE2KEY), '', id === 'library');
+  const out = {}; const lim = d.limit ?? 8;
+  if (id === 'library') { for (const k of KEYS) out[k] = (all[k] ?? []).filter((it) => it.uri.startsWith('library://') || it._inlib).slice(0, lim); return out; }
+  const p = DEMO_PROVIDERS.find((x) => x.instance_id === id);
+  if (!p) throw new Error(`ProviderUnavailableError: ${id}`);
+  const dom = p.domain;
+  const src = dom === 'spotify' ? 'apple_music' : dom === 'tunein' ? 'radiobrowser' : dom;
+  for (const k of KEYS) out[k] = (all[k] ?? []).filter((it) => it.uri.startsWith(`${src}://`)).slice(0, lim)
+    .map((it) => ({ ...it, provider: id, uri: it.uri.replace(`${src}://`, `${id}://`) }));
+  return out;
+}
 function library({ media_type, favorite, search: s, limit = 25, offset = 0, order_by = 'name' }) {
   const key = TYPE2KEY[media_type];
   if (!key) throw new Error(`invalid media_type ${media_type}`);
@@ -569,7 +596,9 @@ function sendCommand(command, d) {
       if (!lyr) return [null, null];
       return [lyr.plain ? lyr.plain() : null, lyr.lrc ? lyr.lrc() : null];
     }
+    case 'providers': return structuredClone(DEMO_PROVIDERS);
     case 'music/search': {
+      if (Array.isArray(d.providers) && d.providers.length) return providerSearch(d);
       const q = String(d.search_query ?? '').toLowerCase();
       const words = q.split(/\s+-\s+|\s+/).filter(Boolean);
       const tracks = libTracks.filter((t) => { const hay = `${t.name} ${(t.artists ?? []).map((a) => a.name).join(' ')}`.toLowerCase(); return words.every((w) => hay.includes(w)); })
@@ -597,7 +626,7 @@ window.__playTrack = (name, position = 60) => {
 
 const USER = { ...(params.get('uid') ? { id: params.get('uid') } : {}), name: params.get('user') ?? 'Kiosk', is_admin: params.get('admin') === '1' };
 // kiosk=1: the jukebox_kiosk integration is loaded (dev/mock-kiosk.js); the card's backend: auto then picks it
-const kiosk = params.get('kiosk') === '1' ? createKiosk({ params, maApi: ma, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit: () => commit(), sleep, catalog: CATALOG, user: USER }) : null;
+const kiosk = params.get('kiosk') === '1' ? createKiosk({ DEMO_PROVIDERS, params, maApi: ma, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit: () => commit(), sleep, catalog: CATALOG, user: USER }) : null;
 function makeHass() {
   return { states: { ...states }, user: USER, locale: { language: 'en-US' }, language: 'en-US', callService, ...(kiosk ? kiosk.extras : {}) };
 }

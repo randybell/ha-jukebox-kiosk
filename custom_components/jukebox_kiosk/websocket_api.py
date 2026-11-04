@@ -41,6 +41,7 @@ from .const import (
     REPEAT_ARG_KEYS,
     REPEAT_ONE,
     RESERVED_ARG_KEYS,
+    SEARCH_PROVIDER_TYPES,
     TODO_VERIFY,
     TRACK_PAGE_DEFAULT,
     TRACK_PAGE_MAX,
@@ -278,6 +279,8 @@ async def ws_capabilities(hass: HomeAssistant, connection: websocket_api.ActiveC
                 "autoplay": has(PermClass.QUEUE),
                 # Autoplay style picker: jukebox_kiosk/autoplay_options + set_autoplay_mode (same class as the toggle)
                 "autoplay_mode": has(PermClass.QUEUE),
+                # 0.7.2 Search source picker: jukebox_kiosk/search_providers + music/search providers=[...]
+                "search_providers": has(PermClass.READ),
             },
         },
     )
@@ -296,6 +299,54 @@ async def ws_ma(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
     """Forward one allowlisted MA command."""
     result = await forward(hass, connection.user, msg["command"], msg["args"])
     connection.send_result(msg["id"], result)
+
+
+def _field(obj: Any, key: str) -> Any:
+    return obj.get(key) if isinstance(obj, dict) else getattr(obj, key, None)
+
+
+def _plain(value: Any) -> str:
+    """Enum or str -> its plain string value."""
+    return str(getattr(value, "value", value) or "")
+
+
+def search_providers(providers: Any) -> list[dict[str, str]]:
+    """MA provider instances -> the music sources Search can be limited to.
+
+    Only available music/plugin providers that list the `search` feature, with MA's display
+    name (user-set name, or the provider name with MA's [2] postfix for a second instance).
+    Nothing else of the provider (config, features, ids of other types) leaves the server.
+    """
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for prov in providers or []:
+        if _plain(_field(prov, "type")) not in SEARCH_PROVIDER_TYPES or _field(prov, "available") is False:
+            continue
+        features = {_plain(f) for f in (_field(prov, "supported_features") or ())}
+        if "search" not in features:
+            continue
+        instance_id = _plain(_field(prov, "instance_id"))
+        if not instance_id or instance_id in seen:
+            continue
+        seen.add(instance_id)
+        domain = _plain(_field(prov, "domain"))
+        out.append({"instance_id": instance_id, "domain": domain, "name": str(_field(prov, "name") or domain or instance_id)})
+    out.sort(key=lambda p: (p["name"].casefold(), p["instance_id"]))
+    return out
+
+
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/search_providers"})
+@websocket_api.async_response
+@_wrap
+async def ws_search_providers(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Music providers configured in MA that Search can be limited to (permission class read).
+
+    Read from the MA client's provider list (kept current by MA's providers_updated event), so
+    no extra MA command and no provider config ever reaches the card.
+    """
+    _e, policy, client = _context(hass)
+    check_class(connection.user, policy, PermClass.READ)
+    connection.send_result(msg["id"], {"providers": search_providers(getattr(client, "providers", None))})
 
 
 @websocket_api.websocket_command(
@@ -609,6 +660,7 @@ async def ws_raw(hass: HomeAssistant, connection: websocket_api.ActiveConnection
 HANDLERS = (
     ws_capabilities,
     ws_ma,
+    ws_search_providers,
     ws_queue_items,
     ws_set_autoplay,
     ws_autoplay_options,

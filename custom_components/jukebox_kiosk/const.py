@@ -148,7 +148,9 @@ MA_COMMANDS: Final[dict[str, MaCommand]] = {
         note="uri; read-only only with allow_update_metadata=False (forced). Returns the full Track, "
         "but the LIBRARY copy (provider 'library') when the track is in the library",
     ),
-    "music/search": MaCommand(R, "checked", impersonate=True, note="result has a genres key"),
+    "music/search": MaCommand(
+        R, "checked", impersonate=True, note="result has a genres key; providers=[instance_id or 'library'] limits it (0.7.2)"
+    ),
     "music/browse": MaCommand(
         R,
         "checked",
@@ -212,6 +214,9 @@ DENY_PREFIXES: Final = (
     "music/sync",
 )
 DENY_SUFFIXES: Final = ("/remove",)
+
+# MA provider types whose instances can be picked as a Search source (0.7.2)
+SEARCH_PROVIDER_TYPES: Final = frozenset({"music", "plugin"})
 
 # Keys a caller may never set in forwarded args (we inject impersonation ourselves).
 RESERVED_ARG_KEYS: Final = frozenset({"user", "username", "message_id", "command"})

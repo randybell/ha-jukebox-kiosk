@@ -16,7 +16,7 @@ import {
   discoverWanted, DEFAULT_ROWS, parseRows, pickRows, parseItems, resumeFraction, memGet, memPut, memClear, ROWS_TTL_MS, ITEMS_TTL_MS, DISCOVER_CONCURRENCY,
   type DiscoverRow,
 } from './discover';
-import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, type TileId } from './library-home';
+import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, libraryCategories, type TileId } from './library-home';
 import { loadDetail } from './detail-view';
 import { FavController, heartTpl, heartType } from './heart';
 import { PoolCache, libraryFiltered, normText, type ScopePool } from './search-scope';
@@ -24,7 +24,20 @@ import type { KeyDetail } from './keyboard';
 import './keyboard';
 
 export interface Cat { type: string; label: string; one: string }
+/** Every Library category (0.7.2: Songs and Genres; the button row shows `library_categories`, by default
+ *  Playlists, Artists, Songs, Genres, Radio). Genres come from MA's music/genres/library_items (kiosk / mass_queue). */
 export const CATS: Cat[] = [
+  { type: 'playlist', label: 'Playlists', one: 'playlist' },
+  { type: 'artist', label: 'Artists', one: 'artist' },
+  { type: 'track', label: 'Songs', one: 'song' },
+  { type: 'genre', label: 'Genres', one: 'genre' },
+  { type: 'radio', label: 'Radio', one: 'station' },
+  { type: 'album', label: 'Albums', one: 'album' },
+  { type: 'podcast', label: 'Podcasts', one: 'podcast' },
+  { type: 'audiobook', label: 'Audiobooks', one: 'audiobook' },
+];
+/** The 0.7.1 chip row, kept for `library_layout: separate` without `library_categories` (empty categories hidden). */
+export const LEGACY_CATS: Cat[] = [
   { type: 'playlist', label: 'Playlists', one: 'playlist' },
   { type: 'album', label: 'Albums', one: 'album' },
   { type: 'artist', label: 'Artists', one: 'artist' },
@@ -35,7 +48,7 @@ export const CATS: Cat[] = [
 ];
 /** v0.7: first Browse chip when `discover` is set and the backend can read recommendations. */
 export const DISCOVER_CAT: Cat = { type: 'discover', label: 'Discover', one: 'item' };
-const catOf = (t: string) => (t === DISCOVER_CAT.type ? DISCOVER_CAT : CATS.find((c) => c.type === t) ?? CATS[0]);
+const catOf = (t: string, legacy = false) => (t === DISCOVER_CAT.type ? DISCOVER_CAT : (legacy ? LEGACY_CATS : CATS).find((c) => c.type === t) ?? CATS.find((c) => c.type === t) ?? CATS[0]);
 /** play_media type for an item: podcast episodes / audiobook chapters go without one (MA infers it from the URI). */
 const playType = (it: MaItem, type: string) => (it.media_type === 'podcast_episode' ? '' : type);
 type RMode = 'library' | RadioBrowseMode;
@@ -51,7 +64,9 @@ const SORTS = [
 const RADIO_SORTS = [{ id: 'play_count_desc', label: 'Popular' }, ...SORTS];
 /** v0.7 Library filters: an artist scope lists that artist's albums and tracks only. */
 const LART_CATS = ['album', 'track'];
-const sortsFor = (type: string) => (type === 'radio' ? RADIO_SORTS : SORTS);
+const sortsFor = (type: string) => (type === 'radio' ? RADIO_SORTS : type === 'genre' ? SORTS.slice(0, 2) : SORTS);
+/** MA genre sort keys (music/genres/library_items) for the card's sorts */
+const GENRE_ORDER: Record<string, string> = { name: 'sort_name', timestamp_added_desc: 'timestamp_added_desc' };
 /** Search used to find stations when the library has none (Radio Browser stations are not in the MA library until added). */
 const RADIO_FALLBACK_QUERY = 'radio';
 
@@ -66,7 +81,7 @@ export const libraryItems = (r: any): MaItem[] => {
 };
 export class JbBrowse extends LitElement {
   static properties = {
-    hass: { attribute: false }, config: { attribute: false }, active: { type: Boolean },
+    hass: { attribute: false }, config: { attribute: false }, active: { type: Boolean }, embedded: { type: Boolean, reflect: true },
     _cat: { state: true }, _fav: { state: true }, _sort: { state: true }, _pages: { state: true }, _avail: { state: true },
     _stack: { state: true }, _home: { state: true }, _menu: { state: true }, _toast: { state: true }, _confirm: { state: true },
     _rmode: { state: true }, _rtrail: { state: true }, _rb: { state: true }, _disc: { state: true }, _ditems: { state: true },
@@ -75,6 +90,9 @@ export class JbBrowse extends LitElement {
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
   active = false;
+  /** 0.7.2 combined Library tab: jb-search hosts this list under its search box and category buttons (no own chips,
+   *  tiles or filter keyboard; the search box is the filter) */
+  embedded = false;
   private _cat = 'playlist';
   private _fav = false;
   private _sort = 'name';
@@ -119,6 +137,14 @@ export class JbBrowse extends LitElement {
   private hearts = new FavController(this);
   private press = new PressController<{ it: MaItem; type: string }>(this, (p, el) => this.tap(p.it, p.type, el), (p, el) => this.openMenu(p.it, p.type, el));
 
+  private _told = '';
+  protected updated() {
+    this.observeRows();
+    // 0.7.2: the combined tab's buttons follow the current category and which ones this user can read
+    if (!this.embedded) return;
+    const k = `${this._cat}|${this.visibleCats().map((c) => c.type).join(',')}`;
+    if (k !== this._told) { this._told = k; this.dispatchEvent(new CustomEvent('jb-cat', { detail: { cat: this._cat } })); }
+  }
   protected shouldUpdate(ch: PropertyValues) { return !(ch.size === 1 && ch.has('hass')); }
   protected willUpdate(ch: PropertyValues) {
     if (ch.has('config')) {
@@ -129,9 +155,9 @@ export class JbBrowse extends LitElement {
       if (this._rmode !== 'library' && !this.rmodes().includes(this._rmode)) { this._rmode = 'library'; this._rb = null; }
     }
     if ((ch.has('active') || ch.has('hass')) && this.active && this.hass && !this._probed) { this._probed = true; this.probe(); }
+    if (ch.has('config') && this._probed && this._avail.genre == null && this.be?.ext?.genres) this.probeGenre();
     if (this.active && this.hass && this._cat === DISCOVER_CAT.type && !this._disc) this.loadDiscover();
   }
-  protected updated() { this.observeRows(); }
   disconnectedCallback() { super.disconnectedCallback(); this._io?.disconnect(); this._io = undefined; }
   private get be() { return this.config?._backend; }
   /** Discover: the config lists rows and the backend can read recommendations. */
@@ -142,12 +168,12 @@ export class JbBrowse extends LitElement {
     return w.length || !this.homeOn() || !configuredTiles(this.config).some((t) => t.id === 'discover') ? w : [...DEFAULT_ROWS];
   }
   /** v0.7 Library home on (default off). */
-  homeOn() { return libraryHomeOn(this.config); }
+  homeOn() { return !this.embedded && libraryHomeOn(this.config); }
   /** Library home tiles this user/backend can use (guests lose the ones the probe says they can't read). */
   tiles() { return visibleTiles(this.config, this._avail, this.be?.ext, this.rmodes().length > 0); }
   private openTile(id: TileId) {
-    if (id === 'search' || id === 'genre') {
-      this.dispatchEvent(new CustomEvent('jukebox-nav', { detail: { tab: 'search', focus: true, category: id === 'genre' ? 'genres' : undefined }, bubbles: true, composed: true }));
+    if (id === 'search') {
+      this.dispatchEvent(new CustomEvent('jukebox-nav', { detail: { tab: 'search', focus: true }, bubbles: true, composed: true }));
       return;
     }
     // Radio opens on "My stations" (favourites first); everything else on its list
@@ -182,22 +208,61 @@ export class JbBrowse extends LitElement {
 
   /** One cheap get_library per type so empty categories (e.g. Radio with no radio provider) are hidden. Radio also counts a
    *  one-result station search, only to decide whether the chip shows (the grid itself never lists search results). */
+  /** 0.7.1 chip row: the separate layout (not embedded in the combined tab) without `library_categories`. */
+  legacyRow() { return !this.embedded && !(Array.isArray(this.config?.library_categories) && this.config!.library_categories!.length); }
   private async probe() {
-    this._avail = Object.fromEntries(CATS.map((c) => [c.type, null]));
-    await Promise.all(CATS.map(async (c) => {
+    if (this.legacyRow()) {
+      this._avail = Object.fromEntries(LEGACY_CATS.map((c) => [c.type, null]));
+      await Promise.all(LEGACY_CATS.map(async (c) => {
+        try {
+          let n = libraryItems(await this.lib({ media_type: c.type, limit: 1 })).length;
+          if (!n && c.type === 'radio') n = (await this.radioSearch(1)).length;
+          this._avail = { ...this._avail, [c.type]: n > 0 };
+        } catch { this._avail = { ...this._avail, [c.type]: false }; }
+      }));
+      const lv = this.visibleCats();
+      if (!lv.some((c) => c.type === this._cat) && lv.length) this._cat = lv[0].type;
+      this.load();
+      return;
+    }
+    // 0.7.2: the configured buttons always show (an empty category says so); only a read this user can't do hides one
+    const want = libraryCategories(this.config);
+    this._avail = Object.fromEntries(CATS.map((c) => [c.type, want.includes(c.type as any) ? null : false]));
+    await Promise.all(CATS.filter((c) => want.includes(c.type as any)).map(async (c) => {
+      if (c.type === 'genre') return this.probeGenre();
       try {
-        let n = libraryItems(await this.lib({ media_type: c.type, limit: 1 })).length;
-        if (!n && c.type === 'radio') n = (await this.radioSearch(1)).length;
-        this._avail = { ...this._avail, [c.type]: n > 0 };
+        await this.lib({ media_type: c.type, limit: 1 });
+        this._avail = { ...this._avail, [c.type]: true };
       } catch { this._avail = { ...this._avail, [c.type]: false }; }
     }));
     const vis = this.visibleCats();
     if (!vis.some((c) => c.type === this._cat) && vis.length) this._cat = vis[0].type;
     this.load();
   }
+  /** Genres need the kiosk backend's capabilities, which may arrive after the first probe: unknown (null) until then. */
+  private async probeGenre() {
+    if (!this.be?.ext?.genres || this.legacyRow() || !libraryCategories(this.config).includes('genre')) return;
+    this._avail = { ...this._avail, genre: true };
+    try { await this.be.send('music/genres/library_items', { limit: 1, offset: 0, hide_empty: true }); }
+    catch { this._avail = { ...this._avail, genre: false }; }
+  }
+  /** The button row: `library_categories` in order (default Playlists, Artists, Songs, Genres, Radio), minus Genres
+   *  without a genre-capable backend and any category this user can't read; Discover first when configured. */
   visibleCats() {
     const radioBrowse = this.rmodes().length > 0;
-    return [...(this.discoverOn() ? [DISCOVER_CAT] : []), ...CATS.filter((c) => this._avail[c.type] !== false || (c.type === 'radio' && radioBrowse))];
+    if (this.legacyRow()) return [...(this.discoverOn() ? [DISCOVER_CAT] : []), ...LEGACY_CATS.filter((c) => this._avail[c.type] !== false || (c.type === 'radio' && radioBrowse))];
+    const cats = libraryCategories(this.config).map((t) => CATS.find((c) => c.type === t)!).filter(Boolean)
+      .filter((c) => (c.type === 'genre' ? !!this.be?.ext?.genres && this._avail.genre !== false
+        : this._avail[c.type] !== false || (c.type === 'radio' && radioBrowse)));
+    return [...(this.discoverOn() ? [DISCOVER_CAT] : []), ...cats];
+  }
+  /** current category (the combined tab's buttons show it) */
+  get cat() { return this._cat; }
+  /** The combined tab's category buttons: open that category's list (from a detail page too). */
+  selectCat(t: string) {
+    if (t === 'radio' && this._rmode !== 'library') { this._rmode = 'library'; this._rb = null; this._rtrail = []; }
+    this._menu = null;
+    if (this._probed) this.setCat(t); else { this._cat = t; this._stack = []; this._catTouched = true; }
   }
   /** Radio Browser stations via music_assistant.search (used when the library has no radio). */
   private async radioSearch(limit: number): Promise<MaItem[]> {
@@ -219,7 +284,7 @@ export class JbBrowse extends LitElement {
       if (fav) data.favorite = true;
       const q = this.lq();
       if (q) data.search = q;
-      let items = libraryItems(await this.lib(data));
+      let items = type === 'genre' ? await this.genres(data) : libraryItems(await this.lib(data));
       const src: Src = 'library';
       // Radio "My stations" (0.6.1): favourite stations first, then the rest of the library stations (followed stations a
       // provider syncs into the library are not favourites, so they must still show). No keyword-search fallback any more:
@@ -237,6 +302,14 @@ export class JbBrowse extends LitElement {
       console.warn('[jukebox-card] get_library failed', err);
       this._pages = { ...this._pages, [k]: { items: cur?.items ?? [], offset, done: true, loading: false, error: 'Library unavailable. Check Music Assistant.' } };
     }
+  }
+  /** Library genres (MA music/genres/library_items, only genres with music mapped to them). */
+  private async genres(d: Record<string, any>): Promise<MaItem[]> {
+    const be = this.be;
+    if (!be?.ext?.genres) throw new Error('genres need the Jukebox Kiosk integration');
+    const args: Record<string, any> = { limit: d.limit, offset: d.offset, order_by: GENRE_ORDER[d.order_by] ?? 'sort_name', hide_empty: true };
+    if (d.search) args.search = d.search;
+    return libraryItems(await be.send('music/genres/library_items', args)).map((g) => ({ ...g, media_type: 'genre' }));
   }
   private ensure() {
     if (this._lart && this.filtersOn() && LART_CATS.includes(this._cat)) { this.loadLart(); return; }
@@ -428,6 +501,8 @@ export class JbBrowse extends LitElement {
 
   // ---------- v0.7 Library filters ----------
   /** Text filter: the scoped grid filters at once; get_library (`search`) is asked after a short pause in typing. */
+  /** 0.7.2 combined tab: back to the category list (tapping the Library tab again). */
+  toList() { this._stack = []; this._menu = null; }
   setFilterText(v: string) {
     this._lq = v.slice(0, 60); this._stack = []; this._menu = null;
     clearTimeout(this._lqTimer);
@@ -502,7 +577,7 @@ export class JbBrowse extends LitElement {
   }
   private filterBox() {
     if (!this._lkb || !this.filtersOn()) return nothing;
-    const what = catOf(this._cat).label.toLowerCase();
+    const what = catOf(this._cat, this.legacyRow()).label.toLowerCase();
     const ph = this._lart ? `Filter ${this._lart.name} ${what}…` : `Filter ${what}…`;
     return html`<div class="lfq" data-act="filter-box">${icon('search', 'i xs')}
       <span class="lfv ${this._lq ? '' : 'ph'}">${this._lq || ph}</span><i class="caret"></i>
@@ -512,7 +587,7 @@ export class JbBrowse extends LitElement {
   /** The artist-scoped grid (Albums / Tracks of one artist, library only, text filter applied locally). */
   private renderLart() {
     const a = this._lart!; const st = this._lpool;
-    const what = catOf(this._cat).label.toLowerCase();
+    const what = catOf(this._cat, this.legacyRow()).label.toLowerCase();
     if (st?.error) return html`<div class="empty scoped"><b>Couldn't load ${a.name}</b><span>${st.error}</span>${this.clearBtn()}</div>`;
     if (!st?.pool) return html`<div class="empty"><span>Loading ${a.name}…</span></div>`;
     const items = libraryFiltered(this._cat === 'album' ? st.pool.albums : st.pool.tracks,
@@ -547,6 +622,12 @@ export class JbBrowse extends LitElement {
     if (e.detail.op === 'back') this.back();
     else if (e.detail.op === 'scope') {
       const d = e.detail.data;
+      // 0.7.2 combined tab: "Filter by" becomes the search box's artist chip (one filter, one Clear filters)
+      if (this.embedded) {
+        this._stack = []; this._menu = null;
+        this.dispatchEvent(new CustomEvent('jb-lib-scope', { detail: { item: e.detail.item, type: e.detail.type, data: d && !d.loading ? d : undefined } }));
+        return;
+      }
       this.setArtistFilter(e.detail.item, d && !d.loading ? { albums: d.albums ?? [], tracks: d.tracks ?? [] } : undefined);
     } else this.openDetail(e.detail.item, e.detail.type);
   }
@@ -597,6 +678,14 @@ export class JbBrowse extends LitElement {
     </div>`;
   }
 
+  /** A genre: tap opens its page (artists, albums, playlists, songs: music/genres/overview). */
+  private genreRow(it: MaItem) {
+    return html`<div class="row gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Open ${it.name}`}
+        @click=${() => this.openDetail(it, 'genre')}>
+      <span class="ar th gl" aria-hidden="true">${icon('genre')}</span>
+      <div class="rt"><b>${it.name}</b><small>Genre</small></div><span class="du"></span><span class="mo">${icon('open')}</span>
+    </div>`;
+  }
   /** Radio "My stations": Favorites, then "More stations" (library stations that are not favourites); a hint when both are empty. */
   private renderStations(pg: Page) {
     const favs = pg.favs ?? [];
@@ -606,9 +695,10 @@ export class JbBrowse extends LitElement {
     const rest = only ? [] : pg.items.filter((i) => !fu.has(i.uri));
     if (!favs.length && !rest.length) return html`<div class="empty" data-empty="stations"><b>${only ? 'No favorite stations yet' : 'No stations yet'}</b>
       <span>${only ? 'Add stations to favorites in Music Assistant and they appear here.'
+        : this.embedded ? 'Type a station name in the search box above and play it. Stations you add to favorites in Music Assistant appear here first.'
         : 'Find a station in Search and play it. Stations you add to favorites in Music Assistant appear here first.'}</span>
       <button class="fc" data-act="search-stations" tabindex="-1" @pointerdown=${noFocus}
-        @click=${() => this.dispatchEvent(new CustomEvent('jukebox-nav', { detail: { tab: 'search' }, bubbles: true, composed: true }))}>${icon('search', 'i xs')}Search stations</button></div>`;
+        @click=${() => this.dispatchEvent(new CustomEvent('jukebox-nav', { detail: { tab: 'search', focus: true, category: 'radio' }, bubbles: true, composed: true }))}>${icon('search', 'i xs')}Search stations</button></div>`;
     return html`${favs.length ? html`<h3 class="sec" data-sec="favorites">${icon('heart', 'i xs')}Favorites</h3>
         <div class="grid radio" data-src="favorites">${favs.map((it) => this.tile(it, 'radio'))}</div>` : nothing}
       ${rest.length ? html`<h3 class="sec" data-sec="more">${favs.length ? 'More stations' : 'Stations'}</h3>
@@ -621,7 +711,7 @@ export class JbBrowse extends LitElement {
     if (this._cat === 'radio' && this._rmode !== 'library') return this.renderRb();
     if (this._lart && this.filtersOn() && LART_CATS.includes(this._cat)) return this.renderLart();
     const pg = this._pages[this.key()];
-    const cat = catOf(this._cat);
+    const cat = catOf(this._cat, this.legacyRow());
     const q = this.lq();
     // typing: until get_library answers, the unfiltered page is narrowed here (no blank grid between keystrokes)
     if (q && (!pg || (pg.loading && !pg.items.length))) {
@@ -640,6 +730,7 @@ export class JbBrowse extends LitElement {
     return this.gridOf(pg.items, pg.loading && this._cat !== 'track' ? html`<div class="empty"><span>Loading more…</span></div>` : nothing, pg.src);
   }
   private gridOf(items: MaItem[], tail: unknown, src: Src = 'library') {
+    if (this._cat === 'genre') return html`<div class="list genres" data-src=${src}>${items.map((it) => this.genreRow(it))}</div>${tail}`;
     return this._cat === 'track'
       ? html`<div class="list">${items.map((it) => this.row(it))}</div>${tail}`
       : html`<div class="grid ${this._cat}" data-src=${src}>${items.map((it) => this.tile(it, this._cat))}</div>${tail}`;
@@ -662,29 +753,32 @@ export class JbBrowse extends LitElement {
     const sort = sortsFor(this._cat).find((s) => s.id === this._sort) ?? SORTS[0];
     const m = this._menu;
     const top = this._stack[this._stack.length - 1];
-    const cat = catOf(this._cat);
+    const cat = catOf(this._cat, this.legacyRow());
     const modes = this._cat === 'radio' ? this.rmodes() : [];
     const libTools = this._cat !== DISCOVER_CAT.type && !(this._cat === 'radio' && this._rmode !== 'library');
+    const emb = this.embedded;
     const trail0 = this._cat === 'radio' && this._rmode !== 'library' ? `Radio · ${MODE_LABEL[this._rmode]}`
-      : lart ? `${cat.label} · ${lart.name}` : `${this.homeOn() ? `${this.homeLabel()} ·` : 'Browse'} ${cat.label}${this.lq() ? ` “${this.lq()}”` : ''}`;
-    const filt = libTools && this.filtersOn();
+      : lart ? `${cat.label} · ${lart.name}` : `${this.homeLabel()} · ${cat.label}${this.lq() ? ` “${this.lq()}”` : ''}`;
+    const filt = libTools && this.filtersOn() && !emb;
     // filter keyboard open: wide screens put box + chips + keyboard on the left and the list on the right (like Search);
     // narrower screens stack box, chips, list, keyboard (CSS order on .lkcol's children)
     const kbOpen = filt && this._lkb && !top;
     const catChips = html`<div class="cats">${cats.map((c) => html`<button class="fc ${this._cat === c.type && !top ? 'on' : ''}" data-cat=${c.type} tabindex="-1"
           @pointerdown=${noFocus} @click=${() => this.setCat(c.type)}>${c.type === DISCOVER_CAT.type ? icon('compass', 'i xs') : nothing}${c.label}</button>`)}</div>`;
+    const favOk = libTools && this._cat !== 'genre';
+    const bar = !emb || libTools || lart;
     return html`<div class="bx">
-      <div class="bar">
+      ${!bar ? nothing : html`<div class="bar">
         ${home ? html`<div class="cats lhead"><button class="fc back" data-act="home" tabindex="-1" aria-label="Back to Library" @pointerdown=${noFocus}
           @click=${() => this.goHome()}>${icon('back', 'i xs')}${this.homeLabel()}</button>${lart ? catChips
             : html`<span class="lt-title">${configuredTiles(this.config).find((t) => t.id === this._cat)?.label ?? cat.label}</span>`}</div>`
-        : catChips}
+        : emb ? (lart ? catChips : html`<span class="bsp"></span>`) : catChips}
         ${filt ? html`<button class="fc tog flt ${this._lkb || this.lq() ? 'on' : ''}" data-act="filter" tabindex="-1" aria-pressed=${this._lkb ? 'true' : 'false'}
           aria-label="Filter this list" @pointerdown=${noFocus} @click=${() => this.toggleFilter()}>${icon('search', 'i xs')}<span class="fl">Filter</span></button>` : nothing}
-        ${libTools ? html`<button class="fc tog ${this._fav ? 'on' : ''}" data-cat="favorites" tabindex="-1" aria-pressed=${this._fav ? 'true' : 'false'}
-          @pointerdown=${noFocus} @click=${() => this.setFav()}>${icon(this._fav ? 'heart' : 'heartline', 'i xs')}Favorites</button>
-        <button class="fc tog sort" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.cycleSort()}>${icon('sort', 'i xs')}${sort.label}</button>` : nothing}
-      </div>
+        ${favOk ? html`<button class="fc tog ${this._fav ? 'on' : ''}" data-cat="favorites" tabindex="-1" aria-pressed=${this._fav ? 'true' : 'false'}
+          @pointerdown=${noFocus} @click=${() => this.setFav()}>${icon(this._fav ? 'heart' : 'heartline', 'i xs')}Favorites</button>` : nothing}
+        ${libTools ? html`<button class="fc tog sort" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.cycleSort()}>${icon('sort', 'i xs')}${sort.label}</button>` : nothing}
+      </div>`}
       ${modes.length && !top ? html`<div class="modes" role="tablist" aria-label="Stations by">
         ${(['library', ...modes] as RMode[]).map((m) => html`<button class="fc sm ${this._rmode === m ? 'on' : ''}" role="tab" aria-selected=${this._rmode === m ? 'true' : 'false'}
           data-rmode=${m} tabindex="-1" @pointerdown=${noFocus} @click=${() => this.setRMode(m)}>${m === 'library' ? 'My stations' : MODE_LABEL[m]}</button>`)}
@@ -708,6 +802,11 @@ export class JbBrowse extends LitElement {
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     .bx { position: relative; height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 14px var(--_pad) 12px; }
     .bar { display: flex; gap: 8px; align-items: center; min-width: 0; }
+    /* 0.7.2 combined Library tab: jb-search draws the padding, search box and category buttons */
+    :host([embedded]) .bx { padding: 0; gap: 10px; }
+    :host([embedded]) .bar .fc { height: 36px; padding: 0 13px; font-size: 13px; }
+    .bsp { flex: 1; }
+    .row.gen { grid-template-columns: 44px minmax(0, 1fr) auto 40px; cursor: pointer; }
     .cats { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
     .cats::-webkit-scrollbar { display: none; }
     .fc { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 42px; padding: 0 18px; border-radius: 999px; font-size: 15px; font-weight: 700;

@@ -25,7 +25,7 @@ async function open(query = '', vp = { width: 1280, height: 800 }) {
   page.on('pageerror', (e) => pageErrors.push(e.message));
   await page.setViewport({ deviceScaleFactor: 1, ...vp });
   await page.evaluateOnNewDocument(() => { window.__jbUndoMs = 8000; });
-  await page.goto(`${BASE}?fresh=1&latency=30&gap=500&kiosk=1${query.includes('tab=') ? '' : '&tab=now'}${query}`);
+  await page.goto(`${BASE}?layout=separate&fresh=1&latency=30&gap=500&kiosk=1${query.includes('tab=') ? '' : '&tab=now'}${query}`);
   await page.waitForFunction('window.__ready === true');
   await sleep(150);
   return page;
@@ -252,9 +252,9 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   // favourite it again, then Browse > Radio (empty library before) lists it under Favorites
   await tapHeart(p, lib.uri); await sleep(200);
   await ev(p, `__card._tab = 'browse'`); await sleep(200);
-  // 0.7.1: the default Library home → the Radio tile (the 0.6 chip row with library_home: false is covered by R9)
-  await wait(p, `${BR}.shadowRoot.querySelector('.lt[data-tile=radio]')`);
-  await sleep(300); await ev(p, `${BR}.shadowRoot.querySelector('.lt[data-tile=radio]').click()`);
+  // 0.7.2: no tile home by default (separate layout here) → the Radio chip
+  await wait(p, `${BR}.shadowRoot.querySelector('.cats .fc[data-cat=radio]')`);
+  await sleep(300); await ev(p, `${BR}.shadowRoot.querySelector('.cats .fc[data-cat=radio]').click()`);
   const ok = await wait(p, `${BR}.shadowRoot.querySelector('[data-src=favorites]')?.children.length === 1`);
   check('R7 Browse › Radio → My stations shows the new favourite under Favorites', ok, J(await ev(p, `({ cats: [...${BR}.shadowRoot.querySelectorAll('[data-cat]')].map((b) => b.dataset.cat + (b.classList.contains('on') ? '*' : '')), cat: ${BR}._cat, secs: [...${BR}.shadowRoot.querySelectorAll('[data-src]')].map((g) => g.dataset.src + ':' + g.children.length), empty: ${BR}.shadowRoot.querySelector('[data-empty]')?.dataset.empty })`)));
   await p.close();

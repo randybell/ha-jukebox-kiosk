@@ -2,6 +2,23 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
+## 0.7.2 — 2026-11-04
+
+### Changed
+- **Search and Library are one tab.** The **Library** tab (`library_label`) now has the search box with the on-screen keyboard on top, a source picker next to it, and category buttons under it: Playlists (default), Artists, Songs, Genres, Radio. There is no Search tab and no tile home by default (`library_layout: combined`).
+  - Empty box with source All or Library: the library list of the selected category. Typed text: results for that category and source only; with **All**, library matches first, then providers.
+  - A provider with an empty box shows its folders (`music/browse`, admins) or an inline "Type to search …" hint. No popups.
+  - The artist/album chip, **Clear filters** and `idle_clear_filters` stay. Clearing (by hand or on idle) also empties the box and resets the source to All.
+- `library_home` defaults to `false` again and only applies with `library_layout: separate`; a 0.7.1 `library_home: true` gets the combined tab.
+
+### Added
+- **Source picker (`search_sources`, default `true`).** All, Library, then the search-capable music providers configured in Music Assistant, by display name (new `jukebox_kiosk/search_providers` command, class `read`, served from the MA client's provider list; mass_queue backend: MA `providers`). A provider limits `music/search` with `providers: [<instance>]`.
+- **Genres button.** The genre list comes from `music/genres/library_items` (now allowed, class `read`); a genre opens its page.
+- `library_layout` (default `combined`; `separate` = the 0.7.1 Library + Search tabs) and `library_categories` (default `[playlist, artist, track, genre, radio]`; `album`, `podcast`, `audiobook` by config). Both in the visual editor.
+
+### Back-compat
+- `default_tab: search`, a saved Search tab, and every "search" shortcut (e.g. Search stations) open the Library tab with the keyboard up, on the matching category. Configs need no change; `library_layout: separate` restores the 0.7.1 tabs and chip row.
+
 ## 0.7.1 — 2026-11-04
 
 ### Changed

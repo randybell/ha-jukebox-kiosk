@@ -23,7 +23,7 @@ async function newPage(vp = { width: 1280, height: 800 }) {
   return pg;
 }
 async function open(pg, q, page = 'index.html') {
-  await pg.goto(`${ROOT}${page}?fresh=1&latency=40${q}`);
+  await pg.goto(`${ROOT}${page}?fresh=1&latency=40&layout=separate${q}`);
   await pg.waitForFunction('window.__ready === true');
   await sleep(150);
 }
@@ -93,7 +93,7 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   check('O3 overlay, tab and card share one lookup (still 2 calls)', (await lyrCmds(pg)).length === 2, J(await lyrCmds(pg)));
   const bg = await pg.evaluate((s) => getComputedStyle(eval(s).querySelector('.ab.lyr')).backgroundColor, SEL.now);
   check('O4 active toggle is white (Black Frame Mono)', /rgb\(255, 255, 255\)|rgba\(255, 255, 255, 1\)/.test(bg), bg);
-  await pg.goto(`${ROOT}index.html?keeplyrics=1&latency=40&tab=now`); await pg.waitForFunction('window.__ready === true'); await sleep(300);
+  await pg.goto(`${ROOT}index.html?keeplyrics=1&latency=40&layout=separate&tab=now`); await pg.waitForFunction('window.__ready === true'); await sleep(300);
   check('O5 overlay choice survives a reload', await pg.evaluate((s) => !!eval(s).querySelector('jb-lyrics') && eval(s).querySelector('.ab.lyr').classList.contains('on'), SEL.now));
   await pg.waitForFunction((s) => { try { return eval(s)?.dataset?.status === 'synced'; } catch { return false; } }, { timeout: 8000 }, SEL.ovl).catch(() => {});
   const lsText = await pg.evaluate(() => Object.keys(localStorage).map((k) => localStorage.getItem(k)).join('\n'));

@@ -1,8 +1,8 @@
-// v0.7 (flag `library_home`; default on since 0.7.1, false = the 0.6 Browse tab): the Library tab's landing screen, a grid of big shortcut tiles
-// (Playlists, Artists, Albums, Radio, Search by default; Tracks, Podcasts, Audiobooks, Genres, Discover opt-in).
+// The Library tab. 0.7.2: the list with a row of category buttons on top (Playlists, Artists, Songs, Genres, Radio by
+// default, `library_categories`). The 0.7.1 tile home (a grid of big shortcut tiles) is opt-in again with `library_home: true`.
 // Pure helpers only (tile list, labels, availability), so they can be unit tested without a DOM.
 import type { ExtCaps } from './backend/types';
-import type { JukeboxCardConfig, LibraryTileId } from './types';
+import type { JukeboxCardConfig, LibraryCategory, LibraryTileId } from './types';
 
 export type TileId = LibraryTileId;
 export interface TileSpec { tile: TileId; label?: string }
@@ -19,7 +19,7 @@ export const TILES: TileDef[] = [
   { id: 'track', label: 'Tracks', icon: 'note', sub: 'Every song', optIn: true },
   { id: 'podcast', label: 'Podcasts', icon: 'podcast', sub: 'Shows', optIn: true },
   { id: 'audiobook', label: 'Audiobooks', icon: 'book', sub: 'Books', optIn: true },
-  { id: 'genre', label: 'Genres', icon: 'genre', sub: 'Search by genre', optIn: true },
+  { id: 'genre', label: 'Genres', icon: 'genre', sub: 'Your genres', optIn: true },
   { id: 'discover', label: 'Discover', icon: 'compass', sub: 'For you', optIn: true },
 ];
 export const TILE_IDS = TILES.map((t) => t.id);
@@ -27,11 +27,38 @@ export const DEFAULT_TILES: TileId[] = TILES.filter((t) => !t.optIn).map((t) => 
 const isId = (x: unknown): x is TileId => typeof x === 'string' && (TILE_IDS as string[]).includes(x);
 export const tileDef = (id: TileId) => TILES.find((t) => t.id === id)!;
 
-/** On unless `library_home: false` (0.7.1: the default changed from off to on). */
-export const libraryHomeOn = (c: Partial<JukeboxCardConfig> | undefined) => c?.library_home !== false;
-/** Tab label: "Library" (or `library_label`), or the 0.6 "Browse" with `library_home: false`. */
-export const libraryTabLabel = (c: Partial<JukeboxCardConfig> | undefined) =>
-  libraryHomeOn(c) ? (String(c?.library_label ?? '').trim() || 'Library') : 'Browse';
+/** The tile home only with an explicit `library_home: true` (0.7.2: off by default again; 0.7.1 had it on). */
+export const libraryHomeOn = (c: Partial<JukeboxCardConfig> | undefined) => c?.library_home === true;
+/** 0.7.2: one combined Library tab (search box + source picker + category buttons) instead of Library + Search tabs.
+ *  Always on unless `library_layout: separate` (the 0.7.1 Library + Search tabs; `library_home` only applies there). */
+export const combinedOn = (c: Partial<JukeboxCardConfig> | undefined) => c?.library_layout !== 'separate';
+/** Tab label: always "Library" (or `library_label`), with or without the tile home. */
+export const libraryTabLabel = (c: Partial<JukeboxCardConfig> | undefined) => String(c?.library_label ?? '').trim() || 'Library';
+
+/** 0.7.2 Library category buttons, in the editor's order. */
+export interface LibraryCatDef { id: LibraryCategory; label: string; icon: string }
+export const LIBRARY_CATS: LibraryCatDef[] = [
+  { id: 'playlist', label: 'Playlists', icon: 'queue' },
+  { id: 'artist', label: 'Artists', icon: 'artist' },
+  { id: 'track', label: 'Songs', icon: 'note' },
+  { id: 'genre', label: 'Genres', icon: 'genre' },
+  { id: 'radio', label: 'Radio', icon: 'radio' },
+  { id: 'album', label: 'Albums', icon: 'disc' },
+  { id: 'podcast', label: 'Podcasts', icon: 'podcast' },
+  { id: 'audiobook', label: 'Audiobooks', icon: 'book' },
+];
+export const LIBRARY_CAT_IDS = LIBRARY_CATS.map((x) => x.id);
+/** The default button row: Playlists, Artists, Songs, Genres, Radio. */
+export const DEFAULT_LIBRARY_CATEGORIES: LibraryCategory[] = ['playlist', 'artist', 'track', 'genre', 'radio'];
+export const libraryCatLabel = (id: string) => LIBRARY_CATS.find((x) => x.id === id)?.label ?? id;
+/** `library_categories` in order (unknown ids and repeats dropped); unset or empty = the default row. */
+export function libraryCategories(c: Partial<JukeboxCardConfig> | undefined): LibraryCategory[] {
+  const raw = Array.isArray(c?.library_categories) ? c!.library_categories : null;
+  const seen = new Set<string>();
+  const list = (raw ?? []).filter((x): x is LibraryCategory => typeof x === 'string' && (LIBRARY_CAT_IDS as string[]).includes(x)
+    && (seen.has(x) ? false : (seen.add(x), true)));
+  return list.length ? list : [...DEFAULT_LIBRARY_CATEGORIES];
+}
 
 /**
  * The configured tiles, in order, with labels. Unset = the defaults, plus Discover when a 0.7 `discover` list is
