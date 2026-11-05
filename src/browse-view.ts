@@ -16,6 +16,7 @@ import {
   discoverWanted, DEFAULT_ROWS, parseRows, pickRows, parseItems, resumeFraction, memGet, memPut, memClear, ROWS_TTL_MS, ITEMS_TTL_MS, DISCOVER_CONCURRENCY,
   type DiscoverRow,
 } from './discover';
+import { fetchRecentlyPlayed, recentPlayType, RECENT_LIMIT, RECENT_TTL_MS, type MaSend } from './recently-played';
 import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, libraryCategories, type TileId } from './library-home';
 import { loadDetail } from './detail-view';
 import { FavController, heartTpl, heartType } from './heart';
@@ -86,6 +87,7 @@ export class JbBrowse extends LitElement {
     _stack: { state: true }, _home: { state: true }, _menu: { state: true }, _toast: { state: true }, _confirm: { state: true },
     _rmode: { state: true }, _rtrail: { state: true }, _rb: { state: true }, _disc: { state: true }, _ditems: { state: true },
     _lq: { state: true }, _lkb: { state: true }, _lart: { state: true }, _lpool: { state: true },
+    _recent: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
@@ -133,6 +135,9 @@ export class JbBrowse extends LitElement {
   private _lpool: { key: string; pool?: ScopePool; error: string } | null = null;
   private lpools = new PoolCache();
   private _lqTimer?: number;
+  /** Library strip: recently played (null = not loaded yet; items=[] = hidden). */
+  private _recent: { items: MaItem[]; at: number; loading: boolean } | null = null;
+  private _recentBusy = false;
   /** Tap never plays: artists / albums / playlists (and podcasts with mass_queue) open their detail, everything else a sheet. */
   private hearts = new FavController(this);
   private press = new PressController<{ it: MaItem; type: string }>(this, (p, el) => this.tap(p.it, p.type, el), (p, el) => this.openMenu(p.it, p.type, el));
@@ -158,6 +163,7 @@ export class JbBrowse extends LitElement {
     if ((ch.has('active') || ch.has('hass')) && this.active && this.hass && !this._probed) { this._probed = true; this.probe(); }
     if (ch.has('config') && this._probed && this._avail.genre == null && this.be?.ext?.genres) this.probeGenre();
     if (this.active && this.hass && this._cat === DISCOVER_CAT.type && !this._disc) this.loadDiscover();
+    if (this.active && this.hass && this.recentWanted()) this.loadRecent();
   }
   disconnectedCallback() { super.disconnectedCallback(); this._io?.disconnect(); this._io = undefined; }
   private get be() { return this.config?._backend; }
@@ -405,6 +411,55 @@ export class JbBrowse extends LitElement {
             <div class="rt"><b>${f.name}</b></div><span class="du"></span><span class="mo">${icon('open')}</span></div>`)}</div>`) : nothing}
       ${d!.stations.length ? html`<div class="grid radio" data-src="radiobrowser">${d!.stations.map((it) => this.tile(it, 'radio'))}</div>` : nothing}
       ${!d!.folders.length && !d!.stations.length ? html`<div class="empty"><b>No stations here</b><span>Try another ${this._rmode === 'popular' ? 'list' : this._rmode}.</span></div>` : nothing}`;
+  }
+
+  // ---------- Recently played (Library strip when search is empty) ----------
+  /** Show the strip above the category list (not Discover, not a detail, not Radio Browser folders, not while filtering). */
+  private recentWanted() {
+    if (!this.active || !this.hass || !this.be?.caps?.send) return false;
+    if (this._stack.length || (this.homeOn() && this._home)) return false;
+    if (this._cat === DISCOVER_CAT.type) return false;
+    if (this._cat === 'radio' && this._rmode !== 'library') return false;
+    if (this.lq()) return false;
+    return true;
+  }
+  async loadRecent(force = false) {
+    if (!this.recentWanted() || this._recentBusy) return;
+    const now = Date.now();
+    if (!force && this._recent && now - this._recent.at < RECENT_TTL_MS) return;
+    this._recentBusy = true;
+    if (!this._recent) this._recent = { items: [], at: 0, loading: true };
+    else this._recent = { ...this._recent, loading: true };
+    try {
+      const send: MaSend = (c, d) => this.be!.send(c, d ?? {});
+      const items = await fetchRecentlyPlayed(send, RECENT_LIMIT);
+      this._recent = { items, at: Date.now(), loading: false };
+    } catch (err) {
+      console.warn('[jukebox-card] recently played failed', err);
+      this._recent = { items: [], at: Date.now(), loading: false };
+    } finally { this._recentBusy = false; }
+  }
+  /** Compact tile: one tap plays (no detail drill / station sheet). */
+  private recentTile(it: MaItem) {
+    const type = recentPlayType(it);
+    const circ = type === 'artist';
+    // class is rtile only (not .tile) so Library/Browse selectors keep matching the category grid.
+    // No provider badge: on these compact tiles the pill covered most of the art.
+    return html`<button class="rtile ${circ ? 'artist' : ''}" type="button" data-uri=${it.uri} data-recent-type=${type}
+        data-recent="1" tabindex="-1" aria-label=${`Play ${it.name}`}
+        @pointerdown=${noFocus} @click=${() => this.play(it, type)}>
+      <div class="tw">${artTpl(it, circ ? 'big circ' : 'big')}</div>
+      <b>${it.name}</b>
+    </button>`;
+  }
+  private renderRecent() {
+    if (!this.recentWanted()) return nothing;
+    const items = this._recent?.items ?? [];
+    if (!items.length) return nothing;
+    return html`<section class="recent" data-recent-row aria-label="Recently played">
+      <h3 class="eyebrow">Recently played</h3>
+      <div class="hs recent-hs" @scroll=${() => this.press.scrolled()}>${items.map((it) => this.recentTile(it))}</div>
+    </section>`;
   }
 
   // ---------- v0.7 Discover ----------
@@ -796,11 +851,11 @@ export class JbBrowse extends LitElement {
       ${kbOpen ? nothing : libTools && !top ? html`${this.filterBox()}${this.filterTpl()}` : nothing}
       ${kbOpen ? html`<div class="lsplit">
           <div class="lkcol">${this.filterBox()}${this.filterTpl()}<jb-keyboard class="kbd" @jb-key=${this.onFilterKey}></jb-keyboard></div>
-          <div class="scroll panel" @scroll=${this.onScroll}>${this.renderGrid()}</div>
+          <div class="scroll panel" @scroll=${this.onScroll}>${this.renderRecent()}${this.renderGrid()}</div>
         </div>`
       : top ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${top} .scopeLabel=${this.scopeLabel}
           .trail=${[trail0, ...this._stack.slice(0, -1).map((x) => x.item.name)]} @jb-nav=${this.onNav}></jb-detail>`
-        : html`<div class="scroll panel" @scroll=${this.onScroll}>${this.renderGrid()}</div>`}
+        : html`<div class="scroll panel" @scroll=${this.onScroll}>${this.renderRecent()}${this.renderGrid()}</div>`}
       ${m ? menuTpl(m.pos, { item: m.item, sub: this.sub(m.item, m.type) || providerLabel(m.item.uri) }, m.actions,
         () => { this._menu = null; this.press.release(); }) : nothing}
       ${confirmTpl(this._confirm, () => (this._confirm = null))}
@@ -926,9 +981,26 @@ export class JbBrowse extends LitElement {
     .rowerr { display: flex; align-items: center; gap: 10px; } .rowerr .fc { height: 34px; }
     .rp { position: absolute; left: 8px; right: 8px; bottom: 6px; height: 4px; border-radius: 2px; background: #ffffff40; overflow: hidden; }
     .rp i { display: block; height: 100%; background: var(--_active); }
+    /* Recently played strip: compact so the 1024x600 Library still shows category results */
+    .recent { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; min-width: 0; }
+    .recent .eyebrow { font-size: 12px; color: var(--_muted); margin: 0; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .recent-hs { grid-auto-columns: 88px; gap: 10px; }
+    .recent .rtile { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 2px; border-radius: 10px;
+      background: transparent; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+    .recent .rtile .tw { position: relative; }
+    /* no .pv on recent tiles — keep art clean at this size */
+    .recent .rtile .pv { display: none; }
+    .recent .rtile b { font-size: 12px; margin-top: 0; font-weight: 700; line-height: 1.2;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+      white-space: normal; word-break: break-word; }
+    .recent .rtile .big { border-radius: 8px; width: 100%; height: auto; aspect-ratio: 1; }
+    .recent .rtile.artist b { text-align: center; }
+    .recent .rtile.artist .big { border-radius: 50%; }
+    :host([embedded]) .recent { margin-bottom: 2px; }
     @container np (max-width: 520px) {
       .hs { grid-auto-columns: 112px; gap: 10px; } .drow { contain-intrinsic-size: auto 190px; } .disc { gap: 16px; }
       .fc.sm { height: 32px; padding: 0 11px; font-size: 13px; } .rbt { font-size: 17px; }
+      .recent-hs { grid-auto-columns: 76px; gap: 8px; } .recent .rtile b { font-size: 11px; }
     }
     @container np (max-width: 520px) {
       .bx { padding: 10px 12px 8px; gap: 10px; }
