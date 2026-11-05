@@ -1,13 +1,14 @@
 // Screenshots: every tab at 1920x1080, 1280x800, 820x1180, 390x844 (JB_SIZES=1920x1080,... to pick) → test/shots/m2/<tab>-<WxH>-<tag>.png
-// Usage: node test/shots-m2.mjs [tag] [extra-query]
+// Usage: node tools/screenshots/shots-m2.mjs [tag] [extra-query]
 import puppeteer from 'puppeteer-core';
 import { mkdirSync } from 'node:fs';
-import { hermetic } from './intercept.mjs';
+import { hermetic } from '../../test/intercept.mjs';
+import { devIndex } from '../../test/serve.mjs';
 const [tag = 'r1', extra = ''] = process.argv.slice(2);
-const OUT = new URL('./shots/m2/', import.meta.url).pathname; mkdirSync(OUT, { recursive: true });
-const BASE = process.env.JB_URL ?? 'http://127.0.0.1:8765/dev/index.html';
+const OUT = new URL('../../test/shots/m2/', import.meta.url).pathname; mkdirSync(OUT, { recursive: true });
+const BASE = await devIndex();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars'] });
+const b = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars'] });
 const sizes = (process.env.JB_SIZES ?? '1920x1080,1280x800,820x1180,390x844').split(',').map((s) => s.split('x').map(Number));
 const errs = [];
 for (const [w, hgt] of sizes) {

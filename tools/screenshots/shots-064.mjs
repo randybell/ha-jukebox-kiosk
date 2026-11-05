@@ -1,18 +1,19 @@
 // 0.6.4 screenshots: the quiet status chip (mock, fake names) → $JB_SHOTS (default test/shots/064/)
 // 1 right after dropping the Garage leader (chip, no dialog) · 2 the chip while regrouping · 3 after Join · 4 an error chip
-// Usage: node test/shots-064.mjs
+// Usage: node tools/screenshots/shots-064.mjs
 import puppeteer from 'puppeteer-core';
 import { mkdirSync } from 'node:fs';
-import { hermetic } from './intercept.mjs';
-const OUT = (process.env.JB_SHOTS ?? new URL('./shots/064/', import.meta.url).pathname).replace(/\/?$/, '/'); mkdirSync(OUT, { recursive: true });
-const BASE = process.env.JB_URL ?? 'http://127.0.0.1:8765/dev/index.html';
+import { hermetic } from '../../test/intercept.mjs';
+import { devIndex } from '../../test/serve.mjs';
+const OUT = (process.env.JB_SHOTS ?? new URL('../../test/shots/064/', import.meta.url).pathname).replace(/\/?$/, '/'); mkdirSync(OUT, { recursive: true });
+const BASE = await devIndex();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SR = `__card.shadowRoot.querySelector('jb-speakers').shadowRoot`;
 const NOW = `__card.shadowRoot.querySelector('jb-now')`;
 const GAR = 'media_player.garage';
 const ra = (e) => `${NOW}.shadowRoot.querySelector('.vr[data-entity="${e}"] .ra')`;
 const chipText = `${SR}.querySelector('.st .ct')?.textContent ?? ''`;
-const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars'] });
+const b = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars'] });
 const errs = [], notes = [];
 const tap = async (p, expr) => { const r = await p.evaluate((e) => { const el = eval(e); el?.scrollIntoView?.({ block: 'center' }); const q = el?.getBoundingClientRect(); return q && { x: q.left + q.width / 2, y: q.top + q.height / 2 }; }, expr); if (!r) throw new Error('no ' + expr); await p.mouse.click(r.x, r.y); await sleep(80); await unclip(p); };
 // scrollIntoView also scrolls main.np (overflow: hidden, so a user never can); put it back so the header and chip show as on a device

@@ -1,15 +1,16 @@
 // 0.6.3 screenshots: 1–5 Everywhere as a dynamic sync group led by Garage (mock, fake names) → $JB_SHOTS (default test/shots/063/)
-// Usage: node test/shots-063.mjs
+// Usage: node tools/screenshots/shots-063.mjs
 import puppeteer from 'puppeteer-core';
 import { mkdirSync } from 'node:fs';
-import { hermetic } from './intercept.mjs';
-const OUT = (process.env.JB_SHOTS ?? new URL('./shots/063/', import.meta.url).pathname).replace(/\/?$/, '/'); mkdirSync(OUT, { recursive: true });
-const BASE = process.env.JB_URL ?? 'http://127.0.0.1:8765/dev/index.html';
+import { hermetic } from '../../test/intercept.mjs';
+import { devIndex } from '../../test/serve.mjs';
+const OUT = (process.env.JB_SHOTS ?? new URL('../../test/shots/063/', import.meta.url).pathname).replace(/\/?$/, '/'); mkdirSync(OUT, { recursive: true });
+const BASE = await devIndex();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SR = `__card.shadowRoot.querySelector('jb-speakers').shadowRoot`;
 const GAR = 'media_player.garage';
 const act = `${SR}.querySelector('[data-room="${GAR}"] .act')`;
-const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars'] });
+const b = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars'] });
 const errs = [];
 const tap = async (p, expr) => { const r = await p.evaluate((e) => { const el = eval(e); el?.scrollIntoView?.({ block: 'center' }); const q = el?.getBoundingClientRect(); return q && { x: q.left + q.width / 2, y: q.top + q.height / 2 }; }, expr); if (!r) throw new Error('no ' + expr); if (process.env.DBG) console.log(expr.slice(-40), r); await p.mouse.click(r.x, r.y); await sleep(80); };
 const wait = (p, fn, timeout = 6000) => p.waitForFunction(fn, { timeout, polling: 50 }).then(() => true, () => false);

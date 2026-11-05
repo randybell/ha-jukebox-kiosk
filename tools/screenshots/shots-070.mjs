@@ -1,13 +1,14 @@
 // 0.7.x release screenshots (0.7.1: the Library home is the default, so the nav says Library) (mock data only) → $JB_SHOTS (default test/shots/070/), <n>-<name>-<w>x<h>.png
 // 1 Search scoped to an artist (chip + Clear filters) · 2 library-first results · 3 Library home tiles · 4 Library filter
 // 5 hearts on rows (one filled, chip top-right) · 6 Now Playing heart + Repeat queue · 7 radio station sheet with heart
-// Usage: (serve the project root) JB_URL=http://127.0.0.1:8811/dev/index.html node test/shots-070.mjs
+// Usage: (starts its own dev server; JB_PORT / JB_URL / JB_ROOT override) node tools/screenshots/shots-070.mjs
 import puppeteer from 'puppeteer-core';
 import { mkdirSync } from 'node:fs';
-import { hermetic } from './intercept.mjs';
+import { hermetic } from '../../test/intercept.mjs';
+import { devIndex } from '../../test/serve.mjs';
 
-const BASE = process.env.JB_URL ?? 'http://127.0.0.1:8765/dev/index.html';
-const OUT = (process.env.JB_SHOTS ?? new URL('./shots/070/', import.meta.url).pathname).replace(/\/?$/, '/'); mkdirSync(OUT, { recursive: true });
+const BASE = await devIndex();
+const OUT = (process.env.JB_SHOTS ?? new URL('../../test/shots/070/', import.meta.url).pathname).replace(/\/?$/, '/'); mkdirSync(OUT, { recursive: true });
 const J = JSON.stringify;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const C = `__card.shadowRoot`;

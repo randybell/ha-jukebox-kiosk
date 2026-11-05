@@ -1,12 +1,13 @@
 // v0.7 design-branch screenshots (mock data only) → test/shots/v070-design/<item>-<name>-<w>x<h>.png (git-ignored).
 // Items: q62 (speakers chip question survives updates), q60 (idle reset clears filters), hearts, station-add, join-resume, dedupe.
-// Usage: (serve the project root) JB_URL=http://127.0.0.1:8797/dev/index.html node test/shots-design.mjs [item ...]
+// Usage: (starts its own dev server; JB_PORT / JB_URL / JB_ROOT override) node tools/screenshots/shots-design.mjs [item ...]
 import puppeteer from 'puppeteer-core';
 import { mkdirSync } from 'node:fs';
-import { hermetic } from './intercept.mjs';
+import { hermetic } from '../../test/intercept.mjs';
+import { devIndex } from '../../test/serve.mjs';
 
-const BASE = process.env.JB_URL ?? 'http://127.0.0.1:8765/dev/index.html';
-const OUT = new URL('./shots/v070-design/', import.meta.url).pathname; mkdirSync(OUT, { recursive: true });
+const BASE = await devIndex();
+const OUT = new URL('../../test/shots/v070-design/', import.meta.url).pathname; mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const C = `__card.shadowRoot`;
 const SPK = `${C}.querySelector('jb-speakers')`, SR = `${SPK}.shadowRoot`;

@@ -1,11 +1,12 @@
-// v0.5.0 screenshots (speakers + queue row icons). Usage: (serve the project root) JB_ROOT=http://127.0.0.1:8765/dev/ node test/shots-v050.mjs
+// v0.5.0 screenshots (speakers + queue row icons). Usage: (starts its own dev server; JB_PORT / JB_URL / JB_ROOT override) node tools/screenshots/shots-v050.mjs
 // Output: test/shots/v050/*.png (git-ignored). Every player / queue id in the mock is a placeholder.
 import puppeteer from 'puppeteer-core';
 import { mkdirSync } from 'node:fs';
-import { hermetic } from './intercept.mjs';
+import { hermetic } from '../../test/intercept.mjs';
+import { devRoot } from '../../test/serve.mjs';
 
-const ROOT = process.env.JB_ROOT ?? 'http://127.0.0.1:8765/dev/';
-const OUT = new URL('./shots/v050/', import.meta.url).pathname;
+const ROOT = await devRoot();
+const OUT = new URL('../../test/shots/v050/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const J = JSON.stringify;

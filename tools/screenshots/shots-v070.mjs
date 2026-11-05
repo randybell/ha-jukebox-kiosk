@@ -1,12 +1,13 @@
 // v0.7 screenshots (Discover, radio "Stations by…", search categories, genre detail, Library home + editor) at 1920x1080 and 390x844, plus a
-// compare sheet. Usage: (serve the project root) JB_ROOT=http://127.0.0.1:8797/dev/ node test/shots-v070.mjs
+// compare sheet. Usage: (starts its own dev server; JB_PORT / JB_URL / JB_ROOT override) node tools/screenshots/shots-v070.mjs
 // Output: test/shots/v070-design/*.png (git-ignored). All data is the placeholder mock (dev/mock-v07.js).
 import puppeteer from 'puppeteer-core';
 import { mkdirSync, readFileSync } from 'node:fs';
-import { hermetic } from './intercept.mjs';
+import { hermetic } from '../../test/intercept.mjs';
+import { devRoot } from '../../test/serve.mjs';
 
-const ROOT = process.env.JB_ROOT ?? 'http://127.0.0.1:8797/dev/';
-const OUT = new URL('./shots/v070-design/', import.meta.url).pathname;
+const ROOT = await devRoot();
+const OUT = new URL('../../test/shots/v070-design/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const J = JSON.stringify;
