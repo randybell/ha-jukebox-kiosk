@@ -504,6 +504,7 @@ for (const c of 'TEAR') await clickEl(page, qkey(`k-${c}`));
 s = await page.evaluate((q) => ({ query: eval(q).querySelector('.qsq').dataset.query, rows: [...eval(q).querySelectorAll('.qr.sr')].map((r) => ({ title: r.querySelector('b')?.textContent, remove: r.querySelector('[data-action="remove"]')?.disabled, label: r.querySelector('[data-action="remove"] span')?.textContent })) }), QV);
 check('11j buffered search match keeps labeled Remove disabled', s.query === 'TEAR' && s.rows.length === 1 && s.rows[0].title === 'Teardrop' && s.rows[0].remove && s.rows[0].label === 'Remove', JSON.stringify(s));
 await open(page, '&latency=20&tab=queue&admin=1');
+await page.waitForFunction((q) => eval(q).querySelectorAll('.qr.next').length > 3, {}, QV);
 let a5 = await qcall(() => clickEl(page, `${qrow(id1)}.querySelector('.rt')`));
 check('11d tap a row → play_queue_item {entity, queue_item_id}', ok11(a5, 'play_queue_item', id1), qs(a5));
 await sleep(900);
