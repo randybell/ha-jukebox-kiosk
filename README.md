@@ -1,6 +1,4 @@
-# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.7.2 — DRAFT
-
-> **Draft for 0.6.0.** This README covers the new integration and the card bundled in it. Sections marked *(legacy)* describe the `mass_queue` backend, which still works.
+# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.7.3
 
 Jukebox Kiosk is a Home Assistant integration that ships the **Jukebox Card**, a Lovelace card for a Home Assistant + Music Assistant jukebox kiosk. It also gives the card its own WebSocket API to Music Assistant, so the card no longer needs [mass_queue](https://github.com/droans/mass_queue).
 
@@ -13,7 +11,7 @@ The card's element is still `custom:jukebox-card`, so existing dashboards keep w
 
 ## Screenshots
 
-*(0.7.2)* **One Library tab for browsing and searching.** A search box with the on-screen keyboard sits on top, with a row of source buttons right under it (All, Library, then your Music Assistant providers; tap several to combine them); Playlists, Artists, Songs, Genres and Radio sit under it. An empty box lists your library; typing searches that category, library first.
+*(0.7.3)* **One Library tab, keyboard always open.** The on-screen keyboard stays open on every screen size. The search box, source buttons (All, Library, then your Music Assistant providers; tap several to combine them), category buttons (Playlists, Artists, Songs, Genres and Radio) and the list are arranged around it. There is no Keyboard pill and no hide handle. An empty box lists your library; typing searches that category, library first.
 
 | Library (empty box) | Typing, source All |
 |---|---|
@@ -388,7 +386,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `hearts` | `true` | *(0.7)* A favourite heart on Search and Library rows and tiles, on playlist rows and on album, artist and playlist pages. See [Favourites (hearts)](#favourites-hearts). Needs the Jukebox Kiosk backend and the `library` class. `false` keeps the 0.6 hearts only (Search radio rows, the station sheet and Now Playing) |
 | `show_autoplay` | `false` | *(0.7)* Autoplay (Music Assistant "don't stop the music") toggle in the Queue header plus an indicator on Now Playing. Jukebox Kiosk backend, class `queue` |
 | `radio_favorites_only` | `false` | *(0.7)* Browse › Radio **My stations** lists favourite stations only. Default: favourites first, then the other library stations |
-| `library_keyboard` | `always` | *(0.7.2, combined Library tab)* `always`: the on-screen keyboard is always shown on every screen size. `tap`: optional fallback for small screens: in portrait and on phones the list shows first and tapping the search box opens the keyboard (landscape tablets keep it on the left either way) |
+| `library_keyboard` | `always` | *(0.7.3, combined Library tab)* `always`: the on-screen keyboard is always shown on every screen size. `tap`: optional fallback for small screens: in portrait and on phones the list shows first and tapping the search box opens the keyboard (landscape tablets keep it on the left either way) |
 | `library_layout` | `combined` | *(0.7.2)* `combined`: one Library tab with the search box, source buttons and category buttons (no Search tab). `separate`: the 0.7.1 Library + Search tabs |
 | `library_categories` | `[playlist, artist, track, genre, radio]` | *(0.7.2)* Category buttons in order; also `album`, `podcast`, `audiobook` |
 | `search_sources` | `true` | *(0.7.2)* The source buttons under the search box (All, Library, Music Assistant providers; multi-select). Jukebox Kiosk and mass_queue backends |
