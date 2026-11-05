@@ -57,8 +57,7 @@ function verify(label, g, { fill = true, tab } = {}) {
   if (fill) check(`${label}: card fills to the bottom (no gap)`, g.nav.b >= g.vh - 1.5, `nav.b=${g.nav.b} vh=${g.vh}`);
   if (tab === LIB) {
     check(`${label}: Library search box fully visible between the header and the tabs`, !!g.lib?.combined && within(g.lib.q, g, g.top.b) && g.lib.q.b <= g.nav.t + 0.5, JSON.stringify(g.lib?.q));
-    // the keyboard must open on screen below the header; the keyboard vs tab bar overlap check lives with the keyboard layout job
-    check(`${label}: on-screen keyboard open, on screen below the header`, !!g.kb && within(g.kb, g, g.top.b), JSON.stringify(g.kb));
+    check(`${label}: on-screen keyboard open and fully visible above the tabs`, !!g.kb && within(g.kb, g, g.top.b) && g.kb.b <= g.nav.t + 0.5, JSON.stringify(g.kb));
     // source buttons: between the header and the tabs, clear of the keyboard (below it in portrait, beside it in landscape);
     // on narrow screens the row scrolls sideways, so only the first one has to be on screen
     const clear = (b) => b && b.t >= g.top.b - 0.5 && b.b <= g.nav.t + 0.5 && !!g.kb && (b.b <= g.kb.t + 0.5 || b.t >= g.kb.b - 0.5 || b.r <= g.kb.l + 0.5 || b.l >= g.kb.r - 0.5);
