@@ -26,11 +26,11 @@ const row = (e) => `${SR}.querySelector('[data-room="${e}"]')`;
 const act = (e) => `${row(e)}?.querySelector('.act')`;
 const FAST = { call: 2500, join: 2500, move: 3000, poll: 250, fast: 120 };
 
-async function open(query = '', vp = { width: 1280, height: 800 }, timeouts = FAST) {
+async function open(query = '', vp = { width: 1280, height: 800 }, timeouts = FAST, undoMs = 8000) {
   const page = await browser.newPage();
   await hermetic(page);
   await page.setViewport({ deviceScaleFactor: 1, ...vp });
-  await page.evaluateOnNewDocument((t) => { window.__jbSpeakerTimeouts = t; window.__jbUndoMs = 8000; }, timeouts);
+  await page.evaluateOnNewDocument((t, u) => { window.__jbSpeakerTimeouts = t; window.__jbUndoMs = u; }, timeouts, undoMs);
   await page.goto(`${BASE}?fresh=1&latency=30${/[?&]gap=/.test(query) ? '' : '&gap=500'}${query.includes('tab=') ? '' : '&tab=now'}${query}`);
   await page.waitForFunction('window.__ready === true');
   await sleep(150);
@@ -88,6 +88,44 @@ async function sliderTo(page, sliderExpr, frac) {
   await page.mouse.move(x, r.y); await page.mouse.down(); await sleep(30); await page.mouse.up(); await sleep(150);
 }
 const allJoins = [];
+
+// ---- issue #16: deterministic taps for the grouping flows (no fixed sleeps) ----
+// A failed precondition is reported as its own FAIL line with what the page showed, instead of tapping blindly.
+function must(name, ok, info) { if (!ok) check(`${name} (precondition)`, false, info); return ok; }
+const chipText = (sr) => `(${sr}.querySelector('.st .ct')?.textContent ?? '')`;
+// nothing in flight: no status chip at all (busy "Regrouping…", "X left · Undo", "… · regrouping…"), no question waiting,
+// no regroup and no optimistic pending row
+const QUIET = `(!${SPK}.inlineRegrouping() && !${SR}.querySelector('.st') && !${SPK}.asking && !${SR}.querySelector('.sp-ask') && !${SPK}.shadowRoot.querySelector('[data-room].pending') && !${NOW}?.shadowRoot.querySelector('.vr.pending'))`;
+async function waitQuiet(page, extra = 'true', timeout = 15000) { return wait(page, `${QUIET} && (${extra})`, timeout); }
+// the button exists, is enabled, and has not moved for a few polls (Lit re-renders after store updates shift the rows)
+async function settledBtn(page, expr, timeout = 6000) {
+  const t0 = Date.now(); let last = '', same = 0;
+  while (Date.now() - t0 < timeout) {
+    const r = await page.evaluate((e) => { const el = eval(e); if (!el || el.disabled) return ''; const b = el.getBoundingClientRect(); return b.width ? `${b.left},${b.top},${b.width},${b.height}` : ''; }, expr);
+    if (r && r === last) { if (++same >= 3) return true; } else { same = 0; last = r; }
+    await sleep(40);
+  }
+  return false;
+}
+// tap once; if `registered` never turns true, tap a second time (once only) when the button is still settled and unchanged
+async function tapRegistered(page, expr, registered, timeout = 3000) {
+  if (!(await settledBtn(page, expr))) return { ok: false, taps: 0 };
+  await tap(page, expr);
+  if (await wait(page, registered, timeout)) return { ok: true, taps: 1 };
+  if (!(await settledBtn(page, expr, 2000))) return { ok: await wait(page, registered, 500), taps: 1 };
+  await tap(page, expr);
+  return { ok: await wait(page, registered, timeout), taps: 2 };
+}
+// the last-room ask: the chip (or the confirm_drop dialog) asks "<room> is the last speaker…" with a Pause confirm control
+const lastAskQ = (re) => `(() => { const r = ${SR}; const a = r.querySelector('.st.ask') || r.querySelector('.sp-ask'); if (!a) return false;
+  const txt = a.textContent ?? '', ok = a.querySelector('[data-action="confirm"]');
+  return !${SPK}.inlineRegrouping() && !/regrouping/i.test(txt) && ${re}.test(txt) && !!ok && /Pause/.test(ok.textContent ?? ''); })()`;
+// quiet → tap the blocked last-room button → poll for the Pause question; false (with a FAIL line) when it never shows
+async function tapLastRoom(page, name, expr, quietExtra, re = '/last speaker/') {
+  if (!must(name, await waitQuiet(page, quietExtra), `never quiet before the tap: ${J({ chip: await chip(page), regroup: await ev(page, `${SPK}.inlineRegrouping()`), asking: await ev(page, `${SPK}.asking`) })}`)) return false;
+  const r = await tapRegistered(page, expr, lastAskQ(re), 4000);
+  return must(name, r.ok, `the Pause question never appeared after ${r.taps} tap(s); chip=${J(await chip(page))}`);
+}
 
 // ───────────── 0.4 regression (fixed is the default) ─────────────
 {
@@ -253,12 +291,11 @@ const allJoins = [];
   await wait(p, ASKQ, 800) && (await confirm(p));
   await wait(p, `${row(KIT)}.classList.contains('out') && ${act(LIV)}?.textContent.trim() === 'Last'`, 6000);
   const nSm = (await ma(p, 'players/cmd/set_members')).length;
-  await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state === 'playing'`);
-  await tap(p, act(LIV));
-  await wait(p, ASKQ, 1500);
+  // the previous drop's "Kitchen left · Undo" / Regrouping chip would mask the ask: wait until nothing is in flight
+  const asked16 = await tapLastRoom(p, 'M16', act(LIV), `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state === 'playing' && ${act(LIV)}?.dataset.act === 'blocked'`);
   const lastT = await askTitle(p);
   const lastC = await chip(p), modal16 = await ev(p, MODALQ);
-  await confirm(p, false);
+  if (asked16) await confirm(p, false);
   check('M16 the last speaker cannot be dropped: the chip offers Pause instead (no dialog), sends nothing',
     /last speaker/.test(lastT) && lastC?.act === 'Pause' && !modal16 && (await ma(p, 'players/cmd/set_members')).length === nSm && (await ev(p, `${act(LIV)}.getAttribute('aria-disabled')`)) === 'true', J({ lastT, lastC, modal16, dis: await ev(p, `${act(LIV)}.getAttribute('aria-disabled')`) }));
   // preset: Dinner (same target) → re-adds Kitchen and sets capped volumes
@@ -954,34 +991,39 @@ const allJoins = [];
   const gw = await ev(p, `${nrow(GAR)}.querySelector('.else')?.textContent ?? ''`);
   const lw = await ev(p, `${nrow(LIV)}.querySelector('.else')?.textContent ?? ''`);
   check('N2 the group row has a Speakers button; Garage says "Leads the group", members show no "elsewhere" title', sb && gw === 'Leads the group' && lw === '', J({ sb, gw, lw }));
+  // the row must be settled (store loaded, not pending/regrouping, button not moving) before Drop, and the tap must
+  // register (a set_members or the row going pending) before asserting; one retry if the click was lost
+  must('N3', await waitQuiet(p, `${ra(GAR)}?.dataset.act === 'drop'`), `Garage row never settled: ${J(await chip(p))}`);
   const n0 = (await ma(p, 'players/cmd/set_members')).length;
-  await tap(p, ra(GAR));
+  const t3 = await tapRegistered(p, ra(GAR), `window.__maLog.filter((x) => x.command === 'players/cmd/set_members').length > ${n0} || ${nrow(GAR)}?.classList.contains('pending') || ${nrow(GAR)}?.classList.contains('out')`);
+  must('N3', t3.ok, `Drop Garage tap never registered after ${t3.taps} tap(s)`);
   const modalN3 = await ev(p, MODALQ);
-  await wait(p, `${nrow(GAR)}?.classList.contains('out') && ${ra(GAR)}?.dataset.act === 'join'`, 5000);
+  await wait(p, `${nrow(GAR)}?.classList.contains('out') && ${ra(GAR)}?.dataset.act === 'join' && !${nrow(GAR)}.classList.contains('pending')`, 5000);
   const sm = (await ma(p, 'players/cmd/set_members')).slice(n0);
   const lbl = await ev(p, `${ra(GAR)}.getAttribute('aria-label')`);
   check('N3 Drop Garage from Now Playing → no dialog → one set_members(remove Garage); Garage greyed with "Add Garage", panel stays closed',
     !modalN3 && sm.length === 1 && sm[0].data.target_player === GSM && J(sm[0].data.player_ids_to_remove) === J([GW]) && lbl === 'Add Garage' && !(await ev(p, `${SPK}.open`)), J({ sm, lbl }));
   const undo = await ev(p, `!!${SR}.querySelector('.st [data-action="undo"]')`);
   check('N4 the chip offers Undo with the panel closed', undo);
-  await tap(p, ra(GAR));
-  await wait(p, ASKQ, 800) && (await confirm(p));
+  const nA = (await ma(p, 'players/cmd/set_members')).length;
+  const t5 = await tapRegistered(p, ra(GAR), `${ASKQ} || window.__maLog.filter((x) => x.command === 'players/cmd/set_members').length > ${nA} || ${nrow(GAR)}?.classList.contains('pending')`);
+  must('N5', t5.ok, `Add Garage tap never registered after ${t5.taps} tap(s)`);
+  if (await ev(p, ASKQ)) await confirm(p);
   await wait(p, `${nrow(GAR)} && !${nrow(GAR)}.classList.contains('out') && ${ra(GAR)}?.dataset.act === 'drop'`, 5000);
   const sm2 = (await ma(p, 'players/cmd/set_members')).at(-1);
   check('N5 Add Garage from Now Playing → set_members(add Garage); back in with Drop', sm2?.data.target_player === GSM && J(sm2?.data.player_ids_to_add) === J([GW]) && (await maMembers(p, GSM)).includes(GW), J(sm2));
   // drop Kitchen and Living Room: Garage becomes the last speaker → Pause offered, nothing sent
   for (const e of [KIT, LIV]) {
-    await wait(p, `${ra(e)}?.dataset.act === 'drop' && !${nrow(e)}.classList.contains('pending')`, 5000);
-    await tap(p, ra(e)); if (await wait(p, ASKQ, 600)) await confirm(p);
+    await wait(p, `${ra(e)}?.dataset.act === 'drop' && !${nrow(e)}.classList.contains('pending') && !${SPK}.inlineRegrouping()`, 6000);
+    const n = (await ma(p, 'players/cmd/set_members')).length;
+    await tapRegistered(p, ra(e), `${ASKQ} || window.__maLog.filter((x) => x.command === 'players/cmd/set_members').length > ${n} || ${nrow(e)}?.classList.contains('pending')`);
+    if (await ev(p, ASKQ)) await confirm(p);
     await wait(p, `${ra(e)}?.dataset.act === 'join'`, 5000);
   }
-  await wait(p, `${ra(GAR)}?.dataset.act === 'blocked' && window.__hass.states['${EVERY}'].state === 'playing' && !${SPK}.inlineRegrouping()`, 6000);
-  await sleep(300);
   const n1 = (await ma(p, 'players/cmd/set_members')).length;
   const dis = await ev(p, `${ra(GAR)}?.getAttribute('aria-disabled')`);
-  await tap(p, ra(GAR));
-  await wait(p, ASKQ, 1500);
-  const at = await ev(p, `${SR}.querySelector('.sp-ask, .st.ask')?.textContent ?? ''`);
+  const askedN6 = await tapLastRoom(p, 'N6', ra(GAR), `${ra(GAR)}?.dataset.act === 'blocked' && window.__hass.states['${EVERY}'].state === 'playing'`);
+  const at = askedN6 ? await ev(p, `${SR}.querySelector('.sp-ask, .st.ask')?.textContent ?? ''`) : '';
   const modalN6 = await ev(p, MODALQ);
   check('N6 the last room: its Drop is greyed, tapping offers Pause in the chip (same as the panel, no dialog), sends nothing',
     dis === 'true' && !modalN6 && /last speaker/.test(at) && /Pause/.test(at) && (await ma(p, 'players/cmd/set_members')).length === n1, J({ dis, at, t: await toast(p), s: await st(p, EVERY) }));
@@ -1079,19 +1121,19 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
   }
   {
     // last room → the chip offers Pause; Pause pauses the group (queue kept), Undo plays again
-    const p = await open('&spk=dyn&admin=1&every=dyn', { width: 1920, height: 1080 });
+    // this case does not test Undo timing: a 2.5 s Undo window lets the earlier drops' chips clear sooner
+    const p = await open('&spk=dyn&admin=1&every=dyn', { width: 1920, height: 1080 }, FAST, 2500);
     for (const e of [KIT, LIV]) {
       await wait(p, `${ra(e)}?.dataset.act === 'drop' && !${nrow(e)}.classList.contains('pending') && !${SPK}.inlineRegrouping()`, 6000);
-      await tap(p, ra(e));
+      const n = (await ma(p, 'players/cmd/set_members')).length;
+      await tapRegistered(p, ra(e), `window.__maLog.filter((x) => x.command === 'players/cmd/set_members').length > ${n} || ${nrow(e)}?.classList.contains('pending')`);
       await wait(p, `${ra(e)}?.dataset.act === 'join'`, 5000);
     }
-    await wait(p, `${ra(GAR)}?.dataset.act === 'blocked' && window.__hass.states['${EVERY}'].state === 'playing' && !${SPK}.inlineRegrouping()`, 6000);
-    await sleep(300);
     const n1 = (await ma(p, 'players/cmd/set_members')).length;
-    await tap(p, ra(GAR));
+    const asked8 = await tapLastRoom(p, 'C8', ra(GAR), `${ra(GAR)}?.dataset.act === 'blocked' && window.__hass.states['${EVERY}'].state === 'playing'`, '/Garage is the last speaker in Everywhere/');
     const c = await chip(p);
-    check('C8 last room: chip "Garage is the last speaker in Everywhere · Pause" (no dialog)', /Garage is the last speaker in Everywhere/.test(c?.text ?? '') && c?.act === 'Pause' && !(await popups(p)), J(c));
-    await tap(p, `${SR}.querySelector('.st.ask [data-action="confirm"]')`);
+    check('C8 last room: chip "Garage is the last speaker in Everywhere · Pause" (no dialog)', asked8 && /Garage is the last speaker in Everywhere/.test(c?.text ?? '') && c?.act === 'Pause' && !(await popups(p)), J(c));
+    if (asked8) await tap(p, `${SR}.querySelector('.st.ask [data-action="confirm"]')`);
     await wait(p, `window.__hass.states['${EVERY}'].state === 'paused'`, 3000);
     await wait(p, `/Everywhere paused/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 3000);
     const c2 = await chip(p);
