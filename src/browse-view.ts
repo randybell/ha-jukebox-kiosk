@@ -142,7 +142,8 @@ export class JbBrowse extends LitElement {
     this.observeRows();
     // 0.7.2: the combined tab's buttons follow the current category and which ones this user can read
     if (!this.embedded) return;
-    const k = `${this._cat}|${this.visibleCats().map((c) => c.type).join(',')}`;
+    const t = this.libTools();
+    const k = `${this._cat}|${this.visibleCats().map((c) => c.type).join(',')}|${t ? `${t.fav}|${t.sort}` : '-'}`;
     if (k !== this._told) { this._told = k; this.dispatchEvent(new CustomEvent('jb-cat', { detail: { cat: this._cat } })); }
   }
   protected shouldUpdate(ch: PropertyValues) { return !(ch.size === 1 && ch.has('hass')); }
@@ -325,6 +326,14 @@ export class JbBrowse extends LitElement {
     this.ensure(); this.renderRoot.querySelector('.scroll')?.scrollTo({ top: 0 });
   }
   private _sortTouched = false;
+  /** 0.7.3 combined tab: the Favorites and sort toggles, drawn by jb-search as small corner icons next to the category
+   *  buttons (null when the list has none: Discover, radio browse modes, a detail page). */
+  libTools(): { fav: boolean | null; sort: string } | null {
+    if (this._cat === DISCOVER_CAT.type || (this._cat === 'radio' && this._rmode !== 'library') || this._stack.length) return null;
+    return { fav: this._cat === 'genre' ? null : this._fav, sort: (sortsFor(this._cat).find((s) => s.id === this._sort) ?? SORTS[0]).label };
+  }
+  toggleFavorites() { this.setFav(); }
+  nextSort() { this.cycleSort(); }
   private setFav() { this._fav = !this._fav; this._stack = []; this.ensure(); }
   private cycleSort() {
     const L = sortsFor(this._cat); const i = L.findIndex((s) => s.id === this._sort);
@@ -766,7 +775,8 @@ export class JbBrowse extends LitElement {
     const catChips = html`<div class="cats">${cats.map((c) => html`<button class="fc ${this._cat === c.type && !top ? 'on' : ''}" data-cat=${c.type} tabindex="-1"
           @pointerdown=${noFocus} @click=${() => this.setCat(c.type)}>${c.type === DISCOVER_CAT.type ? icon('compass', 'i xs') : nothing}${c.label}</button>`)}</div>`;
     const favOk = libTools && this._cat !== 'genre';
-    const bar = !emb || libTools || lart;
+    // 0.7.3: embedded in the combined tab, Favorites and the sort are corner icons in jb-search's category row
+    const bar = !emb || lart;
     return html`<div class="bx">
       ${!bar ? nothing : html`<div class="bar">
         ${home ? html`<div class="cats lhead"><button class="fc back" data-act="home" tabindex="-1" aria-label="Back to Library" @pointerdown=${noFocus}
@@ -775,9 +785,9 @@ export class JbBrowse extends LitElement {
         : emb ? (lart ? catChips : html`<span class="bsp"></span>`) : catChips}
         ${filt ? html`<button class="fc tog flt ${this._lkb || this.lq() ? 'on' : ''}" data-act="filter" tabindex="-1" aria-pressed=${this._lkb ? 'true' : 'false'}
           aria-label="Filter this list" @pointerdown=${noFocus} @click=${() => this.toggleFilter()}>${icon('search', 'i xs')}<span class="fl">Filter</span></button>` : nothing}
-        ${favOk ? html`<button class="fc tog ${this._fav ? 'on' : ''}" data-cat="favorites" tabindex="-1" aria-pressed=${this._fav ? 'true' : 'false'}
+        ${favOk && !emb ? html`<button class="fc tog ${this._fav ? 'on' : ''}" data-cat="favorites" tabindex="-1" aria-pressed=${this._fav ? 'true' : 'false'}
           @pointerdown=${noFocus} @click=${() => this.setFav()}>${icon(this._fav ? 'heart' : 'heartline', 'i xs')}Favorites</button>` : nothing}
-        ${libTools ? html`<button class="fc tog sort" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.cycleSort()}>${icon('sort', 'i xs')}${sort.label}</button>` : nothing}
+        ${libTools && !emb ? html`<button class="fc tog sort" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.cycleSort()}>${icon('sort', 'i xs')}${sort.label}</button>` : nothing}
       </div>`}
       ${modes.length && !top ? html`<div class="modes" role="tablist" aria-label="Stations by">
         ${(['library', ...modes] as RMode[]).map((m) => html`<button class="fc sm ${this._rmode === m ? 'on' : ''}" role="tab" aria-selected=${this._rmode === m ? 'true' : 'false'}
