@@ -11,6 +11,7 @@ import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem } from './types'
 import type { MaBackend, TrackListType } from './backend/types';
 import { MassQueueBackend } from './backend/mass-queue';
 import { defineElement } from './define';
+import { removeFromQueue } from './queue-row-remove';
 import { FavController, heartTpl, heartType } from './heart';
 import { genreId, parseGenreOverview, genreMeta, GENRE_ROW_LIMIT, GENRE_TRACK_PAGE, type GenreSection } from './genres';
 
@@ -270,6 +271,15 @@ export class JbDetail extends LitElement {
       fire(this, 'jukebox-played', { item: it, ...r });
     } catch (err) { this.toast(`Couldn't play ${it.name}`); console.warn('[jukebox-card] play_media failed', err); }
   }
+  private async removeRow(it: MaItem, type: string) {
+    this.closeMenu();
+    try {
+      await removeFromQueue(this, it, type);
+      this.toast(`Removed ${it.name} from the queue`);
+    } catch (e) {
+      this.toast(e instanceof Error ? e.message : `Couldn't remove ${it.name} from the queue`);
+    }
+  }
   /** Header buttons, the whole list. Play (in order) and Shuffle replace the queue, so they ask first; Add does not. */
   private headerAct(mode: 'play' | 'shuffle' | 'add' | 'radio') {
     const e = this.entry; if (!e || !this.hass) return;
@@ -292,11 +302,12 @@ export class JbDetail extends LitElement {
     if (type !== 'track' && type !== 'podcast_episode' && drillable(type, this.config)) { this.press.release(); fire(this, 'jb-nav', { op: 'push', item: it, type }); return; }
     this._sel = this._sel === key ? '' : key;
   }
-  /** Row icons: Add / Play next at once; Replace queue / Start radio (enqueue replace) behind the confirmation. */
+  /** Play Next and Remove act at once; Play Now and Start radio ask first. */
   private rowAct(it: MaItem, type: string, a: RowAct | 'more', el: HTMLElement) {
     const ask = (k: RowAct) => {
       this.closeMenu();
-      if (k === 'add' || k === 'next') { this.play(it, type, k); return; }
+      if (k === 'next') { this.play(it, type, k); return; }
+      if (k === 'remove') { void this.removeRow(it, type); return; }
       this._confirm = { kind: k, item: it, run: () => this.play(it, type, 'replace', k === 'radio') };
     };
     if (a !== 'more') { ask(a); return; }

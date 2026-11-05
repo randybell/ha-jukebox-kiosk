@@ -3,14 +3,15 @@ import { tokens, base } from './styles';
 import { icon } from './icons';
 import { providerLabel } from './providers';
 import {
-  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl, mediaActions, tapActions,
-  playMedia, playMessage, normItem, drillable, canRadio, confirmTpl, type MenuAction, type MenuPos, type ConfirmState,
+  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl, foldedActions,
+  playMedia, playMessage, normItem, drillable, canRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
 } from './shared';
 import './detail-view';
 import type { DetailEntry, JbDetail } from './detail-view';
 export { fromQueueTrack, queueTracks, mergePage, queueEntryId, QUEUE_PAGE_MIN, QUEUE_PAGE_MAX } from './detail-view';
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem, RadioBrowseMode } from './types';
 import { defineElement } from './define';
+import { removeFromQueue } from './queue-row-remove';
 import { radioModes, defaultCountry, countryName, countryPath, MODE_PATH, MODE_LABEL, rbList, type RbListing, type RbFolder } from './radio-browse';
 import {
   discoverWanted, DEFAULT_ROWS, parseRows, pickRows, parseItems, resumeFraction, memGet, memPut, memClear, ROWS_TTL_MS, ITEMS_TTL_MS, DISCOVER_CONCURRENCY,
@@ -539,15 +540,25 @@ export class JbBrowse extends LitElement {
   }
 
   private toast(t: string) { this._toast = t; window.clearTimeout(this._toastTimer); this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400); }
-  async play(it: MaItem, type: string, enqueue: Enqueue = 'play', radio = false) {
+  async play(it: MaItem, type: string, enqueue: Enqueue | 'remove' = 'play', radio = false) {
     if (!this.hass) return;
     this._menu = null; this.press.release();
+    if ((enqueue as string) === 'remove') { await this.removeRow(it, type); return; }
     try {
-      const r = await playMedia(this.hass, this.config, it, type, enqueue, radio);
+      const r = await playMedia(this.hass, this.config, it, type, enqueue as Enqueue, radio);
       if (!r) return;
-      this.toast(playMessage(this.hass, this.config, it, enqueue, radio));
+      this.toast(playMessage(this.hass, this.config, it, enqueue as Enqueue, radio));
       fire(this, 'jukebox-played', { item: it, ...r });
     } catch (err) { this.toast(`Couldn't play ${it.name}`); console.warn('[jukebox-card] play_media failed', err); }
+  }
+  private async removeRow(it: MaItem, type: string) {
+    this._menu = null;
+    try {
+      await removeFromQueue(this, it, type);
+      this.toast(`Removed ${it.name} from the queue`);
+    } catch (e) {
+      this.toast(e instanceof Error ? e.message : `Couldn't remove ${it.name} from the queue`);
+    }
   }
   private root() { return this.renderRoot.querySelector('.bx') as HTMLElement; }
   private tap(it: MaItem, type: string, el: HTMLElement) {
@@ -730,6 +741,17 @@ export class JbBrowse extends LitElement {
   private row(it: MaItem, n?: number) {
     const p = this.press.handlers(it.uri, { it, type: 'track' });
     const fav = !!heartType(this.config, 'track', it);
+    const act = (a: RowAct | 'more', el: HTMLElement) => {
+      const ask = (k: RowAct) => {
+        this._menu = null;
+        if (k === 'next') { void this.play(it, 'track', k); return; }
+        if (k === 'remove') { void this.removeRow(it, 'track'); return; }
+        this._confirm = { kind: k, item: it, run: () => this.play(it, 'track', 'replace', k === 'radio') };
+      };
+      if (a !== 'more') { ask(a); return; }
+      const actions = foldedActions(canRadio('track', it), ask);
+      this._menu = { item: it, type: 'track', pos: menuPos(this.root(), el.closest('.row') as HTMLElement, actions.length), actions };
+    };
     return html`<div class="row ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type="track"
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
@@ -737,8 +759,7 @@ export class JbBrowse extends LitElement {
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b><small>${this.sub(it, 'track')}</small></div>
       ${provTpl(it.uri, it.provider)}<span class="du">${fmtDur(it.duration)}</span>
       ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, 'track'), 'mo fav') : nothing}
-      <button class="mo" tabindex="-1" aria-label="More options for ${it.name}" @pointerdown=${noFocus}
-        @click=${(e: MouseEvent) => this.openMenu(it, 'track', (e.currentTarget as HTMLElement).closest('.row') as HTMLElement)}>${icon('more')}</button>
+      ${rowActsTpl(it, canRadio('track', it), act)}
     </div>`;
   }
 
@@ -912,7 +933,7 @@ export class JbBrowse extends LitElement {
       .scope.typing.textonly { display: none; }
       .scope.typing .sc[data-scope="text"] { display: none; }
     }
-    .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
+    .scroll { flex: 1; min-height: 0; overflow-y: auto; container: np / inline-size; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     /* v0.7 Library home */
     .home { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }

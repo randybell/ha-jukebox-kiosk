@@ -24,7 +24,7 @@ import { libraryTabLabel, combinedOn } from './library-home';
 import { FavStore } from './favorites';
 import { RepeatOneGuard } from './repeat';
 
-export const VERSION = '0.7.5';
+export const VERSION = '0.7.6';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'now', label: 'Now Playing', icon: 'disc' },
   { id: 'browse', label: 'Browse', icon: 'browse' },
@@ -240,11 +240,12 @@ export class JukeboxCard extends LitElement {
   /** caps changed (server answered, or a new backend): new config object so the views re-read the feature flags */
   private applyCaps(refresh = true) {
     if (!this._base) return;
-    this._base = { ...this._base, _backend: this.backend };
+    this._base = { ...this._base, _backend: this.backend, _queue: this.queue };
     this._config = this.effective();
     this.dataset.backend = this.backend?.kind ?? '';
     if (this._tab === 'search' && combinedOn(this._config)) this._tab = 'browse';
     if (this._tab !== 'now' && !this.tabs().some((t) => t.id === this._tab)) this._tab = 'now';
+    this.queue.configForRemove = this._config;
     if (refresh && this.hass) this.queue.refreshSoon(0);
     this.startPush();
     this.requestUpdate();
@@ -335,6 +336,7 @@ export class JukeboxCard extends LitElement {
     this.addEventListener('pointerdown', this.onActivity, { capture: true });
     this.addEventListener('keydown', this.onActivity, { capture: true });
     this.addEventListener('jukebox-played', this.onPlayed as EventListener);
+    this.addEventListener('jukebox-queue-removed', this.onPlayed as EventListener);
     this.addEventListener('jukebox-nav', this.onNav as EventListener);
     this.addEventListener('jukebox-favorites-changed', this.onFavs as EventListener);
     this.addEventListener('jukebox-status', this.onStatus as EventListener);
@@ -799,9 +801,9 @@ export class JukeboxCard extends LitElement {
           ${bd === 'light' ? html`<canvas class="bdl" width="64" height="40" aria-hidden="true"></canvas>` : nothing}
           ${view('now', html`<jb-now ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
           ${combinedOn(c)
-            ? view('browse', html`<jb-search combined ?large=${!!c.large_buttons} .hass=${h} .config=${c} ?active=${this._tab === 'browse'}></jb-search>`)
-            : html`${view('browse', html`<jb-browse ?large=${!!c.large_buttons} .hass=${h} .config=${c} ?active=${this._tab === 'browse'}></jb-browse>`)}
-          ${view('search', html`<jb-search ?large=${!!c.large_buttons} .hass=${h} .config=${c} ?active=${this._tab === 'search'}></jb-search>`)}`}
+            ? view('browse', html`<jb-search combined ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-search>`)
+            : html`${view('browse', html`<jb-browse ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-browse>`)}
+          ${view('search', html`<jb-search ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'search'}></jb-search>`)}`}
           ${view('queue', html`<jb-queue ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'queue'}></jb-queue>`)}
           ${tabs.some((t) => t.id === 'lyrics') ? view('lyrics', html`<jb-lyrics mode="tab" .hass=${h} .config=${c} .store=${this.lyrics} .art=${pic}
             ?active=${this._tab === 'lyrics' && !this._saver && !this._stage}></jb-lyrics>`) : nothing}

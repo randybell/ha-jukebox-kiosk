@@ -4,6 +4,11 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.7.6 — 2026-11-05
+
+### Changed
+- Queue buttons now read Play Next, Play Now and Remove everywhere.
+
 ## 0.7.5 — 2026-11-05
 
 ### Changed

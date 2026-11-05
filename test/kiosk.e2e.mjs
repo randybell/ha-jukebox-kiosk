@@ -67,30 +67,30 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const p = await openQ('&admin=1');
   let ids = await nextIds(p);
   let n = await nws(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[3]}"] .qa[data-action="playnext"]')`);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[3]}"] .ra-b[data-action="playnext"]')`);
   await wait(p, `${QV}.querySelector('.qr.next')?.dataset.id === '${ids[3]}' || [...${QV}.querySelectorAll('.qr.next')][1]?.dataset.id === '${ids[3]}'`, 3000);
   await sleep(800);
   let m = maOf(await ws(p, n), 'player_queues/move_item');
   let q = await maQueue(p);
-  check('Q1 Play next → jukebox_kiosk/ma player_queues/move_item {queue_id, queue_item_id, pos_shift}; MA queue agrees',
+  check('Q1 Play Next → jukebox_kiosk/ma player_queues/move_item {queue_id, queue_item_id, pos_shift}; MA queue agrees',
     m.length === 1 && m[0].args.queue_item_id === ids[3] && typeof m[0].args.pos_shift === 'number' && typeof m[0].args.queue_id === 'string' && q.indexOf(ids[3]) === q.indexOf(ids[0]) - 1, J({ m: m.map((x) => x.args), q: q.slice(0, 6) }));
   const pushed = (await ws(p, n)).filter((x) => x.type === 'queue_items').length;
   check('Q2 the server push (queue_updated) refreshes the window', pushed >= 1, String(pushed));
   ids = await nextIds(p);
   n = await nws(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[4]}"] .qa[data-action="remove"]')`);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[4]}"] .ra-b[data-action="remove"]')`);
   await sleep(900);
   m = maOf(await ws(p, n), 'player_queues/delete_item');
   check('Q3 Remove → player_queues/delete_item {item_id_or_index}; the row is gone', m.length === 1 && m[0].args.item_id_or_index === ids[4] && !(await maQueue(p)).includes(ids[4]) && !(await nextIds(p)).includes(ids[4]), J(m.map((x) => x.args)));
   ids = await nextIds(p);
   n = await nws(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[2]}"] .qa[data-action="playnow"]')`);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[2]}"] .ra-b[data-action="playnow"]')`);
   await wait(p, `!!${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`, 2000);
   await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   await sleep(900);
   m = maOf(await ws(p, n), 'player_queues/play_index');
   const cur = await ev(p, `(() => { const Q = window.__queues['${EV}']; return Q.items[Q.index]?.queue_item_id; })()`);
-  check('Q4 Play now (after the confirm) → player_queues/play_index {index: queue_item_id}; MA plays it', m.length === 1 && m[0].args.index === ids[2] && cur === ids[2], J({ m: m.map((x) => x.args), cur }));
+  check('Q4 Play Now (after the confirm) → player_queues/play_index {index: queue_item_id}; MA plays it', m.length === 1 && m[0].args.index === ids[2] && cur === ids[2], J({ m: m.map((x) => x.args), cur }));
   // an outside change (another client edits the queue) reaches the card through the push alone
   n = await nws(p);
   await ev(p, `(() => { const Q = window.__queues['${EV}']; Q.items.splice(Q.items.length - 1, 1); window.__kioskPush('${EV}'); })()`);
@@ -142,7 +142,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const p = await openQ(`&admin=1&kcaps=${caps}`);
   await sleep(300);
   const acts = await ev(p, `[...${QV}.querySelectorAll('.qr .qa')].filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.dataset.action ?? 'more')`);
-  check('G1 no queue_play / queue_edit → no Play now / Play next / Move / Remove icons', !acts.some((a) => ['playnow', 'playnext', 'up', 'down', 'remove'].includes(a)), J([...new Set(acts)]));
+  check('G1 no queue_play / queue_edit → no Play Now / Play Next / Move / Remove icons', !acts.some((a) => ['playnow', 'playnext', 'up', 'down', 'remove'].includes(a)), J([...new Set(acts)]));
   const tabs = await ev(p, `[...__card.shadowRoot.querySelectorAll('.tab')].map((t) => t.dataset.tab)`);
   check('G2 lyrics feature off → no Lyrics tab', !tabs.includes('lyrics') && tabs.includes('queue'), J(tabs));
   const n = await nws(p);
@@ -395,7 +395,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const onTop = await ev(p, `(() => { const c = __card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st'); if (!c) return 'no chip'; const r = c.getBoundingClientRect();
     const hit = __card.shadowRoot.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return hit?.localName ?? 'none'; })()`);
   check('S6b station sheet heart: the status chip shows above the open sheet (top right)', onTop === 'jb-speakers', onTop);
-  // Play replaces the queue, like the old tap's Play now
+  // Play replaces the queue, like the old tap's Play Now
   await tap(p, `${ST}.querySelector('[data-action=play]')`); await sleep(300);
   const pl = await plays(p);
   check('S7 Play → one play_media {station uri, media_type radio, enqueue play}; the sheet closes', pl.length === 1 && pl[0].media_id === tileUri && pl[0].media_type === 'radio'
@@ -429,9 +429,9 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('S11 sheet heart off on a provider result → item_by_uri lookup, then remove_item with the library id; heart off',
     m.map((x) => x.command).join() === 'music/item_by_uri,music/favorites/remove_item' && /^\d+$/.test(String(m[1].args.library_item_id)) && (await sheet(p)).fav === 'false', J(m));
   await ev(p, `__card.shadowRoot.querySelector('jb-station').dispatchEvent(new CustomEvent('jukebox-station-close', { bubbles: true, composed: true }))`); await sleep(150);
-  await tap(p, `${row}.querySelector('[data-act=add]')`); await sleep(300);
+  await tap(p, `${row}.querySelector('[data-act=next]')`); await sleep(300);
   const pa = await plays(p);
-  check('S12 the row Add icon still works as before (play_media enqueue add), no sheet', pa.length === 1 && pa[0].enqueue === 'add' && pa[0].media_id === st && !(await sheet(p)), J(pa));
+  check('S12 the labeled Play Next action sends enqueue next, with no sheet', pa.length === 1 && pa[0].enqueue === 'next' && pa[0].media_id === st && !(await sheet(p)), J(pa));
   await p.close();
 }
 // ---------------- 10. v0.7 hearts: every row, tile and page (library class), one shared store, no confirmation ----------------

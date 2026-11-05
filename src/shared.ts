@@ -238,61 +238,58 @@ export function menuTpl(pos: MenuPos, head: { item: { name: string } & Partial<M
     </div>`;
 }
 
-/** Long-press / ⋮ menu: every action. Play now is first; a tap never plays, so it has to be here. */
-export function mediaActions(play: (enq: Enqueue) => void, open: (() => void) | undefined, ask: (kind: 'replace' | 'radio') => void, radio: boolean): MenuAction[] {
+/** Long-press / ⋮ menu: Play Now first; a tap never plays by itself. */
+export function mediaActions(play: (enq: Enqueue | 'remove') => void, open: (() => void) | undefined, ask: (kind: 'replace' | 'radio') => void, radio: boolean): MenuAction[] {
   return [
     ...(open ? [{ id: 'open', icon: 'open', label: 'Open', run: open }] : []),
-    { id: 'play', icon: 'play', label: 'Play now', run: () => play('play') },
-    { id: 'next', icon: 'qnext', label: 'Play next', run: () => play('next') },
-    { id: 'add', icon: 'qadd', label: 'Add to queue', run: () => play('add') },
+    { id: 'play', icon: 'play', label: 'Play Now', run: () => play('play') },
+    { id: 'next', icon: 'qnext', label: 'Play Next', run: () => play('next') },
+    { id: 'remove', icon: 'trash', label: 'Remove', run: () => play('remove') },
     // these two replace what everyone is hearing: the caller shows a confirmation first
-    { id: 'replace', icon: 'replace', label: 'Replace queue…', run: () => ask('replace') },
+    { id: 'replace', icon: 'play', label: 'Play Now', run: () => ask('replace') },
     // Start radio only where MA can seed it (track / artist / album; never a station, podcast, audiobook or playlist)
     ...(radio ? [{ id: 'radio', icon: 'tower', label: 'Start radio…', run: () => ask('radio') }] : []),
   ];
 }
 /** Tap on a playable item (track, station, episode, audiobook): a small sheet, nothing plays until a choice is made. */
-export function tapActions(play: (enq: Enqueue) => void, radioStation = false): MenuAction[] {
+export function tapActions(play: (enq: Enqueue | 'remove') => void, radioStation = false): MenuAction[] {
   return [
-    { id: 'play', icon: 'play', label: 'Play now', run: () => play('play') },
+    { id: 'play', icon: 'play', label: 'Play Now', run: () => play('play') },
     ...(radioStation ? [] : [
-      { id: 'next', icon: 'qnext', label: 'Play next', run: () => play('next') },
-      { id: 'add', icon: 'qadd', label: 'Add to queue', run: () => play('add') },
+      { id: 'next', icon: 'qnext', label: 'Play Next', run: () => play('next') },
+      { id: 'remove', icon: 'trash', label: 'Remove', run: () => play('remove') },
     ]),
   ];
 }
-/* ---------------- row actions: Add to queue / Play next / Replace queue / Start radio ---------------- */
-export type RowAct = 'add' | 'next' | 'replace' | 'radio';
-/**
- * Can MA radio mode be seeded from this item? Only track / artist / album: those are the documented seeds and the only
- * ones confirmed from the exports (play_media has a plain `radio_mode` boolean, nothing per type). Radio stations are
- * already streams, podcasts / audiobooks / episodes have no "similar tracks"; playlists are left out until confirmed.
- */
+/* ---------------- row actions: Play Next / Play Now / Remove / Start radio ---------------- */
+export type RowAct = 'remove' | 'next' | 'replace' | 'radio';
+/** Can MA radio mode be seeded from this item? */
 export const canRadio = (type: string, it: Partial<MaItem>) =>
   ['track', 'artist', 'album'].includes(type) && !isRadio(it) && !/^(podcast|audiobook)/.test(String(it.media_type ?? ''));
+export const QUEUE_ACTIONS = ['next', 'replace', 'remove'] as const;
+export const QUEUE_ACTION_LABELS: Record<(typeof QUEUE_ACTIONS)[number], string> = { next: 'Play Next', replace: 'Play Now', remove: 'Remove' };
 const RA: Record<RowAct, { icon: string; title: string; label: (n: string) => string }> = {
-  add: { icon: 'qadd', title: 'Add to queue', label: (n) => `Add ${n} to the queue` },
-  next: { icon: 'qnext', title: 'Play next', label: (n) => `Play ${n} next` },
-  replace: { icon: 'replace', title: 'Replace queue', label: (n) => `Replace the queue with ${n}` },
+  remove: { icon: 'trash', title: QUEUE_ACTION_LABELS.remove, label: (n) => `Remove ${n} from the queue` },
+  next: { icon: 'qnext', title: QUEUE_ACTION_LABELS.next, label: (n) => `Play ${n} next` },
+  replace: { icon: 'play', title: QUEUE_ACTION_LABELS.replace, label: (n) => `Play ${n} now` },
   radio: { icon: 'tower', title: 'Start radio', label: (n) => `Start radio from ${n}` },
 };
-/**
- * The row's icon buttons (48 px targets, 44 px on phones). On a very narrow row (< 330 px, e.g. a 320 px phone) Replace
- * and Start radio fold into a ⋯ button so the targets keep their size and the title still gets room.
- */
+/** Every queueing surface uses the same three visible labels, in this order. */
 export function rowActsTpl(it: MaItem, radio: boolean, run: (a: RowAct | 'more', el: HTMLElement) => void) {
-  const acts: RowAct[] = radio ? ['add', 'next', 'replace', 'radio'] : ['add', 'next', 'replace'];
-  const b = (a: RowAct) => html`<button class="ra-b ${a === 'replace' || a === 'radio' ? 'x2' : ''}" data-act=${a} tabindex="-1" title=${RA[a].title}
-    aria-label=${RA[a].label(it.name)} @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(a, e.currentTarget as HTMLElement); }}>${icon(RA[a].icon)}</button>`;
-  return html`<div class="ra" data-n=${acts.length}>${acts.map(b)}<button class="ra-b ra-more" data-act="more" tabindex="-1" title="More"
-    aria-label="More actions for ${it.name}" @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run('more', e.currentTarget as HTMLElement); }}>${icon('more')}</button></div>`;
+  const acts: RowAct[] = [...QUEUE_ACTIONS, ...(radio ? ['radio' as const] : [])];
+  const b = (a: RowAct) => html`<button class="ra-b ${a === 'radio' ? 'x2' : ''}" data-act=${a} tabindex="-1" title=${RA[a].title}
+    aria-label=${RA[a].label(it.name)} @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(a, e.currentTarget as HTMLElement); }}>${icon(RA[a].icon)}<span>${RA[a].title}</span></button>`;
+  return html`<div class="ra" data-n=${acts.length}>${acts.map(b)}${radio ? html`<button class="ra-b ra-more" data-act="more" tabindex="-1" title="More"
+    aria-label="More actions for ${it.name}" @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run('more', e.currentTarget as HTMLElement); }}>${icon('more')}<span>More</span></button>` : nothing}</div>`;
 }
-/** ⋯ (narrow rows only): the folded actions. Each still goes through the confirmation. */
+/** One labeled queue button for the Queue tab's exact queue-row handlers. */
+export function queueActTpl(a: (typeof QUEUE_ACTIONS)[number], name: string, action: string, run: () => void, dis = false) {
+  return html`<button class="ra-b" data-act=${a} data-action=${action} tabindex="-1" title=${RA[a].title} aria-label=${RA[a].label(name)} ?disabled=${dis}
+    @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(); }}>${icon(RA[a].icon)}<span>${RA[a].title}</span></button>`;
+}
+/** Very narrow rows keep Start radio in an overflow sheet, not the queue labels. */
 export function foldedActions(radio: boolean, ask: (a: RowAct) => void): MenuAction[] {
-  return [
-    { id: 'replace', icon: 'replace', label: 'Replace queue…', run: () => ask('replace') },
-    ...(radio ? [{ id: 'radio', icon: 'tower', label: 'Start radio…', run: () => ask('radio') }] : []),
-  ];
+  return [...(radio ? [{ id: 'radio', icon: 'tower', label: 'Start radio…', run: () => ask('radio') }] : [])];
 }
 
 /* ---------------- confirmation before anything that clears the shared queue ---------------- */
@@ -303,8 +300,8 @@ const CONFIRM: Record<ConfirmKind, { q: (n: string) => string; body: string; ok:
   radio: { q: (n) => `Start radio from “${n}”?`, body: 'This replaces the current queue for everyone.', ok: 'Start radio', icon: 'tower' },
   play: { q: (n) => `Play “${n}” now?`, body: 'This replaces the current queue for everyone.', ok: 'Play', icon: 'play' },
   shuffle: { q: (n) => `Shuffle “${n}” now?`, body: 'This replaces the current queue for everyone.', ok: 'Shuffle', icon: 'shuffle' },
-  // queue-row Play now (0.5.0): jumps the shared queue, so it asks like Replace does
-  jump: { q: () => 'Play this now?', body: 'The current song will stop.', ok: 'Play now', icon: 'play' },
+  // Queue-row Play Now jumps the shared queue, so it asks first
+  jump: { q: () => 'Play this now?', body: 'The current song will stop.', ok: 'Play Now', icon: 'play' },
 };
 export function confirmTpl(c: ConfirmState | null, close: () => void) {
   if (!c) return nothing;
@@ -384,12 +381,23 @@ export const mediaStyles = css`
     .row .du { display: none; }
     .rt small .du2 { display: inline; }
     .ar.th { width: 40px; height: 40px; }
-    .ra-b { width: 44px; height: 44px; }
-    .ra-b .i { width: 22px; height: 22px; }
+    .ra { gap: 3px; }
+    .ra-b { min-width: 44px; min-height: 44px; padding: 5px 4px; font-size: 9px; }
+    .ra-b .i { width: 18px; height: 18px; }
     .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: 6px; }
     .row.hasfav .ra-b { width: 40px; }
   }
-  @container rows (max-width: 330px) {
+  @container rows (max-width: 450px) {
+    .row .rt { grid-column: 2; grid-row: 1; }
+    .row .ra { grid-column: 1 / -1; grid-row: 2; flex-direction: row; justify-content: flex-start; flex-wrap: wrap; gap: 3px; }
+    .row .ra-b { flex-direction: row; min-height: 44px; min-width: 44px; padding: 5px 4px; font-size: 9px; }
+    .row .ra-b .i { flex: none; }
+    .row.hasfav .ra-b { width: auto; }
+    .row.hasfav { grid-template-rows: auto auto auto; }
+    .row.hasfav .ra { grid-column: 1 / -1; grid-row: 3; }
+    .row .fav { display: none; }
+  }
+  @container rows (max-width: 720px) {
     .ra-b.x2 { display: none; }
     .ra-more { display: grid; }
   }
