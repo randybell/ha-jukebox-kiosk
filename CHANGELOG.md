@@ -4,6 +4,8 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.7.6 — 2026-11-05
+
 ### Added
 - **Search queue.** On the Queue tab, **Search queue** opens an on-screen keyboard that stays open. The list narrows to songs whose title, artist or album matches what you type. **Done** closes the search.
 
