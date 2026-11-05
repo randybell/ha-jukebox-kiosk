@@ -127,6 +127,51 @@ async function tapLastRoom(page, name, expr, quietExtra, re = '/last speaker/') 
   return must(name, r.ok, `the Pause question never appeared after ${r.taps} tap(s); chip=${J(await chip(page))}`);
 }
 
+// A Node sleep started after a chip or Undo bar is visible has already missed the start of the
+// window.setTimeout that hides it. C7 failed CI that way ({there:false, gone:true}): the 4 s
+// timer was running before the test's 3.3 s sample. Record those timers in the page instead.
+async function armTimers(page) {
+  await page.evaluate(() => {
+    if (window.__jbArm) return;
+    const orig = window.setTimeout.bind(window);
+    window.__jbArm = [];
+    window.setTimeout = (fn, ms, ...rest) => {
+      const rec = { ms: Number(ms) || 0, at: performance.now(), fired: 0, present: null };
+      window.__jbArm.push(rec);
+      return orig(function (...args) {
+        try { rec.present = window.__jbArmPresent ? !!window.__jbArmPresent() : null; } catch { rec.present = null; }
+        rec.fired = performance.now();
+        return typeof fn === 'function' ? fn.apply(this, args) : undefined;
+      }, ms, ...rest);
+    };
+  });
+}
+// presentExpr is true while the control is showing. Call armTimers before the action that starts the timer.
+async function hideByTimer(page, presentExpr, ms, budget = ms + 12000) {
+  await page.evaluate((expr) => { window.__jbArmPresent = () => !!eval(expr); }, presentExpr);
+  return page.evaluate(async (want, budget) => {
+    const present = () => { try { return !!window.__jbArmPresent(); } catch { return false; } };
+    const untilSeen = performance.now() + Math.min(5000, budget);
+    while (!present() && performance.now() < untilSeen) await new Promise((r) => setTimeout(r, 20));
+    if (!present()) return { appeared: false };
+    const shown = performance.now();
+    const rec = [...(window.__jbArm || [])].reverse().find((r) => r.ms === want && r.at >= shown - 3000);
+    if (!rec) return { appeared: true, found: false, armed: (window.__jbArm || []).filter((r) => r.at >= shown - 3000).map((r) => r.ms) };
+    const until = performance.now() + budget;
+    while (!rec.fired && performance.now() < until) await new Promise((r) => setTimeout(r, 40));
+    const t0 = performance.now();
+    while (present() && performance.now() - t0 < 1500) {
+      await new Promise((r) => { const t = setTimeout(r, 50); requestAnimationFrame(() => { clearTimeout(t); r(); }); });
+    }
+    return {
+      appeared: true, found: true, ms: rec.ms, fired: rec.fired > 0,
+      life: rec.fired ? Math.round(rec.fired - rec.at) : 0,
+      presentAtFire: rec.present, gone: !present(),
+    };
+  }, ms, budget);
+}
+const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtFire === true && life.gone && life.life >= life.ms - 50);
+
 // ───────────── 0.4 regression (fixed is the default) ─────────────
 {
   const seq = async (cfg) => {
@@ -712,14 +757,14 @@ async function tapLastRoom(page, name, expr, quietExtra, re = '/last speaker/') 
   const before = await maUris(p), ids0 = await ids(p), victim = ids0[2], vTitle = await titleOf(p, victim);
   const vUri = before[(await maIds(p)).indexOf(victim)];
   await tap(p, `${QV}.querySelector('.qr[data-id="${victim}"] .qa[data-action="remove"]')`);
-  await sleep(120);
+  // the Undo bar is shown before removeRow finishes; wait until the row is actually gone
+  const settled = await wait(p, `!!${QV}.querySelector('.undo .ub') && !${QV}.querySelector('.confirm') && ![...${QV}.querySelectorAll('.qr')].some((r) => r.dataset.id === '${victim}') && !window.__queues['media_player.everywhere'].items.some((x) => x.queue_item_id === '${victim}')`, 4000);
   const dlg0 = await ev(p, `!!${QV}.querySelector('.confirm')`);
   let u = await bar(p);
-  await sleep(700);
   let sc = await qcmds(p);
   check('D1 Remove: no dialog; player_queues/delete_item {queue_id, item_id_or_index: queue_item_id}; gone from the card and from MA; "Removed <title>. Undo" shows',
-    !dlg0 && sc.length === 1 && J(sc[0]) === J({ command: 'player_queues/delete_item', data: { queue_id: 'syncgroup_everywhere', item_id_or_index: victim } })
-      && !(await ids(p)).includes(victim) && !(await maIds(p)).includes(victim) && u && u.text === `Removed ${vTitle}.` && u.btn === 'Undo', J({ sc, u }));
+    settled && !dlg0 && sc.length === 1 && J(sc[0]) === J({ command: 'player_queues/delete_item', data: { queue_id: 'syncgroup_everywhere', item_id_or_index: victim } })
+      && !(await ids(p)).includes(victim) && !(await maIds(p)).includes(victim) && u && u.text === `Removed ${vTitle}.` && u.btn === 'Undo', J({ settled, sc, u }));
   const nowId = await ev(p, `${QV}.querySelector('.qr.now')?.dataset.id`);
   check('D2 the playing row has no Remove icon (and played rows neither)', nowId && !(await ev(p, `!!${QV}.querySelector('.qr.now .qa[data-action="remove"], .qr.past .qa[data-action="remove"]')`)));
   await tap(p, `${QV}.querySelector('.undo .ub')`);
@@ -733,13 +778,14 @@ async function tapLastRoom(page, name, expr, quietExtra, re = '/last speaker/') 
       && !(await maIds(p)).includes(victim) && (await toastT(p)) === `${vTitle} is back` && !(await bar(p)), J({ sc, before, after }));
   await p.close();
 
-  // the bar leaves after about 5 s
+  // the bar leaves on the default 5 s queue-undo timer (not a Node sleep, which starts late)
   p = await openQ('&admin=1');
   const v2 = (await ids(p))[3];
-  await tap(p, `${QV}.querySelector('.qr[data-id="${v2}"] .qa[data-action="remove"]')`);
-  await sleep(4000); const at4 = !!(await bar(p));
-  await sleep(1600); const at56 = !!(await bar(p));
-  check('D4 the Undo bar stays about 5 s (there at 4 s, gone by 5.6 s)', at4 && !at56, J({ at4, at56 }));
+  await armTimers(p);
+  const rm = `${QV}.querySelector('.qr[data-id="${v2}"] .qa[data-action="remove"]')`;
+  const barUp = await tapRegistered(p, rm, `!!${QV}.querySelector('.undo')`, 3000);
+  const life = barUp.ok ? await hideByTimer(p, `${QV}.querySelector('.undo')`, 5000) : { appeared: false };
+  check('D4 the Undo bar stays for the default 5 s window, then hides', barUp.ok && life.ms === 5000 && heldFor(life), J({ taps: barUp.taps, life }));
   await p.close();
 
   // re-add fails → the toast says so
@@ -1076,47 +1122,40 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
   for (const vp of [{ width: 1920, height: 1080 }, { width: 390, height: 844, isMobile: true, hasTouch: true }]) {
     const tag = `${vp.width}x${vp.height}`;
     const p = await open('&spk=dyn&admin=1&every=dyn&grp=slow', vp);
+    await armTimers(p);
     await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 8000);
     const n0 = (await ma(p, 'players/cmd/set_members')).length;
-    await tap(p, ra(GAR));
-    // wait for the chip to render (reading it straight after the tap raced Lit's update under load); grp=slow keeps
-    // "Regrouping…" up for longer than this wait
-    await wait(p, `!!${SR}.querySelector('.st .ct')?.textContent.trim()`, 3000);
+    // grp=slow keeps "Regrouping…" up; confirm the tap landed (one retry) before reading the chip
+    const dropped = await tapRegistered(p, ra(GAR), `${SR}.querySelector('.st .ct')?.textContent.trim() === 'Regrouping…'`, 4000);
     const pop = await popups(p), c1 = await chip(p), g = await geo(p);
-    check(`C1 ${tag} drop the leader (Garage) from Now Playing: no dialog, no toast or Undo bar; one chip says "Regrouping…"`, !pop && c1?.text === 'Regrouping…' && (await nChips(p)) === 1, J({ pop, c1 }));
+    check(`C1 ${tag} drop the leader (Garage) from Now Playing: no dialog, no toast or Undo bar; one chip says "Regrouping…"`, dropped.ok && !pop && c1?.text === 'Regrouping…' && (await nChips(p)) === 1, J({ pop, c1, taps: dropped.taps }));
     check(`C2 ${tag} the chip sits top-right, under the header clock (does not cover it), right edge lined up with the card`,
       !!c1 && c1.t >= g.cb - 0.5 && c1.t - g.cb < 40 && c1.r <= g.kr + 0.5 && g.kr - c1.r <= 64 && c1.l > g.kr - Math.max(g.kw * 0.75, 300) && c1.h <= 64, J({ c1, g }));
-    const pe = await ev(p, `[getComputedStyle(${SPK}).pointerEvents, getComputedStyle(${SR}.querySelector('.st')).pointerEvents]`);
-    check(`C3 ${tag} only the chip takes taps (the panel layer stays pointer-events: none)`, pe[0] === 'none' && pe[1] === 'auto', J(pe));
+    const pe = await ev(p, `(() => { const el = ${SR}.querySelector('.st'); if (!el) return null; return [getComputedStyle(${SPK}).pointerEvents, getComputedStyle(el).pointerEvents]; })()`);
+    check(`C3 ${tag} only the chip takes taps (the panel layer stays pointer-events: none)`, !!pe && pe[0] === 'none' && pe[1] === 'auto', J(pe));
     await wait(p, `/Garage left/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
     const c2 = await chip(p);
     check(`C4 ${tag} after MA confirms: "Garage left · …" with Undo, replacing "Regrouping…" (still one chip)`, /^Garage left/.test(c2?.text ?? '') && c2?.act === 'Undo' && (await nChips(p)) === 1 && !(await popups(p)), J(c2));
-    await tap(p, `${SR}.querySelector('.st [data-action="undo"]')`);
-    await wait(p, `window.__ma.G.${GSM}.members.includes('${GW}')`, 5000);
+    const undoBtn = `${SR}.querySelector('.st [data-action="undo"]')`;
+    const undone = await tapRegistered(p, undoBtn, `window.__ma.G.${GSM}.members.includes('${GW}') || ${SR}.querySelector('.st .ct')?.textContent === 'Undone'`, 5000);
     const u = (await ma(p, 'players/cmd/set_members')).slice(n0).at(-1);
     await wait(p, `${SR}.querySelector('.st .ct')?.textContent === 'Undone'`, 3000);
-    check(`C5 ${tag} Undo in the chip → set_members(add Garage); chip says "Undone"`, J(u?.data.player_ids_to_add) === J([GW]) && (await toast(p)) === 'Undone', J({ u, t: await toast(p) }));
-    const tUndone = Date.now();
-    await sleep(Math.max(0, 2500 - (Date.now() - tUndone)));
-    const at25 = !!(await chip(p));
-    await sleep(2200);
-    const at47 = !!(await chip(p));
-    check(`C6 ${tag} the chip hides by itself after about 4 s (there at 2.5 s, gone by 4.7 s)`, at25 && !at47, J({ at25, at47 }));
+    check(`C5 ${tag} Undo in the chip → set_members(add Garage); chip says "Undone"`, undone.ok && J(u?.data.player_ids_to_add) === J([GW]) && (await toast(p)) === 'Undone', J({ u, t: await toast(p), taps: undone.taps }));
+    // "Undone" is a plain chip: default 4 s (__jbChipMs), not the long test Undo override
+    const life6 = await hideByTimer(p, `${SR}.querySelector('.st')`, 4000);
+    check(`C6 ${tag} the chip hides by itself after the 4 s window`, life6.ms === 4000 && heldFor(life6), J(life6));
     await p.close();
   }
   {
-    // default Undo window (no test override): about 4 s
+    // default Undo window (no test override): the timer the chip actually armed, not a Node sleep
     const p = await open('&spk=dyn&admin=1&every=dyn');
     await p.evaluate(() => { delete window.__jbUndoMs; });
+    await armTimers(p);
     await wait(p, `${ra(KIT)}?.dataset.act === 'drop'`, 4000);
-    await tap(p, ra(KIT));
-    await wait(p, `!!${SR}.querySelector('.st [data-action="undo"]')`, 3000);
-    const t0 = Date.now();
-    await sleep(3300);
-    const there = !!(await ev(p, `${SR}.querySelector('.st [data-action="undo"]')`));
-    await sleep(Math.max(0, 4700 - (Date.now() - t0)));
-    const gone = !(await chip(p));
-    check('C7 "Kitchen left · Undo" stays tappable about 4 s by default (there at 3.3 s, gone by 4.7 s)', there && gone, J({ there, gone }));
+    const undoQ = `!!${SR}.querySelector('.st [data-action="undo"]') && /Kitchen left/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`;
+    const reg = await tapRegistered(p, ra(KIT), undoQ, 5000);
+    const life = reg.ok ? await hideByTimer(p, `${SR}.querySelector('.st [data-action="undo"]')`, 4000) : { appeared: false };
+    check('C7 "Kitchen left · Undo" stays tappable for the default 4 s window, then hides', reg.ok && life.ms === 4000 && heldFor(life), J({ taps: reg.taps, life }));
     await p.close();
   }
   {
@@ -1163,15 +1202,15 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
     // a failed MA call: the chip in its error style, never a dialog
     const p = await open('&spk=dyn&admin=1&every=dyn&grp=fail', { width: 1920, height: 1080 });
     await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 4000);
-    await tap(p, ra(GAR));
-    await wait(p, `${SR}.querySelector('.st')?.dataset.kind === 'error'`, 4000);
-    const c = await chip(p), g = await geo(p);
-    const look = await ev(p, `(() => { const s = getComputedStyle(${SR}.querySelector('.st')); return [s.backgroundColor, s.color, s.fontSize]; })()`);
+    // a missed tap used to time out the wait and then crash getComputedStyle on a missing chip
+    const reg = await tapRegistered(p, ra(GAR), `${SR}.querySelector('.st')?.dataset.kind === 'error'`, 6000);
+    const c = reg.ok ? await chip(p) : null, g = reg.ok ? await geo(p) : null;
+    const look = reg.ok ? await ev(p, `(() => { const el = ${SR}.querySelector('.st'); if (!el) return null; const s = getComputedStyle(el); return [s.backgroundColor, s.color, s.fontSize]; })()`) : null;
     check('C13 set_members fails → error chip "Couldn\'t drop Garage: …" top-right (white on black inverted, ≥ 14px), no dialog; Garage stays in',
-      /^Couldn't drop Garage/.test(c?.text ?? '') && !(await popups(p)) && c.t >= g.cb - 0.5 && look[0] === 'rgb(255, 255, 255)' && look[1] === 'rgb(0, 0, 0)' && parseFloat(look[2]) >= 14
-      && (await maMembers(p, GSM)).includes(GW), J({ c, look }));
-    await tap(p, `${SR}.querySelector('.st [data-action="cancel"]')`);
-    check('C14 the error chip can be dismissed', !(await chip(p)));
+      reg.ok && !!c && !!g && !!look && /^Couldn't drop Garage/.test(c?.text ?? '') && !(await popups(p)) && c.t >= g.cb - 0.5 && look[0] === 'rgb(255, 255, 255)' && look[1] === 'rgb(0, 0, 0)' && parseFloat(look[2]) >= 14
+      && (await maMembers(p, GSM)).includes(GW), J({ taps: reg.taps, c, look }));
+    if (reg.ok) await tap(p, `${SR}.querySelector('.st [data-action="cancel"]')`);
+    check('C14 the error chip can be dismissed', reg.ok && !(await chip(p)), reg.ok ? '' : 'no error chip');
     await p.close();
   }
   {
