@@ -278,6 +278,33 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   await a.close();
 }
 
+// ---------------- keyboard always open (default) on every size; library_keyboard: tap is the opt-in fallback ----------------
+for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }], ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }],
+  ['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }], ['360x640', { width: 360, height: 640, isMobile: true, hasTouch: true }]]) {
+  const p = await open('&ha=toolbar&sidebar=none', {}, vp);
+  await wait(p, `${SV}.querySelectorAll('.srcs .src').length > 2`);
+  const g = await ev(p, `(() => { const R = (el) => { const b = el?.getBoundingClientRect(); return b && b.height ? { t: b.top, b: b.bottom, l: b.left, r: b.right } : null; };
+    const s = ${SV}, res = R(s.querySelector('.lib:not([hidden])') ?? s.querySelector('.res .scroll')), kb = R(s.querySelector('jb-keyboard')), nav = R(${C}.querySelector('.tabs'));
+    const parts = { q: R(s.querySelector('.qbar')), srcs: R(s.querySelector('.srcs')), cats: R(s.querySelector('.lcats')), list: res, kb };
+    const ov = (a, c) => a.l < c.r - 0.5 && c.l < a.r - 0.5 && a.t < c.b - 0.5 && c.t < a.b - 0.5;
+    const k = Object.keys(parts), bad = [];
+    for (let i = 0; i < k.length; i++) { if (!parts[k[i]]) bad.push(k[i] + ' missing'); else if (parts[k[i]].b > nav.t + 0.5) bad.push(k[i] + ' under the tabs');
+      for (let j = i + 1; j < k.length; j++) if (parts[k[i]] && parts[k[j]] && ov(parts[k[i]], parts[k[j]])) bad.push(k[i] + '/' + k[j]); }
+    return { open: !s.querySelector('.sx').classList.contains('kb-hidden'), pill: !!s.querySelector('.kb-open'), handle: !!s.querySelector('jb-keyboard').shadowRoot.querySelector('.kb-handle'), bad }; })()`);
+  check(`KB1 ${vpName}: Library opens with the on-screen keyboard shown (no Keyboard pill, no hide handle), nothing overlapping`, g.open && !g.pill && !g.handle && !g.bad.length, J(g));
+  await typeQ(p, 'CH');
+  check(`KB2 ${vpName}: typing straight away (no tap on the search box) searches`, (await ev(p, `${SV}.querySelector('.q').dataset.query`)) === 'CH');
+  await p.close();
+}
+{
+  const t = await open('', { library_keyboard: 'tap' }, { width: 390, height: 844, isMobile: true, hasTouch: true });
+  await wait(t, `${SV}.querySelectorAll('.lcats .lc').length >= 2`);
+  const before = await ev(t, `[${SV}.querySelector('.sx').classList.contains('kb-hidden'), !!${SV}.querySelector('.kb-open')]`);
+  await tap(t, `${SV}.querySelector('.qbar')`); await sleep(200);
+  check('KB3 library_keyboard: tap (phone fallback): list first with the Keyboard pill, tapping the search box opens the keyboard', J(before) === J([true, true]) && !(await ev(t, `${SV}.querySelector('.sx').classList.contains('kb-hidden')`)), J(before));
+  await t.close();
+}
+
 check('Z no page errors', pageErrors.length === 0, J(pageErrors.slice(0, 3)));
 await browser.close();
 console.log(`\n${total - failures}/${total} v0.7.2 combined-library checks passed`);
