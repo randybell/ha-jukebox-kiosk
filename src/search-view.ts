@@ -788,6 +788,14 @@ export class JbSearch extends LitElement {
       : `No results for “${this._shownQuery}”`;
     return html`
       <div class="sx ${this._kbHidden ? 'kb-hidden' : ''} ${this.kbAlways() ? 'kb-always' : ''} ${this.srcAvail() && (!this.srcCompact() || this._srcOpen) ? 'srcs-on' : ''}">
+        <div class="kbd-col">${this.kbAlways() ? html`<div class="kb-search"><div class="qwrap">
+          <div class="qrow"><div class="qbar" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this._kbHidden = false; }}>
+            ${icon('search', 'i qi')}<div class="q" role="searchbox" aria-label="Search music" aria-readonly="true" data-query=${this._query}>
+              ${this._query ? html`<span class="qt">${this._query}</span>` : html`<span class="ph">${sc ? `Search in ${name}…` : this.srcOn() ? `Search ${this.srcLabel()}…` : 'Search music…'}</span>`}<i class="caret" aria-hidden="true"></i></div>
+            ${this._query ? html`<button class="qx" tabindex="-1" aria-label="Clear search" @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => this.setQuery('')}>${icon('close')}</button>` : nothing}<span class="hair ${this._loading ? 'on' : ''}" aria-hidden="true"></span>
+          </div>${this.srcTriggerTpl()}</div>${this.srcRowTpl()}${this.scopeTpl()}
+        </div>` : nothing}<jb-keyboard class="kbd" .side=${this.kbAlways()} .collapsible=${!this.kbAlways()} @jb-key=${this.onKey}></jb-keyboard></div>
+        <div class="library-right">
         <div class="qwrap">
           <div class="qrow">
           <div class="qbar" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this._kbHidden = false; }}>
@@ -827,7 +835,7 @@ export class JbSearch extends LitElement {
           <div class="scroll" @scroll=${() => this.press.scrolled()}>${this.renderResults()}</div>`}
           ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
         </section>
-        <jb-keyboard class="kbd" .collapsible=${!this.kbAlways()} @jb-key=${this.onKey}></jb-keyboard>
+        </div>
         ${this._kbHidden ? html`<button class="kb-open" tabindex="-1" aria-label="Show keyboard"
           @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => (this._kbHidden = false)}>${icon('keyboard')}<span>Keyboard</span></button>` : nothing}
         ${this.renderMenu()}
@@ -1020,6 +1028,144 @@ export class JbSearch extends LitElement {
       .lcats .fc.lc { flex-direction: row; min-height: 40px; gap: 6px; } .lc .lci { width: 18px; height: 18px; } .cn small { display: none; } .cn { width: 42px; }
     }
     .sx.kb-hidden .res .scroll { padding-bottom: calc(10px + var(--jb-fab-space, 0px)); scroll-padding-bottom: var(--jb-fab-space, 0px); }
+
+    /* Walk-up Library: the always-open keyboard stays on the left. Tablet search sits above
+       the keys; interim phone search remains above the right-hand results. The two
+       wrappers are transparent for the legacy separate/tap-to-open layouts above. */
+    .kbd-col, .library-right { display: contents; }
+    .sx.kb-always {
+      grid-template-columns: minmax(150px, 48%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
+      grid-template-areas: none; gap: 10px; padding: 10px;
+      --kgap: 6px; --kcols: 6; --krows: 5;
+    }
+    .sx.kb-always .kbd-col { grid-area: auto / auto / auto / auto; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; min-width: 0; min-height: 0; }
+    .sx.kb-always .kb-search { display: block; min-width: 0; }
+    .sx.kb-always .library-right { grid-area: auto / auto / auto / auto; }
+    .sx.kb-always .kbd { grid-area: auto / auto / auto / auto; display: block; height: 100%; min-height: 0; min-width: 0; width: 100%; align-self: stretch; justify-self: stretch; }
+    .sx.kb-always .library-right {
+      display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr);
+      grid-template-areas: "q" "rec" "res"; gap: 8px; min-width: 0; min-height: 0;
+    }
+    .sx.kb-always .library-right:has(.recents:empty) { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "q" "res"; }
+    .sx.kb-always > .library-right > .qwrap { display: none; }
+    .sx.kb-always .kb-search > .qwrap { grid-area: q; min-width: 0; }
+    .sx.kb-always .recents { grid-area: rec; }
+    .sx.kb-always .res { grid-area: res; overflow: hidden; }
+    .sx.kb-always .qbar { height: 52px; padding-left: 12px; }
+    .sx.kb-always .qmeta { margin-top: 5px; }
+    .sx.kb-always .srct { padding: 0 8px; }
+    .sx.kb-always .srct .stl { display: none; }
+    .sx.kb-always .srct .sts { display: inline; }
+    .sx.kb-always .lcrow { margin-bottom: 6px; }
+    .sx.kb-always .scroll { padding: 8px; }
+    /* Portrait tablet: keep the category controls in one compact row. */
+    @container np (min-width: 521px) and (max-width: 1000px) and (orientation: portrait) {
+      .sx.kb-always .lcats { flex-wrap: nowrap; overflow-x: auto; }
+      .sx.kb-always .lcats .fc.lc { flex: 1 0 68px; min-height: 48px; padding: 4px 2px; gap: 2px; border-radius: 11px; }
+      .sx.kb-always .lc .lci { width: 20px; height: 20px; }
+      .sx.kb-always .cn { width: 40px; min-width: 0; border-radius: 11px; }
+      .sx.kb-always .cn small { display: none; }
+      .sx.kb-always .cn .i { width: 20px; height: 20px; }
+    }
+    @container np (max-width: 520px) {
+      .sx.kb-always { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 238px; gap: 6px; padding: 7px; --kcols: 6; --krows: 5; --kgap: 4px; }
+      .sx.kb-always > .kbd-col { grid-area: 2 / 1 / 3 / 2; display: block; height: 238px; }
+      .sx.kb-always > .library-right { grid-area: 1 / 1 / 2 / 2; display: grid; grid-template-rows: auto minmax(0, 1fr); grid-template-areas: none; gap: 6px; }
+      .sx.kb-always > .library-right > .qwrap { display: block; grid-area: auto; }
+      .sx.kb-always .library-right > .res { grid-area: auto; }
+      .sx.kb-always .qbar { height: 48px; gap: 4px; padding-left: 8px; }
+      .sx.kb-always .qi { width: 18px; height: 18px; }
+      .sx.kb-always .q .ph { display: none; }
+      .sx.kb-always .qx { width: 30px; height: 36px; }
+      .sx.kb-always .srct { gap: 2px; padding: 0; width: 36px; min-width: 36px; justify-content: center; }
+      .sx.kb-always .srct .sti { width: 17px; height: 17px; }
+      .sx.kb-always .srct .stc, .sx.kb-always .srct .sts { display: none; }
+      .sx.kb-always .qmeta { display: none; }
+      .sx.kb-always .qrow { gap: 5px; }
+      .sx.kb-always .lcrow { gap: 4px; margin-bottom: 4px; }
+      .sx.kb-always .lcats { flex-wrap: nowrap; overflow-x: auto; gap: 4px; }
+      .sx.kb-always .lcats .fc.lc { flex: 1 0 60px; min-width: 44px; min-height: 44px; padding: 3px; border-radius: 11px; }
+      .sx.kb-always .lcats .lcl { display: none; }
+      .sx.kb-always .lc .lci { width: 20px; height: 20px; }
+      .sx.kb-always .lcorner { gap: 3px; }
+      .sx.kb-always .cn { width: 36px; min-width: 36px; border-radius: 11px; }
+      .sx.kb-always .cn small { display: none; }
+      .sx.kb-always .cn .i { width: 18px; height: 18px; }
+      .sx.kb-always .scroll { padding: 3px 6px 6px; }
+      .sx.kb-always .lsec { margin: 2px 0; }
+      .sx.kb-always .row, .sx.kb-always .row.hasfav { min-height: 60px; margin-bottom: 4px; padding: 4px 2px; grid-template-columns: 36px minmax(0, 1fr) auto auto; grid-template-rows: auto; column-gap: 6px; }
+      .sx.kb-always .row .ar.th, .sx.kb-always .row > .ra-b.fav { grid-column: auto; grid-row: 1; align-self: center; margin-top: 0; width: 36px; height: 36px; }
+      .sx.kb-always .row .rt { grid-column: 2; grid-row: 1; padding-top: 0; }
+      .sx.kb-always .row .ra { grid-column: auto; grid-row: 1; }
+      .sx.kb-always .row.hasfav .ra { padding-left: 0; }
+      .sx.kb-always .row .ra-b.x2 { display: none; }
+      .sx.kb-always .row .ra-more { display: grid; }
+      .sx.kb-always .row .du { display: none; }
+      .sx.kb-always .row .ra-b { width: 36px; height: 44px; }
+      .sx.kb-always .row .ra-b .i { width: 20px; height: 20px; }
+      .sx.kb-always .row .rt small { gap: 3px; margin-top: 0; }
+      .sx.kb-always .row .rt small .pv { display: none; }
+      .sx.kb-always .row .rt small .st { font-size: 12px; }
+    }
+    .sx.kb-always > .library-right > .recents:empty { display: none; }
+
+    /* Landscape phone: the same filled 6x5 grid, with 40px rows at 844x390. */
+    @container np (orientation: landscape) and (max-height: 400px) and (max-width: 900px) {
+      .sx.kb-always { --kgap: 2px; --kb-pad: 1px 4px; gap: 7px; padding: 7px; }
+      .sx.kb-always .kb-search { display: none; }
+      .sx.kb-always > .kbd-col { display: block; }
+      .sx.kb-always { --kcols: 6; --krows: 5; }
+      .sx.kb-always .qbar { height: 44px; }
+      .sx.kb-always .qmeta { display: none; }
+      .sx.kb-always > .kbd-col { display: block; }
+      .sx.kb-always .library-right { gap: 5px; }
+      .sx.kb-always .lcats .fc.lc { min-height: 40px; padding: 3px; }
+      .sx.kb-always .lcrow { margin-bottom: 4px; }
+      .sx.kb-always .lc .lcl { display: none; }
+      .sx.kb-always .cn small { display: none; }
+    }
+    @container np (min-width: 521px) and (min-height: 401px) {
+      .sx.kb-always { grid-template-columns: minmax(340px, 46%) minmax(0, 1fr); }
+      .sx.kb-always .kbd-col { grid-template-rows: auto minmax(294px, min(560px, calc(100cqh - 80px))); align-content: start; }
+      .sx.kb-always .kbd { height: 100%; }
+      .sx.kb-always > .library-right > .qwrap { display: none; }
+      .sx.kb-always .qbar { height: 48px; }
+      .sx.kb-always .qmeta { display: none; }
+      .sx.kb-always .srct { max-width: 136px; }
+      .sx.kb-always .lcrow { gap: 6px; margin-bottom: 6px; }
+      .sx.kb-always .lcats { gap: 5px; }
+      .sx.kb-always .lcats .fc.lc { min-height: 48px; padding: 4px; border-radius: 12px; font-size: 11px; }
+      .sx.kb-always .lc .lci { width: 20px; height: 20px; }
+      .sx.kb-always .lcorner { gap: 4px; }
+      .sx.kb-always .cn { width: 42px; border-radius: 12px; }
+      .sx.kb-always .cn small { display: none; }
+    }
+    @container np (max-width: 520px) {
+      .sx.kb-always .kb-search { display: none; }
+      .sx.kb-always > .kbd-col { display: block; }
+      .sx.kb-always > .library-right > .qwrap { display: block; }
+      .sx.kb-always .srct { width: 36px; min-width: 36px; padding: 0; justify-content: center; }
+      .sx.kb-always .srct .sts { display: none; }
+      .sx.kb-always .qrow { gap: 5px; }
+    }
+    @container np (orientation: landscape) and (max-height: 400px) and (max-width: 900px) {
+      .sx.kb-always { grid-template-columns: minmax(0, 48%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); --kcols: 6; --krows: 5; }
+      .sx.kb-always > .library-right > .qwrap { display: block; }
+      .sx.kb-always .qmeta { display: none; }
+      .sx.kb-always > .kbd-col { display: block; }
+      .sx.kb-always .srct { width: 36px; min-width: 36px; padding: 0; justify-content: center; }
+      .sx.kb-always .srct .sts, .sx.kb-always .srct .stc { display: none; }
+      .sx.kb-always .qrow { gap: 5px; }
+      .sx.kb-always .lcats { flex-wrap: nowrap; overflow-x: auto; gap: 4px; }
+      .sx.kb-always .lcats .fc.lc { flex: 0 0 44px; min-width: 44px; min-height: 40px; padding: 3px; }
+      .sx.kb-always .lcats .lcl { display: none; }
+      .sx.kb-always .lcorner .cn { width: 36px; min-width: 36px; }
+      .sx.kb-always .lcorner .cn small { display: none; }
+    }
+    @container np (max-height: 520px) and (max-width: 520px) {
+      .sx.kb-always { --kgap: 4px; --kcols: 6; --krows: 5; }
+      .sx.kb-always .qmeta { display: none; }
+    }
   `];
 }
 defineElement('jb-search', JbSearch);
