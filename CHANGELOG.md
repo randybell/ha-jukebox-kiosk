@@ -4,6 +4,8 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.7.5 — 2026-11-05
+
 ### Changed
 - **Library keyboard.** On the combined Library tab the always-open keyboard is a full grid, 6 columns by 5 rows, with no empty keys. The bottom row of letters is Y, Z, 123, Space, Backspace and Clear. Space and Clear show as ␣ and ×. The apostrophe and the hyphen are on the 123 page, not with the letters. On a tablet or a wider screen the keyboard sits on the left, the search box and All sources sit just above the keys, and the category buttons and results sit on the right. On a phone held upright the keyboard sits at the bottom. On a phone turned sideways the keyboard stays on the left and the search box stays with the results. All sources reads All, or how many are on. Colours and fonts are unchanged. `library_keyboard: tap` and the separate Search tab keep the older keyboard.
 
