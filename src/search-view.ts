@@ -21,6 +21,8 @@ import { libraryCategories, libraryCatLabel } from './library-home';
 import './browse-view';
 import type { JbBrowse } from './browse-view';
 
+/** 0.7.3 combined Library tab: one icon per category button */
+const CAT_ICON: Record<string, string> = { playlist: 'plist', artist: 'artist', album: 'disc', track: 'note', genre: 'genre', radio: 'radio', podcast: 'podcast', audiobook: 'book', discover: 'compass' };
 /** 0.7.2 combined Library tab: a category button -> its search result group */
 const CAT_GROUP: Record<string, GroupKey> = {
   playlist: 'playlists', artist: 'artists', track: 'tracks', genre: 'genres', radio: 'radio', album: 'albums', podcast: 'podcasts', audiobook: 'audiobooks',
@@ -83,13 +85,15 @@ export class JbSearch extends LitElement {
     _pool: { state: true },
     _poolErr: { state: true },
     combined: { type: Boolean, reflect: true },
-    _srcs: { state: true }, _providers: { state: true }, _lcat: { state: true }, _pb: { state: true },
+    _srcs: { state: true }, _providers: { state: true }, _lcat: { state: true }, _pb: { state: true }, _srcOpen: { state: true },
   };
   /** 0.7.2: the combined Library tab (search box + source buttons + category buttons + the library list) */
   combined = false;
   /** search source: 'all' (library first, then every provider), 'library', or an MA provider instance id */
   /** selected sources (Library / provider instance ids); empty = All */
   private _srcs: string[] = [];
+  /** 0.7.3: the compact sources control next to the search box is open (its multi-select choices show under the box) */
+  private _srcOpen = false;
   private _providers: SearchSource[] = [];
   private _provState: 'idle' | 'loading' | 'done' = 'idle';
   /** combined tab: the selected category button (mirrors the embedded jb-browse) */
@@ -222,11 +226,21 @@ export class JbSearch extends LitElement {
   get source() { return this._srcs.length ? this._srcs.join(',') : SOURCE_ALL; }
   get sources(): string[] { return [...this._srcs]; }
   private srcLabel() { return sourcesLabel(this._srcs, this._providers); }
-  /** the always-visible row of source buttons under the search box: All, Library, then MA's providers */
+  /** 0.7.3: the compact sources control beside the search box ("All sources", or the picked ones); tapping it shows the
+   *  choices under the box. The separate (0.7.1) Search tab keeps the always-visible row. */
+  private srcCompact() { return this.combined; }
+  private srcTriggerTpl() {
+    if (!this.srcAvail() || !this.srcCompact()) return nothing;
+    const open = this._srcOpen, label = this._srcs.length ? this.srcLabel() : 'All sources';
+    return html`<div class="srcs srcc"><button class="src srct ${this._srcs.length ? 'on' : ''} ${open ? 'open' : ''}" data-act="sources" tabindex="-1"
+      aria-expanded=${open ? 'true' : 'false'} aria-controls="srco" aria-label=${`Sources: ${label}`} title=${label}
+      @pointerdown=${noFocus} @click=${() => { this.closeMenu(); this._srcOpen = !this._srcOpen; }}>${icon('globe', 'i sti')}<span class="stl">${label}</span><span class="sts">${this._srcs.length ? `${this._srcs.length} on` : 'All'}</span>${icon(open ? 'chevup' : 'chev', 'i stc')}</button></div>`;
+  }
+  /** the source buttons: All, Library, then MA's providers (combined tab: shown while the sources control is open) */
   private srcRowTpl() {
-    if (!this.srcAvail()) return nothing;
+    if (!this.srcAvail() || (this.srcCompact() && !this._srcOpen)) return nothing;
     const all = !this._srcs.length;
-    return html`<div class="srcs" role="group" aria-label="Search sources">
+    return html`<div class="srcs ${this.srcCompact() ? 'srco' : ''}" id="srco" role="group" aria-label="Search sources">
       ${[{ id: SOURCE_ALL, name: 'All', domain: '' }, ...pickerSources(this._providers)].map((p) => {
         const on = p.id === SOURCE_ALL ? all : this._srcs.includes(p.id);
         return html`<button class="fc src ${on ? 'on' : ''}" data-src=${p.id} aria-pressed=${on ? 'true' : 'false'} tabindex="-1"
@@ -298,13 +312,19 @@ export class JbSearch extends LitElement {
   private lcatsTpl() {
     const cats = this.lcats();
     const cur = this._scope ? this.effFilter() : null;
-    return html`<div class="filters lcats" role="tablist" aria-label="Library categories">
+    const b = this.browse, tools = this.libShown() ? b?.libTools() ?? null : null;
+    return html`<div class="lcrow"><div class="filters lcats" role="tablist" aria-label="Library categories">
       ${cats.map((c) => {
         const on = this._scope ? (cur === 'all' ? false : GROUP_CAT[cur as string] === c.type) : this._lcat === c.type;
         return html`<button class="fc lc ${on ? 'on' : ''}" role="tab" aria-selected=${on ? 'true' : 'false'} data-lcat=${c.type} tabindex="-1"
-          @pointerdown=${noFocus} @click=${() => this.selectCat(c.type)}>${c.type === 'discover' ? icon('compass', 'i xs') : nothing}${c.label}</button>`;
+          @pointerdown=${noFocus} @click=${() => this.selectCat(c.type)}>${icon(CAT_ICON[c.type] ?? 'browse', 'i lci')}<span class="lcl">${c.label}</span></button>`;
       })}
-    </div>`;
+    </div>${tools ? html`<div class="lcorner">
+      ${tools.fav !== null ? html`<button class="cn ${tools.fav ? 'on' : ''}" data-act="lib-fav" tabindex="-1" aria-pressed=${tools.fav ? 'true' : 'false'}
+        aria-label="Favorites only" title="Favorites only" @pointerdown=${noFocus} @click=${() => { b!.toggleFavorites(); this.requestUpdate(); }}>${icon(tools.fav ? 'heart' : 'heartline', 'i')}</button>` : nothing}
+      <button class="cn" data-act="lib-sort" tabindex="-1" aria-label=${`Sort: ${tools.sort}`} title=${`Sort: ${tools.sort}`}
+        @pointerdown=${noFocus} @click=${() => { b!.nextSort(); this.requestUpdate(); }}>${icon('sort', 'i')}<small>${tools.sort}</small></button>
+    </div>` : nothing}</div>`;
   }
   /** Back to the list (tapping the Library tab again): leaves detail pages, keeps the words and filters */
   home() { this.closeMenu(); if (this._stack.length) this.closeDetails(false); this.browse?.toList(); }
@@ -406,6 +426,7 @@ export class JbSearch extends LitElement {
    *  false when there was nothing to clear */
   idleReset(): boolean {
     const lib = this.combined ? !!this.browse?.idleReset() : false;
+    this._srcOpen = false;
     if (!this._scope && !(this.combined && (this._query || this._srcs.length))) return lib;
     this.clearFilters();
     return true;
@@ -766,7 +787,7 @@ export class JbSearch extends LitElement {
       : count ? `${count} result${count === 1 ? '' : 's'} for “${this._shownQuery}” · ${this.srcOn() ? this.srcLabel() : 'all providers'}`
       : `No results for “${this._shownQuery}”`;
     return html`
-      <div class="sx ${this._kbHidden ? 'kb-hidden' : ''} ${this.kbAlways() ? 'kb-always' : ''} ${this.srcAvail() ? 'srcs-on' : ''}">
+      <div class="sx ${this._kbHidden ? 'kb-hidden' : ''} ${this.kbAlways() ? 'kb-always' : ''} ${this.srcAvail() && (!this.srcCompact() || this._srcOpen) ? 'srcs-on' : ''}">
         <div class="qwrap">
           <div class="qrow">
           <div class="qbar" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this._kbHidden = false; }}>
@@ -778,6 +799,7 @@ export class JbSearch extends LitElement {
               @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => this.setQuery('')}>${icon('close')}</button>` : nothing}
             <span class="hair ${this._loading ? 'on' : ''}" aria-hidden="true"></span>
           </div>
+          ${this.srcTriggerTpl()}
           </div>
           ${this.srcRowTpl()}
           ${this.scopeTpl()}
@@ -834,6 +856,30 @@ export class JbSearch extends LitElement {
     @container np (max-width: 520px) and (max-height: 720px) { .sx.srcs-on { --kh: 38px; --kgap: 4px; } .srcs { margin-top: 6px; } }
     .srcn { align-self: center; padding: 0 6px; color: #ffffffa0; font-size: 13px; }
     .lcats { margin-bottom: 10px; }
+    /* 0.7.3 walk-up category buttons: big icon-over-label tiles, the selected one lit solid white; Favorites and the sort sit
+       as small corner icons at the end of the same row (no row of their own) */
+    .lcrow { display: flex; gap: 8px; align-items: stretch; min-width: 0; flex: none; margin-bottom: 10px; }
+    .lcrow .lcats { flex: 1; min-width: 0; margin-bottom: 0; }
+    .lcats .fc.lc { flex: 1 1 auto; min-width: 68px; height: auto; min-height: 62px; padding: 6px 6px; border-radius: 16px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
+      color: #ffffffc4; background: #00000066; border: 1.5px solid #ffffff2e; transition: background 120ms, color 120ms, box-shadow 120ms; }
+    .lc .lci { width: 26px; height: 26px; flex: none; }
+    .lc .lcl { white-space: nowrap; }
+    .lcats .fc.lc.on { background: #fff; color: #000; border-color: #fff; box-shadow: 0 0 0 3px #ffffff47, 0 8px 22px #000000aa; }
+    .lcorner { display: flex; gap: 6px; flex: none; }
+    .cn { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 14px;
+      color: #ffffffc4; background: #00000066; border: 1.5px solid #ffffff2e; }
+    .cn .i { width: 22px; height: 22px; } .cn small { font-size: 10px; font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
+    .cn.on { background: #fff; color: #000; border-color: #fff; }
+    /* 0.7.3 compact sources control beside the search box; its choices open as a row under the box (no overlay) */
+    .qrow .srcs.srcc { display: flex; flex: none; flex-wrap: nowrap; margin-top: 0; overflow: visible; }
+    .srct { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 168px; padding: 0 10px 0 12px; border-radius: 16px; font: inherit; font-size: 12.5px;
+      font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #fff; background: var(--jb-panel-solid, #00000080); border: 1.5px solid #ffffff59; cursor: pointer; }
+    .srct .sts { display: none; }
+    .srct .stl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .srct .sti { width: 22px; height: 22px; flex: none; } .srct .stc { width: 20px; height: 20px; flex: none; margin-left: -2px; }
+    .srct.on { background: #fff; color: #000; border-color: #fff; }
+    .srct.open { border-color: #fff; box-shadow: 0 0 0 3px #ffffff47; }
     .lib { flex: 1; min-height: 0; display: flex; flex-direction: column; } .lib[hidden] { display: none; } .lib jb-browse { flex: 1; min-height: 0; }
     .lsec { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #ffffffb0; }
     .pbh { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; } .pbh b { font-size: 18px; } .recents { grid-area: rec; } .res { grid-area: res; } .kbd { grid-area: kb; }
@@ -956,6 +1002,22 @@ export class JbSearch extends LitElement {
     /* phone on its side: the keyboard has the left half, the status line goes so the list keeps room on the right */
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
       .sx.kb-always .qmeta { display: none; } .sx.kb-always .lcats { margin-bottom: 6px; }
+    }
+    /* 0.7.3 category tiles + sources control on small screens */
+    @container np (max-width: 520px) {
+      .lcrow { gap: 6px; } .lcats { gap: 6px; }
+      .lcats .fc.lc { flex: 1 1 0; min-width: 0; min-height: 54px; padding: 5px 2px; font-size: 11px; letter-spacing: 0; text-transform: none; border-radius: 13px; gap: 3px; }
+      .lc .lci { width: 22px; height: 22px; } .cn { width: 38px; } .cn small { display: none; } .lcorner { gap: 4px; }
+      .srct { padding: 0 10px; gap: 4px; font-size: 13px; letter-spacing: 0; } .srct .stl { display: none; } .srct .sts { display: inline; } .srct .stc { width: 16px; height: 16px; }
+    }
+    @container np (max-width: 520px) and (max-height: 600px) {
+      .lcats .fc.lc { min-height: 46px; gap: 1px; } .lc .lci { width: 18px; height: 18px; }
+    }
+    @container np (orientation: landscape) and (max-height: 520px) {
+      .lcats .fc.lc { min-height: 54px; } .lc .lci { width: 22px; height: 22px; }
+    }
+    @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
+      .lcats .fc.lc { flex-direction: row; min-height: 40px; gap: 6px; } .lc .lci { width: 18px; height: 18px; } .cn small { display: none; } .cn { width: 42px; }
     }
     .sx.kb-hidden .res .scroll { padding-bottom: calc(10px + var(--jb-fab-space, 0px)); scroll-padding-bottom: var(--jb-fab-space, 0px); }
   `];
