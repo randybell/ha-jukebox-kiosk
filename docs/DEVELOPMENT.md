@@ -27,15 +27,21 @@ npm run typecheck     # tsc --noEmit
 ## Dev harness and tests (no Home Assistant needed)
 
 ```bash
-python3 -m http.server 8765 --bind 127.0.0.1     # from the project root; the harness won't run from file://
+python3 -m http.server 8765 --bind 127.0.0.1     # only to open the harness by hand, from the project root (it won't run from file://)
 # open http://127.0.0.1:8765/dev/index.html?log=1
-npm test                                           # run.mjs + lyrics unit/e2e + speakers unit/e2e (mass_queue backend) + backend unit + kiosk e2e (puppeteer-core + /usr/bin/google-chrome; CHROME=... to override)
-npm run test:unit                                  # unit tests only (no server or browser)
-node test/shots-m2.mjs f1                          # every tab at 1920x1080, 1280x800, 820x1180 and 390x844 -> test/shots/m2/
-JB_SIZES=1920x1080 node test/shots-m2.mjs x1 '&backdrop=light'   # one size, one mode
-node test/shots-v040.mjs                           # lyrics surfaces, states and the editor at 1280x800, 1920x1080, 390x844 -> test/shots/v040/
-node test/shots-v050.mjs                           # speakers panel (fixed, dynamic, guest, presets, move, large buttons), queue row icons and the segmented tab bar at 390x844, 1280x800, 1920x1080 and 1024x666 below the HA toolbar -> test/shots/v050/
-npm run test:fit                                   # fit-to-height checks: 11 sizes x HA toolbar / kiosk / full screen, every tab, sidebar, resize, emulated Mac Chrome zoom, 0.5.0 Speakers panel / large buttons / queue overlays -> test/shots/v042/
+npm test                                           # typecheck + every unit test + every browser e2e suite (puppeteer-core + /usr/bin/google-chrome; CHROME=... to override)
+npm run test:unit                                  # every test/unit/*.unit.mjs (no server or browser); scripts/run-tests.mjs picks new files up automatically
+npm run test:e2e                                   # test/run.mjs + every test/*.e2e.mjs except fit
+npm run test:fit                                   # fit-to-height checks: 11 sizes x HA toolbar / kiosk / full screen, every tab (Now Playing, Library with keyboard, source and category buttons, Queue, Lyrics), sidebar, resize, emulated Mac Chrome zoom, Speakers panel / large buttons / queue overlays, Library on the integration backend -> test/shots/v042/
+node scripts/run-tests.mjs --list                  # which files each group runs
+# The browser tests and screenshot scripts start their own static server (test/serve.mjs) on a free 127.0.0.1 port, so a server
+# already running elsewhere can't be tested by mistake. JB_PORT=8765 picks a fixed port (and fails clearly if it is taken);
+# JB_URL=http://127.0.0.1:8765/dev/index.html (or JB_ROOT=http://127.0.0.1:8765/dev/) uses a server you started.
+npm run shots                                      # = node tools/screenshots/shots-m2.mjs
+node tools/screenshots/shots-m2.mjs f1             # every tab at 1920x1080, 1280x800, 820x1180 and 390x844 -> test/shots/m2/
+JB_SIZES=1920x1080 node tools/screenshots/shots-m2.mjs x1 '&backdrop=light'   # one size, one mode
+node tools/screenshots/shots-v040.mjs              # lyrics surfaces, states and the editor at 1280x800, 1920x1080, 390x844 -> test/shots/v040/
+node tools/screenshots/shots-v050.mjs              # speakers panel (fixed, dynamic, guest, presets, move, large buttons), queue row icons and the segmented tab bar at 390x844, 1280x800, 1920x1080 and 1024x666 below the HA toolbar -> test/shots/v050/
 node test/perf.mjs 3                               # frame-time benchmark, see "Backdrop and performance"
 ```
 
@@ -111,7 +117,7 @@ What `up.sh` does (each step is skipped when already done, so it is safe to re-r
 
 Helpers: `ha_ws.py TYPE [JSON] [--kiosk]` and `ma_ws.py COMMAND [JSON]` send one WebSocket command as the e2e admin (or kiosk user).
 
-`ha-e2e.mjs` checks (42): the card element is registered and renders (E1), `backend: auto` picks the kiosk backend (E2), no manual resource (E3), migration Repairs issue while the old plugin files remain, across restarts (R1), capabilities for admin (E4) and the kiosk user with the default guest classes (U1–U14: may search, read the queue, favourite and unfavourite, change volume and mute through `media_player` services and sees the volume mixer; refused `set_members`, `transfer`, `stop` and `raw`), keyboard search through `music_assistant.search` (S1), Replace / Add to queue through `music_assistant.play_media` (P1, P2), Up next, Play next, Remove + Undo, Play now and queue push from an outside MA edit (Q0–Q5), Now Playing (N1), the Speakers sheet (K1), lyrics resolve to "No lyrics found" for local files and the library copy is never asked (L1, L2), `item_tracks` paging and the album detail (T1–T3), and the double load of the old card file next to the bundled one with no console errors (D1, D2).
+`ha-e2e.mjs` checks (42): the card element is registered and renders (E1), `backend: auto` picks the kiosk backend (E2), no manual resource (E3), migration Repairs issue while the old plugin files remain, across restarts (R1), capabilities for admin (E4) and the kiosk user with the default guest classes (U1–U14: may search, read the queue, favourite and unfavourite, change volume and mute through `media_player` services and sees the volume mixer; refused `set_members`, `transfer` and `stop`; `jukebox_kiosk/raw` is not registered since 0.7.3), keyboard search through `music_assistant.search` (S1), Replace / Add to queue through `music_assistant.play_media` (P1, P2), Up next, Play next, Remove + Undo, Play now and queue push from an outside MA edit (Q0–Q5), Now Playing (N1), the Speakers sheet (K1), lyrics resolve to "No lyrics found" for local files and the library copy is never asked (L1, L2), `item_tracks` paging and the album detail (T1–T3), and the double load of the old card file next to the bundled one with no console errors (D1, D2).
 
 Other checks that need no HA: `node test/unit/define.unit.mjs` (element re-definition when HA swaps the custom element registry; part of `npm test`), `pytest tests/` from the `.venv` with `homeassistant` installed, and hassfest:
 
@@ -122,8 +128,9 @@ docker run --rm -v "$PWD/custom_components:/github/workspace/custom_components" 
 ## Repository, releases and HACS
 
 - `hacs.json`: `{"name": "Jukebox Kiosk", "homeassistant": "2026.10.0"}`, category **integration**.
-- The built card **is committed** in `custom_components/jukebox_kiosk/www/` (bundle, fonts, notices). HACS installs an integration from the tagged source, so the bundle has to be in the tree. `.github/workflows/release.yaml` runs on a `v*` tag: it checks that the tag matches `package.json` and `manifest.json`, runs pytest, the typecheck and the card unit tests, rebuilds, **fails if the committed bundle or notices differ from the rebuild**, then attaches `jukebox_kiosk.zip` to a GitHub release.
-  - To release: bump `version` in `package.json` (and `package-lock.json`), `custom_components/jukebox_kiosk/manifest.json` and `VERSION` in `src/jukebox-card.ts`, run `npm run build`, commit, then `git tag -a v0.6.0 -m 'Jukebox Kiosk 0.6.0' && git push origin v0.6.0` (push only that tag).
+- The built card **is committed** in `custom_components/jukebox_kiosk/www/` (bundle, fonts, notices). HACS installs an integration from the tagged source, so the bundle has to be in the tree. `.github/workflows/release.yaml` runs on a `v*` tag: it checks that the tag matches `package.json` and `manifest.json`, runs pytest, the typecheck and the card unit tests, rebuilds, **fails if the committed bundle or notices differ from the rebuild**, runs the browser e2e and fit suites in Chrome (`browser-actions/setup-chrome`), then attaches `jukebox_kiosk.zip` to a GitHub release.
+  - To release: bump `version` in `package.json` (and `package-lock.json`), `custom_components/jukebox_kiosk/manifest.json` and `VERSION` in `src/jukebox-card.ts`, run `npm run build`, commit, then `git tag -a v0.7.3 -m 'Jukebox Kiosk 0.7.3' && git push origin v0.7.3` (push only that tag).
 - `.github/workflows/hassfest.yaml` and `hacs.yaml` validate the integration on every push and nightly.
+- `.github/workflows/ci.yaml` (workflow `CI`) runs on every push and pull request with four jobs: `unit` (typecheck, unit tests, build, committed-bundle check), `e2e` (`npm run test:e2e` in Chrome), `fit` (`npm run test:fit` in Chrome) and `pytest`.
 - `test/shots/` (generated by the tests and screenshot scripts) is git-ignored; the curated screenshots used in the README are in `docs/`.
 - License: MIT (`LICENSE`), Copyright (c) 2026 Randy Bell. The bundled fonts are OFL (licence files ship in `www/fonts/`). Third-party licenses are in `THIRD_PARTY_NOTICES.md`.
