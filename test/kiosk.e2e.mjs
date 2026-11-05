@@ -178,7 +178,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const vc = await ev(p, `window.__calls.slice(${c0}).filter((c) => c.domain === 'media_player').map((c) => ({ s: c.service, e: c.target?.entity_id }))`);
   check('V3 default guest: room slider → media_player.volume_set, mute → media_player.volume_mute (HA services)',
     vc.some((c) => c.s === 'volume_set' && c.e === r.id) && vc.some((c) => c.s === 'volume_mute' && c.e === r.id), J(vc));
-  const sent = (await ws(p, w0)).filter((x) => x.type === 'ma' || x.type === 'raw').map((x) => x.command);
+  const sent = (await ws(p, w0)).filter((x) => x.type === 'ma').map((x) => x.command);
   check('V4 default guest: volume sends nothing through jukebox_kiosk/ma (no set_members / transfer / stop)',
     !sent.some((c) => /set_members|transfer|cmd\/stop/.test(c)), J(sent));
   await p.close();
