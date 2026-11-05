@@ -1,5 +1,7 @@
 # Jukebox Kiosk (`ha-jukebox-kiosk`) 0.7.3
 
+> This README covers the integration and the card bundled in it. Sections marked *(legacy)* describe the `mass_queue` backend, which still works.
+
 Jukebox Kiosk is a Home Assistant integration that ships the **Jukebox Card**, a Lovelace card for a Home Assistant + Music Assistant jukebox kiosk. It also gives the card its own WebSocket API to Music Assistant, so the card no longer needs [mass_queue](https://github.com/droans/mass_queue).
 
 - **One install.** Setting up the integration serves the card from `/jukebox_kiosk_static/jukebox-card.js` and loads it on every dashboard. You don't add a resource, and you don't unzip fonts.

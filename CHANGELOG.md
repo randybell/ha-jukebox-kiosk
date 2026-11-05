@@ -9,6 +9,18 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ### Fixed
 - **The on-screen keyboard stays above the tab bar on short landscape screens.** At 1024×600 under the Home Assistant toolbar the Library keyboard ran under the tab bar (9 px, 21 px with `large_buttons`): the recents are hidden there, but their grid row and its gap were still taking space. That row is dropped, and with the source buttons on the keys are sized to the room left (36–46 px; they stay 46 px where there is room).
+- README header shows the released version (no draft wording).
+
+### Removed
+- The `jukebox_kiosk/raw` admin diagnostic command (it forwarded any non-denied Music Assistant command for admins). Nothing in the card used it; the `admin` class stays reserved. Calls now get `unknown_command`.
+
+### Development
+- `test/fit.e2e.mjs` checks the 0.7.2 four-tab bar (Now Playing, Library, Queue, Lyrics) and the combined Library tab (search box, source buttons, category buttons, keyboard above the tab bar) on all 11 screen sizes, plus the integration backend.
+- `test/v072.e2e.mjs` KB1–KB3 cover the always-open keyboard default and the `library_keyboard: tap` fallback.
+- `npm run test:unit` runs every `test/unit/*.unit.mjs` (via `scripts/run-tests.mjs`); `npm run test:e2e` runs every browser suite; `npm run test:fit` runs the fit suite.
+- Browser tests start their own static server on a free port (`test/serve.mjs`); `JB_PORT` picks a fixed port and fails clearly if it is taken, `JB_URL` / `JB_ROOT` point them at a running server. `CHROME` overrides the browser path everywhere, including `test/perf.mjs`.
+- Screenshot scripts moved from `test/` to `tools/screenshots/` (`npm run shots`).
+- CI: new `CI` workflow on push and pull request (unit, browser e2e, fit, pytest; Node 20, Python 3.14); the release workflow also runs the browser e2e and fit suites in Chrome and fails the release if they fail.
 
 ## 0.7.2 — 2026-11-04
 
