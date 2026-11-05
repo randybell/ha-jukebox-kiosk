@@ -2,11 +2,12 @@
 // with its chip, Clear filters, album scope, the empty state, and the Library tab's Filter button + artist filter.
 // Mock data only (dev/mock-hass.js `jjgrey=1`: a public artist name with invented albums / tracks). Runs as the guest
 // (non-admin) user on the HA backend and on the kiosk backend, at 1280x800 and on a 390x844 phone.
-// Usage: (serve the project root) JB_URL=http://127.0.0.1:8797/dev/index.html node test/filters.e2e.mjs
+// Usage: (starts its own dev server on a free port; JB_PORT / JB_URL override) node test/filters.e2e.mjs
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
+import { devIndex } from './serve.mjs';
 
-const BASE = process.env.JB_URL ?? 'http://127.0.0.1:8765/dev/index.html';
+const BASE = await devIndex();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const J = JSON.stringify;
 let failures = 0, total = 0;

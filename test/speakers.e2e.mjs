@@ -1,9 +1,10 @@
 // 0.5.0 Speakers panel e2e (mock Music Assistant in dev/mock-ma.js; every id is a placeholder).
-// Usage: (serve the project root on :8765) node test/speakers.e2e.mjs
+// Usage: (starts its own dev server on a free port; JB_PORT / JB_URL override) node test/speakers.e2e.mjs
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
+import { devIndex } from './serve.mjs';
 
-const BASE = process.env.JB_URL ?? 'http://127.0.0.1:8765/dev/index.html';
+const BASE = await devIndex();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const J = JSON.stringify;
 let failures = 0, total = 0;

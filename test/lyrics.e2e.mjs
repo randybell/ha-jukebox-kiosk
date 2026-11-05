@@ -1,10 +1,11 @@
 // v0.4.0/0.4.1 lyrics + Stage + screensaver status + editor checks against the mock hass (dev/index.html, dev/editor.html). Real pointer/touch input via CDP.
-// Usage: (serve the project root on :8765) node test/lyrics.e2e.mjs        — all lyric text in the harness is invented.
+// Usage: (starts its own dev server on a free port; JB_PORT / JB_URL override) node test/lyrics.e2e.mjs        — all lyric text in the harness is invented.
 import puppeteer from 'puppeteer-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { hermetic } from './intercept.mjs';
+import { devRoot } from './serve.mjs';
 
-const ROOT = process.env.JB_ROOT ?? 'http://127.0.0.1:8765/dev/';
+const ROOT = await devRoot();
 const SHOTS = new URL('./shots/', import.meta.url).pathname;
 mkdirSync(SHOTS, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
