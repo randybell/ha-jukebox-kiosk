@@ -1,11 +1,12 @@
-// v0.4.0 screenshots (lyrics). Usage: (serve the project root on :8765) node test/shots-v040.mjs
+// v0.4.0 screenshots (lyrics). Usage: (starts its own dev server; JB_PORT / JB_URL / JB_ROOT override) node tools/screenshots/shots-v040.mjs
 // Output: test/shots/v040/*.png (git-ignored). All lyrics in the harness are invented placeholder text.
 import puppeteer from 'puppeteer-core';
 import { mkdirSync } from 'node:fs';
-import { hermetic } from './intercept.mjs';
+import { hermetic } from '../../test/intercept.mjs';
+import { devRoot } from '../../test/serve.mjs';
 
-const ROOT = process.env.JB_ROOT ?? 'http://127.0.0.1:8765/dev/';
-const OUT = new URL('./shots/v040/', import.meta.url).pathname;
+const ROOT = await devRoot();
+const OUT = new URL('../../test/shots/v040/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const VPS = [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }, { width: 390, height: 844, isMobile: true, hasTouch: true }];

@@ -2,13 +2,14 @@
 // 01-05 empty box: Playlists, Artists, Songs, Genres, Radio · 06 source buttons (Apple Music on: its browse)
 // 06b two providers on (Apple Music + Spotify), typed · 07 typed search, All (library first)
 // 08 typed search limited to Spotify (tapped in the source buttons) · 09 artist chip + Clear filters
-// Usage: (serve the project root) JB_URL=http://127.0.0.1:8772/dev/index.html JB_SHOTS=/tmp/shots node test/shots-072.mjs
+// Usage: (starts its own dev server; JB_PORT / JB_URL / JB_ROOT override) JB_SHOTS=/tmp/shots node tools/screenshots/shots-072.mjs
 import puppeteer from 'puppeteer-core';
 import { mkdirSync } from 'node:fs';
-import { hermetic } from './intercept.mjs';
+import { hermetic } from '../../test/intercept.mjs';
+import { devIndex } from '../../test/serve.mjs';
 
-const BASE = process.env.JB_URL ?? 'http://127.0.0.1:8765/dev/index.html';
-const OUT = (process.env.JB_SHOTS ?? new URL('./shots/072/', import.meta.url).pathname).replace(/\/?$/, '/'); mkdirSync(OUT, { recursive: true });
+const BASE = await devIndex();
+const OUT = (process.env.JB_SHOTS ?? new URL('../../test/shots/072/', import.meta.url).pathname).replace(/\/?$/, '/'); mkdirSync(OUT, { recursive: true });
 const J = JSON.stringify;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const C = `__card.shadowRoot`;

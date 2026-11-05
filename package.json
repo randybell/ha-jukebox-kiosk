@@ -12,11 +12,12 @@
     "build": "rollup -c && node scripts/copy-fonts.mjs",
     "watch": "rollup -c -w",
     "typecheck": "tsc --noEmit",
-    "test": "tsc --noEmit && node test/run.mjs && node test/unit/lyrics.unit.mjs && node test/lyrics.e2e.mjs && node test/unit/speakers.unit.mjs && node test/speakers.e2e.mjs && node test/unit/backend.unit.mjs && node test/unit/define.unit.mjs && node test/unit/radio.unit.mjs && node test/unit/repeat.unit.mjs && node test/kiosk.e2e.mjs && node test/unit/v070.unit.mjs && node test/unit/filters.unit.mjs && node test/v070.e2e.mjs && node test/filters.e2e.mjs && node test/unit/v072.unit.mjs && node test/v072.e2e.mjs",
-    "test:unit": "node test/unit/lyrics.unit.mjs && node test/unit/speakers.unit.mjs && node test/unit/backend.unit.mjs && node test/unit/define.unit.mjs && node test/unit/radio.unit.mjs && node test/unit/repeat.unit.mjs && node test/unit/v070.unit.mjs && node test/unit/filters.unit.mjs",
+    "test": "tsc --noEmit && node scripts/run-tests.mjs unit && node scripts/run-tests.mjs e2e",
+    "test:unit": "node scripts/run-tests.mjs unit",
+    "test:e2e": "node scripts/run-tests.mjs e2e",
+    "test:fit": "node scripts/run-tests.mjs fit",
     "perf": "node test/perf.mjs 3",
-    "shots": "node test/shots-m2.mjs",
-    "test:fit": "node test/fit.e2e.mjs"
+    "shots": "node tools/screenshots/shots-m2.mjs"
   },
   "author": "Randy Bell",
   "license": "MIT",
