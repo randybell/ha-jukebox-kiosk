@@ -151,6 +151,11 @@ export interface JukeboxCardConfig {
    *  under it, the library list while the box is empty and search results (that category, that source) once you type.
    *  'separate' = the 0.7.1 layout: a Library tab and a Search tab (only there does `library_home` / the tile grid apply). */
   library_layout?: 'combined' | 'separate';
+  /** Combined Library tab's on-screen keyboard. 'always' (default) = always shown on every screen size, the search box, source
+   *  buttons, category buttons and list arranged around it. 'tap' = optional small-screen fallback: in portrait and on phones the
+   *  list shows first and the keyboard opens when the search box is tapped (it can be hidden with its handle); landscape tablets
+   *  keep it on the left either way. Ignored with `library_layout: separate`. */
+  library_keyboard?: 'always' | 'tap';
   /** 0.7.2: the Library tab's category buttons, in order. Default playlist, artist, track (Songs), genre, radio.
    *  Also available: album, podcast, audiobook. (`discover` adds a Discover button first, as before.) */
   library_categories?: LibraryCategory[];
