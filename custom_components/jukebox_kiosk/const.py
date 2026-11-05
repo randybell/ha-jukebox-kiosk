@@ -204,8 +204,7 @@ MA_COMMANDS: Final[dict[str, MaCommand]] = {
     "music/audiobooks/library_items": MaCommand(R, "checked", impersonate=True, note=_LIBRARY_ITEMS_ARGS),
 }
 
-# Never forwarded, even for admins via the generic proxy (admins can use
-# jukebox_kiosk/raw on purpose). Prefix match.
+# Never forwarded, not even for admins. Prefix match.
 DENY_PREFIXES: Final = (
     "auth/",
     "config/core/",

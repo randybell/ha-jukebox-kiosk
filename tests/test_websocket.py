@@ -143,18 +143,14 @@ async def test_guest_without_library_denied(hass: HomeAssistant, hass_ws_client:
     assert fake_ma.calls == []
 
 
-async def test_non_admin_denied_raw(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
-    ws = await _ws(hass_ws_client, user_token[1])
-    res = await _call(ws, type="jukebox_kiosk/raw", command="players/all", args={})
-    assert res["error"]["code"] == "unauthorized"
+async def test_raw_command_removed(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, user_token: Any,
+                                   fake_ma: FakeMa) -> None:
+    """jukebox_kiosk/raw bypassed the allowlist; it is no longer registered, for admins or anyone else."""
+    for token in (admin_token[1], user_token[1]):
+        ws = await _ws(hass_ws_client, token)
+        res = await _call(ws, type="jukebox_kiosk/raw", command="players/all", args={})
+        assert not res["success"] and res["error"]["code"] == "unknown_command", res
     assert fake_ma.calls == []
-
-
-async def test_admin_raw_but_never_auth(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
-    ws = await _ws(hass_ws_client, admin_token[1])
-    assert (await _call(ws, type="jukebox_kiosk/raw", command="players/all", args={}))["success"]
-    res = await _call(ws, type="jukebox_kiosk/raw", command="auth/users", args={})
-    assert res["error"]["code"] == "not_allowed"
 
 
 @pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True,
@@ -178,9 +174,6 @@ async def test_guest_default_cannot_regroup(hass: HomeAssistant, hass_ws_client:
     ):
         res = await _call(ws, type="jukebox_kiosk/ma", command=cmd, args=args)
         assert not res["success"] and res["error"]["code"] == "unauthorized", (cmd, res)
-    res = await _call(ws, type="jukebox_kiosk/raw", command="players/cmd/set_members",
-                      args={"target_player": SYNCGROUP, "player_ids_to_add": [PLAYER_B]})
-    assert res["error"]["code"] == "unauthorized"
     assert fake_ma.calls == []
 
 

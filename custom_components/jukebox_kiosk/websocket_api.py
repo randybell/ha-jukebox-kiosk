@@ -30,7 +30,6 @@ from .const import (
     AUTOPLAY_MODES,
     AUTOPLAY_PLAYLIST_KEY,
     DOMAIN,
-    LOGGER,
     MA_COMMANDS,
     NO_WRITE_ARG_KEYS,
     PLAYER_ARG_KEYS,
@@ -638,25 +637,6 @@ async def ws_subscribe_queue(
     connection.send_result(msg_id, {"queue_id": queue_id})
 
 
-@websocket_api.websocket_command(
-    {
-        probatio.Required("type"): f"{DOMAIN}/raw",
-        probatio.Required("command"): str,
-        probatio.Optional("args", default={}): dict,
-    }
-)
-@websocket_api.require_admin
-@websocket_api.async_response
-@_wrap
-async def ws_raw(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """Admin-only escape hatch for diagnostics. Still refuses auth/*."""
-    if msg["command"].startswith("auth/"):
-        raise KioskError("not_allowed", "auth/* is never forwarded")
-    _e, _p, client = _context(hass)
-    LOGGER.debug("raw MA command by admin: %s", msg["command"])
-    connection.send_result(msg["id"], await _send(client, msg["command"], **msg["args"]))
-
-
 HANDLERS = (
     ws_capabilities,
     ws_ma,
@@ -668,7 +648,6 @@ HANDLERS = (
     ws_item_tracks,
     ws_unfavorite_current,
     ws_subscribe_queue,
-    ws_raw,
 )
 
 

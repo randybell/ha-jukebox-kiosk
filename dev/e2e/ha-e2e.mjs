@@ -237,7 +237,7 @@ if (shotsAt) {
     check('U5 kiosk user may unfavourite (favorites/remove_item); favourite state restored', rm.ok, J(rm));
   } else check('U5 kiosk user may unfavourite (skipped: the track was already a favourite, left as is)', true);
   const raw = await wsCall(k, { type: 'jukebox_kiosk/raw', command: 'players/all', args: {} });
-  check('U6 kiosk user denied the admin raw command', !raw.ok && raw.e === 'unauthorized', J(raw));
+  check('U6 jukebox_kiosk/raw is not registered (removed in 0.7.3)', !raw.ok && raw.e === 'unknown_command', J(raw));
   const unfav = await wsCall(k, { type: 'jukebox_kiosk/unfavorite_current', entity_id: ENT });
   check('U7 kiosk user passes the class check on unfavorite_current (library); any refusal is not "unauthorized"', unfav.ok || unfav.e !== 'unauthorized', J(unfav));
   const players = ma('players/all');
