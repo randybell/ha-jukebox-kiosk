@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v0.6.0 to test, build and publish a GitHub release.
+# Push a tag like v0.7.3 to test (pytest, typecheck, unit, browser e2e and fit in Chrome), build and publish a GitHub release.
 # HACS installs custom_components/jukebox_kiosk from the tagged source, so the built card in
 # custom_components/jukebox_kiosk/www/ is committed; this job fails if it is stale.
 on:
@@ -37,6 +37,9 @@ jobs:
             exit 1
           fi
 
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+
       - name: Install
         run: |
           npm ci
@@ -60,6 +63,17 @@ jobs:
           test -s custom_components/jukebox_kiosk/www/THIRD_PARTY_NOTICES.md
           test -s custom_components/jukebox_kiosk/www/fonts/THIRD_PARTY_NOTICES.md
           git diff --exit-code -- custom_components/jukebox_kiosk/www THIRD_PARTY_NOTICES.md
+
+      # the browser suites run against the committed (just verified) bundle; a failure stops the release
+      - name: Browser end-to-end tests
+        env:
+          CHROME: ${{ steps.chrome.outputs.chrome-path }}
+        run: npm run test:e2e
+
+      - name: Fit-to-panel tests (all 11 screen sizes)
+        env:
+          CHROME: ${{ steps.chrome.outputs.chrome-path }}
+        run: npm run test:fit
 
       - name: Zip the integration
         run: cd custom_components/jukebox_kiosk && zip -r ../../jukebox_kiosk.zip . -x '__pycache__/*' '*/__pycache__/*'

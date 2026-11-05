@@ -1,0 +1,82 @@
+name: CI
+
+# Every push and pull request: card unit tests, browser tests (end-to-end and fit-to-panel, headless Chrome),
+# and the integration tests. The release workflow runs the same suites before it publishes.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Card unit tests (every test/unit/*.unit.mjs)
+        run: npm run test:unit
+      - name: Build
+        run: npm run build
+      - name: Check the committed card bundle and notices are up to date
+        run: git diff --exit-code -- custom_components/jukebox_kiosk/www THIRD_PARTY_NOTICES.md
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Browser end-to-end tests (test/run.mjs and test/*.e2e.mjs)
+        env:
+          CHROME: ${{ steps.chrome.outputs.chrome-path }}
+        run: npm run test:e2e
+
+  fit:
+    name: fit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Fit-to-panel tests (test/fit.e2e.mjs, all 11 screen sizes)
+        env:
+          CHROME: ${{ steps.chrome.outputs.chrome-path }}
+        run: npm run test:fit
+
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+      - run: pip install -r requirements_test.txt
+      - name: Integration tests
+        run: pytest -q
