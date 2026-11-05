@@ -2,6 +2,11 @@
 
 All notable changes to Jukebox Card. Versions follow [semver](https://semver.org/).
 
+## Unreleased
+
+### Changed
+- **Library tab buttons.** On the combined Library tab, Playlists, Artists, Songs, Genres and Radio are large buttons with an icon. The one you are in is solid white. The row of source buttons is now an **All sources** button beside the search box. Tap it to open the same choices under the box (All, Library, then each music service). You can still pick more than one. The button turns white while any is on: on a larger screen it shows their names (shortened if they do not fit); on a phone it says how many are on. Tap it again to close the row. The screensaver closes it too when `idle_clear_filters` is on (the default). Favorites and sort are small buttons at the end of the category row, on the library list: a heart for favorites only, and a button that cycles A–Z, Recently added and Recently played. Radio opens on Popular. Genres have no heart, and they cycle A–Z and Recently added. Those two buttons hide while you are typing, while a music service is chosen, while Search in an artist or album is on, or on a detail page. On a phone, and on a very short screen, the sort button is only the icon. Favorites and sort are no longer chips in a bar above the list. The separate Search tab still keeps its source buttons in a row under the box. The keyboard stays open by default.
+
 ## 0.7.3 — 2026-11-05
 
 ### Added
