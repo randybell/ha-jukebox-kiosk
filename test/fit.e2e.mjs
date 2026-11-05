@@ -2,6 +2,8 @@
 // a regular masonry card), the header and tab bar are always fully visible and the page never scrolls.
 // The HA frontend is emulated by dev/index.html?ha=toolbar|kiosk|masonry&sidebar=open|narrow|closed|none
 // (fixed app toolbar of HA's --header-height: 56px, sidebar drawer 256/56 px, window-scrolling view).
+// The tab bar is the 0.7.2 default (library_layout: combined): Now Playing, Library (the old Browse and Search
+// tabs in one: search box, source buttons, category buttons; the keyboard opens when the search box is tapped), Queue, Lyrics.
 // Usage: (serve the project root on :8765, or set JB_ROOT) node test/fit.e2e.mjs   Screenshots: test/shots/v042/ (git-ignored)
 import puppeteer from 'puppeteer-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -19,7 +21,8 @@ const pageErrors = [];
 
 const SIZES = [[1024, 666], [1280, 720], [1366, 768], [1440, 900], [1280, 800], [1920, 1080], [390, 844, 1], [844, 390, 1], [820, 1180, 1], [1180, 820, 1], [1024, 600, 1]];
 const KEY = new Set(['1024x666', '1280x720', '1366x768', '1920x1080', '1024x600', '390x844', '844x390', '820x1180']);
-const TABS = ['now', 'browse', 'search', 'queue', 'lyrics'];
+const TABS = ['now', 'browse', 'queue', 'lyrics']; // 'browse' is the combined Library tab; there is no separate search tab
+const LIB = 'browse';
 const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 
 /** geometry of everything that must be fully visible, plus page-scroll state */
@@ -34,21 +37,32 @@ const geom = (pg) => pg.evaluate(() => {
   });
   const before = scrollY; scrollTo(0, 1e5); const could = scrollY; scrollTo(0, before);
   const kb = sr.querySelector('jb-search')?.shadowRoot.querySelector('jb-keyboard');
+  const sv = sr.querySelector('jb-search')?.shadowRoot;
+  const vis = (el) => { const b = r(el); return b && b.h > 0 && b.w > 0 ? b : null; };
+  const lib = sv ? { combined: sr.querySelector('jb-search').hasAttribute('combined') || !!sr.querySelector('jb-search').combined, q: vis(sv.querySelector('.qbar')),
+    srcs: [...sv.querySelectorAll('.srcs .src')].map(vis) } : null;
   const nw = sr.querySelector('jb-now')?.shadowRoot.querySelector('.nw');
   const pp = sr.querySelector('jb-now')?.shadowRoot.querySelector('.tb.pp');
   return { vw, vh, tbB, nav: r(sr.querySelector('.tabs')), top: r(sr.querySelector('.top')), tabs, could, docH: document.documentElement.scrollHeight,
     kb: kb && kb.getBoundingClientRect().height ? r(kb) : null, nw: nw ? { sh: nw.scrollHeight, ch: nw.clientHeight } : null, pp: r(pp),
-    fit: __card.dataset.fitH, size: __card.dataset.fit ?? '' };
+    lib, fit: __card.dataset.fitH, size: __card.dataset.fit ?? '' };
 });
 const within = (b, g, top = 0) => b && b.t >= top - 0.5 && b.b <= g.vh + 0.5 && b.l >= -0.5 && b.r <= g.vw + 0.5 && b.h > 0;
 function verify(label, g, { fill = true, tab } = {}) {
-  const tabsOk = g.tabs.length === 5 && g.tabs.every((t) => within(t, g) && t.hit);
+  const tabsOk = g.tabs.length === TABS.length && g.tabs.every((t, i) => t.id === TABS[i]) && g.tabs.every((t) => within(t, g) && t.hit);
   check(`${label}: tab bar fully visible (bottom ${Math.round(g.nav.b)} ≤ ${g.vh}), every tab hit-testable`, within(g.nav, g) && tabsOk,
     JSON.stringify({ nav: g.nav, bad: g.tabs.filter((t) => !within(t, g) || !t.hit).map((t) => t.id) }));
   check(`${label}: header fully visible below the HA toolbar`, within(g.top, g, g.tbB), JSON.stringify({ top: g.top, tbB: g.tbB }));
   check(`${label}: no page scroll`, g.could === 0 && g.docH <= g.vh, `could=${g.could} docH=${g.docH} vh=${g.vh}`);
   if (fill) check(`${label}: card fills to the bottom (no gap)`, g.nav.b >= g.vh - 1.5, `nav.b=${g.nav.b} vh=${g.vh}`);
-  if (tab === 'search') check(`${label}: on-screen keyboard open and fully visible above the tabs`, !!g.kb && within(g.kb, g, g.top.b) && g.kb.b <= g.nav.t + 0.5, JSON.stringify(g.kb));
+  if (tab === LIB) {
+    check(`${label}: Library search box fully visible between the header and the tabs`, !!g.lib?.combined && within(g.lib.q, g, g.top.b) && g.lib.q.b <= g.nav.t + 0.5, JSON.stringify(g.lib?.q));
+    check(`${label}: on-screen keyboard open and fully visible above the tabs`, !!g.kb && within(g.kb, g, g.top.b) && g.kb.b <= g.nav.t + 0.5, JSON.stringify(g.kb));
+    // source buttons: between the header and the tabs, clear of the keyboard (below it in portrait, beside it in landscape);
+    // on narrow screens the row scrolls sideways, so only the first one has to be on screen
+    const clear = (b) => b && b.t >= g.top.b - 0.5 && b.b <= g.nav.t + 0.5 && !!g.kb && (b.b <= g.kb.t + 0.5 || b.t >= g.kb.b - 0.5 || b.r <= g.kb.l + 0.5 || b.l >= g.kb.r - 0.5);
+    if (g.lib?.srcs.length) check(`${label}: ${g.lib.srcs.length} source buttons visible, clear of the keyboard`, g.lib.srcs.every(clear) && within(g.lib.srcs[0], g, g.top.b), JSON.stringify({ srcs: g.lib.srcs, kb: g.kb }));
+  }
   if (tab === 'now') check(`${label}: Now Playing transport reachable (visible, or the middle scrolls)`, (g.pp && g.pp.t >= g.top.b && g.pp.b <= g.nav.t) || (g.nw && g.nw.sh > g.nw.ch), JSON.stringify({ pp: g.pp, nw: g.nw }));
 }
 async function newPage(vp, ua) {
@@ -64,12 +78,27 @@ async function open(pg, q) {
   await pg.waitForFunction('window.__ready === true');
   await sleep(350);
 }
-async function tapTab(pg, id, touch) {
+async function tapTab(pg, id, touch, kb = true) {
   const b = await pg.evaluate((id) => { const t = __card.shadowRoot.querySelector(`.tab[data-tab="${id}"]`).getBoundingClientRect(); return { x: t.left + t.width / 2, y: t.top + t.height / 2 }; }, id);
   if (touch) await pg.touchscreen.tap(b.x, b.y); else await pg.mouse.click(b.x, b.y);
-  await sleep(id === 'lyrics' || id === 'search' ? 350 : 250);
+  await sleep(id === 'lyrics' || id === LIB ? 350 : 250);
   const sel = await pg.evaluate(() => __card.shadowRoot.querySelector('.tab.active')?.dataset.tab);
   if (sel !== id) throw new Error(`tab ${id} did not open (active=${sel})`);
+  if (id === LIB && kb) await openKb(pg, touch);
+}
+/** combined Library with the keyboard still hidden: every category button fully visible between the header and the tabs */
+const libCats = (pg) => pg.evaluate(() => { const sr = __card.shadowRoot, sv = sr.querySelector('jb-search').shadowRoot;
+  const top = sr.querySelector('.top').getBoundingClientRect().bottom, nav = sr.querySelector('.tabs').getBoundingClientRect().top;
+  // the row scrolls sideways when the buttons do not fit (phones on their side): then a button only has to be inside it vertically
+  const row = sv.querySelector('.lcats'), rr = row?.getBoundingClientRect(), scrolls = !!row && row.scrollWidth > row.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(row).overflowX);
+  return [...sv.querySelectorAll('.lcats .lc')].map((b, i) => { const r = b.getBoundingClientRect(); return { id: b.dataset.lcat, ok: r.width > 0 && r.height > 0 && r.top >= top - 0.5 && r.bottom <= nav + 0.5
+    && (i === 0 || !scrolls ? r.left >= -0.5 && r.right <= innerWidth + 0.5 : r.top >= rr.top - 0.5 && r.bottom <= rr.bottom + 0.5), ...(scrolls ? { scrolls } : {}) }; }); });
+/** combined Library: the keyboard starts hidden; tapping the search box opens it */
+async function openKb(pg, touch) {
+  const b = await pg.evaluate(() => { const q = __card.shadowRoot.querySelector('jb-search').shadowRoot.querySelector('.qbar'); if (!q) return null; const r = q.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  if (!b) throw new Error('Library search box not found');
+  if (touch) await pg.touchscreen.tap(b.x, b.y); else await pg.mouse.click(b.x, b.y);
+  await sleep(300);
 }
 // HA: sidebar is a modal drawer (hidden) below 870 px wide, the narrow icon rail otherwise
 const sidebarFor = (w) => (w < 870 ? 'none' : 'narrow');
@@ -82,10 +111,15 @@ for (const [w, h, touch] of SIZES) {
     const pg = await newPage(vp);
     await open(pg, q);
     for (const tab of TABS) {
-      await tapTab(pg, tab, touch);
+      if (tab === LIB) {
+        await tapTab(pg, tab, touch, false);
+        const cats = await libCats(pg);
+        check(`F1 ${w}x${h} ${mode} Library: ${cats.length} category buttons fully visible before the keyboard opens`, cats.length >= 4 && cats.every((c) => c.ok), JSON.stringify(cats));
+        await openKb(pg, touch);
+      } else await tapTab(pg, tab, touch);
       const g = await geom(pg);
       verify(`F1 ${w}x${h} ${mode} ${tab}`, g, { tab });
-      if (mode === 'toolbar' && (tab === 'now' || (KEY.has(`${w}x${h}`) && (w === 1024 && h === 666 || tab === 'search'))))
+      if (mode === 'toolbar' && (tab === 'now' || (KEY.has(`${w}x${h}`) && (w === 1024 && h === 666 || tab === LIB))))
         await pg.screenshot({ path: `${OUT}${tab}-${w}x${h}-toolbar.png` });
     }
     await pg.close();
@@ -97,7 +131,7 @@ for (const [w, h] of [[1440, 900], [1280, 800], [1024, 666]]) {
   for (const sb of ['open', 'closed']) {
     const pg = await newPage({ width: w, height: h });
     await open(pg, `&ha=toolbar&sidebar=${sb}`);
-    for (const tab of ['now', 'search']) { await tapTab(pg, tab); verify(`F2 ${w}x${h} toolbar sidebar=${sb} ${tab}`, await geom(pg), { tab }); }
+    for (const tab of ['now', LIB]) { await tapTab(pg, tab); verify(`F2 ${w}x${h} toolbar sidebar=${sb} ${tab}`, await geom(pg), { tab }); }
     await pg.close();
   }
 }
@@ -123,13 +157,13 @@ for (const [w, h] of [[1440, 900], [1280, 800], [1024, 666]]) {
     verify(`F3 resize → ${w}x${h}`, await geom(pg), { tab: 'now' });
   }
   await pg.setViewport({ width: 1024, height: 666, deviceScaleFactor: 1 }); await sleep(300);
-  await tapTab(pg, 'search');
+  await tapTab(pg, LIB);
   await pg.evaluate(() => __haToolbar(false)); await sleep(400);
-  verify('F3 toolbar hidden while open (kiosk-mode toggled) 1024x666 search', await geom(pg), { tab: 'search' });
+  verify('F3 toolbar hidden while open (kiosk-mode toggled) 1024x666 Library', await geom(pg), { tab: LIB });
   await pg.evaluate(() => __haToolbar(true)); await sleep(400);
-  verify('F3 toolbar shown again 1024x666 search', await geom(pg), { tab: 'search' });
+  verify('F3 toolbar shown again 1024x666 Library', await geom(pg), { tab: LIB });
   await pg.evaluate(() => __haSidebar('256px')); await sleep(400);
-  verify('F3 sidebar opened while open 1024x666', await geom(pg), { tab: 'search' });
+  verify('F3 sidebar opened while open 1024x666', await geom(pg), { tab: LIB });
   await pg.close();
   const ph = await newPage({ width: 390, height: 844, isMobile: true, hasTouch: true });
   await open(ph, '&ha=toolbar&sidebar=none');
@@ -236,6 +270,23 @@ for (const [w, h, touch, size] of S6) {
     if (w === 1024 && h === 666) await pg.screenshot({ path: `${OUT}queue-undo-${w}x${h}-toolbar${lg ? '-large' : ''}.png` });
     await pg.close();
   }
+}
+
+// ---------- 7. 0.7.2 Library with the integration backend (source buttons shown), every size ----------
+for (const [w, h, touch] of SIZES) {
+  const vp = { width: w, height: h, ...(touch ? { isMobile: true, hasTouch: true } : {}) };
+  const pg = await newPage(vp);
+  await open(pg, `&kiosk=1&ha=toolbar&sidebar=${sidebarFor(w)}`);
+  await tapTab(pg, LIB, touch, false);
+  await pg.waitForFunction(() => __card.shadowRoot.querySelector('jb-search').shadowRoot.querySelectorAll('.srcs .src').length > 0, { timeout: 4000 }).catch(() => {});
+  const cats = await libCats(pg);
+  check(`F7 ${w}x${h} toolbar kiosk backend Library: ${cats.length} category buttons fully visible before the keyboard opens`, cats.length >= 4 && cats.every((c) => c.ok), JSON.stringify(cats));
+  await openKb(pg, touch);
+  const g = await geom(pg);
+  check(`F7 ${w}x${h} toolbar kiosk backend Library: source buttons shown`, (g.lib?.srcs.length ?? 0) > 0, JSON.stringify(g.lib));
+  verify(`F7 ${w}x${h} toolbar kiosk backend Library`, g, { tab: LIB });
+  if (KEY.has(`${w}x${h}`)) await pg.screenshot({ path: `${OUT}library-kiosk-${w}x${h}-toolbar.png` });
+  await pg.close();
 }
 
 check('F9 no page errors', pageErrors.length === 0, pageErrors.join(' | '));
