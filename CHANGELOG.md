@@ -12,6 +12,7 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 - `library_home` defaults to `false` again and only applies with `library_layout: separate`; a 0.7.1 `library_home: true` gets the combined tab.
 
 ### Added
+- **Keyboard always open on the Library tab.** The combined tab's on-screen keyboard is shown by default on every screen size (portrait tablets and phones included), with the search box, source buttons, category buttons, list and tab bar arranged around it; no Keyboard pill or hide handle. `library_keyboard: tap` (YAML only) restores the tap-to-open keyboard in portrait / on phones as a small-screen fallback.
 - **Source buttons (`search_sources`, default `true`).** An always-visible row of touch-sized chips under the search box (no dropdown): All, Library, then the search-capable music providers configured in Music Assistant, by display name (new `jukebox_kiosk/search_providers` command, class `read`, served from the MA client's provider list; mass_queue backend: MA `providers`).
   - Multi-select: All by default; tapping a provider turns All off and selects it, more taps add providers, tapping a selected one removes it, none left = All again, tapping All clears them. Status and placeholder name the selection ("Apple Music + TuneIn").
   - The selected providers go together in `music/search`'s `providers`; Library alone = library only; Library plus providers = library first, then those providers. With an empty box, one provider shows its browse (or a hint); several show the inline hint to type.

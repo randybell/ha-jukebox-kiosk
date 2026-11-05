@@ -317,7 +317,8 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
   - `123` / `#+=` switches to symbols.
   - Holding backspace clears the query.
   - Keys fire on release (pointerup), so a touch that slides off a key does not type.
-  - In portrait you can hide the keyboard with its handle; a "Keyboard" button brings it back.
+  - On the combined Library tab the keyboard is always shown, on every screen size (no hide handle, no "Keyboard" button): the search box, source buttons, category buttons and the list sit around it, and a guest can just start typing. On short phones the keys get smaller and the status line under the search box is dropped so a row of the list stays visible. `library_keyboard: tap` is an optional fallback for small screens (see [Options](#options)).
+  - With `library_keyboard: tap`, and on the separate (0.7.1) Search tab, you can hide the keyboard in portrait with its handle; a "Keyboard" button brings it back.
 - **Focus.** No keyboard ever pops up: there is no input, textarea or contenteditable element anywhere. Every button is `tabindex=-1` and calls `preventDefault` on pointerdown, except the active bottom tab (0.5.0), which is the tab bar's one keyboard stop: ←/→/Home/End switch tabs. A focusin guard blurs anything editable.
 
 
@@ -387,6 +388,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `hearts` | `true` | *(0.7)* A favourite heart on Search and Library rows and tiles, on playlist rows and on album, artist and playlist pages. See [Favourites (hearts)](#favourites-hearts). Needs the Jukebox Kiosk backend and the `library` class. `false` keeps the 0.6 hearts only (Search radio rows, the station sheet and Now Playing) |
 | `show_autoplay` | `false` | *(0.7)* Autoplay (Music Assistant "don't stop the music") toggle in the Queue header plus an indicator on Now Playing. Jukebox Kiosk backend, class `queue` |
 | `radio_favorites_only` | `false` | *(0.7)* Browse › Radio **My stations** lists favourite stations only. Default: favourites first, then the other library stations |
+| `library_keyboard` | `always` | *(0.7.2, combined Library tab)* `always`: the on-screen keyboard is always shown on every screen size. `tap`: optional fallback for small screens: in portrait and on phones the list shows first and tapping the search box opens the keyboard (landscape tablets keep it on the left either way) |
 | `library_layout` | `combined` | *(0.7.2)* `combined`: one Library tab with the search box, source buttons and category buttons (no Search tab). `separate`: the 0.7.1 Library + Search tabs |
 | `library_categories` | `[playlist, artist, track, genre, radio]` | *(0.7.2)* Category buttons in order; also `album`, `podcast`, `audiobook` |
 | `search_sources` | `true` | *(0.7.2)* The source buttons under the search box (All, Library, Music Assistant providers; multi-select). Jukebox Kiosk and mass_queue backends |
