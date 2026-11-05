@@ -1,6 +1,7 @@
 import type { HomeAssistant } from './types';
 import { cleanName, safeImage } from './shared';
 import { BackendError, type AutoplayMode, type AutoplayOptions, type MaBackend, type QueueAction } from './backend/types';
+import { removeQueuedItem } from './queue-actions';
 import { MassQueueBackend } from './backend/mass-queue';
 
 /** One item from mass_queue.get_queue_items (v0.10.4: no duration). */
@@ -209,6 +210,14 @@ export class QueueModel {
     const send = this.ma('player_queues/move_item', { queue_item_id: id, pos_shift: shift });
     return send ? this.act('player_queues/move_item', id, (items, j) => this.moveTo(items, j, lk + 1), send) : this.next(id);
   }
+  /** Remove the queued occurrence of a browsed/search result, rather than playing it again. */
+  removeItem(it: { uri?: string; name: string; media_type?: string }) {
+    const match = this.snap.items.find((x) => x.media_content_id === it.uri && x.queue_item_id !== this.currentItem?.queue_item_id);
+    if (match && !this.isLocked(match.queue_item_id)) return this.removeRow(match.queue_item_id);
+    return removeQueuedItem(this.hass, this.configForRemove, this.backend, this.entity, it);
+  }
+  /** Set by the card with its runtime entity/backend; direct model tests keep using their own backend. */
+  configForRemove: { entity?: string; mass_queue_entry_id?: string; queue_config_entry_id?: string; config_entry_id?: string } = { entity: 'media_player.everywhere' };
   remove(id: string) {
     return this.act('remove', id, (items, i) => {
       const cur = this.snap.current; items.splice(i, 1);

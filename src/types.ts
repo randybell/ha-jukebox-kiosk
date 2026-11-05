@@ -187,6 +187,8 @@ export interface JukeboxCardConfig {
   large_buttons?: boolean;
   /** @internal the card's Music Assistant backend (set by the card, shared with every view) */
   _backend?: import('./backend/types').MaBackend;
+  /** Shared active queue, used by row Remove without constructing a second queue. */
+  _queue?: import('./queue-model').QueueModel;
   /** v0.7 hearts: the card's shared favourites store (set by the card) */
   _favs?: import('./favorites').FavStore;
   /** @internal set by the card in dynamic mode only: resolves false when the user cancels a start that would take speakers */
