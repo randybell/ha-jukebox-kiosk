@@ -6,7 +6,7 @@ Jukebox Kiosk is a Home Assistant integration that ships the **Jukebox Card**, a
 
 - **One install.** Setting up the integration serves the card from `/jukebox_kiosk_static/jukebox-card.js` and loads it on every dashboard. You don't add a resource, and you don't unzip fonts.
 - **Its own Music Assistant API.** The integration borrows the connection the official Music Assistant integration already holds and exposes it as `jukebox_kiosk/*` WebSocket commands. It forwards only an allowlist of Music Assistant commands, and every one is checked against the calling Home Assistant user (see [Permissions](#permissions)).
-- **Every card feature without mass_queue.** Queue reading and editing (Play now, Play next, Move, Remove with Undo), album/artist/playlist/podcast track lists with server-side paging, lyrics, speaker grouping and transfer, and removing favourites.
+- **Every card feature without mass_queue.** Queue reading and editing (Play Now, Play Next, Move, Remove with Undo), album/artist/playlist/podcast track lists with server-side paging, lyrics, speaker grouping and transfer, and removing favourites.
 - **Live queue.** The card subscribes to queue changes (`jukebox_kiosk/subscribe_queue`) instead of polling.
 
 The card's element is still `custom:jukebox-card`, so existing dashboards keep working. Version history is in [CHANGELOG.md](CHANGELOG.md), and building and tests are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
@@ -64,7 +64,7 @@ The card talks to Music Assistant through one of three backends. Set `backend` i
 | `mass_queue` *(legacy)* | `mass_queue.*` services, as in 0.5.x | Needs `mass_queue_entry_id`. Kept for anyone not ready to install the integration. |
 | `native` | the official `music_assistant` services only | Search, Browse grid, transport, volume and playing music. No queue tab, track lists, lyrics or grouping. |
 
-On the kiosk backend the card asks `jukebox_kiosk/capabilities` once per connection and hides what the server reports as unavailable: queue icons (`queue_play`, `queue_edit`), Undo, the remove-favourite heart (`unfavorite`), the Speakers panel's grouping (`speakers`) and the Lyrics tab (`lyrics`).
+On the kiosk backend the card asks `jukebox_kiosk/capabilities` once per connection and hides what the server reports as unavailable: Move up and Move down when `queue_edit` is off, Undo, the remove-favourite heart (`unfavorite`), the Speakers panel's grouping (`speakers`) and the Lyrics tab (`lyrics`). Play Next, Play Now and Remove stay on the Queue rows; they are greyed when `queue_play` is off.
 
 ## Permissions
 
@@ -207,16 +207,16 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 - **Reading.** The queue comes from `mass_queue.get_queue_items {entity, limit_before: 1, limit_after: queue_limit (1–1000)}` with `return_response`. It refreshes when the tab opens, when the track, state or shuffle changes, and after every action.
 - **Layout.** The previous track is dimmed. "Now playing" is the highlighted white row, then a numbered "Up next" list. "+ N more in Music Assistant" appears when the queue is longer than the list.
 - **Tap a row** to send `mass_queue.play_queue_item {entity, queue_item_id}`.
-- **Row buttons.** ↑ and ↓ send `move_queue_item_up` and `move_queue_item_down`; they are hidden on phones. **⋮** or a long-press opens a menu: Play now, Play next (`move_queue_item_next`), Move up, Move down, Remove (`remove_queue_item`). Every action sends exactly `{entity, queue_item_id}`.
-- **Header.** The Queue tab badge shows how many items are left.
-- **0.5.0 row icons** (for users allowed to group, see `grouping`; guests keep the 0.4 rows). They go through `mass_queue.send_command` with the MA queue id, and fall back to the 0.4 services when `mass_queue_entry_id` is not set:
-  - **Play now** (not on the playing row) asks first, "Play this now? The current song will stop.", then sends `player_queues/play_index {queue_id, index: queue_item_id}`. Every Play now (icon, ⋯ sheet, long-press menu, row tap) only moves playback to that item: the queue keeps its items and order, and nothing is replaced, cleared or moved.
-  - **Play next** sends `player_queues/move_item {queue_id, queue_item_id, pos_shift: (current + 1) − index}`, no dialog; disabled on the row that is already next, absent on played rows. If MA has already buffered the next track it ignores the move and the card shows MA's order again.
-  - **Move up / Move down**: as in 0.4, no dialog.
-  - **Remove** (never the playing row or played rows) sends `player_queues/delete_item {queue_id, item_id_or_index: queue_item_id}`, no dialog, and shows "Removed <title>. Undo" for 5 s. **Undo** re-adds the track's URI (`player_queues/play_media {queue_id, media: uri, option: add}`), finds the new row (`player_queues/items`) and moves it back (`move_item`). If it can only be re-added at the end, or not at all, the toast says so.
-  - Phones (card ≤ 520 px wide): Play next and Remove stay on the row; **⋯** opens an action sheet with Play now…, Play next, Move up, Move down, Remove. Wider cards show all five icons (44 px targets, right-aligned).
-  - Tapping a row and the long-press menu keep the 0.4 behaviour.
-  - The track Music Assistant is already loading (the one after the playing track, near its end) can't be moved or removed: those rows have no Play next / Remove and their Move buttons are off. If MA refuses anyway, the toast says "That track is already loading" and the queue reloads.
+- **Row actions.** Every song row shows three buttons with an icon and a label, in this order: **Play Next**, **Play Now**, **Remove**. On a wide card they sit beside the title. Move up and Move down stay as the ↑ and ↓ arrows beside them (`move_queue_item_up` and `move_queue_item_down`). On a phone (the card is 520 px wide or less) Play Next, Play Now and Remove sit on their own row under the title, the arrows are hidden, and **⋯** opens an action sheet with Play Now, Play Next, Move up, Move down and Remove. A long-press opens that menu.
+- **Search queue.** **Search queue** in the header opens a box and an on-screen keyboard that stays open. The list shows songs whose title, artist or album contains what you type. **Done** closes the search and clears it.
+- **Header.** The Queue tab badge shows how many items are left, and the header says how many are up next.
+- **Play Now, Play Next and Remove** go through `mass_queue.send_command` with the MA queue id, and fall back to the 0.4 services when `mass_queue_entry_id` is not set. Someone who may not change the queue (see `grouping`, or `queue_play` off) still sees the three labels; they are greyed and do nothing.
+  - **Play Now** asks first, "Play this now? The current song will stop.", then sends `player_queues/play_index {queue_id, index: queue_item_id}`. It only moves playback to that item: the queue keeps its items and order, and nothing is replaced, cleared or moved. It is greyed on the song that is playing.
+  - **Play Next** sends `player_queues/move_item {queue_id, queue_item_id, pos_shift: (current + 1) − index}`, no dialog. It is greyed on the row that is already next, on the song playing now, and on songs that have already played. If MA has already buffered the next track it ignores the move and the card shows MA's order again.
+  - **Move up / Move down**: no dialog.
+  - **Remove** sends `player_queues/delete_item {queue_id, item_id_or_index: queue_item_id}`, no dialog, and shows "Removed <title>. Undo" for 5 s. **Undo** re-adds the track's URI (`player_queues/play_media {queue_id, media: uri, option: add}`), finds the new row (`player_queues/items`) and moves it back (`move_item`). If it can only be re-added at the end, or not at all, the toast says so. Remove is greyed on the song playing now, on songs already played, and on the track Music Assistant is already loading.
+  - An action that cannot be used stays on the row, greyed. It is not hidden.
+  - The track Music Assistant is already loading (the one after the playing track, near its end) can't be moved or removed: Play Next and Remove are greyed and the Move buttons are off. If MA refuses anyway, the toast says "That track is already loading" and the queue reloads.
 
 ### Speakers (0.5.0)
 
@@ -247,10 +247,10 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
   - At start the card makes one `limit: 1` call per category and **hides the categories that are empty**, such as Radio, Podcasts and Audiobooks when the library has none.
 - **Favorites and sort.** On the combined tab these are the heart and the sort button at the end of the category row. On the separate Library tab they stay in the bar above the list: a **Favorites** toggle, and a sort chip. The cycle is A–Z (`name`), then Recently added (`timestamp_added_desc`), then Recently played (`last_played_desc`). Radio starts on Popular (`play_count_desc`; `get_library` has no popularity order, so this is your own play count), then A–Z, Recently added and Recently played. Genres use A–Z and Recently added, and have no Favorites control.
 - **Layout.** Tile grid with provider badges; tracks show as rows. Pages are cached per category, favorite and sort, and load more on scroll.
-- **Tap never plays.** Artists, albums, playlists (and podcasts with mass_queue) open the detail view described under Search, with the same rows, icons and confirmations. Other tiles open a small sheet (Play next, Add to queue, Replace queue…, Start radio…). **Long-press** opens a menu: Open, Play next, Add to queue, Replace queue, Start radio (not shown for radio stations); Replace and Start radio confirm first.
+- **Tap never plays.** Artists, albums, playlists (and podcasts with mass_queue) open the detail view described under Search, with the same **Play Next**, **Play Now** and **Remove** labels and the same confirmations. Other tiles open a small sheet: Play Now, Play Next, Remove. **Long-press** opens a menu: Open (when the item has a page), Play Now, Play Next, Remove, another Play Now that asks before it replaces the queue, and Start radio… for a track, artist or album. Start radio asks first. Add to queue is not on the row or in that menu.
 - **Radio.** Browse > Radio lists `get_library {media_type: radio}`. If the library has no stations (Radio Browser stations you haven't saved), it falls back to `music_assistant.search {name: radio, media_type: [radio]}` and says so above the grid. Station names are trimmed (Radio Browser pads some with tabs), every station has a **Radio** badge, and a station with no logo or a dead logo gets a radio-tower image. A tap sends `play_media {media_id: radiobrowser://radio/…, media_type: radio, enqueue: play}` to `media_player.everywhere`, never with `radio_mode`.
 - **Drill-down.** The › button on artist, album and playlist tiles, or Open in the menu, opens a detail page:
-  - a back button, Play, Shuffle, Add to queue and Start radio (`radio_mode: true`, tracks / artists / albums only), and a track list with per-row icons (tapping a track only highlights it)
+  - a back button, Play, Shuffle, Add to queue and Start radio (`radio_mode: true`, tracks / artists / albums only), and a track list whose rows are labeled **Play Next**, **Play Now** and **Remove** (tapping a track only highlights it)
   - with `mass_queue_entry_id`, tracks come from `mass_queue.get_album_tracks` / `get_artist_tracks` / `get_playlist_tracks {config_entry_id: <mass_queue entry>, uri[, page]}` with `return_response`. Each row shows its duration, and the header shows the count and total time ("9 tracks · 43 min", with "+" while more pages may follow)
   - playlists are paged: the card asks for `page: 0` first, then `page: 1, 2, …` (0–1000) when you scroll to the end or tap **Load more tracks**. mass_queue 0.10 returns the whole playlist for page 0, so usually there is one call; paging stops on an empty page, a page shorter than the first, or a page that repeats tracks already shown
   - artists also get an Albums row from `music_assistant.search`
@@ -285,19 +285,19 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 - **Slow Music Assistant.** If a reply takes more than `slow_ms` (800 ms), the card keeps one call in flight and queues only the latest query. Keystrokes in between are merged into that one.
 - **Results.** They are grouped as Artists, Albums, Tracks, Playlists, Radio, Audiobooks and Podcasts, with filter chips. **Empty groups and their chips are hidden**, so Radio (when no radio provider answers), Audiobooks and Podcasts don't show. Radio items get a **Radio** badge, a 'Live radio' subtitle, and no Start radio action. Each item has a provider badge taken from its URI scheme, because MA items have no provider field (`library://…` → LIBRARY, `apple_music://…` and `apple_music--XXXXXXXX://…` → APPLE MUSIC).
 - **Every result is a list row**: art (round for artists) or an icon, title, subtitle (provider badge, type, artist / album; on phones the track length joins the subtitle). Titles truncate with an ellipsis; rows are at least 56 px tall.
-- **Row icons** (48 px, 44 px on phones), each with an `aria-label`:
+- **Row actions.** Each song row shows an icon and a visible label, at least 44 px, in this order:
 
-  | Icon | `play_media` data | Confirmation |
+  | Button | What it sends | Confirmation |
   |---|---|---|
-  | Add to queue | `enqueue: add` | none |
-  | Play next | `enqueue: next` | none |
-  | Replace queue | `enqueue: replace` | "Replace the current queue? This clears what's playing for everyone." Cancel / Replace |
-  | Start radio (radio-tower icon) | `enqueue: replace, radio_mode: true` | "Start radio from “…”? This replaces the current queue for everyone." Cancel / Start radio |
+  | Play Next | `play_media` with `enqueue: next` | none; it runs at once |
+  | Play Now | `play_media` with `enqueue: replace` | "Replace the current queue? This clears what's playing for everyone." Cancel / Replace |
+  | Remove | takes that item off the queue if it is already there; it does not add anything | none; it runs at once |
+  | Start radio | `play_media` with `enqueue: replace, radio_mode: true` | "Start radio from “…”? This replaces the current queue for everyone." Cancel / Start radio |
 
-  Start radio is shown only for tracks, artists and albums. It is hidden for radio stations, podcasts, episodes, audiobooks and playlists (playlist seeds are not confirmed to work in MA). Nothing is sent until you confirm; Cancel, Esc or tapping outside sends nothing. A second tap on an icon while its call is still on its way is dropped.
-  When a row is too narrow for four icons (under about 330 px, e.g. a 320 px phone), Replace and Start radio fold into a **⋯** menu (Replace queue…, Start radio…), which still confirm.
+  Start radio is shown only for tracks, artists and albums. It is hidden for radio stations, podcasts, episodes, audiobooks and playlists (playlist seeds are not confirmed to work in MA). Play Next and Remove send at once. Play Now and Start radio send nothing until you confirm; Cancel, Esc or tapping outside sends nothing. A second tap on a button while its call is still on its way is dropped. Add to queue is not one of these row buttons.
+  On a phone, and when the list is narrow (under about 450 px), Play Next, Play Now and Remove sit on their own row under the title. When the list is under about 720 px, Start radio moves into **More** as **Start radio…**, which still asks first.
 - **Tapping a row never plays.** An artist, album, playlist (or podcast) opens its detail view in place; a track or station row is only highlighted. Long-press does the same.
-- **Detail views** (from Search, Browse or Enter on the top result): Back, Play, Shuffle, Add to queue and, where the seed is supported, Start radio. Play and Shuffle replace the queue, so they ask first; Add to queue does not. Tracks, an artist's albums and podcast episodes use the same rows and icons; an album row inside an artist opens that album.
+- **Detail views** (from Search, Browse or Enter on the top result): Back, Play, Shuffle, Add to queue and, where the seed is supported, Start radio. Play and Shuffle replace the queue, so they ask first; Add to queue does not. Tracks, an artist's albums and podcast episodes use the same **Play Next**, **Play Now** and **Remove** labels; an album row inside an artist opens that album.
   - **Play** sends `play_media … enqueue: replace`; if the player is shuffling it first sends `media_player.shuffle_set {shuffle: false}` (awaited) so the list plays in order.
   - **Shuffle** sends `media_player.shuffle_set {shuffle: true}` to the player, waits for it, then `play_media … enqueue: replace`. Music Assistant applies the queue's shuffle flag as it loads the new items, so the whole album / playlist / artist plays in random order using documented services only (no client-side reordering of URIs).
   - Track lists come from mass_queue when `mass_queue_entry_id` is set. Without it, albums and artists fall back to a search, labelled "matched by search" with a note; playlists say that mass_queue is needed for their tracks (Play / Shuffle still work).
@@ -378,7 +378,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `lyrics_offset_ms` | `500` (−5000–5000) | Shift for synced lyrics; positive shows lines sooner |
 | `speaker_mode` | `fixed` | `fixed`: always play on `entity`; the Speakers panel is a volume mixer and a 0.4 config makes exactly the same calls. `dynamic`: pick where to play, group, move and use presets. See [Speakers](#speakers-050) |
 | `targets` | all MA players | `dynamic` only: `[{entity, name?, members?}]` or entity ids the card may play on |
-| `grouping` | `admins` | Who may group, move, pick the target and use the queue's Play now / Play next / Remove icons: `admins`, `everyone` or `nobody`. **A UI lock, not security** |
+| `grouping` | `admins` | Who may group, move, pick the target and use Play Now, Play Next and Remove on the queue: `admins`, `everyone` or `nobody`. Anyone else still sees those three labels, greyed. **A UI lock, not security** |
 | `grouping_users` | `[]` | Extra users (name or user id) treated like admins for the above |
 | `guest_access` | `volume` | Everyone else in the Speakers panel: `volume` or `none` (read only) |
 | `leader_drop` | `allow` | Dropping the leader of a playing group: `allow` (MA re-forms the group on the other rooms after about 6 s of silence; the panel shows "Regrouping…"), or `block` (hand off with Move) |
@@ -419,7 +419,7 @@ Not in 0.7.x: joining a speaker to a dynamic group so playback resumes on it, an
 
 - **The card says "Custom element doesn't exist: jukebox-card".** Make sure Jukebox Kiosk is set up (not only installed), then reload the browser. Fully Kiosk may need **Clear cache**.
 - **The card loads twice, or shows the old version.** An old `/hacsfiles/ha-jukebox-kiosk-card/` (or `/local/community/ha-jukebox-kiosk-card/`) resource is still there. See the Repairs issue, or delete it under **Settings → Dashboards → Resources**.
-- **Queue icons, the heart or grouping are missing for one user.** That user is a guest without the matching class (see [Permissions](#permissions)).
+- **Play Next, Play Now or Remove are greyed, or the heart or grouping is missing, for one user.** Greyed queue actions mean that person may not change the queue (`grouping`, or `queue_play` left off). A missing heart means no `library` class (see [Permissions](#permissions)).
 - **Lyrics say "Lyrics unavailable".** Music Assistant has no lyrics provider enabled, or the user lacks `read`. Music Assistant won't fetch lyrics for library tracks, so the card asks for the provider copy of the track.
 - **No album art.** The card never loads the player's absolute `entity_picture` (mixed content on https). It uses `entity_picture_local`, then a relative `entity_picture`, then an https queue image.
 - **Typing or volume drags stutter on a kiosk tablet.** Set `backdrop` to `light`, `static` or `off`.

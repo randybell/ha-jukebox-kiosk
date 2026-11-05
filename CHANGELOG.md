@@ -4,6 +4,14 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+### Added
+- **Search queue.** On the Queue tab, **Search queue** opens an on-screen keyboard that stays open. The list narrows to songs whose title, artist or album matches what you type. **Done** closes the search.
+
+### Changed
+- **Play Next, Play Now and Remove.** Song rows in the Library, in search, on a playlist or artist page, and on the Queue tab show the same three actions, each with an icon and those words, in that order. On a phone, and when the row is narrow, the three sit on their own line under the title.
+- On the Queue tab, an action that cannot be used stays on the row, greyed out, instead of disappearing. **Remove** still offers **Undo**.
+- In the Library, in search and on a detail page, **Play Next** and **Remove** run straight away. **Play Now**, and **Start radio** where that is offered, still ask first. **Add to queue** is no longer a button on the song row. The row button that used to say Replace queue now says **Play Now**.
+
 ## 0.7.5 — 2026-11-05
 
 ### Changed
