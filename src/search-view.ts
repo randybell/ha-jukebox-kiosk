@@ -14,6 +14,7 @@ import type { KeyDetail } from './keyboard';
 import './keyboard';
 import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, SearchCategory, SearchResults } from './types';
 import { defineElement } from './define';
+import { removeFromQueue } from './queue-row-remove';
 import { categoriesOn, resolveCategories, serviceTypes, defaultCategory } from './search-categories';
 import { FavController, heartTpl, heartType } from './heart';
 import { SOURCE_ALL, SOURCE_LIBRARY, sourcesOn, parseSearchProviders, pickerSources, toggleSource, sourcesLabel, splitSources, fromSources, type SearchSource } from './search-sources';
@@ -510,6 +511,7 @@ export class JbSearch extends LitElement {
   async play(it: MaItem, g: GroupKey, enqueue: Enqueue = 'play', radio = false) {
     if (!this.hass) return;
     this.closeMenu();
+    if ((enqueue as string) === 'remove') { await this.removeRow(it, this.mediaType(it, g)); return; }
     this.addRecent(this._shownQuery || this._query);
     try {
       const r = await playMedia(this.hass, this.config, it, this.mediaType(it, g), enqueue, radio);
@@ -519,6 +521,15 @@ export class JbSearch extends LitElement {
     } catch (err) {
       this.toast(`Couldn't play ${it.name}`);
       console.warn('[jukebox-card] play_media failed', err);
+    }
+  }
+  private async removeRow(it: MaItem, type: string) {
+    this.closeMenu();
+    try {
+      await removeFromQueue(this, it, type);
+      this.toast(`Removed ${it.name} from the queue`);
+    } catch (e) {
+      this.toast(e instanceof Error ? e.message : `Couldn't remove ${it.name} from the queue`);
     }
   }
   /** Hardware Enter: act on the first result as a tap would (open it, or highlight it). Never plays by itself. */
@@ -561,12 +572,13 @@ export class JbSearch extends LitElement {
     if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.hearts.isFav(it) } }); return; }
     this._sel = this._sel === it.uri ? '' : it.uri;
   }
-  /** Row icons. Add / Play next run at once; Replace queue and Start radio (enqueue replace) ask first. */
+  /** Play Next and Remove act at once; Play Now and Start radio ask first. */
   private rowAct(it: MaItem, g: GroupKey, a: RowAct | 'more', el: HTMLElement) {
     const type = this.mediaType(it, g);
     const ask = (k: RowAct) => {
       this.closeMenu();
-      if (k === 'add' || k === 'next') { this.play(it, g, k); return; }
+      if (k === 'next') { this.play(it, g, k); return; }
+      if (k === 'remove') { void this.removeRow(it, g); return; }
       this._confirm = { kind: k, item: it, run: () => this.play(it, g, 'replace', k === 'radio') };
     };
     if (a === 'more') this.showMenu(it, g, el.closest('.row') as HTMLElement, foldedActions(canRadio(type, it), ask));
@@ -1096,12 +1108,12 @@ export class JbSearch extends LitElement {
       .sx.kb-always .row, .sx.kb-always .row.hasfav { min-height: 60px; margin-bottom: 4px; padding: 4px 2px; grid-template-columns: 36px minmax(0, 1fr) auto auto; grid-template-rows: auto; column-gap: 6px; }
       .sx.kb-always .row .ar.th, .sx.kb-always .row > .ra-b.fav { grid-column: auto; grid-row: 1; align-self: center; margin-top: 0; width: 36px; height: 36px; }
       .sx.kb-always .row .rt { grid-column: 2; grid-row: 1; padding-top: 0; }
-      .sx.kb-always .row .ra { grid-column: auto; grid-row: 1; }
+      .sx.kb-always .row .ra { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; }
       .sx.kb-always .row.hasfav .ra { padding-left: 0; }
       .sx.kb-always .row .ra-b.x2 { display: none; }
       .sx.kb-always .row .ra-more { display: grid; }
       .sx.kb-always .row .du { display: none; }
-      .sx.kb-always .row .ra-b { width: 36px; height: 44px; }
+      .sx.kb-always .row .ra-b { width: auto; min-width: 44px; height: 44px; flex-direction: row; }
       .sx.kb-always .row .ra-b .i { width: 20px; height: 20px; }
       .sx.kb-always .row .rt small { gap: 3px; margin-top: 0; }
       .sx.kb-always .row .rt small .pv { display: none; }

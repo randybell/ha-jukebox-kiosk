@@ -2,7 +2,9 @@ import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
 import { combinedOn, libraryTabLabel } from './library-home';
-import { mediaStyles, noFocus, artTpl, provTpl, PressController, menuPos, menuTpl, confirmTpl, type ConfirmState, type MenuAction, type MenuPos } from './shared';
+import { mediaStyles, noFocus, artTpl, provTpl, PressController, menuPos, menuTpl, confirmTpl, queueActTpl, type ConfirmState, type MenuAction, type MenuPos } from './shared';
+import './keyboard';
+import type { KeyDetail } from './keyboard';
 import { canJumpQueue } from './speakers/model';
 import { QueueBusy, type QueueItem, type QueueModel, type QueueSnapshot, type RemovedRow } from './queue-model';
 /** MA refused or ignored a change on a played / buffered track (live 2.10.9: 500 "<n> is already played/buffered", delete ignored) */
@@ -26,13 +28,16 @@ const asArt = (q: QueueItem) => ({ name: q.media_title || '?', image: q.media_im
 export class JbQueue extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, queue: { attribute: false }, active: { type: Boolean },
-    _snap: { state: true }, _menu: { state: true }, _toast: { state: true }, _confirm: { state: true }, _undo: { state: true }, _ap: { state: true },
+    _snap: { state: true }, _menu: { state: true }, _toast: { state: true }, _confirm: { state: true }, _undo: { state: true }, _ap: { state: true }, _search: { state: true }, _q: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
   queue?: QueueModel;
   active = false;
   private _snap?: QueueSnapshot;
+  /** Search inside the queue: the on-screen keyboard stays open while this is on */
+  private _search = false;
+  private _q = '';
   private _menu: { item: QueueItem; pos: MenuPos } | null = null;
   private _toast = '';
   /** queue-row Play now waits here for Cancel / Play now (same dialog as Replace queue) */
@@ -172,6 +177,12 @@ export class JbQueue extends LitElement {
     if (e.key === 'Escape' && this._ap) { this._ap = null; e.stopPropagation(); return; }
     if (e.key === 'Escape' && this._confirm) { this._confirm = null; e.stopPropagation(); }
   };
+  private onSearchKey = (e: CustomEvent<KeyDetail>) => {
+    const d = e.detail;
+    if (d.type === 'char') this._q = (this._q + d.value).slice(0, 60).replace(/^\s+/, '');
+    else if (d.type === 'backspace') this._q = this._q.slice(0, -1);
+    else if (d.type === 'clear') this._q = '';
+  };
   private play(it: QueueItem) { this.run(this.queue?.play(it.queue_item_id), `Playing ${it.media_title}`); }
   private openMenu(it: QueueItem, el: HTMLElement) {
     const root = this.renderRoot.querySelector('.qx') as HTMLElement;
@@ -192,8 +203,8 @@ export class JbQueue extends LitElement {
       const s = this._snap, i = s?.items.findIndex((x) => x.queue_item_id === id) ?? -1, cur = s?.current ?? -1, lk = q.locked;
       const last = !!s && i === s.items.length - 1;
       return [
-        ...(i !== cur ? [{ id: 'play', icon: 'play', label: 'Play now…', run: () => this.askPlayNow(it) }] : []),
-        ...(i > lk + 1 ? [{ id: 'next', icon: 'qnext', label: 'Play next', run: () => this.run(q.playNext(id), `${it.media_title} plays next`) }] : []),
+        ...(i !== cur ? [{ id: 'play', icon: 'play', label: 'Play Now', run: () => this.askPlayNow(it) }] : []),
+        ...(i > lk + 1 ? [{ id: 'next', icon: 'qnext', label: 'Play Next', run: () => this.run(q.playNext(id), `${it.media_title} plays next`) }] : []),
         ...(i > lk + 1 ? [{ id: 'up', icon: 'up', label: 'Move up', run: () => this.run(q.up(id), '') }] : []),
         ...(i > lk && !last ? [{ id: 'down', icon: 'down', label: 'Move down', run: () => this.run(q.down(id), '') }] : []),
         ...(i > lk ? [{ id: 'remove', icon: 'trash', label: 'Remove', run: () => { this.removeRow(it); } }] : []),
@@ -201,9 +212,9 @@ export class JbQueue extends LitElement {
     }
     const locked = q.isLocked(id);
     return [
-      { id: 'play', icon: 'play', label: 'Play now', run: () => this.play(it) },
+      { id: 'play', icon: 'play', label: 'Play Now', run: () => this.play(it) },
       ...(locked ? [] : [
-        { id: 'next', icon: 'qnext', label: 'Play next', run: () => this.run(q.next(id), `${it.media_title} plays next`) },
+        { id: 'next', icon: 'qnext', label: 'Play Next', run: () => this.run(q.next(id), `${it.media_title} plays next`) },
         { id: 'up', icon: 'up', label: 'Move up', run: () => this.run(q.up(id), '') },
         { id: 'down', icon: 'down', label: 'Move down', run: () => this.run(q.down(id), '') },
         { id: 'remove', icon: 'trash', label: 'Remove', run: () => this.run(q.remove(id), `Removed ${it.media_title}`) },
@@ -212,19 +223,29 @@ export class JbQueue extends LitElement {
   }
 
   private jumps() { return !!this.config && (this.caps?.queuePlay ?? true) && canJumpQueue(this.config, this.hass?.user); }
-  private row(it: QueueItem, kind: 'now' | 'next' | 'past', n: number, isFirstNext: boolean, isLast: boolean, jumps: boolean, buf = false) {
+  private row(it: QueueItem, kind: 'now' | 'next' | 'past', n: number, isFirstNext: boolean, isLast: boolean, jumps: boolean, buf = false, search = false) {
     const p = this.press.handlers(it.queue_item_id, it);
     const q = this.queue!;
     // buf: an Up next row MA already handed to the player (index_in_buffer): it can't move or go (MA refuses / ignores)
     const ic = (name: string, label: string, act: string, fn: () => void, dis = false) => html`<button class="qa" tabindex="-1" data-action=${act} aria-label=${label} title=${label}
       ?disabled=${dis} @pointerdown=${noFocus} @click=${(e: Event) => { e.stopPropagation(); fn(); }}>${icon(name)}</button>`;
-    // Play now: not on the playing row. Play next: not on the row already next, nor on played rows (MA refuses those).
-    const playNow = jumps && kind !== 'now' ? ic('play', 'Play now', 'playnow', () => this.askPlayNow(it)) : nothing;
-    const playNext = jumps && kind === 'next' && !buf ? ic('qnext', 'Play next', 'playnext', () => this.run(q.playNext(it.queue_item_id), `${it.media_title} plays next`), isFirstNext) : nothing;
+    // Play Now: not on the playing row. Play Next: not on the row already next, nor on played rows (MA refuses those).
+    const canNext = jumps && kind === 'next' && !buf && !isFirstNext;
+    const queueActs = html`${queueActTpl('next', it.media_title, 'playnext', () => this.run(q.playNext(it.queue_item_id), `${it.media_title} plays next`), !canNext)}
+      ${queueActTpl('replace', it.media_title, 'playnow', () => this.askPlayNow(it), !jumps || kind === 'now')}`;
     // Remove: never the playing row, played rows, nor the buffered row (MA ignores deletes at or before the buffer)
-    const remove = jumps && kind === 'next' && !buf ? ic('trash', 'Remove', 'remove', () => this.removeRow(it)) : nothing;
+    const canRemove = jumps && kind === 'next' && !buf;
+    const remove = html`<button class="ra-b rm" tabindex="-1" data-act="remove" data-action="remove" aria-label="Remove ${it.media_title} from the queue"
+      title=${canRemove ? 'Remove' : kind === 'now' ? 'Playing now' : kind === 'past' ? 'Already played' : 'Already loading'} ?disabled=${!canRemove}
+      @pointerdown=${noFocus} @click=${(e: Event) => { e.stopPropagation(); this.removeRow(it); }}>${icon('trash')}<span>Remove</span></button>`;
     const qa = (ic: string, label: string, fn: () => Promise<any>, dis = false, act = '') => html`<button class="qa" tabindex="-1" data-action=${act} aria-label=${label} ?disabled=${dis}
       @pointerdown=${noFocus} @click=${(e: Event) => { e.stopPropagation(); this.run(fn(), ''); }}>${icon(ic)}</button>`;
+    if (search) return html`<div class="qr sr ${kind} ${buf ? 'buf' : ''}" data-id=${it.queue_item_id}>
+      <span class="n">${kind === 'now' ? icon('eq', 'i eqi') : kind === 'past' ? '' : n}</span>
+      ${artTpl(asArt(it), 'th')}
+      <div class="rt"><b>${it.media_title}</b><small>${[it.media_artist, it.media_album_name].filter(Boolean).join(' · ')}</small></div>
+      <span class="acts ra">${queueActs}${remove}</span>
+    </div>`;
     return html`<div class="qr ${kind} ${buf ? 'buf' : ''} ${jumps && kind !== 'now' ? 'jx' : ''} ${this.press.held === it.queue_item_id ? 'held' : ''}" data-id=${it.queue_item_id}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
@@ -232,14 +253,14 @@ export class JbQueue extends LitElement {
       ${artTpl(asArt(it), 'th')}
       <div class="rt"><b>${it.media_title}</b><small>${[it.media_artist, it.media_album_name].filter(Boolean).join(' · ')}</small></div>
       ${provTpl(it.media_content_id)}
-      ${kind === 'next' && this.edits ? html`<span class="acts">
-        ${playNow}${playNext}
+      ${kind === 'next' && this.edits ? html`<span class="acts ra">
+        ${queueActs}
+        ${remove}
         ${qa('up', buf ? 'Already loading' : 'Move up', () => q.up(it.queue_item_id), isFirstNext || buf, 'up')}
         ${qa('down', buf ? 'Already loading' : 'Move down', () => q.down(it.queue_item_id), isLast || buf, 'down')}
-        ${remove}
         <button class="qa mo" tabindex="-1" aria-label="More options" @pointerdown=${noFocus}
           @click=${(e: MouseEvent) => this.openMenu(it, (e.currentTarget as HTMLElement).closest('.qr') as HTMLElement)}>${icon('more')}</button>
-      </span>` : html`<span class="acts">${playNow}</span>`}
+      </span>` : html`<span class="acts ra">${queueActs}${remove}</span>`}
     </div>`;
   }
 
@@ -254,10 +275,23 @@ export class JbQueue extends LitElement {
     const jumps = this.jumps();
     // Up next rows already in the player's buffer (MA index_in_buffer > current_index): locked; the first movable row follows
     const nb = cur >= 0 ? Math.max(0, Math.min(next.length, (this.queue?.locked ?? cur) - cur)) : 0;
-    return html`<div class="qx" @keydown=${this.onKey}>
+    const ql = this._q.toLowerCase();
+    const found = this._search ? items.map((it, i) => ({ it, i })).filter(({ it }) => !ql || [it.media_title, it.media_artist, it.media_album_name].some((x) => String(x ?? '').toLowerCase().includes(ql))) : [];
+    return html`<div class="qx ${this._search ? 'searching' : ''}" @keydown=${this.onKey}>
       <div class="head"><h2>Queue</h2><span class="cnt">${remaining ? `${remaining} up next` : ''}</span>
-        ${s?.loading ? html`<span class="live busy"></span>` : nothing}${this.autoplayTpl(s)}</div>
-      <div class="scroll panel" @scroll=${() => this.press.scrolled()}>
+        ${s?.loading ? html`<span class="live busy"></span>` : nothing}
+        <button class="qsearch ${this._search ? 'on' : ''}" data-action="queue-search" tabindex="-1" aria-pressed=${this._search ? 'true' : 'false'} @pointerdown=${noFocus}
+          @click=${() => { this._search = !this._search; this._q = ''; }}>${icon(this._search ? 'close' : 'search', 'i xs')}${this._search ? 'Done' : 'Search queue'}</button>
+        ${this.autoplayTpl(s)}</div>
+      ${this._search ? html`<div class="qsx">
+        <div class="qsbar"><div class="qsq" role="searchbox" aria-label="Search the queue" aria-readonly="true" data-query=${this._q}>${icon('search', 'i xs')}
+          ${this._q ? html`<span>${this._q}</span>` : html`<span class="ph">Search this queue…</span>`}</div>
+          <small>${found.length} match${found.length === 1 ? '' : 'es'}</small></div>
+        <jb-keyboard class="qkbd" .collapsible=${false} @jb-key=${this.onSearchKey}></jb-keyboard>
+        <div class="scroll panel qres" aria-label="Queue search results">
+          ${found.length ? found.map(({ it, i }) => this.row(it, i === cur ? 'now' : i < cur ? 'past' : 'next', i > cur ? i - cur : 0, i === cur + 1 + nb, i === items.length - 1, jumps, i > cur && i <= cur + nb, true))
+            : html`<div class="empty"><b>No matching songs</b><span>Try fewer letters.</span></div>`}
+        </div></div>` : html`<div class="scroll panel" @scroll=${() => this.press.scrolled()}>
         ${s?.error ? html`<div class="empty"><b>Queue unavailable</b><span>${s.error}</span></div>`
           : !items.length ? html`<div class="empty"><b>${s?.loading || !s?.at ? 'Loading queue…' : 'The queue is empty'}</b><span>${combinedOn(this.config) ? `Add music from ${libraryTabLabel(this.config)}.` : `Add music from Search or ${libraryTabLabel(this.config)}.`}</span></div>`
           : html`
@@ -265,7 +299,7 @@ export class JbQueue extends LitElement {
             ${now ? html`<h3 class="eyebrow">Now playing</h3>${this.row(now, 'now', 0, false, false, jumps)}` : nothing}
             ${next.length ? html`<h3 class="eyebrow">Up next</h3>${next.map((it, i) => this.row(it, 'next', i + 1, i === nb, i === next.length - 1, jumps, i < nb))}` : html`<div class="end">End of queue</div>`}
             ${remaining > next.length ? html`<div class="end">+ ${remaining - next.length} more in Music Assistant</div>` : nothing}`}
-      </div>
+      </div>`}
       ${this._menu ? menuTpl(this._menu.pos, { item: asArt(this._menu.item), sub: this._menu.item.media_artist ?? '' }, this.actions(this._menu.item),
         () => { this._menu = null; this.press.release(); }) : nothing}
       ${this._undo ? html`<div class="undo" role="status"><span>Removed ${this._undo.title}.</span>
@@ -333,7 +367,22 @@ export class JbQueue extends LitElement {
     .qr.now .pv { color: #000; border-color: #0006; background: #0000000f; }
     .qr.past { opacity: .45; }
     .qr.held { background: #ffffff1f; box-shadow: inset 0 0 0 1.5px #fff; }
-    .acts { display: flex; gap: 2px; }
+    .acts { display: flex; gap: 2px; align-items: center; }
+    .qr .ra-b { flex-direction: row; min-width: 44px; min-height: 44px; padding: 5px 4px; font-size: 9px; }
+    .qr .ra-b .i { flex: none; }
+    .qsearch { align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
+      border: 1px solid var(--_divider); color: #fff; font: inherit; font-size: 14px; font-weight: 700; }
+    .qsearch.on { background: #fff; color: #000; }
+    .qsx { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(360px, 38%) minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 10px 16px;
+      grid-template-areas: "q res" "kb res"; }
+    .qsbar { grid-area: q; display: flex; flex-direction: column; gap: 5px; }
+    .qsq { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; border-radius: 14px; background: #ffffff14; border: 1px solid #ffffff3d; font-size: 18px; font-weight: 700; }
+    .qsq .ph { color: var(--_muted); font-weight: 500; }
+    .qsbar small { color: var(--_muted); font-size: 13px; padding-left: 4px; }
+    .qkbd { grid-area: kb; align-self: end; --kh: 42px; --kgap: 6px; --kfs: 20px; }
+    .qres { grid-area: res; }
+    .qr.sr { grid-template-columns: 22px 44px minmax(0, 1fr) auto; cursor: default; }
+    .qr .ra-b { color: #fff; } .qr.now .ra-b { color: var(--_on-accent); }
     .qa { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--_inactive); }
     .qa:active { background: #ffffff1f; color: #fff; }
     .qa:disabled { opacity: .25; }
@@ -352,11 +401,16 @@ export class JbQueue extends LitElement {
       .qr .pv { display: none; } .qr .th { width: 42px; height: 42px; }
       .qa[data-action="up"], .qa[data-action="down"] { display: none; }
       .rt b { font-size: 15px; }
-      /* rows with the five icons: Play next and Remove stay inline, the rest go behind ⋯ (an action sheet here) */
-      .qr.jx .qa[data-action="playnow"], .qr.jx .qa[data-action="up"], .qr.jx .qa[data-action="down"] { display: none; }
+      /* Labeled queue actions stay visible; move actions use the existing responsive controls. */
+      .qr.jx { grid-template-columns: 20px 42px minmax(0, 1fr); grid-template-rows: 42px 44px; min-height: 104px; }
+      .qr.jx > .n { grid-column: 1; grid-row: 1; }
+      .qr.jx > .ar.th { grid-column: 2; grid-row: 1; }
+      .qr.jx .rt { grid-column: 3; grid-row: 1; }
+      .qr.jx .acts { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; }
+      .qsx { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "q" "res" "kb"; }
+      .qr.sr { grid-template-columns: 0 40px minmax(0, 1fr); grid-template-rows: 42px 44px; min-height: 104px; } .qr.sr .acts { grid-column: 2 / -1; justify-content: flex-end; }
       .qr.jx .qa.mo { display: grid; }
       .qr.jx .acts { gap: 0; }
-      .qr.past.jx .qa[data-action="playnow"] { display: grid; }
       /* the style sheet becomes a bottom sheet */
       .aps { top: auto; bottom: 0; transform: translateX(-50%); width: 100%; border-radius: 18px 18px 0 0; border-width: 1px 0 0; max-height: 80%; padding-bottom: 20px; }
     }

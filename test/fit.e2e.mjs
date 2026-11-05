@@ -240,9 +240,13 @@ for (const z of [1, 0.8, 0.67]) {
 // tappable (a tab tap closes the panel); the page never scrolls; overlays taller than the room scroll inside it.
 const SR6 = `__card.shadowRoot.querySelector('jb-speakers').shadowRoot`, QV6 = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
 const ev6 = (pg, e) => pg.evaluate((e) => eval(e), e);
-async function tap6(pg, expr, touch) {
-  const b = await ev6(pg, `(() => { const el = ${expr}; if (!el) return null; el.scrollIntoView({ block: 'nearest' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; })()`);
+async function tap6(pg, expr, touch, block = 'nearest') {
+  const b = await ev6(pg, `(() => { const el = ${expr}; if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; })()`);
   if (!b || !b.w) throw new Error('nothing to tap: ' + expr);
+  const settled = await ev6(pg, `(() => { const el = ${expr}; if (!el) return null; el.scrollIntoView({ block: '${block}' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; })()`);
+  if (!settled || !settled.w) throw new Error('nothing to tap after scroll: ' + expr);
+  Object.assign(b, settled);
+  await sleep(200);
   if (touch) await pg.touchscreen.tap(b.x, b.y); else await pg.mouse.click(b.x, b.y);
   await sleep(300);
 }
@@ -277,7 +281,7 @@ for (const [w, h, touch, size] of S6) {
     await tapTab(pg, 'queue', touch);
     check(`${tag}: a tab tap closes the Speakers panel`, await ev6(pg, `!__card.shadowRoot.querySelector('jb-speakers').open`));
     // queue overlays
-    await pg.waitForFunction(`${QV6}.querySelectorAll('.qr.next .qa[data-action="remove"]').length > 2`, { timeout: 4000 }).catch(() => {});
+    await pg.waitForFunction(`${QV6}.querySelectorAll('.qr.next .ra-b[data-action="remove"]').length > 2`, { timeout: 4000 }).catch(() => {});
     const narrow = await ev6(pg, `(() => { const b = ${QV6}.querySelector('.qr.next .qa.mo'); return !!b && b.getBoundingClientRect().width > 0; })()`);
     if (narrow) {
       await tap6(pg, `${QV6}.querySelectorAll('.qr.next .qa.mo')[1]`, touch);
@@ -290,15 +294,19 @@ for (const [w, h, touch, size] of S6) {
       if (w === 390) await pg.screenshot({ path: `${OUT}queue-sheet-${w}x${h}-toolbar${lg ? '-large' : ''}.png` });
       await tap6(pg, `${QV6}.querySelector('.menu .mi.cancel')`, touch);
     }
-    await tap6(pg, `${QV6}.querySelectorAll('.qr.next')[1].querySelector('.qa[data-action="playnow"]') ?? null`, touch).catch(async () => {
-      await tap6(pg, `${QV6}.querySelectorAll('.qr.next .qa.mo')[1]`, touch); await tap6(pg, `[...${QV6}.querySelectorAll('.menu .mi:not(.cancel)')][0]`, touch); });
+    await ev6(pg, `${QV6}.querySelector('.scroll').scrollTop = 0`); await sleep(150);
+    await tap6(pg, `[...${QV6}.querySelectorAll('.qr.next .ra-b[data-action="playnow"]')].find((b) => !b.disabled)`, touch);
+    await pg.waitForFunction(`!!${QV6}.querySelector('.confirm')`, { timeout: 4000 });
     const cf = await inMiddle(pg, `${QV6}.querySelector('.confirm')`, `${QV6}.querySelector('.confirm')`);
     check(`${tag} Play-now confirm inside the middle`, fits6(cf), JSON.stringify(cf));
     const ok = await inMiddle(pg, `${QV6}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
     check(`${tag} Play-now confirm: Play now button visible`, ok && ok.inside, JSON.stringify(ok));
     verify(`${tag} Play-now confirm open`, await geom(pg), {});
     await tap6(pg, `${QV6}.querySelector('.confirm .cbtn[data-action="cancel"]')`, touch);
-    await tap6(pg, `${QV6}.querySelectorAll('.qr.next .qa[data-action="remove"]')[2]`, touch);
+    await tap6(pg, `${QV6}.querySelector('[data-action="queue-search"]')`, touch);
+    for (const c of 'PORC') await tap6(pg, `[...${QV6}.querySelector('.qkbd').shadowRoot.querySelectorAll('[data-key="k-${c}"]')].find((b) => b.getBoundingClientRect().width > 0)`, touch);
+    await pg.waitForFunction(`(() => { const q = ${QV6}; const b = q.querySelector('.qr.sr .ra-b[data-action="remove"]'); return q.querySelector('.qsq')?.textContent.trim() === 'PORC' && b && !b.disabled; })()`);
+    await tap6(pg, `${QV6}.querySelector('.qr.sr .ra-b[data-action="remove"]')`, touch, 'center');
     const ub = await inMiddle(pg, `${QV6}.querySelector('.undo')`);
     check(`${tag} Undo bar inside the middle, above the tab bar`, ub && ub.inside, JSON.stringify(ub));
     verify(`${tag} Undo bar showing`, await geom(pg), {});
