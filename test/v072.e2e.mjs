@@ -3,11 +3,12 @@
 // typed text = results for that category and source (All: library first, then providers); a provider with an empty box
 // = its browse or an inline hint; the artist chip + Clear filters (also resets the words and the source); the 'search'
 // tab back-compat; the separate (0.7.1) layout; search_sources: false. Mock data only, invented provider ids.
-// Usage: (serve the project root) JB_URL=http://127.0.0.1:8772/dev/index.html node test/v072.e2e.mjs
+// Usage: (starts its own dev server on a free port; JB_PORT / JB_URL override) node test/v072.e2e.mjs
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
+import { devIndex } from './serve.mjs';
 
-const BASE = process.env.JB_URL ?? 'http://127.0.0.1:8765/dev/index.html';
+const BASE = await devIndex();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const J = JSON.stringify;
 let failures = 0, total = 0;

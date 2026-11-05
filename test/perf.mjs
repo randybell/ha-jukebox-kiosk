@@ -2,14 +2,15 @@
 // Scenarios: dragging the "Everywhere" volume slider on Now Playing; typing on the on-screen keyboard in Search.
 // Metrics: rAF frame deltas (avg / p95 / max / % over 33 ms), long tasks (PerformanceObserver 'longtask'),
 // and from a CDP trace: renderer main-thread busy ms and raster/GPU ms (where the live blur is paid).
-// Usage: node test/perf.mjs [runs=3]   (dev server on 127.0.0.1:8765) → test/shots/perf.json
+// Usage: node test/perf.mjs [runs=3]   (starts its own dev server; JB_PORT / JB_URL override) → test/shots/perf.json
 import puppeteer from 'puppeteer-core';
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { devIndex } from './serve.mjs';
 const RUNS = Number(process.argv[2] ?? 3);
-const BASE = process.env.JB_URL ?? 'http://127.0.0.1:8765/dev/index.html';
+const BASE = await devIndex();
 const OUT = new URL('./shots/', import.meta.url).pathname; mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--hide-scrollbars', '--enable-gpu-rasterization'] });
+const b = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--hide-scrollbars', '--enable-gpu-rasterization'] });
 
 const RECORDER = () => {
   window.__frames = []; window.__long = []; let last = performance.now(), on = true;

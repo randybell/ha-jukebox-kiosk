@@ -1,11 +1,12 @@
 // End-to-end checks for the jukebox-card Search tab against the mock hass (dev/index.html).
 // Real pointer/mouse/touch input via Chrome DevTools Protocol (puppeteer-core + system Chrome).
-// Usage: (serve the project root on :8765)  node test/run.mjs
+// Usage: (starts its own dev server on a free port; JB_PORT / JB_URL override) node test/run.mjs
 import puppeteer from 'puppeteer-core';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { hermetic } from './intercept.mjs';
+import { devIndex } from './serve.mjs';
 
-const BASE = process.env.JB_URL ?? 'http://127.0.0.1:8765/dev/index.html';
+const BASE = await devIndex();
 const SHOTS = new URL('./shots/', import.meta.url).pathname;
 mkdirSync(SHOTS + 'v032/', { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
