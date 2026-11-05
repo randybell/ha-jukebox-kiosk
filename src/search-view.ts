@@ -167,8 +167,9 @@ export class JbSearch extends LitElement {
   }
 
   protected willUpdate(changed: PropertyValues) {
-    // combined tab: the library list shows first; the keyboard opens when the search box is tapped (landscape keeps it on the left)
-    if (changed.has('combined') && this.combined && !this._kbInit) { this._kbInit = true; this._kbHidden = true; }
+    // combined tab: the on-screen keyboard is always shown (every screen size) so a walk-up guest can just start typing;
+    // `library_keyboard: tap` brings back the 0.7.2 tap-to-open keyboard in portrait / on phones (landscape always shows it)
+    if ((changed.has('combined') || changed.has('config')) && this.combined && !this._kbInit && this.config) { this._kbInit = true; this._kbHidden = !this.kbAlways(); }
     if (this.active && this.config && this.srcAvail() && this._provState === 'idle') this.loadProviders();
     if (changed.has('config') && this.config && !this.srcAvail() && this._srcs.length) { this._srcs = []; this._pb = null; }
     if (changed.has('config') && this.config) {
@@ -187,6 +188,8 @@ export class JbSearch extends LitElement {
 
   // ---------- 0.7.2 source buttons (multi-select) ----------
   /** the backend can list and search single providers, and the config doesn't turn the picker off */
+  /** combined tab with the keyboard pinned open (default; `library_keyboard: tap` turns it off) */
+  private kbAlways() { return this.combined && this.config?.library_keyboard !== 'tap'; }
   private srcAvail() { return sourcesOn(this.config) && !!this.config?._backend?.ext?.searchProviders && !!this.config._backend.searchProviders; }
   private srcOn() { return this.srcAvail() && this._srcs.length > 0; }
   /** the one non-library provider selected (empty-box browse), else '' */
@@ -450,7 +453,7 @@ export class JbSearch extends LitElement {
     if (d.type === 'char') this.setQuery(this._query + d.value);
     else if (d.type === 'backspace') this.setQuery(this._query.slice(0, -1));
     else if (d.type === 'clear') this.setQuery('');
-    else if (d.type === 'hide') this._kbHidden = true;
+    else if (d.type === 'hide' && !this.kbAlways()) this._kbHidden = true;
   };
 
   /** Hardware keyboard (USB/BT keyboard, or desktop testing). */
@@ -554,13 +557,14 @@ export class JbSearch extends LitElement {
     fire(this, 'jukebox-menu', { item: it });
   }
   private closeMenu() { this._menu = null; this.press.release(); }
-  /** Push a detail view over the results. On a phone the on-screen keyboard is tucked away while browsing it. */
+  /** Push a detail view over the results. On a phone the on-screen keyboard is tucked away while browsing it
+   *  (not on the combined tab with the keyboard pinned open). */
   openDetail(it: MaItem, type: string) {
     this.closeMenu(); this._confirm = null;
     if (!this._stack.length) {
       this._resScroll = (this.renderRoot.querySelector('.res .scroll') as HTMLElement | null)?.scrollTop ?? 0;
       this._kbBefore = this._kbHidden;
-      this._kbHidden = true;
+      if (!this.kbAlways()) this._kbHidden = true;
       this.addRecent(this._shownQuery || this._query);
     }
     this._stack = [...this._stack, { item: it, type }];
@@ -762,7 +766,7 @@ export class JbSearch extends LitElement {
       : count ? `${count} result${count === 1 ? '' : 's'} for “${this._shownQuery}” · ${this.srcOn() ? this.srcLabel() : 'all providers'}`
       : `No results for “${this._shownQuery}”`;
     return html`
-      <div class="sx ${this._kbHidden ? 'kb-hidden' : ''} ${this.srcAvail() ? 'srcs-on' : ''}">
+      <div class="sx ${this._kbHidden ? 'kb-hidden' : ''} ${this.kbAlways() ? 'kb-always' : ''} ${this.srcAvail() ? 'srcs-on' : ''}">
         <div class="qwrap">
           <div class="qrow">
           <div class="qbar" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this._kbHidden = false; }}>
@@ -801,7 +805,7 @@ export class JbSearch extends LitElement {
           <div class="scroll" @scroll=${() => this.press.scrolled()}>${this.renderResults()}</div>`}
           ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
         </section>
-        <jb-keyboard class="kbd" @jb-key=${this.onKey}></jb-keyboard>
+        <jb-keyboard class="kbd" .collapsible=${!this.kbAlways()} @jb-key=${this.onKey}></jb-keyboard>
         ${this._kbHidden ? html`<button class="kb-open" tabindex="-1" aria-label="Show keyboard"
           @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => (this._kbHidden = false)}>${icon('keyboard')}<span>Keyboard</span></button>` : nothing}
         ${this.renderMenu()}
@@ -940,6 +944,18 @@ export class JbSearch extends LitElement {
       .scope { margin-top: 8px; gap: 6px; }
       .sc { height: 40px; font-size: 14px; padding-left: 13px; }
       .fc.clr { height: 40px; padding: 0 13px; font-size: 13px; }
+    }
+    /* keyboard pinned open (combined tab default): the list area never spills under the keyboard or the tab bar, whatever the size
+       (on the smallest screens it gets less room rather than overlapping) */
+    .sx.kb-always .res { overflow: hidden; }
+    /* short phones (portrait under the HA toolbar): the status line goes and the keys shrink so the list keeps a row above the keyboard */
+    @container np (max-width: 520px) and (max-height: 600px) {
+      .sx.kb-always, .sx.kb-always.srcs-on { --kh: 32px; --kgap: 4px; gap: 7px; }
+      .sx.kb-always .qmeta { display: none; } .sx.kb-always .lcats { margin-bottom: 6px; }
+    }
+    /* phone on its side: the keyboard has the left half, the status line goes so the list keeps room on the right */
+    @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
+      .sx.kb-always .qmeta { display: none; } .sx.kb-always .lcats { margin-bottom: 6px; }
     }
     .sx.kb-hidden .res .scroll { padding-bottom: calc(10px + var(--jb-fab-space, 0px)); scroll-padding-bottom: var(--jb-fab-space, 0px); }
   `];
