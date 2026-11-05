@@ -4,12 +4,13 @@
 // (fixed app toolbar of HA's --header-height: 56px, sidebar drawer 256/56 px, window-scrolling view).
 // The tab bar is the 0.7.2 default (library_layout: combined): Now Playing, Library (the old Browse and Search
 // tabs in one: search box, source buttons, category buttons; the keyboard opens when the search box is tapped), Queue, Lyrics.
-// Usage: (serve the project root on :8765, or set JB_ROOT) node test/fit.e2e.mjs   Screenshots: test/shots/v042/ (git-ignored)
+// Usage: (starts its own dev server on a free port; JB_PORT=n for a fixed one, JB_ROOT to use yours) node test/fit.e2e.mjs   Screenshots: test/shots/v042/ (git-ignored)
 import puppeteer from 'puppeteer-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { hermetic } from './intercept.mjs';
+import { devRoot } from './serve.mjs';
 
-const ROOT = process.env.JB_ROOT ?? 'http://127.0.0.1:8765/dev/';
+const ROOT = await devRoot();
 const OUT = new URL('./shots/v042/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
