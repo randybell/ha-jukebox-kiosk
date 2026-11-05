@@ -48,16 +48,19 @@ const btns = (p) => ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].map((b) => 
 const onBtn = (p) => ev(p, `${SV}.querySelector('.lcats .lc.on')?.dataset.lcat`);
 const libShown = (p) => ev(p, `!${SV}.querySelector('.lib').hidden`);
 const rows = (p) => ev(p, `[...${SV}.querySelectorAll('.scroll .lsec, .scroll .row')].map((r) => r.classList.contains('lsec') ? '## ' + (r.dataset.sec ?? r.textContent.trim()) : (r.querySelector('.pv')?.textContent.trim() ?? '') + '|' + (r.querySelector('b, .t')?.textContent.trim() ?? ''))`);
-const SRC = (id) => `${SV}.querySelector('.srcs .src[data-src="${id}"]')`;
-const srcOn = (p) => ev(p, `[...${SV}.querySelectorAll('.srcs .src[aria-pressed=true]')].map((b) => b.dataset.src)`);
-const pickSrc = (p, id) => tap(p, SRC(id));
+// 0.7.3: the combined tab folds the source buttons into a compact "All sources" control beside the box (.srct);
+// tapping it shows the same multi-select buttons in a row under the box (.srco)
+const SRC = (id) => `${SV}.querySelector('.srco .src[data-src="${id}"]')`;
+const openSrc = async (p) => { await wait(p, `!!${SV}.querySelector('.srct')`); if (!(await ev(p, `!!${SV}.querySelector('.srco')`))) await tap(p, `${SV}.querySelector('.srct')`); return wait(p, `${SV}.querySelectorAll('.srco .src').length > 2`); };
+const srcOn = async (p) => { await openSrc(p); return ev(p, `[...${SV}.querySelectorAll('.srco .src[aria-pressed=true]')].map((b) => b.dataset.src)`); };
+const pickSrc = async (p, id) => { await openSrc(p); await tap(p, SRC(id)); };
 const noPopup = (p) => ev(p, `![...${SV}.querySelectorAll('.toast, .confirm, [role=dialog]')].some((e) => e.getBoundingClientRect().width > 0) && !${C}.querySelector('.toast')`);
 
 // ---------------- 1. defaults: one Library tab, no tiles, box + source buttons + 5 buttons ----------------
 for (const [vpName, vp] of [['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }], ['320x640', { width: 320, height: 640, isMobile: true, hasTouch: true }]]) {
   const p = await open('', {}, vp);
-  await wait(p, `${SV}.querySelectorAll('.srcs .src').length > 2`);
-  const g = await ev(p, `(() => { const q = ${SV}.querySelector('.qbar').getBoundingClientRect(), row = ${SV}.querySelector('.srcs'), r = row.getBoundingClientRect();
+  await openSrc(p);
+  const g = await ev(p, `(() => { const q = ${SV}.querySelector('.qrow').getBoundingClientRect(), row = ${SV}.querySelector('.srco'), r = row.getBoundingClientRect();
     const bs = [...row.querySelectorAll('.src')].map((b) => b.getBoundingClientRect()); const kb = ${SV}.querySelector('.kbd')?.getBoundingClientRect();
     return { gap: Math.round(r.top - q.bottom), tops: new Set(bs.map((b) => Math.round(b.top))).size, minH: Math.min(...bs.map((b) => b.height)), scrolls: row.scrollWidth > row.clientWidth + 1, rowInside: r.right <= innerWidth + 1, resH: Math.round(${SV}.querySelector('.res')?.getBoundingClientRect().height ?? 0), kbTop: Math.round(kb?.top ?? 0) }; })()`);
   check(`T3d [${vpName}] phone: one horizontally scrolling button row directly under the box, >= 44px`, g.gap >= 0 && g.gap <= 16 && g.tops === 1 && g.minH >= 44 && g.scrolls && g.rowInside, J(g));
@@ -70,11 +73,11 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   check(`T1 [${vpName}] tabs: Now Playing, Library, Queue, Lyrics; no Search tab`, J(t) === J(['now:Now Playing', 'browse:Library', 'queue:Queue', 'lyrics:Lyrics']), J(t));
   check(`T2 [${vpName}] Library tab active; no tile grid anywhere`, (await ev(p, `${C}.querySelector('.tab.active')?.dataset.tab`)) === 'browse'
     && !(await ev(p, `!!${BR}.querySelector('.home, .lt')`)));
-  await wait(p, `${SV}.querySelectorAll('.srcs .src').length > 2`);
+  await openSrc(p);
   check(`T3 [${vpName}] search box and source buttons visible, All on`, (await visible(p, `${SV}.querySelector('.qbar')`)) && (await visible(p, SRC('all')))
     && J(await srcOn(p)) === J(['all']));
-  const geo = await ev(p, `(() => { const q = ${SV}.querySelector('.qbar').getBoundingClientRect(), r = ${SV}.querySelector('.srcs').getBoundingClientRect();
-    const bs = [...${SV}.querySelectorAll('.srcs .src')].map((b) => b.getBoundingClientRect());
+  const geo = await ev(p, `(() => { const q = ${SV}.querySelector('.qrow').getBoundingClientRect(), r = ${SV}.querySelector('.srco').getBoundingClientRect();
+    const bs = [...${SV}.querySelectorAll('.srco .src')].map((b) => b.getBoundingClientRect());
     return { gap: r.top - q.bottom, left: Math.abs(r.left - q.left), minH: Math.min(...bs.map((b) => b.height)), inside: bs.every((b) => b.right <= q.right + 1 && b.left >= q.left - 1 && b.bottom <= innerHeight) }; })()`);
   check(`T3b [${vpName}] the button row sits directly under the search box, touch-sized (>= 44px), all on screen`, geo.gap >= 0 && geo.gap <= 16 && geo.left <= 1 && geo.minH >= 44 && geo.inside, J(geo));
   check(`T3c [${vpName}] no dropdown / popover / select for sources`, !(await ev(p, `!!${SV}.querySelector('.srcb, .srcm, .srcveil, select, [aria-haspopup]')`)));
@@ -110,8 +113,8 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
 // ---------------- 3. source buttons (multi-select) ----------------
 {
   const p = await open();
-  await wait(p, `${SV}.querySelectorAll('.srcs .src').length > 2`);
-  const opts = await ev(p, `[...${SV}.querySelectorAll('.srcs .src')].map((o) => o.dataset.src + ':' + o.textContent.trim())`);
+  await openSrc(p);
+  const opts = await ev(p, `[...${SV}.querySelectorAll('.srco .src')].map((o) => o.dataset.src + ':' + o.textContent.trim())`);
   check('P1 buttons: All, Library, then MA providers by display name (sorted; unavailable + player providers left out)',
     J(opts) === J(['all:All', 'library:Library', 'apple_music--demo0001:Apple Music', 'radiobrowser--demo0004:Radio Browser', 'spotify--demo0002:Spotify', 'tunein--demo0003:TuneIn']), J(opts));
   const sp = await ev(p, `window.__ws.filter((m) => m.type === 'search_providers').length`);
@@ -194,7 +197,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
 // ---------------- 6. provider with an empty box: browse or inline hint ----------------
 {
   const p = await open('&admin=1');
-  await wait(p, SRC('apple_music--demo0001'));
+  await openSrc(p);
   await pickSrc(p, 'apple_music--demo0001');
   const okB = await wait(p, `${SV}.querySelectorAll('.row.fold').length > 0`);
   check('V1 Apple Music, empty box → its browse folders (music/browse)', okB && !(await libShown(p))
@@ -209,7 +212,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   check('V3b two providers, empty box → the inline hint to type (no browse)', okM && !(await ev(p, `!!${SV}.querySelector('.row.fold')`)) && !(await libShown(p)) && (await noPopup(p)));
   await p.close();
   const g = await open();
-  await wait(g, SRC('spotify--demo0002'));
+  await openSrc(g);
   await pickSrc(g, 'spotify--demo0002');
   check('V4 guest (browse refused) → the inline hint', await wait(g, `!!${SV}.querySelector('[data-empty=provider]')`) && (await noPopup(g)));
   await g.close();
@@ -219,7 +222,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
 {
   const p = await open();
   await wait(p, `${SV}.querySelectorAll('.lcats .lc').length >= 5`);
-  await wait(p, SRC('spotify--demo0002'));
+  await openSrc(p);
   await pickSrc(p, 'spotify--demo0002');
   await tap(p, `${SV}.querySelector('.lcats .lc[data-lcat=artist]')`);
   await pickSrc(p, 'all');
@@ -241,7 +244,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
 // ---------------- 8. idle reset ----------------
 {
   const p = await open('&saver=0.1');
-  await wait(p, SRC('tunein--demo0003'));
+  await openSrc(p);
   await pickSrc(p, 'spotify--demo0002'); await pickSrc(p, 'tunein--demo0003');
   await typeQ(p, 'MO');
   const idle = await wait(p, `${C}.querySelector('.saver.on')`, 12000);
@@ -283,7 +286,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
 for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }], ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }],
   ['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }], ['360x640', { width: 360, height: 640, isMobile: true, hasTouch: true }]]) {
   const p = await open('&ha=toolbar&sidebar=none', {}, vp);
-  await wait(p, `${SV}.querySelectorAll('.srcs .src').length > 2`);
+  await wait(p, `!!${SV}.querySelector('.srct') && ${SV}.querySelectorAll('.lcats .lc').length >= 5`);
   const g = await ev(p, `(() => { const R = (el) => { const b = el?.getBoundingClientRect(); return b && b.height ? { t: b.top, b: b.bottom, l: b.left, r: b.right } : null; };
     const s = ${SV}, res = R(s.querySelector('.lib:not([hidden])') ?? s.querySelector('.res .scroll')), kb = R(s.querySelector('jb-keyboard')), nav = R(${C}.querySelector('.tabs'));
     const parts = { q: R(s.querySelector('.qbar')), srcs: R(s.querySelector('.srcs')), cats: R(s.querySelector('.lcats')), list: res, kb };
@@ -304,6 +307,70 @@ for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: t
   await tap(t, `${SV}.querySelector('.qbar')`); await sleep(200);
   check('KB3 library_keyboard: tap (phone fallback): list first with the Keyboard pill, tapping the search box opens the keyboard', J(before) === J([true, true]) && !(await ev(t, `${SV}.querySelector('.sx').classList.contains('kb-hidden')`)), J(before));
   await t.close();
+}
+
+// ---------------- 0.7.3: big icon category buttons, compact sources control, Favorites / A–Z corner icons ----------------
+for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }, {}], ['1024x600 large_buttons', { width: 1024, height: 600, isMobile: true, hasTouch: true }, { large_buttons: true }],
+  ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }, {}], ['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }, {}], ['360x640', { width: 360, height: 640, isMobile: true, hasTouch: true }, {}]]) {
+  const p = await open('&ha=toolbar&sidebar=none', cfg, vp);
+  await wait(p, `!!${SV}.querySelector('.srct') && ${SV}.querySelectorAll('.lcats .lc').length >= 5 && !!${SV}.querySelector('.lcorner')`);
+  const geo = `(() => { const R = (el) => { const b = el?.getBoundingClientRect(); return b && b.height ? { t: b.top, b: b.bottom, l: b.left, r: b.right, h: b.height } : null; };
+    const s = ${SV}, nav = R(${C}.querySelector('.tabs'));
+    const parts = { q: R(s.querySelector('.qbar')), trig: R(s.querySelector('.srct')), opts: R(s.querySelector('.srco')), cats: R(s.querySelector('.lcats')), corner: R(s.querySelector('.lcorner')),
+      list: R(s.querySelector('.lib:not([hidden])') ?? s.querySelector('.res .scroll')), kb: R(s.querySelector('jb-keyboard')) };
+    const ov = (a, c) => a.l < c.r - 0.5 && c.l < a.r - 0.5 && a.t < c.b - 0.5 && c.t < a.b - 0.5;
+    const k = Object.keys(parts).filter((x) => parts[x]), bad = [];
+    for (let i = 0; i < k.length; i++) { if (parts[k[i]].b > nav.t + 0.5 || parts[k[i]].r > innerWidth + 0.5 || parts[k[i]].l < -0.5) bad.push(k[i] + ' off screen / under the tabs');
+      for (let j = i + 1; j < k.length; j++) if (ov(parts[k[i]], parts[k[j]])) bad.push(k[i] + '/' + k[j]); }
+    const t = s.querySelector('.srct'), cats = [...s.querySelectorAll('.lcats .lc')];
+    return { bad, has: k, kbOpen: !s.querySelector('.sx').classList.contains('kb-hidden') && !s.querySelector('.kb-open'), expanded: t.getAttribute('aria-expanded'),
+      beside: parts.q && parts.trig && parts.trig.l >= parts.q.r - 0.5 && parts.trig.t < parts.q.b && parts.q.t < parts.trig.b, trigH: parts.trig?.h ?? 0,
+      label: t.getAttribute('aria-label'), icons: cats.every((c) => !!c.querySelector('svg')), catH: Math.min(...cats.map((c) => c.getBoundingClientRect().height)),
+      cornerH: Math.min(...[...s.querySelectorAll('.lcorner .cn')].map((c) => c.getBoundingClientRect().height)), corner: [...s.querySelectorAll('.lcorner .cn')].map((c) => c.dataset.act) }; })()`;
+  const c = await ev(p, geo);
+  check(`C1 [${vpName}] sources: one compact control beside the search box ("All sources"), collapsed; keyboard open; nothing overlapping`,
+    c.beside && c.trigH >= 44 && c.expanded === 'false' && c.label === 'Sources: All sources' && !c.has.includes('opts') && c.kbOpen && !c.bad.length, J(c));
+  check(`C2 [${vpName}] category buttons: each has an icon, >= 44px tall; Favorites + sort are corner icons in the same row (no row of their own)`,
+    c.icons && c.catH >= 44 && c.cornerH >= 44 && J(c.corner) === J(['lib-fav', 'lib-sort']) && !(await ev(p, `!!${BR}.querySelector('.bar')`)), J(c));
+  await tap(p, `${SV}.querySelector('.srct')`);
+  await wait(p, `${SV}.querySelectorAll('.srco .src').length > 2`);
+  const o = await ev(p, geo);
+  check(`C3 [${vpName}] sources opened: the choices show under the box, keyboard still open, nothing overlapping`, o.expanded === 'true' && o.has.includes('opts') && o.kbOpen && !o.bad.length, J(o));
+  await p.close();
+}
+{
+  const p = await open();
+  await openSrc(p);
+  const lbl = () => ev(p, `[${SV}.querySelector('.srct .stl').textContent.trim(), ${SV}.querySelector('.srct').classList.contains('on')]`);
+  await pickSrc(p, 'spotify--demo0002');
+  const l1 = await lbl();
+  await pickSrc(p, 'tunein--demo0003');
+  const l2 = await lbl();
+  check('C4 the control names the picked sources and lights up', l1[0] === 'Spotify' && l1[1] && l2[0] === 'Spotify + TuneIn' && l2[1], J([l1, l2]));
+  await pickSrc(p, 'tunein--demo0003'); await pickSrc(p, 'spotify--demo0002');
+  const l3 = await lbl();
+  check('C5 unselecting the last provider: back to All ("All sources", not lit)', J(await srcOn(p)) === J(['all']) && l3[0] === 'All sources' && !l3[1], J(l3));
+  await tap(p, `${SV}.querySelector('.srct')`);
+  check('C6 tapping the control again folds the choices away', await wait(p, `!${SV}.querySelector('.srco') && ${SV}.querySelector('.srct').getAttribute('aria-expanded') === 'false'`));
+  // selected category is unmistakable: solid light fill vs the dim others
+  const bg = await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].map((b) => [b.classList.contains('on'), getComputedStyle(b).backgroundColor])`);
+  check('C7 the selected category button is filled white, the others are not', bg.filter((x) => x[0]).length === 1 && bg.every((x) => x[0] === (x[1] === 'rgb(255, 255, 255)')), J(bg));
+  // corner icons drive the embedded library list
+  await wait(p, `${BR}.querySelectorAll('.tile[data-type=playlist]').length > 0`);
+  await ev(p, `window.__calls.length = 0`);
+  await tap(p, `${SV}.querySelector('[data-act=lib-fav]')`);
+  const fav = await wait(p, `${SV}.querySelector('[data-act=lib-fav]').getAttribute('aria-pressed') === 'true' && ${SH}.browse.libTools().fav === true`);
+  const favReq = await wait(p, `window.__calls.some((c) => c.service === 'get_library' && c.data?.favorite === true)`);
+  check('C8 the heart corner icon turns Favorites only on (library re-asked with favorite: true)', fav && favReq, J(await ev(p, `window.__calls.map((c) => c.service)`)));
+  await tap(p, `${SV}.querySelector('[data-act=lib-fav]')`);
+  check('C9 tapping it again turns Favorites off', await wait(p, `${SV}.querySelector('[data-act=lib-fav]').getAttribute('aria-pressed') === 'false'`));
+  const s1 = await ev(p, `${SV}.querySelector('[data-act=lib-sort]').getAttribute('aria-label')`);
+  await tap(p, `${SV}.querySelector('[data-act=lib-sort]')`);
+  const s2 = await ev(p, `${SV}.querySelector('[data-act=lib-sort]').getAttribute('aria-label')`);
+  check('C10 the sort corner icon cycles the sort (label follows)', s1 === 'Sort: A–Z' && s2 !== s1 && s2 === `Sort: ${await ev(p, `${SH}.browse.libTools().sort`)}`, J([s1, s2]));
+  await tap(p, `${SV}.querySelector('.lcats .lc[data-lcat=genre]')`);
+  check('C11 Genres: no Favorites icon (sort only)', await wait(p, `!${SV}.querySelector('[data-act=lib-fav]') && !!${SV}.querySelector('[data-act=lib-sort]')`));
+  await p.close();
 }
 
 check('Z no page errors', pageErrors.length === 0, J(pageErrors.slice(0, 3)));
