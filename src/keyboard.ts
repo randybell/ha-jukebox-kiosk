@@ -24,10 +24,13 @@ interface KeyDef { id: string; label?: string; cls?: string; span?: number; aria
 export class JbKeyboard extends LitElement {
   static properties = {
     collapsible: { type: Boolean },
+    side: { type: Boolean, reflect: true },
     _sym: { state: true },
     _pressed: { state: true },
   };
   collapsible = true;
+  /** Combined Library: a compact column beside the results; search sits above it on tablets. */
+  side = false;
   private _sym = false;
   private _pressed = '';
   private _holdTimer?: number;
@@ -43,13 +46,13 @@ export class JbKeyboard extends LitElement {
     const out: KeyDef[] = DIGITS.map((d) => ch(d, 'num'));
     if (!this._sym) {
       out.push(...LETTERS.map((c) => ch(c)));
-      out.push(ch("'", '', 'Apostrophe'), ch('-', '', 'Hyphen'), ch('&', 'wide-only'), ch('.', 'wide-only', 'Period'));
+      out.push(ch('&', 'wide-only'), ch('.', 'wide-only', 'Period'));
     } else {
       // narrow: digits shown inline (the num row is hidden), then symbols. wide: symbols only.
       out.push(...DIGITS.map((d) => ch(d, 'narrow-only')));
-      out.push(...SYMBOLS.map((s, i) => ch(s, i >= SYMBOLS.length - 2 ? 'wide-only' : '')));
-      out.push(ch("'", '', 'Apostrophe'), ch('-', '', 'Hyphen'));
+      out.push(...(this.side ? SYMBOLS.slice(0, 14).map((s) => ch(s)) : SYMBOLS.map((s, i) => ch(s, i >= SYMBOLS.length - 2 ? 'wide-only' : ''))));
     }
+    if (this._sym) out.push(ch("'", '', 'Apostrophe'), ch('-', '', 'Hyphen'));
     out.push(
       { id: 'k-toggle-n', label: this._sym ? 'ABC' : '123', cls: 'sp narrow-only', aria: this._sym ? 'Letters' : 'Numbers and symbols', act: () => 'toggle' },
       { id: 'k-toggle-w', label: this._sym ? 'ABC' : '#+=', cls: 'sp wide-only', span: 2, aria: this._sym ? 'Letters' : 'Symbols', act: () => 'toggle' },
@@ -127,7 +130,7 @@ export class JbKeyboard extends LitElement {
               @lostpointercapture=${() => this.onCancel()}
               @click=${(e: MouseEvent) => this.onClick(e, k)}
               @contextmenu=${(e: Event) => e.preventDefault()}
-            >${k.icon ? icon(k.icon) : k.label}</button>`,
+            >${k.icon ? icon(k.icon) : this.side && k.id === 'k-space' ? '␣' : this.side && k.id === 'k-clear' ? '×' : k.label}</button>`,
           )}
         </div>
       </section>
@@ -172,6 +175,20 @@ export class JbKeyboard extends LitElement {
       @container kb (max-width: 380px) {
         .kb-handle span { display: none; }
       }
+
+      /* Pinned Library keyboard: compact grid beside the results, sized by the responsive Library container. */
+      :host([side]) { height: 100%; }
+      :host([side]) .kb { height: 100%; display: flex; flex-direction: column; padding: 6px; }
+      :host([side]) .keys {
+        flex: 1; min-height: 0; min-width: 0; grid-template-columns: repeat(var(--kcols, 4), minmax(0, 1fr));
+        grid-template-rows: repeat(var(--krows, 8), minmax(0, 1fr)); gap: var(--kgap, 6px);
+      }
+      :host([side]) .k { height: auto; min-width: 0; min-height: 0; overflow: hidden; white-space: nowrap; }
+      :host([side]) .k.num, :host([side]) .wide-only { display: none; }
+      :host([side]) .narrow-only { display: grid !important; }
+      :host([side]) .k.space, :host([side]) .k.bk, :host([side]) .k.clr { grid-column: span 1 !important; }
+      :host([side]) .kb-handle { display: none; }
+      :host([side]) .kb { height: 100%; box-sizing: border-box; padding: var(--kb-pad, 6px); }
     `,
   ];
 }

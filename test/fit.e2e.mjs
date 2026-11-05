@@ -40,14 +40,48 @@ const geom = (pg) => pg.evaluate(() => {
   const kb = sr.querySelector('jb-search')?.shadowRoot.querySelector('jb-keyboard');
   const sv = sr.querySelector('jb-search')?.shadowRoot;
   const vis = (el) => { const b = r(el); return b && b.h > 0 && b.w > 0 ? b : null; };
-  const lib = sv ? { combined: sr.querySelector('jb-search').hasAttribute('combined') || !!sr.querySelector('jb-search').combined, q: vis(sv.querySelector('.qbar')),
-    srcs: [...sv.querySelectorAll('.srcs .src')].map(vis) } : null;
+  const lib = sv ? { combined: sr.querySelector('jb-search').hasAttribute('combined') || !!sr.querySelector('jb-search').combined, q: vis([...sv.querySelectorAll('.qbar')].find((el) => el.getBoundingClientRect().height)),
+    srcs: [...sv.querySelectorAll('.srcs .src')].map(vis).filter(Boolean) } : null;
   const nw = sr.querySelector('jb-now')?.shadowRoot.querySelector('.nw');
   const pp = sr.querySelector('jb-now')?.shadowRoot.querySelector('.tb.pp');
   return { vw, vh, tbB, nav: r(sr.querySelector('.tabs')), top: r(sr.querySelector('.top')), tabs, could, docH: document.documentElement.scrollHeight,
     kb: kb && kb.getBoundingClientRect().height ? r(kb) : null, nw: nw ? { sh: nw.scrollHeight, ch: nw.clientHeight } : null, pp: r(pp),
     lib, fit: __card.dataset.fitH, size: __card.dataset.fit ?? '' };
 });
+const kbdGeom = (pg) => pg.evaluate(() => {
+  const sr = __card.shadowRoot, sv = sr.querySelector('jb-search')?.shadowRoot;
+  const kb = sv?.querySelector('jb-keyboard'), res = sv?.querySelector('.res'), q = [...(sv?.querySelectorAll('.qbar') ?? [])].find((el) => el.getBoundingClientRect().height);
+  if (!kb || !res || !q) return null;
+  const R = (el) => { const b = el.getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right, h: b.height, w: b.width }; };
+  const keys = [...kb.shadowRoot.querySelectorAll('.k')].filter((k) => getComputedStyle(k).display !== 'none');
+  const rs = keys.map(R), space = R(kb.shadowRoot.querySelector('[data-key="k-space"]'));
+  const cols = [...new Set(rs.map((b) => Math.round(b.l)))], rows = [...new Set(rs.map((b) => Math.round(b.t)))];
+  const titles = [...sv.querySelectorAll('.scroll .row .rt b')].map(R).filter((b) => b.w && b.h);
+  const catRow = sv.querySelector('.lcats'), catButtons = [...sv.querySelectorAll('.lcats .lc')].map(R);
+  const labelFit = ['k-space', 'k-clear'].every((id) => { const el = kb.shadowRoot.querySelector(`[data-key=${id}]`); return el && el.scrollWidth <= el.clientWidth + 1; });
+  const source = [...sv.querySelectorAll('.srct')].find((el) => el.getBoundingClientRect().height);
+  const lastY = Math.max(...rs.map((b) => Math.round(b.t))), lastRow = rs.filter((b) => Math.round(b.t) === lastY);
+  const rowFull = lastRow.length === 6 && Math.abs(Math.min(...lastRow.map((b) => b.l)) - cols[0]) <= 1 && Math.abs(Math.max(...lastRow.map((b) => b.r)) - Math.max(...rs.map((b) => b.r))) <= 1;
+  return { kb: R(kb), res: R(res), q: R(q), nav: R(sr.querySelector('.tabs')), cols: cols.length, rows: rows.length, lastCount: lastRow.length, rowFull,
+    vw: innerWidth, vh: innerHeight, titleW: titles.length ? Math.min(...titles.map((b) => b.w)) : 0, titleCount: titles.length,
+    catRows: new Set(catButtons.map((b) => Math.round(b.t))).size, catScroll: catRow ? catRow.scrollWidth >= catRow.clientWidth : false, labelFit,
+    statusHidden: [...sv.querySelectorAll('.qmeta')].every((el) => getComputedStyle(el).display === 'none' || !el.getBoundingClientRect().height),
+    sourceFit: !source || source.getBoundingClientRect().right <= innerWidth + 0.5,
+    minW: Math.min(...rs.map((b) => b.w)), minH: Math.min(...rs.map((b) => b.h)), maxW: Math.max(...rs.map((b) => b.w)),
+    maxH: Math.max(...rs.map((b) => b.h)), count: rs.length, space, side: kb.hasAttribute('side'), fill: kb.shadowRoot.querySelector(':host .keys') ? getComputedStyle(kb.shadowRoot.querySelector('.keys')).gridTemplateRows : '' };
+});
+function verifyKbd(label, g) {
+  const phone = g && g.vw <= 520;
+  const landscape = g && g.vw > g.vh && g.vh <= 520;
+  const tablet = g && !phone && !landscape;
+  const bottom = phone && !landscape;
+  const gridOk = g?.cols === 6 && g?.rows === 5;
+  check(`${label}: portrait keyboard below results; tablet/landscape keyboard beside results`, !!g && g.side && (bottom ? (g.kb.t >= g.res.b - 0.5 && g.kb.l >= g.res.l - 0.5 && g.kb.r <= g.res.r + 0.5 && g.q.b <= g.kb.t + 0.5 && g.res.b <= g.kb.t + 0.5) : (g.kb.r <= g.res.l + 0.5 && (tablet ? (g.q.l >= g.kb.l - 0.5 && g.q.r <= g.kb.r + 0.5 && g.q.b <= g.kb.t + 0.5) : g.q.l >= g.kb.r - 0.5))) && g.kb.b <= g.nav.t + 0.5 && g.res.b <= g.nav.t + 0.5, JSON.stringify(g));
+  check(`${label}: full 30-key 6x5 grid; final row has no empty cells`, !!g && g.count === 30 && gridOk && g.lastCount === 6 && g.rowFull && g.space.w <= g.maxW + 1 && g.space.w <= g.minW * 1.35 && g.space.h <= g.maxH + 1, JSON.stringify(g));
+  check(`${label}: usable touch keys; short landscape >= 40px tall`, !!g && g.minW >= (phone ? 34 : 40) && g.minH >= 40 && g.maxW <= g.minW * 1.35, JSON.stringify(g));
+  check(`${label}: one category row, fitting source control, Space/Clear labels, no clipped status`, !!g && g.catRows === 1 && g.catScroll && g.sourceFit && g.labelFit && (phone || g.statusHidden), JSON.stringify(g));
+  if (g?.titleCount) check(`${label}: visible result titles retain useful width`, g.titleW >= 90, JSON.stringify({ titleW: g.titleW, count: g.titleCount }));
+}
 const within = (b, g, top = 0) => b && b.t >= top - 0.5 && b.b <= g.vh + 0.5 && b.l >= -0.5 && b.r <= g.vw + 0.5 && b.h > 0;
 function verify(label, g, { fill = true, tab } = {}) {
   const tabsOk = g.tabs.length === TABS.length && g.tabs.every((t, i) => t.id === TABS[i]) && g.tabs.every((t) => within(t, g) && t.hit);
@@ -287,6 +321,8 @@ for (const [w, h, touch] of SIZES) {
   check(`F7 ${w}x${h} toolbar kiosk backend Library: source buttons shown`, (g.lib?.srcs.length ?? 0) > 0, JSON.stringify(g.lib));
   verify(`F7 ${w}x${h} toolbar kiosk backend Library`, g, { tab: LIB });
   if (KEY.has(`${w}x${h}`)) await pg.screenshot({ path: `${OUT}library-kiosk-${w}x${h}-toolbar.png` });
+  const kg = await kbdGeom(pg);
+  verifyKbd(`F7 ${w}x${h}`, kg);
   await pg.close();
 }
 
