@@ -736,6 +736,13 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
       .sx, .sx.srcs-on { --kh: 46px; --kgap: 6px; } .recents { display: none; }
       .srcs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-top: 8px; } .srcs::-webkit-scrollbar { display: none; } .srcs .fc.src { flex: none; }
     }
+    /* short landscape (1024x600 under the HA toolbar): the recents are hidden, so drop their grid row (and its 12 px gap), and with the
+       source buttons on size the keys to the room left under the search box so the keyboard always ends above the tab bar
+       (keys stay 46 px where there is room; 220px = padding + search box + source buttons + gap + keyboard padding and row gaps) */
+    @container np (orientation: landscape) and (min-width: 700px) and (max-height: 520px) {
+      .sx { grid-template-rows: auto 1fr; grid-template-areas: "q res" "kb res"; }
+      .sx.srcs-on { --kh: clamp(36px, calc((100cqh - 220px) / 5), 46px); }
+    }
     /* very short landscape (phone on its side under the HA toolbar): keyboard alone on the left at full height,
        query above the results on the right, keys sized to the space so no row is clipped */
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
