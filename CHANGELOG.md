@@ -6,8 +6,14 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## 0.7.7 — 2026-11-05
 
+### Added
+- **Sleep timer.** On Now Playing, Sleep offers Off, 15, 30 and 60 minutes. While it is on, the control shows the time left. Music Assistant's sleep timer is used when the player accepts it, so playback still stops if the kiosk screen sleeps. Otherwise the card pauses the player when the time is up.
+- **Recently played.** On the Library tab, with an empty search box, a Recently played row sits above the categories. It shows the last items from Music Assistant and hides when there are none.
+
 ### Changed
-- **Library keyboard.** Restores the v0.7.4 always-open on-screen keyboard on tablets and touchscreen monitors: 7 columns when narrow, 10 columns with a number row when wide. On a landscape tablet the keyboard sits on the left with search and results beside it; on a portrait tablet the keyboard sits under the results. The 0.7.5 filled 6×5 side grid is gone. Theme, colours and fonts are unchanged. Everything else from 0.7.5 and 0.7.6 stays.
+- **Library keyboard.** Restores the v0.7.4 always-open on-screen keyboard on tablets and touchscreen monitors: 7 columns when narrow, 10 columns with a number row when wide. On a landscape tablet the keyboard sits on the left with search and results beside it; on a portrait tablet the keyboard sits under the results. The 0.7.5 filled 6×5 side grid is gone. Theme, colours and fonts are unchanged.
+- **Search and tiles.** On a tablet or monitor the search box is full width and the source control sits under it. Playlist provider badges sit under the square artwork, and titles wrap. Play Next, Play Now and Remove each stay on one line, large enough to read on a touchscreen.
+- **Radio stations.** Playing a station replaces the queue. A station row offers Play Now only. Songs, albums and playlists still have Play Next, Play Now and Remove.
 
 ## 0.7.6 — 2026-11-05
 
