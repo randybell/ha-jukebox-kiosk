@@ -606,6 +606,17 @@ function sendCommand(command, d) {
       return [lyr.plain ? lyr.plain() : null, lyr.lrc ? lyr.lrc() : null];
     }
     case 'providers': return structuredClone(DEMO_PROVIDERS);
+    case 'music/recently_played_items': {
+      if (params.get('recentfail') === '1') throw new Error('mock: recently_played_items failed');
+      if (params.get('recent') === 'empty' || params.get('v07') === 'empty') return [];
+      const lim = Math.max(1, Math.min(50, Number(d.limit ?? 12)));
+      const mix = [
+        ...libTracks.slice(0, 4).map(maItem),
+        ...(CATALOG.albums ?? []).slice(0, 2).map((x) => pub({ ...x, media_type: x.media_type || 'album' })),
+        ...(CATALOG.playlists ?? []).slice(0, 2).map((x) => pub({ ...x, media_type: x.media_type || 'playlist' })),
+      ];
+      return mix.slice(0, lim);
+    }
     case 'music/search': {
       if (Array.isArray(d.providers) && d.providers.length) return providerSearch(d);
       const q = String(d.search_query ?? '').toLowerCase();

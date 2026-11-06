@@ -1,8 +1,10 @@
 // v0.7 mock data for the dev harness (?kiosk=1): genres, a Radio Browser tree and MA recommendation rows.
 // Shapes follow MA 2.10.9 (music/genres/overview + /tracks, music/browse radiobrowser://..., music/recommendations + /items).
 // PLACEHOLDER DATA ONLY: invented genre / station / tag names, fake ids, no real station uuids.
-// URL params: v07=empty (no genres, empty rows, empty radio tree), rbfail=1 (music/browse throws),
-// recfail=1 (music/recommendations throws), rowfail=<row id> (that row's items throw), v07lat=<ms> (latency, default 60).
+// URL params: v07=empty (no genres, empty rows, empty radio tree, empty recently played), rbfail=1 (music/browse throws),
+// recfail=1 (music/recommendations throws), rowfail=<row id> (that row's items throw),
+// recentfail=1 (music/recently_played_items throws; recommendations fallback still works),
+// recent=empty (recently_played_items returns []), v07lat=<ms> (latency, default 60).
 
 const GENRES = ['Rock', 'Jazz', 'Electronic', 'Soul', 'Classical', 'Mock Folk', 'Ambient', 'Blues'];
 const svgArt = (label, hue) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="hsl(${hue},45%,28%)"/><text x="50" y="58" font-family="sans-serif" font-size="18" fill="#fff" text-anchor="middle">${label.slice(0, 10)}</text></svg>`)}`;
@@ -95,6 +97,19 @@ export function createV07({ params, catalog, sleep }) {
     await sleep(lat);
     switch (command) {
       case 'music/browse': return browse(String(args.path ?? ''));
+      case 'music/recently_played_items': {
+        if (params.get('recentfail') === '1') throw new Error('mock: recently_played_items failed');
+        if (EMPTY || params.get('recent') === 'empty') return [];
+        const lim = Math.max(1, Math.min(50, Number(args.limit ?? 12)));
+        // Mix of tracks, albums, playlists and radio (placeholder names only)
+        const mix = [
+          ...(catalog.tracks ?? []).slice(0, 4),
+          ...(catalog.albums ?? []).slice(0, 2),
+          ...(catalog.playlists ?? []).slice(0, 2),
+          ...Array.from({ length: 2 }, (_, i) => station('recent', i, ['Hits', 'Jazz'][i % 2])),
+        ].map(pub);
+        return mix.slice(0, lim);
+      }
       case 'music/recommendations':
         if (params.get('recfail') === '1') throw new Error('mock: recommendations failed');
         return [...ROWS.map((r) => asFolder(r)), asFolder(['stations_for_you', 'Stations for you'], 'mock_stream--XXXXXXXX')];
