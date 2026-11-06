@@ -27,7 +27,7 @@ async def test_capabilities_admin(hass: HomeAssistant, hass_ws_client: Any, admi
     res = await _call(ws, type="jukebox_kiosk/capabilities")
     assert res["success"]
     r = res["result"]
-    assert r["backend"] == "kiosk" and r["version"] == "0.7.6" and r["ma_connected"]
+    assert r["backend"] == "kiosk" and r["version"] == "0.7.7" and r["ma_connected"]
     assert not r["guest"] and "admin" in r["classes"]
     assert r["features"]["unfavorite"] and r["features"]["queue_edit"]
     assert "player_queues/play_index" in r["commands"]

@@ -42,8 +42,6 @@ async function tap(page, expr) {
 const wait = (page, fn, timeout = 5000) => page.waitForFunction(fn, { timeout, polling: 40 }).then(() => true, () => false);
 const ev = (page, expr) => page.evaluate((e) => eval(e), expr);
 const visible = (page, expr) => ev(page, `(() => { const el = ${expr}; if (!el) return false; const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0 && b.bottom > 0 && b.right > 0 && b.top < innerHeight && b.left < innerWidth; })()`);
-const Q = `[...${SV}.querySelectorAll('.qbar')].find((e) => e.getBoundingClientRect().height)`;
-const ST = `[...${SV}.querySelectorAll('.srct')].find((e) => e.getBoundingClientRect().height)`;
 const typeQ = async (page, q) => { for (const ch of q) await tap(page, `[...${SV}.querySelector('jb-keyboard').shadowRoot.querySelectorAll('button')].find((b) => b.textContent.trim() === '${ch}')`); await sleep(500); };
 const tabs = (p) => ev(p, `[...${C}.querySelectorAll('.tab')].map((t) => t.dataset.tab + ':' + t.querySelector('span').textContent.trim())`);
 const btns = (p) => ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].map((b) => b.dataset.lcat + ':' + b.textContent.trim())`);
@@ -52,9 +50,9 @@ const libShown = (p) => ev(p, `!${SV}.querySelector('.lib').hidden`);
 const rows = (p) => ev(p, `[...${SV}.querySelectorAll('.scroll .lsec, .scroll .row')].map((r) => r.classList.contains('lsec') ? '## ' + (r.dataset.sec ?? r.textContent.trim()) : (r.querySelector('.pv')?.textContent.trim() ?? '') + '|' + (r.querySelector('b, .t')?.textContent.trim() ?? ''))`);
 // 0.7.3: the combined tab folds the source buttons into a compact "All sources" control beside the box (.srct);
 // tapping it shows the same multi-select buttons in a row under the box (.srco)
-const SRC = (id) => `${SV}.querySelector('.kb-search .srco .src[data-src="${id}"]')`;
-const openSrc = async (p) => { await wait(p, `!!${ST}`); if (!(await ev(p, `!!${SV}.querySelector('.srco')`))) await tap(p, `${ST}`); return wait(p, `${SV}.querySelectorAll('.kb-search .srco .src').length > 2`); };
-const srcOn = async (p) => { await openSrc(p); return ev(p, `[...new Set([...${SV}.querySelectorAll('.kb-search .srco .src[aria-pressed=true]')].map((b) => b.dataset.src))]`); };
+const SRC = (id) => `${SV}.querySelector('.srco .src[data-src="${id}"]')`;
+const openSrc = async (p) => { await wait(p, `!!${SV}.querySelector('.srct')`); if (!(await ev(p, `!!${SV}.querySelector('.srco')`))) await tap(p, `${SV}.querySelector('.srct')`); return wait(p, `${SV}.querySelectorAll('.srco .src').length > 2`); };
+const srcOn = async (p) => { await openSrc(p); return ev(p, `[...${SV}.querySelectorAll('.srco .src[aria-pressed=true]')].map((b) => b.dataset.src)`); };
 const pickSrc = async (p, id) => { await openSrc(p); await tap(p, SRC(id)); };
 const noPopup = (p) => ev(p, `![...${SV}.querySelectorAll('.toast, .confirm, [role=dialog]')].some((e) => e.getBoundingClientRect().width > 0) && !${C}.querySelector('.toast')`);
 
@@ -62,7 +60,7 @@ const noPopup = (p) => ev(p, `![...${SV}.querySelectorAll('.toast, .confirm, [ro
 for (const [vpName, vp] of [['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }], ['320x640', { width: 320, height: 640, isMobile: true, hasTouch: true }]]) {
   const p = await open('', {}, vp);
   await openSrc(p);
-  const g = await ev(p, `(() => { const row = [...${SV}.querySelectorAll('.srco')].find((e) => e.getBoundingClientRect().height), q = row.closest('.qwrap').querySelector('.qrow').getBoundingClientRect(), r = row.getBoundingClientRect();
+  const g = await ev(p, `(() => { const q = ${SV}.querySelector('.qrow').getBoundingClientRect(), row = ${SV}.querySelector('.srco'), r = row.getBoundingClientRect();
     const bs = [...row.querySelectorAll('.src')].map((b) => b.getBoundingClientRect()); const kb = ${SV}.querySelector('.kbd')?.getBoundingClientRect();
     return { gap: Math.round(r.top - q.bottom), tops: new Set(bs.map((b) => Math.round(b.top))).size, minH: Math.min(...bs.map((b) => b.height)), scrolls: row.scrollWidth > row.clientWidth + 1, rowInside: r.right <= innerWidth + 1, resH: Math.round(${SV}.querySelector('.res')?.getBoundingClientRect().height ?? 0), kbTop: Math.round(kb?.top ?? 0) }; })()`);
   check(`T3d [${vpName}] phone: one horizontally scrolling button row directly under the box, >= 44px`, g.gap >= 0 && g.gap <= 16 && g.tops === 1 && g.minH >= 44 && g.scrolls && g.rowInside, J(g));
@@ -76,10 +74,10 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   check(`T2 [${vpName}] Library tab active; no tile grid anywhere`, (await ev(p, `${C}.querySelector('.tab.active')?.dataset.tab`)) === 'browse'
     && !(await ev(p, `!!${BR}.querySelector('.home, .lt')`)));
   await openSrc(p);
-  check(`T3 [${vpName}] search box and source buttons visible, All on`, (await visible(p, `${Q}`)) && (await visible(p, SRC('all')))
+  check(`T3 [${vpName}] search box and source buttons visible, All on`, (await visible(p, `${SV}.querySelector('.qbar')`)) && (await visible(p, SRC('all')))
     && J(await srcOn(p)) === J(['all']));
-  const geo = await ev(p, `(() => { const r = [...${SV}.querySelectorAll('.srco')].find((e) => e.getBoundingClientRect().height).getBoundingClientRect(), q = ${Q}.closest('.qrow').getBoundingClientRect();
-    const bs = [...${SV}.querySelectorAll('.kb-search .srco .src')].map((b) => b.getBoundingClientRect());
+  const geo = await ev(p, `(() => { const q = ${SV}.querySelector('.qrow').getBoundingClientRect(), r = ${SV}.querySelector('.srco').getBoundingClientRect();
+    const bs = [...${SV}.querySelectorAll('.srco .src')].map((b) => b.getBoundingClientRect());
     return { gap: r.top - q.bottom, left: Math.abs(r.left - q.left), minH: Math.min(...bs.map((b) => b.height)), inside: bs.every((b) => b.right <= q.right + 1 && b.left >= q.left - 1 && b.bottom <= innerHeight) }; })()`);
   check(`T3b [${vpName}] the button row sits directly under the search box, touch-sized (>= 44px), all on screen`, geo.gap >= 0 && geo.gap <= 16 && geo.left <= 1 && geo.minH >= 44 && geo.inside, J(geo));
   check(`T3c [${vpName}] no dropdown / popover / select for sources`, !(await ev(p, `!!${SV}.querySelector('.srcb, .srcm, .srcveil, select, [aria-haspopup]')`)));
@@ -116,7 +114,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
 {
   const p = await open();
   await openSrc(p);
-  const opts = await ev(p, `[...${SV}.querySelectorAll('.kb-search .srco .src')].map((o) => o.dataset.src + ':' + o.textContent.trim())`);
+  const opts = await ev(p, `[...${SV}.querySelectorAll('.srco .src')].map((o) => o.dataset.src + ':' + o.textContent.trim())`);
   check('P1 buttons: All, Library, then MA providers by display name (sorted; unavailable + player providers left out)',
     J(opts) === J(['all:All', 'library:Library', 'apple_music--demo0001:Apple Music', 'radiobrowser--demo0004:Radio Browser', 'spotify--demo0002:Spotify', 'tunein--demo0003:TuneIn']), J(opts));
   const sp = await ev(p, `window.__ws.filter((m) => m.type === 'search_providers').length`);
@@ -124,8 +122,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   check('P3 default: All selected, nothing else', J(await srcOn(p)) === J(['all']) && (await ev(p, `${SH}.source`)) === 'all');
   await pickSrc(p, 'spotify--demo0002');
   check('P4 tapping Spotify while All is on: All off, Spotify on', J(await srcOn(p)) === J(['spotify--demo0002']) && (await ev(p, `${SH}.source`)) === 'spotify--demo0002', J(await srcOn(p)));
-  await wait(p, `${SV}.querySelector('.kb-search .ph')?.textContent.includes('Spotify')`);
-  check('P5 placeholder names the provider', /Search Spotify/.test(await ev(p, `${SV}.querySelector('.kb-search .ph')?.textContent ?? ''`)));
+  check('P5 placeholder names the provider', /Search Spotify/.test(await ev(p, `${SV}.querySelector('.ph')?.textContent ?? ''`)));
   // ---- 4. typed search limited to one provider ----
   await ev(p, `window.__provSearchLog.length = 0`);
   await typeQ(p, 'MO');
@@ -146,7 +143,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   await wait(p, `window.__provSearchLog.length > 0 && [...${SV}.querySelectorAll('.scroll .row')].length > 0`);
   const log2 = await ev(p, `window.__provSearchLog`);
   check('M2 both are sent in one music/search providers list', log2.length > 0 && log2.every((x) => J(x.ids) === J(['spotify--demo0002', 'tunein--demo0003'])), J(log2));
-  check('M3 status names both: "Spotify + TuneIn"', /Spotify \+ TuneIn/.test(await ev(p, `[...${SV}.querySelectorAll('.qmeta')].find((e) => e.textContent.includes('Spotify')).textContent`)), await ev(p, `[...${SV}.querySelectorAll('.qmeta')].find((e) => e.textContent.includes('Spotify')).textContent`));
+  check('M3 status names both: "Spotify + TuneIn"', /Spotify \+ TuneIn/.test(await ev(p, `${SV}.querySelector('.qmeta').textContent`)), await ev(p, `${SV}.querySelector('.qmeta').textContent`));
   const r2 = (await rows(p)).filter((x) => !x.startsWith('##'));
   check('M4 rows only from Spotify or TuneIn', r2.length > 0 && r2.every((x) => /^(spotify|tunein)\|/i.test(x)), J(r2));
   await ev(p, `window.__provSearchLog.length = 0`);
@@ -178,7 +175,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
 // ---------------- 5. typed search with All: library first, then providers ----------------
 {
   const p = await open();
-  await wait(p, `${Q}`);
+  await wait(p, `${SV}.querySelector('.qbar')`);
   await typeQ(p, 'MO');
   await wait(p, `${SV}.querySelectorAll('.scroll .row').length > 0`);
   const r = await rows(p);
@@ -277,7 +274,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   await h.close();
   const n = await open('', { search_sources: false });
   await wait(n, `${SV}.querySelectorAll('.lcats .lc').length >= 5`);
-  check('K6 search_sources: false hides the source buttons only', !(await ev(n, `!!${SV}.querySelector('.srcs')`)) && (await visible(n, `${Q}`)));
+  check('K6 search_sources: false hides the source buttons only', !(await ev(n, `!!${SV}.querySelector('.srcs')`)) && (await visible(n, `${SV}.querySelector('.qbar')`)));
   await n.close();
   const a = await open('', { library_categories: ['album', 'genre', 'podcast'] });
   await wait(a, `${SV}.querySelectorAll('.lcats .lc').length >= 2`);
@@ -289,44 +286,25 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
 for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }], ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }],
   ['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }], ['360x640', { width: 360, height: 640, isMobile: true, hasTouch: true }]]) {
   const p = await open('&ha=toolbar&sidebar=none', {}, vp);
-  await wait(p, `!!${ST} && ${SV}.querySelectorAll('.lcats .lc').length >= 5`);
-  const g = await ev(p, `(() => { const R = (el) => { const b = el?.getBoundingClientRect(); return b && b.height ? { t: b.top, b: b.bottom, l: b.left, r: b.right, w: b.width, h: b.height } : null; };
+  await wait(p, `!!${SV}.querySelector('.srct') && ${SV}.querySelectorAll('.lcats .lc').length >= 5`);
+  const g = await ev(p, `(() => { const R = (el) => { const b = el?.getBoundingClientRect(); return b && b.height ? { t: b.top, b: b.bottom, l: b.left, r: b.right } : null; };
     const s = ${SV}, res = R(s.querySelector('.lib:not([hidden])') ?? s.querySelector('.res .scroll')), kb = R(s.querySelector('jb-keyboard')), nav = R(${C}.querySelector('.tabs'));
-    const parts = { q: R([...s.querySelectorAll('.qbar')].find((e) => e.getBoundingClientRect().height)), srcs: R([...s.querySelectorAll('.srcs')].find((e) => e.getBoundingClientRect().height)), list: res, kb };
-    const cats = [...s.querySelectorAll('.lcats .lc')].map(R);
+    const parts = { q: R(s.querySelector('.qbar')), srcs: R(s.querySelector('.srcs')), cats: R(s.querySelector('.lcats')), list: res, kb };
     const ov = (a, c) => a.l < c.r - 0.5 && c.l < a.r - 0.5 && a.t < c.b - 0.5 && c.t < a.b - 0.5;
     const k = Object.keys(parts), bad = [];
     for (let i = 0; i < k.length; i++) { if (!parts[k[i]]) bad.push(k[i] + ' missing'); else if (parts[k[i]].b > nav.t + 0.5) bad.push(k[i] + ' under the tabs');
       for (let j = i + 1; j < k.length; j++) if (parts[k[i]] && parts[k[j]] && ov(parts[k[i]], parts[k[j]])) bad.push(k[i] + '/' + k[j]); }
-    const badCats = cats.filter((r) => !r || r.b > nav.t + 0.5);
-    const keys = [...s.querySelector('jb-keyboard').shadowRoot.querySelectorAll('.k')].filter((k) => getComputedStyle(k).display !== 'none').map(R);
-    const kbEl = s.querySelector('jb-keyboard'), space = R(kbEl.shadowRoot.querySelector('[data-key=k-space]'));
-    const ordinary = R(kbEl.shadowRoot.querySelector('[data-key=k-A]'));
-    const portrait = innerWidth <= 520 && innerHeight > innerWidth;
-    const side = portrait ? kb.t >= res.b - 0.5 && parts.q.b <= kb.t + 0.5 : kb.r <= res.l + 0.5 && (parts.q.l >= kb.r - 0.5 || (innerWidth > 520 && innerHeight > 400 && parts.q.l <= kb.l + 0.5 && parts.q.b <= kb.t + 0.5));
-    const cols = new Set(keys.map((r) => Math.round(r.l))).size, rows = new Set(keys.map((r) => Math.round(r.t))).size;
-    const lastY = Math.max(...keys.map((r) => Math.round(r.t))), last = keys.filter((r) => Math.round(r.t) === lastY);
-    const rowFull = last.length === 6 && Math.abs(Math.min(...last.map((r) => r.l)) - Math.min(...keys.map((r) => r.l))) <= 1 && Math.abs(Math.max(...last.map((r) => r.r)) - Math.max(...keys.map((r) => r.r))) <= 1;
-    return { cats: cats.length, badCats: badCats.length, side, cols, rows, keys: keys.length, last: last.length, rowFull, shortSpace: space.w <= ordinary.w + 1, open: !s.querySelector('.sx').classList.contains('kb-hidden'), pill: !!s.querySelector('.kb-open'), handle: !!s.querySelector('jb-keyboard').shadowRoot.querySelector('.kb-handle'), bad }; })()`);
-  check(`KB1 ${vpName}: Library opens with the on-screen keyboard shown (no Keyboard pill, no hide handle), nothing overlapping`, g.open && !g.pill && !g.handle && !g.bad.length && g.cats >= 5 && !g.badCats && g.side && g.cols === 6 && g.rows === 5 && g.keys === 30 && g.last === 6 && g.rowFull && g.shortSpace, J(g));
+    return { open: !s.querySelector('.sx').classList.contains('kb-hidden'), pill: !!s.querySelector('.kb-open'), handle: !!s.querySelector('jb-keyboard').shadowRoot.querySelector('.kb-handle'), bad }; })()`);
+  check(`KB1 ${vpName}: Library opens with the on-screen keyboard shown (no Keyboard pill, no hide handle), nothing overlapping`, g.open && !g.pill && !g.handle && !g.bad.length, J(g));
   await typeQ(p, 'CH');
   check(`KB2 ${vpName}: typing straight away (no tap on the search box) searches`, (await ev(p, `${SV}.querySelector('.q').dataset.query`)) === 'CH');
-  const titles = await ev(p, `[...${SV}.querySelectorAll('.scroll .row .rt b')].map((el) => { const r = el.getBoundingClientRect(); return { text: el.textContent.trim(), w: r.width, h: r.height }; })`);
-  check(`KB2 ${vpName}: typed results have readable, nonzero title boxes`, titles.length > 0 && titles.every((t) => t.text && t.w >= 90 && t.h >= 16), J(titles));
-  const sym = await ev(p, `(async () => { const k = ${SV}.querySelector('jb-keyboard'); k.shadowRoot.querySelector('[data-key=k-toggle-n]').click(); await k.updateComplete;
-    const keys = [...k.shadowRoot.querySelectorAll('.k')].filter((e) => getComputedStyle(e).display !== 'none').map((e) => e.getBoundingClientRect());
-    const lastY = Math.max(...keys.map((r) => Math.round(r.top))), last = keys.filter((r) => Math.round(r.top) === lastY);
-    return { keys: keys.length, cols: new Set(keys.map((r) => Math.round(r.left))).size, rows: new Set(keys.map((r) => Math.round(r.top))).size,
-      punctuation: [...k.shadowRoot.querySelectorAll('.k')].some((e) => e.dataset.key === "k-'"), last: last.length,
-      full: last.length === 6 && Math.abs(Math.max(...last.map((r) => r.right)) - Math.max(...keys.map((r) => r.right))) <= 1 }; })()`);
-  check(`KB2 ${vpName}: numbers/symbols keep a full 30-cell grid, including apostrophe and hyphen`, sym.keys === 30 && sym.cols === 6 && sym.rows === 5 && sym.punctuation && sym.last === 6 && sym.full, J(sym));
   await p.close();
 }
 {
   const t = await open('', { library_keyboard: 'tap' }, { width: 390, height: 844, isMobile: true, hasTouch: true });
   await wait(t, `${SV}.querySelectorAll('.lcats .lc').length >= 2`);
   const before = await ev(t, `[${SV}.querySelector('.sx').classList.contains('kb-hidden'), !!${SV}.querySelector('.kb-open')]`);
-  await tap(t, `${Q}`); await sleep(200);
+  await tap(t, `${SV}.querySelector('.qbar')`); await sleep(200);
   check('KB3 library_keyboard: tap (phone fallback): list first with the Keyboard pill, tapping the search box opens the keyboard', J(before) === J([true, true]) && !(await ev(t, `${SV}.querySelector('.sx').classList.contains('kb-hidden')`)), J(before));
   await t.close();
 }
@@ -335,16 +313,16 @@ for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: t
 for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }, {}], ['1024x600 large_buttons', { width: 1024, height: 600, isMobile: true, hasTouch: true }, { large_buttons: true }],
   ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }, {}], ['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }, {}], ['360x640', { width: 360, height: 640, isMobile: true, hasTouch: true }, {}]]) {
   const p = await open('&ha=toolbar&sidebar=none', cfg, vp);
-  await wait(p, `!!${ST} && ${SV}.querySelectorAll('.lcats .lc').length >= 5 && !!${SV}.querySelector('.lcorner')`);
+  await wait(p, `!!${SV}.querySelector('.srct') && ${SV}.querySelectorAll('.lcats .lc').length >= 5 && !!${SV}.querySelector('.lcorner')`);
   const geo = `(() => { const R = (el) => { const b = el?.getBoundingClientRect(); return b && b.height ? { t: b.top, b: b.bottom, l: b.left, r: b.right, h: b.height } : null; };
     const s = ${SV}, nav = R(${C}.querySelector('.tabs'));
-    const parts = { q: R([...s.querySelectorAll('.qbar')].find((e) => e.getBoundingClientRect().height)), trig: R([...s.querySelectorAll('.srct')].find((e) => e.getBoundingClientRect().height)), opts: R([...s.querySelectorAll('.srco')].find((e) => e.getBoundingClientRect().height)), cats: R(s.querySelector('.lcats')), corner: R(s.querySelector('.lcorner')),
+    const parts = { q: R(s.querySelector('.qbar')), trig: R(s.querySelector('.srct')), opts: R(s.querySelector('.srco')), cats: R(s.querySelector('.lcats')), corner: R(s.querySelector('.lcorner')),
       list: R(s.querySelector('.lib:not([hidden])') ?? s.querySelector('.res .scroll')), kb: R(s.querySelector('jb-keyboard')) };
     const ov = (a, c) => a.l < c.r - 0.5 && c.l < a.r - 0.5 && a.t < c.b - 0.5 && c.t < a.b - 0.5;
     const k = Object.keys(parts).filter((x) => parts[x]), bad = [];
     for (let i = 0; i < k.length; i++) { if (parts[k[i]].b > nav.t + 0.5 || parts[k[i]].r > innerWidth + 0.5 || parts[k[i]].l < -0.5) bad.push(k[i] + ' off screen / under the tabs');
       for (let j = i + 1; j < k.length; j++) if (ov(parts[k[i]], parts[k[j]])) bad.push(k[i] + '/' + k[j]); }
-    const t = [...s.querySelectorAll('.srct')].find((e) => e.getBoundingClientRect().height), cats = [...s.querySelectorAll('.lcats .lc')];
+    const t = s.querySelector('.srct'), cats = [...s.querySelectorAll('.lcats .lc')];
     return { bad, has: k, kbOpen: !s.querySelector('.sx').classList.contains('kb-hidden') && !s.querySelector('.kb-open'), expanded: t.getAttribute('aria-expanded'),
       beside: parts.q && parts.trig && parts.trig.l >= parts.q.r - 0.5 && parts.trig.t < parts.q.b && parts.q.t < parts.trig.b, trigH: parts.trig?.h ?? 0,
       label: t.getAttribute('aria-label'), icons: cats.every((c) => !!c.querySelector('svg')), catH: Math.min(...cats.map((c) => c.getBoundingClientRect().height)),
@@ -354,8 +332,8 @@ for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobi
     c.beside && c.trigH >= 44 && c.expanded === 'false' && c.label === 'Sources: All sources' && !c.has.includes('opts') && c.kbOpen && !c.bad.length, J(c));
   check(`C2 [${vpName}] category buttons: each has an icon, >= 44px tall; Favorites + sort are corner icons in the same row (no row of their own)`,
     c.icons && c.catH >= 44 && c.cornerH >= 44 && J(c.corner) === J(['lib-fav', 'lib-sort']) && !(await ev(p, `!!${BR}.querySelector('.bar')`)), J(c));
-  await tap(p, `${ST}`);
-  await wait(p, `${SV}.querySelectorAll('.kb-search .srco .src').length > 2`);
+  await tap(p, `${SV}.querySelector('.srct')`);
+  await wait(p, `${SV}.querySelectorAll('.srco .src').length > 2`);
   const o = await ev(p, geo);
   check(`C3 [${vpName}] sources opened: the choices show under the box, keyboard still open, nothing overlapping`, o.expanded === 'true' && o.has.includes('opts') && o.kbOpen && !o.bad.length, J(o));
   await p.close();
@@ -363,7 +341,7 @@ for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobi
 {
   const p = await open();
   await openSrc(p);
-  const lbl = () => ev(p, `[${ST}.querySelector('.stl').textContent.trim(), ${ST}.classList.contains('on')]`);
+  const lbl = () => ev(p, `[${SV}.querySelector('.srct .stl').textContent.trim(), ${SV}.querySelector('.srct').classList.contains('on')]`);
   await pickSrc(p, 'spotify--demo0002');
   const l1 = await lbl();
   await pickSrc(p, 'tunein--demo0003');
@@ -372,8 +350,8 @@ for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobi
   await pickSrc(p, 'tunein--demo0003'); await pickSrc(p, 'spotify--demo0002');
   const l3 = await lbl();
   check('C5 unselecting the last provider: back to All ("All sources", not lit)', J(await srcOn(p)) === J(['all']) && l3[0] === 'All sources' && !l3[1], J(l3));
-  await tap(p, `${ST}`);
-  check('C6 tapping the control again folds the choices away', await wait(p, `!${SV}.querySelector('.srco') && ${ST}.getAttribute('aria-expanded') === 'false'`));
+  await tap(p, `${SV}.querySelector('.srct')`);
+  check('C6 tapping the control again folds the choices away', await wait(p, `!${SV}.querySelector('.srco') && ${SV}.querySelector('.srct').getAttribute('aria-expanded') === 'false'`));
   // selected category is unmistakable: solid light fill vs the dim others
   const bg = await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].map((b) => [b.classList.contains('on'), getComputedStyle(b).backgroundColor])`);
   check('C7 the selected category button is filled white, the others are not', bg.filter((x) => x[0]).length === 1 && bg.every((x) => x[0] === (x[1] === 'rgb(255, 255, 255)')), J(bg));

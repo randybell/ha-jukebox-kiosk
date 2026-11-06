@@ -906,12 +906,13 @@ export class JbBrowse extends LitElement {
     .tw .tfav .i { width: 20px; height: 20px; }
     :host([large]) .tw .tfav { width: 42px; height: 42px; } :host([large]) .tw .tfav .i { width: 24px; height: 24px; }
     .mo.fav.on { color: var(--_active); }
-    .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto 44px 40px 40px; }
+    .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto auto; }
+    .row .ra { flex: none; } .row .ra-b { flex-shrink: 0; }
     .tile b { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
     .tile.artist b { text-align: center; }
     .tile small { font-size: 12px; color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .list { display: flex; flex-direction: column; }
-    .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto 44px 40px; align-items: center; gap: 12px; min-height: 58px; padding: 0 4px; border-radius: 10px; cursor: pointer; }
+    .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; min-height: 58px; padding: 0 4px; border-radius: 10px; cursor: pointer; }
     .row + .row { border-top: 1px solid var(--_divider); }
     .row.held { background: #ffffff1f; box-shadow: inset 0 0 0 1.5px #fff; }
     .row .n { text-align: center; color: var(--_inactive); font-size: 14px; font-variant-numeric: tabular-nums; }
@@ -932,7 +933,7 @@ export class JbBrowse extends LitElement {
     .rbh { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .rbt { font-family: var(--_font-display); font-size: 20px; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
     .tagc { display: flex; flex-wrap: wrap; gap: 8px; }
-    .row.fold { grid-template-columns: 44px minmax(0, 1fr) auto 40px; }
+    .row.fold { grid-template-columns: 44px minmax(0, 1fr) auto auto; }
     .ar.gl { display: grid; place-items: center; background: #ffffff0f; color: var(--_muted); } .ar.gl .i { width: 60%; height: 60%; }
     .empty .fc { margin-top: 8px; }
     /* v0.7 Discover */
@@ -959,7 +960,7 @@ export class JbBrowse extends LitElement {
       .home { grid-template-columns: 1fr 1fr; gap: 12px; } .lt { min-height: 132px; padding: 16px; border-radius: 18px; }
       .lti svg { width: 38px; height: 38px; } .ltl { font-size: 21px; } .lts { font-size: 13px; } .lt-title { font-size: 18px; }
       .tw .pv { font-size: 9px; left: 5px; bottom: 5px; }
-      .row { grid-template-columns: 40px minmax(0, 1fr) auto 40px; gap: 8px; } .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto 40px 40px; } .row .pv { display: none; } .row .du { font-size: 12px; } .th { width: 40px; height: 40px; }
+      .row { grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: 8px; } .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto auto; } .row .pv { display: none; } .row .du { font-size: 12px; } .th { width: 40px; height: 40px; }
     }
   `];
 }
