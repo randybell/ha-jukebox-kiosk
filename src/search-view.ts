@@ -5,7 +5,7 @@ import { providerLabel } from './providers';
 import { SearchEngine } from './search-engine';
 import {
   imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, menuPos, menuTpl,
-  playMedia, playMessage, drillable, canRadio, rowActsTpl, foldedActions, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  playMedia, playMessage, drillable, canRadio, isRadio, rowActsTpl, foldedActions, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
 } from './shared';
 import './detail-view';
 import { loadDetail, type DetailEntry } from './detail-view';
@@ -512,9 +512,11 @@ export class JbSearch extends LitElement {
     if (!this.hass) return;
     this.closeMenu();
     if ((enqueue as string) === 'remove') { await this.removeRow(it, this.mediaType(it, g)); return; }
+    const type = this.mediaType(it, g);
+    if (type === 'radio' || isRadio(it)) enqueue = 'replace';
     this.addRecent(this._shownQuery || this._query);
     try {
-      const r = await playMedia(this.hass, this.config, it, this.mediaType(it, g), enqueue, radio);
+      const r = await playMedia(this.hass, this.config, it, type, enqueue, radio);
       if (!r) return;
       this.toast(playMessage(this.hass, this.config, it, enqueue, radio));
       fire(this, 'jukebox-played', { item: it, ...r });
@@ -572,13 +574,15 @@ export class JbSearch extends LitElement {
     if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.hearts.isFav(it) } }); return; }
     this._sel = this._sel === it.uri ? '' : it.uri;
   }
-  /** Play Next and Remove act at once; Play Now and Start radio ask first. */
+  /** Play Next and Remove act at once; Play Now and Start radio ask first. Radio Play Now replaces immediately. */
   private rowAct(it: MaItem, g: GroupKey, a: RowAct | 'more', el: HTMLElement) {
     const type = this.mediaType(it, g);
     const ask = (k: RowAct) => {
       this.closeMenu();
       if (k === 'next') { this.play(it, g, k); return; }
       if (k === 'remove') { void this.removeRow(it, g); return; }
+      // radio stations: Play Now replaces the queue right away (no confirm, no next/add)
+      if ((type === 'radio' || isRadio(it)) && k === 'replace') { this.play(it, g, 'replace'); return; }
       this._confirm = { kind: k, item: it, run: () => this.play(it, g, 'replace', k === 'radio') };
     };
     if (a === 'more') this.showMenu(it, g, el.closest('.row') as HTMLElement, foldedActions(canRadio(type, it), ask));

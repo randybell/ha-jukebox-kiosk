@@ -4,7 +4,7 @@ import { icon } from './icons';
 import { providerLabel } from './providers';
 import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl, foldedActions,
-  playMedia, playMessage, normItem, drillable, canRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  playMedia, playMessage, normItem, drillable, canRadio, isRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
 } from './shared';
 import './detail-view';
 import type { DetailEntry, JbDetail } from './detail-view';
@@ -489,6 +489,7 @@ export class JbBrowse extends LitElement {
     if (!this.hass) return;
     this._menu = null; this.press.release();
     if ((enqueue as string) === 'remove') { await this.removeRow(it, type); return; }
+    if (type === 'radio' || isRadio(it)) enqueue = 'replace';
     try {
       const r = await playMedia(this.hass, this.config, it, type, enqueue as Enqueue, radio);
       if (!r) return;
@@ -514,8 +515,9 @@ export class JbBrowse extends LitElement {
     this._menu = { item: it, type, pos: menuPos(this.root(), el, actions.length), actions };
   }
   private openMenu(it: MaItem, type: string, el: HTMLElement) {
+    const station = type === 'radio' || isRadio(it);
     const ask = (kind: 'replace' | 'radio') => { this._menu = null; this.press.release(); this._confirm = { kind, item: it, run: () => this.play(it, playType(it, type), 'replace', kind === 'radio') }; };
-    const actions = mediaActions((enq) => this.play(it, playType(it, type), enq), drillable(type, this.config) ? () => this.openDetail(it, type) : undefined, ask, canRadio(type, it));
+    const actions = mediaActions((enq) => this.play(it, playType(it, type), enq), drillable(type, this.config) ? () => this.openDetail(it, type) : undefined, ask, canRadio(type, it), station);
     this._menu = { item: it, type, pos: menuPos(this.root(), el, actions.length), actions };
   }
 

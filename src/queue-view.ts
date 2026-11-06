@@ -2,7 +2,7 @@ import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
 import { combinedOn, libraryTabLabel } from './library-home';
-import { mediaStyles, noFocus, artTpl, provTpl, PressController, menuPos, menuTpl, confirmTpl, queueActTpl, type ConfirmState, type MenuAction, type MenuPos } from './shared';
+import { mediaStyles, noFocus, artTpl, provTpl, PressController, menuPos, menuTpl, confirmTpl, queueActTpl, isRadioUri, type ConfirmState, type MenuAction, type MenuPos } from './shared';
 import './keyboard';
 import type { KeyDetail } from './keyboard';
 import { canJumpQueue } from './speakers/model';
@@ -197,14 +197,16 @@ export class JbQueue extends LitElement {
   }
   private actionsAll(it: QueueItem): MenuAction[] {
     const q = this.queue!; const id = it.queue_item_id;
+    const radio = isRadioUri(it.media_content_id);
     if (this.jumps()) {
       // the narrow-row action sheet: the same rules as the row icons (Play now asks first, Remove offers Undo)
       // rows up to `lk` belong to MA (played, playing, or in the player's buffer): no Play next / move / remove there
+      // radio stations: no Play Next (stations replace the queue when played from Library/Search)
       const s = this._snap, i = s?.items.findIndex((x) => x.queue_item_id === id) ?? -1, cur = s?.current ?? -1, lk = q.locked;
       const last = !!s && i === s.items.length - 1;
       return [
         ...(i !== cur ? [{ id: 'play', icon: 'play', label: 'Play Now', run: () => this.askPlayNow(it) }] : []),
-        ...(i > lk + 1 ? [{ id: 'next', icon: 'qnext', label: 'Play Next', run: () => this.run(q.playNext(id), `${it.media_title} plays next`) }] : []),
+        ...(!radio && i > lk + 1 ? [{ id: 'next', icon: 'qnext', label: 'Play Next', run: () => this.run(q.playNext(id), `${it.media_title} plays next`) }] : []),
         ...(i > lk + 1 ? [{ id: 'up', icon: 'up', label: 'Move up', run: () => this.run(q.up(id), '') }] : []),
         ...(i > lk && !last ? [{ id: 'down', icon: 'down', label: 'Move down', run: () => this.run(q.down(id), '') }] : []),
         ...(i > lk ? [{ id: 'remove', icon: 'trash', label: 'Remove', run: () => { this.removeRow(it); } }] : []),
@@ -214,7 +216,7 @@ export class JbQueue extends LitElement {
     return [
       { id: 'play', icon: 'play', label: 'Play Now', run: () => this.play(it) },
       ...(locked ? [] : [
-        { id: 'next', icon: 'qnext', label: 'Play Next', run: () => this.run(q.next(id), `${it.media_title} plays next`) },
+        ...(!radio ? [{ id: 'next', icon: 'qnext', label: 'Play Next', run: () => this.run(q.next(id), `${it.media_title} plays next`) }] : []),
         { id: 'up', icon: 'up', label: 'Move up', run: () => this.run(q.up(id), '') },
         { id: 'down', icon: 'down', label: 'Move down', run: () => this.run(q.down(id), '') },
         { id: 'remove', icon: 'trash', label: 'Remove', run: () => this.run(q.remove(id), `Removed ${it.media_title}`) },
@@ -230,8 +232,10 @@ export class JbQueue extends LitElement {
     const ic = (name: string, label: string, act: string, fn: () => void, dis = false) => html`<button class="qa" tabindex="-1" data-action=${act} aria-label=${label} title=${label}
       ?disabled=${dis} @pointerdown=${noFocus} @click=${(e: Event) => { e.stopPropagation(); fn(); }}>${icon(name)}</button>`;
     // Play Now: not on the playing row. Play Next: not on the row already next, nor on played rows (MA refuses those).
-    const canNext = jumps && kind === 'next' && !buf && !isFirstNext;
-    const queueActs = html`${queueActTpl('next', it.media_title, 'playnext', () => this.run(q.playNext(it.queue_item_id), `${it.media_title} plays next`), !canNext)}
+    // Radio stations in the queue: hide Play Next (stations replace when played elsewhere; Remove still makes sense here).
+    const radio = isRadioUri(it.media_content_id);
+    const canNext = !radio && jumps && kind === 'next' && !buf && !isFirstNext;
+    const queueActs = html`${radio ? nothing : queueActTpl('next', it.media_title, 'playnext', () => this.run(q.playNext(it.queue_item_id), `${it.media_title} plays next`), !canNext)}
       ${queueActTpl('replace', it.media_title, 'playnow', () => this.askPlayNow(it), !jumps || kind === 'now')}`;
     // Remove: never the playing row, played rows, nor the buffered row (MA ignores deletes at or before the buffer)
     const canRemove = jumps && kind === 'next' && !buf;

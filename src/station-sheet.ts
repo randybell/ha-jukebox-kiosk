@@ -72,14 +72,14 @@ export class JbStation extends LitElement {
     try { await this.hearts.toggle({ ...it, favorite: own }, 'radio', this._detail ?? it); }
     finally { this._busy = false; }
   }
-  /** Play replaces the queue with the station, exactly like the tile's old "Play now" (play_media enqueue play). */
+  /** Play replaces the queue with the station (MA enqueue replace). */
   private async play() {
     const it = this.item;
     if (!it || !this.hass) return;
     try {
-      const r = await playMedia(this.hass, this.config, it, 'radio', 'play');
+      const r = await playMedia(this.hass, this.config, it, 'radio', 'replace');
       if (!r) return;
-      this.toast(playMessage(this.hass, this.config, it, 'play', false));
+      this.toast(playMessage(this.hass, this.config, it, 'replace', false));
       fire(this, 'jukebox-played', { item: it, ...r });
       this.close();
     } catch (err) {

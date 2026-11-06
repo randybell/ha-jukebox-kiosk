@@ -117,7 +117,14 @@ const inflight = new Set<string>();
 export const isInflight = (k: string) => inflight.has(k);
 /** music_assistant.play_media on the configured player (shared by Search, Browse and the detail view).
  *  Returns null when the same call is already in flight. `mediaType` '' omits media_type (MA infers it from the URI). */
+/** Stations always replace the queue (never add / next / plain play-as-add). Seed radio (radio_mode) is unchanged. */
+export function enqueueFor(it: Partial<MaItem> | undefined, mediaType: string, enqueue: Enqueue): Enqueue {
+  return mediaType === 'radio' || isRadio(it) ? 'replace' : enqueue;
+}
+/** True when a queue / media URI is an MA radio station. */
+export const isRadioUri = (uri?: string) => /^[a-z0-9_\-]+:\/\/radio\//i.test(uri ?? '');
 export async function playMedia(hass: HomeAssistant, config: JukeboxCardConfig, it: MaItem, mediaType: string, enqueue: Enqueue = 'play', radio = false) {
+  enqueue = enqueueFor(it, mediaType, enqueue);
   const entity_id = config.entity || 'media_player.everywhere';
   const data: Record<string, any> = { media_id: it.uri, ...(mediaType ? { media_type: mediaType } : {}), enqueue };
   if (radio && mediaType !== 'radio' && !isRadio(it)) data.radio_mode = true;
@@ -238,8 +245,15 @@ export function menuTpl(pos: MenuPos, head: { item: { name: string } & Partial<M
     </div>`;
 }
 
-/** Long-press / ⋮ menu: Play Now first; a tap never plays by itself. */
-export function mediaActions(play: (enq: Enqueue | 'remove') => void, open: (() => void) | undefined, ask: (kind: 'replace' | 'radio') => void, radio: boolean): MenuAction[] {
+/** Long-press / ⋮ menu: Play Now first; a tap never plays by itself.
+ *  `seedRadio` = Start radio… from a track/artist/album. `radioStation` = an MA radio item: Play Now replaces, no next/add/remove. */
+export function mediaActions(play: (enq: Enqueue | 'remove') => void, open: (() => void) | undefined, ask: (kind: 'replace' | 'radio') => void, seedRadio: boolean, radioStation = false): MenuAction[] {
+  if (radioStation) {
+    return [
+      ...(open ? [{ id: 'open', icon: 'open', label: 'Open', run: open }] : []),
+      { id: 'play', icon: 'play', label: 'Play Now', run: () => play('replace') },
+    ];
+  }
   return [
     ...(open ? [{ id: 'open', icon: 'open', label: 'Open', run: open }] : []),
     { id: 'play', icon: 'play', label: 'Play Now', run: () => play('play') },
@@ -248,17 +262,18 @@ export function mediaActions(play: (enq: Enqueue | 'remove') => void, open: (() 
     // these two replace what everyone is hearing: the caller shows a confirmation first
     { id: 'replace', icon: 'play', label: 'Play Now', run: () => ask('replace') },
     // Start radio only where MA can seed it (track / artist / album; never a station, podcast, audiobook or playlist)
-    ...(radio ? [{ id: 'radio', icon: 'tower', label: 'Start radio…', run: () => ask('radio') }] : []),
+    ...(seedRadio ? [{ id: 'radio', icon: 'tower', label: 'Start radio…', run: () => ask('radio') }] : []),
   ];
 }
 /** Tap on a playable item (track, station, episode, audiobook): a small sheet, nothing plays until a choice is made. */
 export function tapActions(play: (enq: Enqueue | 'remove') => void, radioStation = false): MenuAction[] {
+  if (radioStation) {
+    return [{ id: 'play', icon: 'play', label: 'Play Now', run: () => play('replace') }];
+  }
   return [
     { id: 'play', icon: 'play', label: 'Play Now', run: () => play('play') },
-    ...(radioStation ? [] : [
-      { id: 'next', icon: 'qnext', label: 'Play Next', run: () => play('next') },
-      { id: 'remove', icon: 'trash', label: 'Remove', run: () => play('remove') },
-    ]),
+    { id: 'next', icon: 'qnext', label: 'Play Next', run: () => play('next') },
+    { id: 'remove', icon: 'trash', label: 'Remove', run: () => play('remove') },
   ];
 }
 /* ---------------- row actions: Play Next / Play Now / Remove / Start radio ---------------- */
@@ -274,12 +289,14 @@ const RA: Record<RowAct, { icon: string; title: string; label: (n: string) => st
   replace: { icon: 'play', title: QUEUE_ACTION_LABELS.replace, label: (n) => `Play ${n} now` },
   radio: { icon: 'tower', title: 'Start radio', label: (n) => `Start radio from ${n}` },
 };
-/** Every queueing surface uses the same three visible labels, in this order. */
-export function rowActsTpl(it: MaItem, radio: boolean, run: (a: RowAct | 'more', el: HTMLElement) => void) {
-  const acts: RowAct[] = [...QUEUE_ACTIONS, ...(radio ? ['radio' as const] : [])];
+/** Every queueing surface uses the same three visible labels, in this order.
+ *  Radio stations: only Play Now (replace). No Play Next, add-to-queue, Remove, or Start radio. */
+export function rowActsTpl(it: MaItem, seedRadio: boolean, run: (a: RowAct | 'more', el: HTMLElement) => void) {
+  const station = isRadio(it);
+  const acts: RowAct[] = station ? ['replace'] : [...QUEUE_ACTIONS, ...(seedRadio ? ['radio' as const] : [])];
   const b = (a: RowAct) => html`<button class="ra-b ${a === 'radio' ? 'x2' : ''}" data-act=${a} tabindex="-1" title=${RA[a].title}
     aria-label=${RA[a].label(it.name)} @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(a, e.currentTarget as HTMLElement); }}>${icon(RA[a].icon)}<span>${RA[a].title}</span></button>`;
-  return html`<div class="ra" data-n=${acts.length}>${acts.map(b)}${radio ? html`<button class="ra-b ra-more" data-act="more" tabindex="-1" title="More"
+  return html`<div class="ra" data-n=${acts.length}>${acts.map(b)}${!station && seedRadio ? html`<button class="ra-b ra-more" data-act="more" tabindex="-1" title="More"
     aria-label="More actions for ${it.name}" @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run('more', e.currentTarget as HTMLElement); }}>${icon('more')}<span>More</span></button>` : nothing}</div>`;
 }
 /** One labeled queue button for the Queue tab's exact queue-row handlers. */

@@ -4,7 +4,7 @@ import { icon } from './icons';
 import { providerLabel } from './providers';
 import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl,
-  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, rowActsTpl, foldedActions, confirmTpl, drillable,
+  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, confirmTpl, drillable,
   type MenuAction, type MenuPos, type RowAct, type ConfirmState,
 } from './shared';
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem } from './types';
@@ -264,6 +264,7 @@ export class JbDetail extends LitElement {
   async play(it: MaItem, type: string, enqueue: Enqueue = 'play', radio = false) {
     if (!this.hass) return;
     this.closeMenu();
+    if (type === 'radio' || isRadio(it)) enqueue = 'replace';
     try {
       const r = await playMedia(this.hass, this.config, it, this.mt(it, type), enqueue, radio);
       if (!r) return;
@@ -302,12 +303,13 @@ export class JbDetail extends LitElement {
     if (type !== 'track' && type !== 'podcast_episode' && drillable(type, this.config)) { this.press.release(); fire(this, 'jb-nav', { op: 'push', item: it, type }); return; }
     this._sel = this._sel === key ? '' : key;
   }
-  /** Play Next and Remove act at once; Play Now and Start radio ask first. */
+  /** Play Next and Remove act at once; Play Now and Start radio ask first. Radio Play Now replaces immediately. */
   private rowAct(it: MaItem, type: string, a: RowAct | 'more', el: HTMLElement) {
     const ask = (k: RowAct) => {
       this.closeMenu();
       if (k === 'next') { this.play(it, type, k); return; }
       if (k === 'remove') { void this.removeRow(it, type); return; }
+      if ((type === 'radio' || isRadio(it)) && k === 'replace') { this.play(it, type, 'replace'); return; }
       this._confirm = { kind: k, item: it, run: () => this.play(it, type, 'replace', k === 'radio') };
     };
     if (a !== 'more') { ask(a); return; }
@@ -456,6 +458,11 @@ export class JbDetail extends LitElement {
       padding-bottom: calc(16px + var(--jb-fab-space, 0px)); scroll-padding-bottom: var(--jb-fab-space, 0px); }
     .scroll::-webkit-scrollbar { display: none; }
     .detail { display: flex; flex-direction: column; gap: 14px; }
+    /* Station-only actions: keep Play Now on one line and fully inside its row. */
+    .row[data-type="radio"] { min-height: 68px; }
+    .row[data-type="radio"] .ra-b[data-act="replace"] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      width: auto; min-width: 72px; height: auto; min-height: 56px; padding: 6px; font-size: 13px; line-height: 1.2; }
+    .row[data-type="radio"] .ra-b[data-act="replace"] span { white-space: nowrap; }
     .nav { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .back { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px 0 12px; border-radius: 999px; background: #ffffff14;
       border: 1px solid #ffffff33; color: #fff; font-weight: 700; font-size: 15px; }
