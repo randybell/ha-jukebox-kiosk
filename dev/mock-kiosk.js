@@ -6,7 +6,7 @@ import { createV07 } from './mock-v07.js';
 //   jukebox_kiosk/capabilities, /ma {command,args} (music/favorites/* need kcaps library_write, like the library class), /queue_items, /item_tracks,
 //   /unfavorite_current, /subscribe_queue, /set_autoplay, /autoplay_options, /set_autoplay_mode
 // The /ma allowlist mirrors const.py MA_COMMANDS; metadata/get_track_lyrics refuses library tracks like the server.
-const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item)|browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks|genres\/library_items|in_progress_items)|metadata\/get_track_lyrics)$/;
+const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|players\/sleep_timer\/(get|set|clear)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item)|browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks|genres\/library_items|in_progress_items)|metadata\/get_track_lyrics)$/;
 const V07 = /^music\/(browse|recommendations|recommendations\/items|genres\/overview|genres\/tracks|genres\/library_items)$/;
 const MUTATING = /^player_queues\/(play_index|move_item|delete_item|play_media|transfer)$/;
 const FEATURES = { queue: true, queue_play: true, queue_edit: true, undo: true, ma_commands: true, lyrics: true, track_lists: true,

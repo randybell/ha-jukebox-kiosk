@@ -153,9 +153,36 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   const bufOf = (Q) => (typeof Q.buf === 'number' ? Q.buf : Q.index + (params.get('qbuf') === '1' ? 1 : 0));
   const boundary = (Q) => Math.max(Q.index, bufOf(Q));
   const qEnt = (qid) => { if (G[qid] && QS[G[qid].entity]) return G[qid].entity; const e = Object.keys(QS).find((x) => st(x)?.attributes?.active_queue === qid); if (!e) throw new Error(`PlayerUnavailableError: queue ${qid}`); return e; };
+  // players/sleep_timer/* — server-side expiry (unix seconds). Survives screen sleep like live MA.
+  const sleepTimers = (window.__sleepTimers = new Map()); // player_id -> expires_at
+  const sleepTask = new Map(); // player_id -> timeout id
+  function clearSleep(pid) {
+    const t = sleepTask.get(pid); if (t) clearTimeout(t); sleepTask.delete(pid); sleepTimers.delete(pid);
+  }
+  function armSleep(pid, seconds) {
+    clearSleep(pid);
+    const expires = Date.now() / 1000 + seconds;
+    sleepTimers.set(pid, expires);
+    sleepTask.set(pid, setTimeout(() => {
+      sleepTask.delete(pid); sleepTimers.delete(pid);
+      // live MA stops the player; mirror with players/cmd/stop semantics
+      try {
+        if (G[pid]) stopGroup(pid, 'sleep_timer');
+        else if (NAME[pid]) release(pid, undefined, 'sleep_timer');
+        else {
+          // HA entity whose active_queue is this player
+          const e = Object.keys(QS).find((x) => st(x)?.attributes?.active_queue === pid) ?? EVERY;
+          setState(e, 'paused');
+        }
+        syncHa(); commit();
+      } catch (err) { console.warn('mock sleep expire', err); }
+    }, seconds * 1000));
+    return expires;
+  }
+
   async function command(cmd, d) {
     log.push({ t: Math.round(performance.now()), command: cmd, data: structuredClone(d) });
-    if (cmd !== 'players/all' && cmd !== 'config/players/get' && cmd !== 'player_queues/get') window.__calls.push({ t: Math.round(performance.now()), domain: 'mass_queue', service: 'send_command', data: { command: cmd, data: structuredClone(d) } });
+    if (cmd !== 'players/all' && cmd !== 'config/players/get' && cmd !== 'player_queues/get' && cmd !== 'players/sleep_timer/get') window.__calls.push({ t: Math.round(performance.now()), domain: 'mass_queue', service: 'send_command', data: { command: cmd, data: structuredClone(d) } });
     await sleep(MALAT);
     switch (cmd) {
       case 'players/all': return players();
@@ -286,6 +313,21 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
         else if (NAME[p]) release(p, undefined, 'stop');
         else throw new Error(`Unknown player ${p}`);
         syncHa(); commit();
+        return null;
+      }
+      case 'players/sleep_timer/get': {
+        if (!d.player_id) throw new Error('player_id required');
+        return sleepTimers.has(d.player_id) ? sleepTimers.get(d.player_id) : null;
+      }
+      case 'players/sleep_timer/set': {
+        if (!d.player_id) throw new Error('player_id required');
+        const sec = Number(d.seconds);
+        if (!(sec > 0)) throw new Error('Sleep timer duration must be greater than zero seconds');
+        return armSleep(d.player_id, sec);
+      }
+      case 'players/sleep_timer/clear': {
+        if (!d.player_id) throw new Error('player_id required');
+        clearSleep(d.player_id);
         return null;
       }
       default: throw new Error(`mock-ma: unhandled ${cmd}`);
