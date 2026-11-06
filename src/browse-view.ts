@@ -899,6 +899,9 @@ export class JbBrowse extends LitElement {
     .big.circ { border-radius: 50%; }
     .tw .pv { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); }
     .tile.artist .tw .pv { left: 50%; transform: translateX(-50%); bottom: 2px; }
+    /* Playlist artwork (including lettering near its lower edge) must not sit behind a provider badge. */
+    .tile[data-type="playlist"] .tw .pv { position: static; display: block; margin-top: 6px; max-width: 100%; }
+    .tile[data-type="playlist"] b { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
     .tw .open { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #000000a0; color: #fff; }
     .tw .open .i { width: 20px; height: 20px; }
     .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #000000a0; color: #ffffffb3; }
