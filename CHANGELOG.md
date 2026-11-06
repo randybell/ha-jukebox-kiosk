@@ -4,6 +4,11 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.7.7 — 2026-11-05
+
+### Changed
+- **Library keyboard.** Restores the v0.7.4 always-open on-screen keyboard on tablets and touchscreen monitors: 7 columns when narrow, 10 columns with a number row when wide. On a landscape tablet the keyboard sits on the left with search and results beside it; on a portrait tablet the keyboard sits under the results. The 0.7.5 filled 6×5 side grid is gone. Theme, colours and fonts are unchanged. Everything else from 0.7.5 and 0.7.6 stays.
+
 ## 0.7.6 — 2026-11-05
 
 ### Added
