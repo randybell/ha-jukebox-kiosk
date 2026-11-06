@@ -4,7 +4,10 @@ const h = (s) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7) >>> 
 const PAL = [['#ff2e7e', '#ff9a3d'], ['#3b2cff', '#00d4c4'], ['#ffd23f', '#ff4f8b'], ['#00b37e', '#1e3cff'], ['#c42fd8', '#ffd23f'], ['#0fd1ff', '#ff2e7e']];
 export function svgFor(key, label = '') {
   const [a, b] = PAL[h(key) % PAL.length];
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="400" height="400" fill="url(#g)"/><circle cx="${100 + (h(key) % 200)}" cy="${120 + (h(key + 'y') % 160)}" r="90" fill="#fff" opacity=".22"/>${label ? `<text x="200" y="230" text-anchor="middle" font-family="Helvetica,Arial" font-weight="800" font-size="64" fill="#fff" opacity=".92">${label}</text>` : ''}</svg>`;
+  const cx = 100 + (h(key) % 200), cy = 120 + (h(key + 'y') % 160);
+  // The Now Playing mock note belongs at the circle's centre, not the canvas centre.
+  const note = label === '♪';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="400" height="400" fill="url(#g)"/><circle cx="${cx}" cy="${cy}" r="90" fill="#fff" opacity=".22"/>${label ? `<text x="${note ? cx : 200}" y="${note ? cy : 230}" ${note ? 'dominant-baseline="central" dy="-4"' : ''} text-anchor="middle" font-family="Helvetica,Arial" font-weight="800" font-size="64" fill="#fff" opacity=".92">${label}</text>` : ''}</svg>`;
 }
 export async function hermetic(page, { dead = [] } = {}) {
   page.__img = [];

@@ -45,6 +45,9 @@ async function rectOf(page, expr) {
   }, expr);
 }
 async function tap(page, expr) {
+  // Touch-sized queue rows can place a target below the scroll viewport.
+  // Bring that same target into view before a real pointer tap; retain all assertions.
+  await page.evaluate((expr) => eval(expr)?.closest('.qr')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }), expr);
   const r = await rectOf(page, expr);
   if (!r || !r.w) throw new Error('no element to tap: ' + expr);
   await page.mouse.click(r.x, r.y);

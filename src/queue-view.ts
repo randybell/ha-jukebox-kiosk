@@ -312,7 +312,7 @@ export class JbQueue extends LitElement {
 
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
-    .qx { position: relative; height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 16px var(--_pad) 14px; max-width: 1100px; margin: 0 auto; }
+    .qx { position: relative; height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 16px var(--_pad) 14px; width: 100%; }
     .head { display: flex; align-items: baseline; gap: 12px; }
     h2 { font-family: var(--_font-display); font-size: 28px; font-weight: 800; }
     .cnt { font-size: 14px; color: var(--_muted); }
@@ -353,7 +353,7 @@ export class JbQueue extends LitElement {
     .scroll::-webkit-scrollbar { display: none; }
     h3.eyebrow { font-size: 11px; color: var(--_inactive); margin: 12px 6px 6px; }
     h3.eyebrow:first-child { margin-top: 2px; }
-    .qr { display: grid; grid-template-columns: 28px 48px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 64px; padding: 0 8px; border-radius: 12px; cursor: pointer; }
+    .qr { display: grid; grid-template-columns: 28px 48px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 72px; padding: 6px 8px; border-radius: 12px; cursor: pointer; }
     .qr + .qr { border-top: 1px solid var(--_divider); }
     .qr .th { width: 48px; height: 48px; }
     .n { font-size: 13px; color: var(--_inactive); text-align: center; font-variant-numeric: tabular-nums; }
@@ -368,7 +368,9 @@ export class JbQueue extends LitElement {
     .qr.past { opacity: .45; }
     .qr.held { background: #ffffff1f; box-shadow: inset 0 0 0 1.5px #fff; }
     .acts { display: flex; gap: 2px; align-items: center; }
-    .qr .ra-b { flex-direction: row; min-width: 44px; min-height: 44px; padding: 5px 4px; font-size: 9px; }
+    .qr .ra-b { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; flex: none;
+      width: auto; min-width: 76px; min-height: 60px; height: auto; padding: 6px; font-size: 14px; font-weight: 700; line-height: 1.2; }
+    .qr .ra-b span { white-space: nowrap; }
     .qr .ra-b .i { flex: none; }
     .qsearch { align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
       border: 1px solid var(--_divider); color: #fff; font: inherit; font-size: 14px; font-weight: 700; }
@@ -402,13 +404,13 @@ export class JbQueue extends LitElement {
       .qa[data-action="up"], .qa[data-action="down"] { display: none; }
       .rt b { font-size: 15px; }
       /* Labeled queue actions stay visible; move actions use the existing responsive controls. */
-      .qr.jx { grid-template-columns: 20px 42px minmax(0, 1fr); grid-template-rows: 42px 44px; min-height: 104px; }
-      .qr.jx > .n { grid-column: 1; grid-row: 1; }
-      .qr.jx > .ar.th { grid-column: 2; grid-row: 1; }
-      .qr.jx .rt { grid-column: 3; grid-row: 1; }
-      .qr.jx .acts { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; }
+      .qr { grid-template-columns: 20px 42px minmax(0, 1fr); grid-template-rows: 42px 60px; min-height: 124px; }
+      .qr > .n { grid-column: 1; grid-row: 1; }
+      .qr > .ar.th { grid-column: 2; grid-row: 1; }
+      .qr .rt { grid-column: 3; grid-row: 1; }
+      .qr .acts { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; gap: 0; }
       .qsx { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "q" "res" "kb"; }
-      .qr.sr { grid-template-columns: 0 40px minmax(0, 1fr); grid-template-rows: 42px 44px; min-height: 104px; } .qr.sr .acts { grid-column: 2 / -1; justify-content: flex-end; }
+      .qr.sr { grid-template-columns: 0 40px minmax(0, 1fr); grid-template-rows: 42px 60px; min-height: 124px; } .qr.sr .acts { grid-column: 2 / -1; justify-content: flex-end; }
       .qr.jx .qa.mo { display: grid; }
       .qr.jx .acts { gap: 0; }
       /* the style sheet becomes a bottom sheet */

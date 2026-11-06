@@ -954,6 +954,12 @@ export class JbSearch extends LitElement {
     .ar.gen { display: grid; place-items: center; background: #ffffff14; color: #fff; box-shadow: 0 0 0 1px #ffffff33; }
     .ar.gen .i { width: 22px; height: 22px; }
     .ra.go { width: 48px; height: 48px; display: grid; place-items: center; color: var(--_inactive); }
+    /* Labeled search actions need their own height and enough width for an unbroken touch label. */
+    .row { min-height: 68px; }
+    .row .ra-b:is([data-act="next"], [data-act="replace"], [data-act="remove"]) { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      width: auto; min-width: 72px; height: auto; min-height: 56px; padding: 6px; font-size: 13px; line-height: 1.2; }
+    .row .ra-b:is([data-act="next"], [data-act="replace"], [data-act="remove"]) span { white-space: nowrap; }
+
     .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: 14px;
       padding: 12px 14px 24px; border-radius: var(--_radius); background: var(--_surface); border: 1px solid var(--_surface-border);
       -webkit-backdrop-filter: var(--jb-panel-filter, blur(14px)); backdrop-filter: var(--jb-panel-filter, blur(14px)); touch-action: pan-y; }
