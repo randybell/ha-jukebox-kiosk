@@ -324,12 +324,13 @@ for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobi
       for (let j = i + 1; j < k.length; j++) if (ov(parts[k[i]], parts[k[j]])) bad.push(k[i] + '/' + k[j]); }
     const t = s.querySelector('.srct'), cats = [...s.querySelectorAll('.lcats .lc')];
     return { bad, has: k, kbOpen: !s.querySelector('.sx').classList.contains('kb-hidden') && !s.querySelector('.kb-open'), expanded: t.getAttribute('aria-expanded'),
+      below: parts.q && parts.trig && parts.trig.t >= parts.q.b && Math.abs(parts.trig.l - parts.q.l) <= 1,
       beside: parts.q && parts.trig && parts.trig.l >= parts.q.r - 0.5 && parts.trig.t < parts.q.b && parts.q.t < parts.trig.b, trigH: parts.trig?.h ?? 0,
       label: t.getAttribute('aria-label'), icons: cats.every((c) => !!c.querySelector('svg')), catH: Math.min(...cats.map((c) => c.getBoundingClientRect().height)),
       cornerH: Math.min(...[...s.querySelectorAll('.lcorner .cn')].map((c) => c.getBoundingClientRect().height)), corner: [...s.querySelectorAll('.lcorner .cn')].map((c) => c.dataset.act) }; })()`;
   const c = await ev(p, geo);
-  check(`C1 [${vpName}] sources: one compact control beside the search box ("All sources"), collapsed; keyboard open; nothing overlapping`,
-    c.beside && c.trigH >= 44 && c.expanded === 'false' && c.label === 'Sources: All sources' && !c.has.includes('opts') && c.kbOpen && !c.bad.length, J(c));
+  check(`C1 [${vpName}] sources: one compact control on its tablet row (beside on phones), collapsed; keyboard open; nothing overlapping`,
+    (vp.width >= 700 ? c.below : c.beside) && c.trigH >= 44 && c.expanded === 'false' && c.label === 'Sources: All sources' && !c.has.includes('opts') && c.kbOpen && !c.bad.length, J(c));
   check(`C2 [${vpName}] category buttons: each has an icon, >= 44px tall; Favorites + sort are corner icons in the same row (no row of their own)`,
     c.icons && c.catH >= 44 && c.cornerH >= 44 && J(c.corner) === J(['lib-fav', 'lib-sort']) && !(await ev(p, `!!${BR}.querySelector('.bar')`)), J(c));
   await tap(p, `${SV}.querySelector('.srct')`);
@@ -370,6 +371,27 @@ for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobi
   check('C10 the sort corner icon cycles the sort (label follows)', s1 === 'Sort: A–Z' && s2 !== s1 && s2 === `Sort: ${await ev(p, `${SH}.browse.libTools().sort`)}`, J([s1, s2]));
   await tap(p, `${SV}.querySelector('.lcats .lc[data-lcat=genre]')`);
   check('C11 Genres: no Favorites icon (sort only)', await wait(p, `!${SV}.querySelector('[data-act=lib-fav]') && !!${SV}.querySelector('[data-act=lib-sort]')`));
+  await p.close();
+}
+
+// 0.7.7 surrounding-layout regression: full-width search, source row, no keyboard dead space, unobscured playlist art.
+for (const vp of [{ width: 1024, height: 600 }, { width: 820, height: 1180 }, { width: 1920, height: 1080 }]) {
+  const tag = `${vp.width}x${vp.height}`, p = await open('', {}, vp);
+  await wait(p, `${BR}.querySelectorAll('.tile[data-type=playlist]').length > 0`);
+  const g = await ev(p, `(() => {
+    const s = ${SV}, R = e => e.getBoundingClientRect(), q = R(s.querySelector('.qbar')), row = R(s.querySelector('.qrow')),
+      trig = R(s.querySelector('.srct')), ph = s.querySelector('.ph'), kb = s.querySelector('jb-keyboard'), kr = R(kb), hint = R(s.querySelector('.qmeta')),
+      res = R(s.querySelector('.res')), tiles = [...${BR}.querySelectorAll('.tile[data-type=playlist]')];
+    return { full: Math.abs(q.width - row.width) <= 1, below: trig.top >= q.bottom && Math.abs(trig.left - q.left) <= 1,
+      placeholder: ph.scrollWidth <= ph.clientWidth + 1, scale: R(s.querySelector('.sx')).width / s.querySelector('.sx').offsetWidth,
+      gap: innerWidth > innerHeight ? kr.top - hint.bottom : kr.top - res.bottom,
+      art: tiles.map(t => { const a = R(t.querySelector('.big')), b = R(t.querySelector('.pv')); return { square: Math.abs(a.width - a.height) < 1, clear: b.top >= a.bottom, badgeFits: b.left >= a.left && b.right <= a.right + 1 }; }),
+      columns: getComputedStyle(kb.shadowRoot.querySelector('.keys')).gridTemplateColumns.split(' ').length };
+  })()`);
+  check(`L1 ${tag}: full-width search and uncut placeholder; All sources on its own row`, g.full && g.below && g.placeholder, J(g));
+  check(`L2 ${tag}: keyboard follows the hint/results without empty dead space`, g.gap >= 0 && g.gap <= 14 * g.scale, J(g));
+  check(`L3 ${tag}: square playlist art and provider badge fully visible without overlap`, g.art.length > 0 && g.art.every(a => a.square && a.clear && a.badgeFits), J(g));
+  check(`L4 ${tag}: unchanged responsive keyboard grid`, g.columns === (vp.width > vp.height ? 7 : 10), J(g));
   await p.close();
 }
 

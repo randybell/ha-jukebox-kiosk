@@ -883,7 +883,7 @@ export class JbSearch extends LitElement {
       color: #ffffffc4; background: #00000066; border: 1.5px solid #ffffff2e; }
     .cn .i { width: 22px; height: 22px; } .cn small { font-size: 10px; font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
     .cn.on { background: #fff; color: #000; border-color: #fff; }
-    /* 0.7.3 compact sources control beside the search box; its choices open as a row under the box (no overlay) */
+    /* Compact sources control; its choices open as a row under the control (no overlay). */
     .qrow .srcs.srcc { display: flex; flex: none; flex-wrap: nowrap; margin-top: 0; overflow: visible; }
     .srct { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 168px; padding: 0 10px 0 12px; border-radius: 16px; font: inherit; font-size: 12.5px;
       font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #fff; background: var(--jb-panel-solid, #00000080); border: 1.5px solid #ffffff59; cursor: pointer; }
@@ -892,6 +892,14 @@ export class JbSearch extends LitElement {
     .srct .sti { width: 22px; height: 22px; flex: none; } .srct .stc { width: 20px; height: 20px; flex: none; margin-left: -2px; }
     .srct.on { background: #fff; color: #000; border-color: #fff; }
     .srct.open { border-color: #fff; box-shadow: 0 0 0 3px #ffffff47; }
+    /* Tablet/monitor: reserve the whole column for the search text. The source control has its own touch-sized row. */
+    @container np (min-width: 700px) {
+      .qrow { flex-direction: column; }
+      .qrow .qbar { flex: none; width: 100%; }
+      .qrow .srcs.srcc { align-self: flex-start; max-width: 100%; }
+      .qrow .srct { min-height: 44px; max-width: 100%; }
+      .qmeta { white-space: normal; overflow: visible; line-height: 1.35; }
+    }
     .lib { flex: 1; min-height: 0; display: flex; flex-direction: column; } .lib[hidden] { display: none; } .lib jb-browse { flex: 1; min-height: 0; }
     .lsec { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #ffffffb0; }
     .pbh { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; } .pbh b { font-size: 18px; } .recents { grid-area: rec; } .res { grid-area: res; } .kbd { grid-area: kb; }
@@ -966,10 +974,15 @@ export class JbSearch extends LitElement {
         --kh: clamp(56px, calc((100cqh - 200px) / 5 - 12px), 88px); --kgap: 10px; --kfs: clamp(22px, 2cqw, 26px); }
       /* the source buttons (two rows here) take room from the keys */
       .sx.srcs-on { --kh: clamp(44px, calc((100cqh - 300px) / 5 - 12px), 88px); }
-      .kbd { align-self: end; --jb-kb-handle-display: none; }
+      /* Keep the unchanged keyboard at the top of its available area, directly below the query/hint. */
+      .kbd { align-self: start; --jb-kb-handle-display: none; }
       .sx.kb-hidden .kbd { display: block; }
       .kb-open { display: none; }
       .sx.kb-hidden { --jb-fab-space: 0px; }
+    }
+    /* Empty recents must not reserve a second gap. Very short landscape keeps its separate side-by-side layout. */
+    @container np (orientation: landscape) and (min-width: 700px) and (min-height: 401px) {
+      .sx:has(> .recents:empty) { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "q res" "kb res"; }
     }
     @container np (orientation: landscape) and (max-height: 520px) {
       .sx, .sx.srcs-on { --kh: 46px; --kgap: 6px; } .recents { display: none; }
@@ -977,10 +990,11 @@ export class JbSearch extends LitElement {
     }
     /* short landscape (1024x600 under the HA toolbar): the recents are hidden, so drop their grid row (and its 12 px gap), and with the
        source buttons on size the keys to the room left under the search box so the keyboard always ends above the tab bar
-       (keys stay 46 px where there is room; 220px = padding + search box + source buttons + gap + keyboard padding and row gaps) */
+       (keys stay 46 px where there is room; the expanded choices also pay for the separate source-control row). */
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 520px) {
-      .sx { grid-template-rows: auto 1fr; grid-template-areas: "q res" "kb res"; }
-      .sx.srcs-on { --kh: clamp(36px, calc((100cqh - 220px) / 5), 46px); }
+      .sx { grid-template-rows: auto 1fr; grid-template-areas: "q res" "kb res";
+        --kh: clamp(28px, calc((100cqh - 220px) / 5), 46px); }
+      .sx.srcs-on { --kh: clamp(24px, calc((100cqh - 274px) / 5), 46px); }
     }
     /* very short landscape (phone on its side under the HA toolbar): keyboard alone on the left at full height,
        query above the results on the right, keys sized to the space so no row is clipped */
