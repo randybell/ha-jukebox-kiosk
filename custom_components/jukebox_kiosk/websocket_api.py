@@ -264,6 +264,7 @@ async def ws_capabilities(hass: HomeAssistant, connection: websocket_api.ActiveC
                 "genre_overview": has(PermClass.READ),
                 "podcast_library": has(PermClass.READ),
                 "audiobook_library": has(PermClass.READ),
+                "favorite": has(PermClass.LIBRARY),
                 "unfavorite": has(PermClass.LIBRARY),
                 "library_write": has(PermClass.LIBRARY),
                 "speakers": has(PermClass.SPEAKERS),
@@ -581,6 +582,31 @@ async def ws_item_tracks(hass: HomeAssistant, connection: websocket_api.ActiveCo
 
 
 @websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/favorite_current", probatio.Required("entity_id"): str}
+)
+@websocket_api.async_response
+@_wrap
+async def ws_favorite_current(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Add the playing item to favourites (the Now Playing heart; no button entity needed)."""
+    _e, policy, client = _context(hass)
+    user = connection.user
+    check_class(user, policy, PermClass.LIBRARY)
+    check_entity(user, msg["entity_id"], control=True)
+    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    queue = await _send(client, "player_queues/get", queue_id=queue_id) or {}
+    media = (queue.get("current_item") or {}).get("media_item") or {}
+    uri = media.get("uri") or ""
+    try:
+        fmt.parse_uri(uri)
+    except ValueError as err:
+        raise KioskError("not_found", "Nothing is playing") from err
+    await _send(client, "music/favorites/add_item", item=uri)
+    connection.send_result(msg["id"], {"uri": uri})
+
+
+@websocket_api.websocket_command(
     {probatio.Required("type"): f"{DOMAIN}/unfavorite_current", probatio.Required("entity_id"): str}
 )
 @websocket_api.async_response
@@ -646,6 +672,7 @@ HANDLERS = (
     ws_autoplay_options,
     ws_set_autoplay_mode,
     ws_item_tracks,
+    ws_favorite_current,
     ws_unfavorite_current,
     ws_subscribe_queue,
 )

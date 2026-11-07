@@ -18,7 +18,7 @@ const QV = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
 const NP = `__card.shadowRoot.querySelector('jb-now').shadowRoot`;
 const BR = `__card.shadowRoot.querySelector('jb-browse')`;
 const BDs = `${BR}.shadowRoot.querySelector('jb-detail')?.shadowRoot`;
-const LY = `__card.shadowRoot.querySelector('jb-lyrics[mode=tab]')`;
+const LY = `__card.shadowRoot.querySelector('jb-now')?.shadowRoot.querySelector('jb-lyrics')`; // the art overlay (there is no Lyrics tab)
 
 async function open(query = '', vp = { width: 1280, height: 800 }) {
   const page = await browser.newPage();
@@ -42,8 +42,8 @@ const ev = (page, expr) => page.evaluate((e) => eval(e), expr);
 const ws = (page, since = 0) => page.evaluate((n) => window.__ws.slice(n).map((m) => ({ ...m })), since);
 const nws = (page) => page.evaluate(() => window.__ws.length);
 const maOf = (msgs, cmd) => msgs.filter((m) => m.type === 'ma' && (!cmd || m.command === cmd));
-/** mass_queue / music_assistant service calls (none expected on the kiosk backend, except core playback services) */
-const mqCalls = (page) => page.evaluate(() => window.__calls.filter((c) => c.domain === 'mass_queue' && c.service !== 'send_command').map((c) => c.service));
+/** mass_queue service calls: the card no longer knows that integration, so there must never be any */
+const mqCalls = (page) => page.evaluate(() => window.__calls.filter((c) => c.domain === 'mass_queue').map((c) => c.service));
 const openQ = async (q = '') => { const p = await open(`&tab=queue${q}`); await wait(p, `${QV}.querySelectorAll('.qr.next').length > 3`); await sleep(150); return p; };
 const nextIds = (p) => ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`);
 const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_item_id)`);
@@ -96,7 +96,6 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   await ev(p, `(() => { const Q = window.__queues['${EV}']; Q.items.splice(Q.items.length - 1, 1); window.__kioskPush('${EV}'); })()`);
   await sleep(700);
   check('Q5 push without any card action → one more queue_items read', (await ws(p, n)).filter((x) => x.type === 'queue_items').length >= 1);
-  // (the mock MA logs its raw commands as mass_queue send_command; only real mass_queue services count here)
   check('Q6 still no mass_queue services', (await mqCalls(p)).length === 0, J(await mqCalls(p)));
   await p.close();
 }
@@ -124,11 +123,11 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
 }
 // ---------------- 4. lyrics ----------------
 {
-  const p = await open('&tab=lyrics');
+  const p = await open('&tab=now&overlay=1');
   const ok = await wait(p, `${LY}?.dataset.status === 'synced' || ${LY}?.dataset.status === 'plain'`, 8000);
   const m = maOf(await ws(p));
   const lyr = m.filter((x) => x.command === 'metadata/get_track_lyrics').map((x) => x.args.track);
-  check('L1 lyrics tab shows lyrics on the kiosk backend', ok, await ev(p, `${LY}?.dataset.status`));
+  check('L1 the art lyrics overlay shows lyrics on the kiosk backend', ok, await ev(p, `${LY}?.dataset.status`));
   check('L2 the library track is never sent to get_track_lyrics; the queue\'s provider copy is (player_queues/get)',
     lyr.length >= 1 && lyr.every((t) => t.provider !== 'library' && !String(t.uri).startsWith('library://')) && m.some((x) => x.command === 'player_queues/get'), J(lyr.map((t) => t.uri)));
   const byUri = m.filter((x) => x.command === 'music/item_by_uri').map((x) => x.args);
@@ -144,7 +143,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const acts = await ev(p, `[...${QV}.querySelectorAll('.qr .qa')].filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.dataset.action ?? 'more')`);
   check('G1 no queue_play / queue_edit → no Play Now / Play Next / Move / Remove icons', !acts.some((a) => ['playnow', 'playnext', 'up', 'down', 'remove'].includes(a)), J([...new Set(acts)]));
   const tabs = await ev(p, `[...__card.shadowRoot.querySelectorAll('.tab')].map((t) => t.dataset.tab)`);
-  check('G2 lyrics feature off → no Lyrics tab', !tabs.includes('lyrics') && tabs.includes('queue'), J(tabs));
+  check('G2 the bar is Now Playing, Library, (Search in the separate layout,) Queue — no Lyrics tab', J(tabs) === J(['now', 'browse', 'search', 'queue']), J(tabs));
   const n = await nws(p);
   await tap(p, `__card.shadowRoot.querySelector('.tab[data-tab="now"]')`); await sleep(300);
   await tap(p, `${NP}.querySelector('.tb.fv')`); await sleep(400);
@@ -184,12 +183,14 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
     !sent.some((c) => /set_members|transfer|cmd\/stop/.test(c)), J(sent));
   await p.close();
 }
-// ---------------- 6. explicit backend: mass_queue still wins over auto ----------------
+// ---------------- 6. explicit YAML backend: native wins over auto; mass_queue is gone ----------------
 {
-  const p = await open(`&cfg=${encodeURIComponent(J({ backend: 'mass_queue' }))}&tab=queue`);
+  const p = await open(`&cfg=${encodeURIComponent(J({ backend: 'native' }))}&tab=queue&admin=1`);
   await wait(p, `${QV}.querySelectorAll('.qr.next').length > 3`);
-  check('X1 backend: mass_queue with the integration loaded → legacy services, no kiosk queue reads',
-    (await ev(p, `__card.dataset.backend`)) === 'mass_queue' && (await ev(p, `window.__calls.some((c) => c.domain === 'mass_queue' && c.service === 'get_queue_items')`)) && !(await ws(p)).some((x) => x.type === 'queue_items'));
+  check('X1 backend: native with the integration loaded → core services, no kiosk queue reads',
+    (await ev(p, `__card.dataset.backend`)) === 'native' && !(await ws(p)).some((x) => x.type === 'queue_items'), await ev(p, `__card.dataset.backend`));
+  const err = await ev(p, `(() => { try { __card.setConfig({ ...__card._config, backend: 'mass_queue' }); return ''; } catch (e) { return e.message; } })()`);
+  check('X2 backend: mass_queue is refused as an unknown value (no fallback)', /backend/.test(err), err);
   await p.close();
 }
 // ---------------- 7. 0.6.2 Search radio heart (library class): favourite a station from Search ----------------

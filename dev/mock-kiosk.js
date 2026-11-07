@@ -1,16 +1,17 @@
 import { createV07 } from './mock-v07.js';
 // Mock of the jukebox_kiosk integration's WebSocket API (custom_components/jukebox_kiosk/websocket_api.py) for the dev
-// harness: ?kiosk=1 adds hass.config.components ['music_assistant', 'jukebox_kiosk'], hass.callWS and hass.connection.
+// harness (on unless ?kiosk=0) adds hass.config.components ['music_assistant', 'jukebox_kiosk'], hass.callWS and hass.connection.
+// lyrlat=<ms>, lyrfail=perm|err: lyrics lookups (logged in __lyricsLog) are slow / fail.
 // kcaps=<json> overrides capability flags (e.g. {"queue_edit":false,"lyrics":false}); kfail=<type> makes that message type
 // throw. Every message is logged in window.__ws ({type, ...}). Placeholder ids only.
 //   jukebox_kiosk/capabilities, /ma {command,args} (music/favorites/* need kcaps library_write, like the library class), /queue_items, /item_tracks,
-//   /unfavorite_current, /subscribe_queue, /set_autoplay, /autoplay_options, /set_autoplay_mode
+//   /favorite_current, /unfavorite_current, /subscribe_queue, /set_autoplay, /autoplay_options, /set_autoplay_mode
 // The /ma allowlist mirrors const.py MA_COMMANDS; metadata/get_track_lyrics refuses library tracks like the server.
 const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|players\/sleep_timer\/(get|set|clear)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item)|browse|recommendations|recommendations\/items|recently_played_items|genres\/overview|genres\/tracks|genres\/library_items|in_progress_items)|metadata\/get_track_lyrics)$/;
 const V07 = /^music\/(browse|recommendations|recommendations\/items|recently_played_items|genres\/overview|genres\/tracks|genres\/library_items)$/;
 const MUTATING = /^player_queues\/(play_index|move_item|delete_item|play_media|transfer)$/;
 const FEATURES = { queue: true, queue_play: true, queue_edit: true, undo: true, ma_commands: true, lyrics: true, track_lists: true,
-  podcast_episodes: true, unfavorite: true, library_write: false, speakers: true, group_configs: true, queue_push: true,
+  podcast_episodes: true, favorite: true, unfavorite: true, library_write: false, speakers: true, group_configs: true, queue_push: true,
   // v0.7 (read class): genres, Radio Browser "Stations by…", Discover rows, resume positions
   genres: true, radio_browse: true, discover: true, resume: true,
   // 0.7.2: the Search source picker (jukebox_kiosk/search_providers)
@@ -52,6 +53,13 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
 
   async function maCmd(command, args) {
     if (!ALLOW.test(command)) throw err('not_allowed', `Command ${command} is not allowed`);
+    // lyrics lookups: their own log (window.__lyricsLog), lyrlat=<ms> latency (default 40), lyrfail=perm|err makes them fail
+    if (command === 'metadata/get_track_lyrics' || command === 'music/item_by_uri') {
+      window.__lyricsLog.push({ t: Math.round(performance.now()), data: { command, data: structuredClone(args ?? {}) } });
+      await sleep(Number(params.get('lyrlat') ?? 40));
+      if (params.get('lyrfail') === 'perm') throw err('unauthorized', 'Unauthorized');
+      if (params.get('lyrfail') === 'err') throw err('home_assistant_error', 'Music Assistant: provider unavailable');
+    }
     if (!features.ma_commands) throw err('unauthorized', 'Unauthorized');
     if (command === 'metadata/get_track_lyrics') {
       if (!features.lyrics) throw err('unauthorized', 'Unauthorized');
@@ -108,7 +116,7 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
     await sleep(20);
     if (kfail === t) throw err('home_assistant_error', `mock: ${t} failed`);
     switch (t) {
-      case 'capabilities': return { version: '0.6.0', ma_entry_id: 'MA_ENTRY_ID_PLACEHOLDER', ma_connected: true, guest: false, classes: ['library', 'playback', 'queue', 'read', 'speakers'], commands: [], todo_verify: [], features };
+      case 'capabilities': return { version: '0.6.0', ma_entry_id: '01MUSICASSISTANT0000000000', ma_connected: true, guest: false, classes: ['library', 'playback', 'queue', 'read', 'speakers'], commands: [], todo_verify: [], features };
       case 'ma': return maCmd(String(msg.command), msg.args ?? {});
       // like websocket_api.search_providers(): available music/plugin providers with the search feature, by name
       case 'search_providers': return { providers: DEMO_PROVIDERS.filter((p) => ['music', 'plugin'].includes(p.type) && p.available && p.supported_features.includes('search'))
@@ -157,6 +165,14 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
           media_image: x.image ?? '', favorite: !!x.favorite, media_album_name: x.album?.name ?? '', media_artist: (x.artists ?? []).map((a) => a.name).join(', '), position: i }));
         const rows = all.slice((page - 1) * size, page * size);
         return { tracks: rows, total: all.length, page, more: page * size < all.length };
+      }
+      case 'favorite_current': {
+        // like the server: the Library class (library_write here) and something playing
+        if (!features.library_write) throw err('unauthorized', 'Unauthorized');
+        const Q = QS[msg.entity_id]; const cur = Q?.items[Q.index];
+        if (!cur) throw err('not_found', 'Nothing is playing');
+        cur._t.favorite = true; commit();
+        return { uri: cur._t.uri };
       }
       case 'unfavorite_current': {
         if (!features.unfavorite) throw err('unauthorized', 'Unauthorized');

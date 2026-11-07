@@ -29,7 +29,6 @@ async function open(pg, q, page = 'index.html') {
   await sleep(150);
 }
 const SEL = {
-  tab: `__card.shadowRoot.querySelector('jb-lyrics[mode=tab]')`,
   ovl: `__card.shadowRoot.querySelector('jb-now')?.shadowRoot.querySelector('jb-lyrics')`,
   stage: `__card.shadowRoot.querySelector('.amb.stage jb-lyrics')`,
   saver: `__card.shadowRoot.querySelector('.amb.saver jb-lyrics')`,
@@ -54,44 +53,36 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   let k = -1; ts.forEach((t, i) => { if (t <= pos) k = i; }); return { k, pos };
 }, sel);
 
-// ---------------- 1. tabs, surfaces, shared lookup ----------------
+// ---------------- 1. the art overlay, shared lookup (0.7.9 #58: there is no Lyrics tab) ----------------
+const isOpen = (pg) => pg.evaluate((s) => !!eval(s), SEL.ovl);
+const lyrBtn = (pg) => pg.evaluate((s) => { const b = eval(s).querySelector('.ab.lyr').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }, SEL.now);
 {
   const pg = await newPage();
-  await open(pg, '&tab=lyrics');
+  await open(pg, '&tab=now');
   const tabs = await pg.evaluate(() => [...__card.shadowRoot.querySelectorAll('.tab')].map((t) => t.dataset.tab));
-  check('T1 5th tab "lyrics" after Queue by default', J(tabs) === J(['now', 'browse', 'search', 'queue', 'lyrics']), J(tabs));
-  const ok = await waitStatus(pg, SEL.tab, 'synced');
-  check('T2 Lyrics tab: So What → synced (item_by_uri → get_track_lyrics)', ok && J(await lyrCmds(pg)) === J(['music/item_by_uri', 'metadata/get_track_lyrics']), J(await lyrCmds(pg)));
-  const sc = await pg.evaluate((s) => { const c = eval(s).shadowRoot; return { lines: c.querySelectorAll('.ln').length, curEl: c.querySelectorAll('.ln.cur').length, hdr: c.querySelector('.hd b')?.textContent, chip: !!c.querySelector('.chip') }; }, SEL.tab);
-  check('T3 tab header shows title, one highlighted line, no Unsynced chip for synced', sc.lines > 40 && sc.curEl === 1 && sc.hdr === 'So What' && !sc.chip, J(sc));
-  const call0 = await pg.evaluate(() => __lyricsCalls()[0]);
-  check('T4 send_command uses mass_queue_entry_id + return_response', call0.domain === 'mass_queue' && call0.returnResponse === true && call0.data.config_entry_id === '01MASSQUEUE0000000000000000' && call0.data.data.uri.startsWith('library://track/'));
-  // current line follows interpolated position
-  let curOk = false, info = '';
-  for (let k = 0; k < 4 && !curOk; k++) { const e = await expectedCur(pg, SEL.tab); const c = await cur(pg, SEL.tab); curOk = c === e.k; info = `cur=${c} expected=${e.k} pos=${e.pos.toFixed(2)}`; if (!curOk) await sleep(120); }
-  check('T5 current line = last line with t <= interpolated position + 0.5 s', curOk, info);
-  // centred
-  const cen = await pg.evaluate((s) => { const r = eval(s).shadowRoot; const sc = r.querySelector('.sc').getBoundingClientRect(); const c = r.querySelector('.ln.cur').getBoundingClientRect(); return Math.abs((c.top + c.height / 2) - (sc.top + sc.height / 2)); }, SEL.tab);
-  check('T6 current line is scrolled to the middle of the view', cen < 60, `off by ${cen.toFixed(0)} px`);
-  // advances by itself: jump the mock to 2 s before a line and wait
-  const nxt = await pg.evaluate((s) => { const ln = [...eval(s).shadowRoot.querySelectorAll('.ln')].find((l) => Number(l.dataset.t) > 200 && l.textContent.trim() !== '♪'); return { i: Number(ln.dataset.i), t: Number(ln.dataset.t) }; }, SEL.tab);
-  await pg.evaluate((t) => __hass.callService('media_player', 'media_seek', { seek_position: t - 1.8 }, { entity_id: 'media_player.everywhere' }), nxt.t);
-  await sleep(300);
-  const before = await cur(pg, SEL.tab);
-  await sleep(1900);
-  const after = await cur(pg, SEL.tab);
-  check('T7 highlight advances on time without hass updates (timer to the next line)', before === nxt.i - 1 && after === nxt.i, `before=${before} after=${after} want ${nxt.i - 1}→${nxt.i}`);
-  // switch tabs: Now Playing overlay off by default, toggle on → same store, no new lookup
-  await pg.evaluate(() => __card.shadowRoot.querySelector('.tab[data-tab=now]').click());
-  await sleep(250);
+  check('T1 no Lyrics tab: the bar is Now Playing, Library, Search (separate layout), Queue', J(tabs) === J(['now', 'browse', 'search', 'queue']) && !(await pg.evaluate(() => !!__card.shadowRoot.querySelector('jb-lyrics[mode=tab]'))), J(tabs));
   const btns = await pg.evaluate((s) => { const r = eval(s); const b = r.querySelector('.ab.lyr'); return { lyr: !!b, on: b?.classList.contains('on'), pressed: b?.getAttribute('aria-pressed'), stg: !!r.querySelector('.ab.stg'), ovl: !!r.querySelector('jb-lyrics') }; }, SEL.now);
   check('O1 Now Playing: lyrics + full-screen buttons on the art, overlay off by default', btns.lyr && btns.stg && !btns.on && btns.pressed === 'false' && !btns.ovl, J(btns));
   const bx = await pg.evaluate((s) => { const r = eval(s).querySelector('.ab.lyr').getBoundingClientRect(); const a = eval(s).querySelector('.art').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, topRight: r.right > a.right - 140 && r.top < a.top + 80 }; }, SEL.now);
   await pg.mouse.click(bx.x, bx.y);
   await sleep(300);
   const on = await pg.evaluate((s) => ({ on: eval(s).querySelector('.ab.lyr').classList.contains('on'), ls: localStorage.getItem('jukebox-card:lyrics-overlay:v1') }), SEL.now);
-  check('O2 toggle (top right of the art) turns the overlay on, stored per device in localStorage', on.on && on.ls === '1' && bx.topRight && (await status(pg, SEL.ovl)) === 'synced', J(on));
-  check('O3 overlay, tab and card share one lookup (still 2 calls)', (await lyrCmds(pg)).length === 2, J(await lyrCmds(pg)));
+  const ok = await waitStatus(pg, SEL.ovl, 'synced');
+  check('O2 toggle (top right of the art) turns the overlay on, stored per device in localStorage', on.on && on.ls === '1' && bx.topRight && ok, J(on));
+  check('T2 overlay: So What → synced (item_by_uri → get_track_lyrics)', ok && J(await lyrCmds(pg)) === J(['music/item_by_uri', 'metadata/get_track_lyrics']), J(await lyrCmds(pg)));
+  const viaKiosk = await pg.evaluate(() => window.__ws.filter((m) => m.type === 'ma' && m.command === 'metadata/get_track_lyrics').length);
+  check('T4 lyrics are looked up through jukebox_kiosk/ma (no other integration)', viaKiosk >= 1 && !(await pg.evaluate(() => __calls.some((c) => c.domain === 'mass_queue'))), String(viaKiosk));
+  let curOk = false, info = '';
+  for (let k = 0; k < 4 && !curOk; k++) { const e = await expectedCur(pg, SEL.ovl); const c = await cur(pg, SEL.ovl); curOk = c === e.k; info = `cur=${c} expected=${e.k} pos=${e.pos.toFixed(2)}`; if (!curOk) await sleep(150); }
+  check('T5 current line = last line with t <= interpolated position + 0.5 s', curOk, info);
+  const nxt = await pg.evaluate((s) => { const ln = [...eval(s).shadowRoot.querySelectorAll('.ln')].find((l) => Number(l.dataset.t) > 200 && l.textContent.trim() !== '♪'); return { i: Number(ln.dataset.i), t: Number(ln.dataset.t) }; }, SEL.ovl);
+  await pg.evaluate((t) => __hass.callService('media_player', 'media_seek', { seek_position: t - 1.8 }, { entity_id: 'media_player.everywhere' }), nxt.t);
+  await sleep(300);
+  const before = await cur(pg, SEL.ovl);
+  await sleep(1900);
+  const after = await cur(pg, SEL.ovl);
+  check('T7 highlight advances on time without hass updates (timer to the next line)', before === nxt.i - 1 && after === nxt.i, `before=${before} after=${after} want ${nxt.i - 1}→${nxt.i}`);
+  check('O3 overlay and card share one lookup (still 2 calls)', (await lyrCmds(pg)).length === 2, J(await lyrCmds(pg)));
   const bg = await pg.evaluate((s) => getComputedStyle(eval(s).querySelector('.ab.lyr')).backgroundColor, SEL.now);
   check('O4 active toggle is white (Black Frame Mono)', /rgb\(255, 255, 255\)|rgba\(255, 255, 255, 1\)/.test(bg), bg);
   await pg.goto(`${ROOT}index.html?keeplyrics=1&latency=40&layout=separate&tab=now`); await pg.waitForFunction('window.__ready === true'); await sleep(300);
@@ -103,145 +94,75 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   await pg.close();
 }
 
-// ---------------- 2. long-press seek vs tap ----------------
+// ---------------- 2. long-press seek vs tap (on the art overlay) ----------------
 {
   const pg = await newPage();
-  await open(pg, '&tab=lyrics');
-  await waitStatus(pg, SEL.tab, 'synced');
+  await open(pg, '&tab=now&overlay=1');
+  await waitStatus(pg, SEL.ovl, 'synced');
   await sleep(600);
-  const c = await cur(pg, SEL.tab);
-  const target = c + 2;
-  let L = await lineBox(pg, SEL.tab, target);
-  // 0.7.8 #49: a plain tap returns to Now Playing (and never seeks)
-  const tabNow = () => pg.evaluate(() => __card._tab);
-  const back = async () => { await pg.evaluate(() => __card.shadowRoot.querySelector('.tab[data-tab=lyrics]').click()); await waitStatus(pg, SEL.tab, 'synced'); await sleep(600); L = await lineBox(pg, SEL.tab, target); };
+  const c = await cur(pg, SEL.ovl);
+  const target = c + 1;
+  let L = await lineBox(pg, SEL.ovl, target);
+  const reopen = async () => { const b = await lyrBtn(pg); await pg.mouse.click(b.x, b.y); await waitStatus(pg, SEL.ovl, 'synced'); await sleep(600); L = await lineBox(pg, SEL.ovl, target); };
   await pg.mouse.click(L.x, L.y);
   await sleep(700);
-  check('P1 tap on a synced line does not seek, and returns to Now Playing (#49)', (await seeks(pg)).length === 0 && (await tabNow()) === 'now', await tabNow());
-  await back();
-  // short hold (250 ms): a tap too
+  check('P1 tap on a synced line does not seek, and closes the overlay', (await seeks(pg)).length === 0 && !(await isOpen(pg)));
+  await reopen();
   await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(250); await pg.mouse.up(); await sleep(600);
-  check('P2 short press (250 ms) does not seek (it is a tap: back to Now Playing)', (await seeks(pg)).length === 0 && (await tabNow()) === 'now', await tabNow());
-  await back();
-  // press + drag (scrolling): nothing
-  await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(120); await pg.mouse.move(L.x, L.y + 40, { steps: 4 }); await sleep(700); await pg.mouse.up(); await sleep(200);
-  check('P3 press then move > 10 px cancels the long-press, and a drag is not a tap (stays on Lyrics, #49)', (await seeks(pg)).length === 0 && (await tabNow()) === 'lyrics', await tabNow());
-  // hold feedback during the press
-  L = await lineBox(pg, SEL.tab, target);
+  check('P2 short press (250 ms) does not seek (it is a tap: the overlay closes)', (await seeks(pg)).length === 0 && !(await isOpen(pg)));
+  await reopen();
+  await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(120); await pg.mouse.move(L.x, L.y - 40, { steps: 4 }); await sleep(700); await pg.mouse.up(); await sleep(200);
+  check('P3 press then move > 10 px cancels the long-press, and a drag is not a tap (overlay stays open)', (await seeks(pg)).length === 0 && (await isOpen(pg)));
+  await sleep(1500);
+  L = await lineBox(pg, SEL.ovl, (await cur(pg, SEL.ovl)) + 1);
+  const tgt2 = Number(await pg.evaluate((s, y) => [...eval(s).shadowRoot.querySelectorAll('.ln')].find((l) => { const r = l.getBoundingClientRect(); return y >= r.top && y <= r.bottom; })?.dataset.i, SEL.ovl, L.y));
   await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(250);
-  const pressing = await pg.evaluate((s, i) => eval(s).shadowRoot.querySelector(`.ln[data-i="${i}"]`).classList.contains('press'), SEL.tab, target);
+  const pressing = await pg.evaluate((s, i) => !!eval(s).shadowRoot.querySelector(`.ln[data-i="${i}"]`)?.classList.contains('press'), SEL.ovl, tgt2);
   await sleep(500);
   const s1 = await seeks(pg);
-  const fb = await pg.evaluate((s, i) => { const r = eval(s).shadowRoot; return { flash: r.querySelector(`.ln[data-i="${i}"]`).classList.contains('flash'), toast: r.querySelector('.toast')?.textContent ?? '' }; }, SEL.tab, target);
+  const fb = await pg.evaluate((s, i) => { const r = eval(s).shadowRoot; return { flash: !!r.querySelector(`.ln[data-i="${i}"]`)?.classList.contains('flash'), toast: r.querySelector('.toast')?.textContent ?? '' }; }, SEL.ovl, tgt2);
   await pg.mouse.up(); await sleep(400);
   check('P4 visual feedback: line shows a hold bar while pressed', pressing);
   const want = Math.floor(L.t);
   check('P5 long-press (550 ms) → exactly one media_player.media_seek {seek_position: floor(line time)} on the card entity',
     s1.length === 1 && s1[0].domain === 'media_player' && s1[0].data.seek_position === want && J(s1[0].target) === J({ entity_id: 'media_player.everywhere' }), J(s1) + ` want ${want}`);
   check('P6 seek feedback: line flashes and "Jumped to m:ss" toast', fb.flash && fb.toast === `Jumped to ${Math.floor(want / 60)}:${String(want % 60).padStart(2, '0')}`, J(fb));
-  const after = await cur(pg, SEL.tab);
-  check('P7 after the seek the pressed line becomes current', after === target, `cur=${after} target=${target}`);
-  check('P8 releasing after a long-press does not trigger a second action (no seek, stays on Lyrics)', (await seeks(pg)).length === 1 && (await tabNow()) === 'lyrics', await tabNow());
-  // touch long-press at phone size
-  await pg.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
-  await pg.reload(); await pg.waitForFunction('window.__ready === true');
-  await waitStatus(pg, SEL.tab, 'synced'); await sleep(700);
-  const c2 = await cur(pg, SEL.tab);
-  const L2 = await lineBox(pg, SEL.tab, c2 + 1);
-  await pg.touchscreen.tap(L2.x, L2.y); await sleep(700);
-  check('P9 touch tap does not seek, returns to Now Playing (390x844)', (await seeks(pg)).length === 0 && (await tabNow()) === 'now', await tabNow());
-  await pg.evaluate(() => __card.shadowRoot.querySelector('.tab[data-tab=lyrics]').click()); await waitStatus(pg, SEL.tab, 'synced'); await sleep(700);
-  await pg.touchscreen.touchStart(L2.x, L2.y); await sleep(800); await pg.touchscreen.touchEnd(); await sleep(300);
-  const s2 = await seeks(pg);
-  check('P10 touch long-press seeks to that line (390x844)', s2.length === 1 && s2[0].data.seek_position === Math.floor(L2.t), J(s2.map((x) => x.data)));
-  // overlay long-press also works; Stage taps do not seek
+  check('P8 releasing after a long-press does not trigger a second action (no seek, overlay stays open)', (await seeks(pg)).length === 1 && (await isOpen(pg)));
   await pg.close();
 }
 
-// ---------------- 2b. #49 tap anywhere returns to the player ----------------
+// ---------------- 2b. the art overlay: a tap closes it, a drag does not ----------------
 {
-  const pg = await newPage();
-  const tabNow = () => pg.evaluate(() => __card._tab);
-  const center = (sel) => pg.evaluate((s) => { const r = eval(s).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, sel);
-  const LY = `${SEL.tab}.shadowRoot.querySelector('.ly')`;
-  await open(pg, '&tab=lyrics'); await waitStatus(pg, SEL.tab, 'synced'); await sleep(600);
-  // the header (track title) area is part of the lyrics body
-  let c = await center(`${SEL.tab}.shadowRoot.querySelector('.hd')`);
-  await pg.mouse.click(c.x, c.y); await sleep(400);
-  check('TP1 tap on the lyrics header/body → Now Playing', (await tabNow()) === 'now', await tabNow());
-  await pg.evaluate(() => __card.shadowRoot.querySelector('.tab[data-tab=lyrics]').click()); await waitStatus(pg, SEL.tab, 'synced'); await sleep(600);
-  // touch drag (scroll) is not a tap
-  await pg.setViewport({ width: 820, height: 1180, isMobile: true, hasTouch: true, deviceScaleFactor: 1 }); await sleep(400);
-  c = await center(LY);
-  const cdp = await pg.target().createCDPSession();
-  const tp = (type, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: c.x, y }] });
-  await tp('touchStart', c.y); for (let k = 1; k <= 8; k++) { await tp('touchMove', c.y - k * 12); await sleep(16); } await tp('touchEnd'); await sleep(500);
-  check('TP2 touch drag over the lyrics (scroll) stays on Lyrics', (await tabNow()) === 'lyrics', await tabNow());
-  // a tap that lands while the lyrics are still scrolling (ends a fling) does not count
-  await pg.evaluate((s) => { const sc = eval(s).shadowRoot.querySelector('.sc'); sc.dispatchEvent(new WheelEvent('wheel', { deltaY: 60, bubbles: true })); sc.scrollTop += 60; sc.dispatchEvent(new Event('scroll')); }, SEL.tab);
-  await pg.touchscreen.tap(c.x, c.y); await sleep(400);
-  check('TP3 a tap right after a scroll (stopping it) stays on Lyrics', (await tabNow()) === 'lyrics', await tabNow());
-  await sleep(400);
-  await pg.touchscreen.tap(c.x, c.y); await sleep(400);
-  check('TP4 a later plain touch tap → Now Playing', (await tabNow()) === 'now', await tabNow());
-  // the tab bar and the header keep their own behavior
-  await pg.evaluate(() => __card.shadowRoot.querySelector('.tab[data-tab=lyrics]').click()); await sleep(400);
-  c = await center(`__card.shadowRoot.querySelector('.tab[data-tab=queue]')`); await pg.touchscreen.tap(c.x, c.y); await sleep(400);
-  check('TP5 tab bar on the Lyrics screen: Queue tab opens Queue (not Now Playing)', (await tabNow()) === 'queue', await tabNow());
-  await pg.close();
-  // empty / loading / error states
   const p2 = await newPage();
-  const t2 = () => p2.evaluate(() => __card._tab);
-  const mid = async () => { const r = await p2.evaluate((s) => { const b = eval(s).getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }, `${SEL.tab}.shadowRoot.querySelector('.ly')`); await p2.mouse.click(r.x, r.y); await sleep(400); };
-  await open(p2, '&tab=lyrics&lyrics=none'); await waitStatus(p2, SEL.tab, 'none'); await mid();
-  check('TP6 "No lyrics found": tap → Now Playing', (await t2()) === 'now', await t2());
-  await open(p2, '&tab=lyrics&lyrlat=60000'); await sleep(300);
-  const ld = await status(p2, SEL.tab); await mid();
-  check('TP7 "Looking for lyrics…": tap → Now Playing', ld === 'loading' && (await t2()) === 'now', J({ ld, tab: await t2() }));
-  await open(p2, '&tab=lyrics&lyrfail=perm'); await waitStatus(p2, SEL.tab, 'error');
-  const n0 = (await lyrCmds(p2)).length;
-  const rb = await p2.evaluate((s) => { const b = eval(s).shadowRoot.querySelector('.retry').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }, SEL.tab);
-  await p2.mouse.click(rb.x, rb.y); await sleep(400);
-  check('TP8 Try again button only retries (stays on Lyrics)', (await lyrCmds(p2)).length > n0 && (await t2()) === 'lyrics', J({ tab: await t2() }));
-  await mid();
-  check('TP9 error state: tap elsewhere → Now Playing', (await t2()) === 'now', await t2());
-  // Now Playing artwork overlay: a tap closes the overlay (stays on Now Playing); a drag does not
   await open(p2, '&tab=now&overlay=1'); await waitStatus(p2, SEL.ovl, 'synced'); await sleep(500);
   const ob = await p2.evaluate((s) => { const b = eval(s).getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height * 0.7 }; }, SEL.ovl);
   await p2.mouse.move(ob.x, ob.y); await p2.mouse.down(); await p2.mouse.move(ob.x, ob.y - 40, { steps: 4 }); await p2.mouse.up(); await sleep(300);
-  check('TP10 drag on the artwork lyrics overlay keeps it open', await p2.evaluate((s) => !!eval(s), SEL.ovl));
-  const lyb = await p2.evaluate((s) => { const b = eval(s).querySelector('.ab.lyr').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }, SEL.now);
+  check('TP10 drag on the artwork lyrics overlay keeps it open', await isOpen(p2));
+  const lyb = await lyrBtn(p2);
   await p2.mouse.click(ob.x, ob.y); await sleep(400);
   const ov = await p2.evaluate((s) => ({ ovl: !!eval(s).querySelector('jb-lyrics'), on: eval(s).querySelector('.ab.lyr').classList.contains('on'), ls: localStorage.getItem('jukebox-card:lyrics-overlay:v1') }), SEL.now);
-  check('TP11 tap on the artwork lyrics overlay closes it (back to the plain player), remembered', !ov.ovl && !ov.on && ov.ls !== '1' && (await t2()) === 'now', J(ov));
+  check('TP11 tap on the artwork lyrics overlay closes it (back to the plain player), remembered', !ov.ovl && !ov.on && ov.ls !== '1' && (await p2.evaluate(() => __card._tab)) === 'now', J(ov));
   await p2.mouse.click(lyb.x, lyb.y); await sleep(400);
-  check('TP12 the corner Lyrics button still toggles the overlay on', await p2.evaluate((s) => !!eval(s).querySelector('jb-lyrics'), SEL.now));
+  check('TP12 the corner Lyrics button still toggles the overlay on', await isOpen(p2));
   await p2.close();
 }
 
 // ---------------- 3. plain lyrics ----------------
 {
   const pg = await newPage();
-  await open(pg, '&tab=lyrics');
-  await waitStatus(pg, SEL.tab, 'synced');
+  await open(pg, '&tab=now&overlay=1');
+  await waitStatus(pg, SEL.ovl, 'synced');
   await pg.evaluate(() => __playTrack('Dreams', 200));
-  const ok = await waitStatus(pg, SEL.tab, 'plain');
-  const info = await pg.evaluate((s) => { const r = eval(s).shadowRoot; const sc = r.querySelector('.sc'); return { chip: r.querySelector('.chip')?.textContent, cur: r.querySelectorAll('.ln.cur').length, top: sc.scrollTop, max: sc.scrollHeight - sc.clientHeight }; }, SEL.tab);
+  const ok = await waitStatus(pg, SEL.ovl, 'plain');
+  const info = await pg.evaluate((s) => { const r = eval(s).shadowRoot; return { chip: r.querySelector('.chip')?.textContent, cur: r.querySelectorAll('.ln.cur').length }; }, SEL.ovl);
   check('U1 plain lyrics: "Unsynced" chip, no highlighted line', ok && info.chip === 'Unsynced' && info.cur === 0, J(info));
-  await sleep(2300);
-  const top = await pg.evaluate((s) => eval(s).shadowRoot.querySelector('.sc').scrollTop, SEL.tab);
-  check('U2 plain lyrics scroll in proportion to progress (200 s of 257 s → past the middle)', info.max <= 0 || top > info.max * 0.5, `top=${top} max=${info.max}`);
-  const L = await pg.evaluate((s) => { const sc = eval(s).shadowRoot.querySelector('.sc').getBoundingClientRect(); return { x: sc.x + 80, y: sc.y + sc.height / 2 }; }, SEL.tab);
+  const L = await pg.evaluate((s) => { const b = eval(s).getBoundingClientRect(); return { x: b.x + 80, y: b.y + b.height / 2 }; }, SEL.ovl);
   await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(800); await pg.mouse.up(); await sleep(200);
   check('U3 long-press on plain lyrics never seeks', (await seeks(pg)).length === 0);
-  // manual override: wheel scroll up, the auto scroll leaves it alone
-  await pg.mouse.move(L.x, L.y); await pg.mouse.wheel({ deltaY: -2000 }); await sleep(2600);
-  const top2 = await pg.evaluate((s) => eval(s).shadowRoot.querySelector('.sc').scrollTop, SEL.tab);
-  check('U4 manual scroll wins over the auto scroll', top2 < top - 50, `auto=${top} after manual=${top2}`);
-  // Teardrop: synced via item metadata (no get_track_lyrics)
+  if (!(await isOpen(pg))) { const b = await lyrBtn(pg); await pg.mouse.click(b.x, b.y); await sleep(300); }
   const n = (await lyrCmds(pg)).length;
   await pg.evaluate(() => __playTrack('Teardrop', 40));
-  await waitStatus(pg, SEL.tab, 'synced');
+  await waitStatus(pg, SEL.ovl, 'synced');
   const cmds = (await lyrCmds(pg)).slice(n);
   check('U5 lyrics in item metadata are used directly (one call)', J(cmds) === J(['music/item_by_uri']), J(cmds));
   await pg.close();
@@ -250,51 +171,39 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
 // ---------------- 4. radio ----------------
 {
   const pg = await newPage();
-  await open(pg, '&tab=lyrics');
-  await waitStatus(pg, SEL.tab, 'synced');
+  await open(pg, '&tab=now&overlay=1');
+  await waitStatus(pg, SEL.ovl, 'synced');
   const n = (await lyrCmds(pg)).length;
   await pg.evaluate(() => __setNowPlaying({ title: 'Massive Attack - Teardrop', radio: true }));
-  const ok = await waitStatus(pg, SEL.tab, 'synced');
+  await sleep(200);
+  const ok = await waitStatus(pg, SEL.ovl, 'synced');
   await sleep(200);
   const calls = await pg.evaluate((n) => __lyricsCalls().slice(n).map((c) => ({ cmd: c.data.command, d: c.data.data })), n);
-  check('R1 radio "Artist - Title" → music/search → best match → lyrics (synced)', ok && calls[0]?.cmd === 'music/search' && /Massive Attack - Teardrop/.test(calls[0].d.search_query) && J(calls[0].d.media_types) === J(['track']), J(calls.map((c) => c.cmd)));
-  const L = await lineBox(pg, SEL.tab, Math.max(0, await cur(pg, SEL.tab)) + 1);
-  await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(800); await pg.mouse.up(); await sleep(200);
-  check('R2 radio: long-press never seeks', (await seeks(pg)).length === 0);
+  const srch = await pg.evaluate(() => window.__ws.filter((m) => m.type === 'ma' && m.command === 'music/search').map((m) => m.args));
+  check('R1 radio "Artist - Title" → music/search → best match → lyrics (synced)', ok && srch.some((a) => /Massive Attack - Teardrop/.test(a.search_query) && J(a.media_types) === J(['track'])), J({ calls: calls.map((c) => c.cmd), srch }));
   await pg.evaluate(() => __setNowPlaying({ artist: 'Nobody Known', title: 'Unknown Jingle', radio: true }));
-  const none = await waitStatus(pg, SEL.tab, 'none');
-  check('R3 radio with no library match → "No lyrics found"', none && (await text(pg, SEL.tab)).includes('No lyrics found'));
+  const none = await waitStatus(pg, SEL.ovl, 'none');
+  check('R3 radio with no library match → "No lyrics found"', none && (await text(pg, SEL.ovl)).includes('No lyrics found'));
   await pg.close();
 }
 
 // ---------------- 5. loading / none / errors ----------------
 {
   const pg = await newPage();
-  await open(pg, '&tab=lyrics&lyrlat=1500');
-  check('M1 slow lookup shows "Looking for lyrics…" (no spinner)', (await status(pg, SEL.tab)) === 'loading' && (await text(pg, SEL.tab)).includes('Looking for lyrics…') && !(await pg.evaluate((s) => !!eval(s).shadowRoot.querySelector('ha-circular-progress, .spinner'), SEL.tab)));
-  const seen = await pg.evaluate((s) => new Promise((res) => { const el = eval(s); const st = []; const mo = new MutationObserver(() => { if (st[st.length - 1] !== el.dataset.status) st.push(el.dataset.status); if (el.dataset.status === 'synced') { mo.disconnect(); res(st); } }); mo.observe(el, { attributes: true }); setTimeout(() => res(st), 6000); }), SEL.tab);
+  await open(pg, '&tab=now&overlay=1&lyrlat=1500');
+  check('M1 slow lookup shows "Looking for lyrics…" (no spinner)', (await status(pg, SEL.ovl)) === 'loading' && (await text(pg, SEL.ovl)).includes('Looking for lyrics…') && !(await pg.evaluate((s) => !!eval(s).shadowRoot.querySelector('ha-circular-progress, .spinner'), SEL.ovl)));
+  const seen = await pg.evaluate((s) => new Promise((res) => { const el = eval(s); const st = []; const mo = new MutationObserver(() => { if (st[st.length - 1] !== el.dataset.status) st.push(el.dataset.status); if (el.dataset.status === 'synced') { mo.disconnect(); res(st); } }); mo.observe(el, { attributes: true }); setTimeout(() => res(st), 6000); }), SEL.ovl);
   check('M2 loading → synced with no flicker in between', J(seen) === J(['synced']), J(seen));
-  await open(pg, '&tab=lyrics&lyrics=none');
-  check('M3 nothing found → "No lyrics found"', (await waitStatus(pg, SEL.tab, 'none')) && (await text(pg, SEL.tab)).includes('No lyrics found'));
-  await open(pg, '&tab=lyrics&lyrfail=perm');
-  const perm = await waitStatus(pg, SEL.tab, 'error');
-  check('M4 permission error (non-admin / Unauthorized) → "Lyrics unavailable" + Try again', perm && (await text(pg, SEL.tab)).includes('Lyrics unavailable') && (await text(pg, SEL.tab)).includes('Try again'));
-  const n = (await lyrCmds(pg)).length;
-  await pg.evaluate((s) => eval(s).shadowRoot.querySelector('.retry').click(), SEL.tab);
-  await sleep(300);
-  check('M5 Try again looks up again', (await lyrCmds(pg)).length > n && (await status(pg, SEL.tab)) === 'error');
-  await open(pg, '&tab=lyrics&lyrfail=err');
-  check('M6 generic failure → "Lyrics unavailable"', (await waitStatus(pg, SEL.tab, 'error')) && (await text(pg, SEL.tab)).includes('Lyrics unavailable'));
+  await open(pg, '&tab=now&overlay=1&lyrics=none');
+  check('M3 nothing found → "No lyrics found"', (await waitStatus(pg, SEL.ovl, 'none')) && (await text(pg, SEL.ovl)).includes('No lyrics found'));
+  await open(pg, '&tab=now&overlay=1&lyrfail=perm');
+  check('M4 permission error (Unauthorized) → "Lyrics unavailable"', (await waitStatus(pg, SEL.ovl, 'error')) && (await text(pg, SEL.ovl)).includes('Lyrics unavailable'));
   await open(pg, '&tab=now&overlay=1&lyrfail=err');
   await waitStatus(pg, SEL.ovl, 'error');
   check('M7 overlay error stays quiet (no Try again button on the art)', !(await pg.evaluate((s) => !!eval(s).shadowRoot.querySelector('.retry'), SEL.ovl)) && (await text(pg, SEL.ovl)).includes('Lyrics unavailable'));
-  await open(pg, '&tab=lyrics&noqueue=1');
-  const cfg = await waitStatus(pg, SEL.tab, 'error');
-  check('M8 no mass_queue_entry_id → "Lyrics unavailable" + config hint, no calls', cfg && (await text(pg, SEL.tab)).includes('mass_queue_entry_id') && (await lyrCmds(pg)).length === 0);
-  await open(pg, '&tab=lyrics&legacyq=1');
-  check('M9 legacy queue_config_entry_id still works for lyrics', await waitStatus(pg, SEL.tab, 'synced'));
-  await open(pg, '&tab=lyrics&idle=1');
-  check('M10 idle player → "Nothing playing", no calls', (await text(pg, SEL.tab)).includes('Nothing playing') && (await lyrCmds(pg)).length === 0);
+  await open(pg, '&tab=now&overlay=1&idle=1');
+  await sleep(300);
+  check('M10 idle player → no lookups', (await lyrCmds(pg)).length === 0);
   await pg.close();
 }
 
@@ -302,29 +211,24 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
 {
   const pg = await newPage();
   const cfg = (o) => '&cfg=' + encodeURIComponent(J(o));
-  await open(pg, '&tab=now' + cfg({ lyrics_tab: false }));
-  const t1 = await pg.evaluate(() => [...__card.shadowRoot.querySelectorAll('.tab')].map((t) => t.dataset.tab).join());
-  check('C1 lyrics_tab:false → 4 tabs, overlay button still there', t1 === 'now,browse,search,queue' && (await pg.evaluate((s) => !!eval(s).querySelector('.ab.lyr'), SEL.now)), t1);
   await open(pg, '&tab=now&overlay=1' + cfg({ show_lyrics: false }));
   await sleep(300);
   const off = await pg.evaluate((s) => ({ tabs: __card.shadowRoot.querySelectorAll('.tab').length, lyr: !!eval(s).querySelector('.ab.lyr'), ovl: !!eval(s).querySelector('jb-lyrics') }), SEL.now);
-  check('C2 show_lyrics:false → no tab, no overlay, no lookups', off.tabs === 4 && !off.lyr && !off.ovl && (await lyrCmds(pg)).length === 0, J(off));
-  await open(pg, '&tab=lyrics' + cfg({ lyrics_seek: false }));
-  await waitStatus(pg, SEL.tab, 'synced'); await sleep(400);
-  const L = await lineBox(pg, SEL.tab, (await cur(pg, SEL.tab)) + 1);
+  check('C2 show_lyrics:false → no overlay button, no overlay, no lookups', off.tabs === 4 && !off.lyr && !off.ovl && (await lyrCmds(pg)).length === 0, J(off));
+  await open(pg, '&tab=now&overlay=1' + cfg({ lyrics_seek: false }));
+  await waitStatus(pg, SEL.ovl, 'synced'); await sleep(400);
+  const L = await lineBox(pg, SEL.ovl, (await cur(pg, SEL.ovl)) + 1);
   await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(800); await pg.mouse.up();
   check('C3 lyrics_seek:false → long-press does nothing', (await seeks(pg)).length === 0);
   const bad = await pg.evaluate(() => { const r = []; for (const c of [{ lyrics_offset_ms: 9000 }, { show_lyrics: 'yes' }, { lyrics_seek: 1 }]) { try { __card.setConfig({ ...__card._config, ...c }); r.push('ok'); } catch (e) { r.push('err'); } } return r; });
   check('C4 setConfig rejects lyrics_offset_ms out of ±5000, non-boolean flags', J(bad) === J(['err', 'err', 'err']), J(bad));
   const good = await pg.evaluate(() => { const r = []; for (const m of [0, 1, 10, 1440, 37]) { try { __card.setConfig({ ...__card._config, screensaver_minutes: m }); r.push('ok'); } catch (e) { r.push(e.message); } } return r; });
-  const lenient = await pg.evaluate(() => { try { __card.setConfig({ ...__card._config, default_tab: 'lyrics', lyrics_tab: false }); return 'ok'; } catch (e) { return e.message; } });
-  check('C4b default_tab: lyrics with the tab turned off is ignored like any unknown tab (as in 0.3.x), not an error', lenient === 'ok', lenient);
   check('C5 screensaver_minutes 0, 1, 10, 1440 and odd values like 37 still load', good.every((x) => x === 'ok'), J(good));
-  await open(pg, '&tab=lyrics' + cfg({ lyrics_offset_ms: 3000 }));
-  await waitStatus(pg, SEL.tab, 'synced'); await sleep(300);
-  const e = await expectedCur(pg, SEL.tab);
-  const withOff = await pg.evaluate((s, base) => { const ts = [...eval(s).shadowRoot.querySelectorAll('.ln')].map((l) => Number(l.dataset.t)); let k = -1; ts.forEach((t, i) => { if (t <= base + 2.5) k = i; }); return k; }, SEL.tab, e.pos);
-  check('C6 lyrics_offset_ms shifts the highlight', (await cur(pg, SEL.tab)) === withOff, `cur=${await cur(pg, SEL.tab)} want=${withOff}`);
+  await open(pg, '&tab=now&overlay=1' + cfg({ lyrics_offset_ms: 3000 }));
+  await waitStatus(pg, SEL.ovl, 'synced'); await sleep(300);
+  const e = await expectedCur(pg, SEL.ovl);
+  const withOff = await pg.evaluate((s, base) => { const ts = [...eval(s).shadowRoot.querySelectorAll('.ln')].map((l) => Number(l.dataset.t)); let k = -1; ts.forEach((t, i) => { if (t <= base + 2.5) k = i; }); return k; }, SEL.ovl, e.pos);
+  check('C6 lyrics_offset_ms shifts the highlight', (await cur(pg, SEL.ovl)) === withOff, `cur=${await cur(pg, SEL.ovl)} want=${withOff}`);
   await pg.close();
 }
 
@@ -493,11 +397,11 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
 // every frame with getBoundingClientRect and assert the lines only ever move upward on screen (the saver: relative to
 // its slow burn-in drift block, which may drift down on its own), and that new lines come in from the bottom.
 {
-  const DSEL = { overlay: SEL.ovl, tab: SEL.tab, stage: SEL.stage, saver: SEL.saver };
+  const DSEL = { overlay: SEL.ovl, stage: SEL.stage, saver: SEL.saver };
   async function direction(surface, kind, { rm = false } = {}) {
     const pg = await newPage(surface === 'stage' ? { width: 1920, height: 1080 } : { width: 1280, height: 800 });
     if (rm) await pg.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
-    const q = surface === 'tab' ? '&tab=lyrics' : surface === 'overlay' ? '&tab=now&overlay=1' : surface === 'saver' ? '&tab=now&saver=0.02' : '&tab=now';
+    const q = surface === 'overlay' ? '&tab=now&overlay=1' : surface === 'saver' ? '&tab=now&saver=0.02' : '&tab=now';
     await open(pg, q);
     await pg.evaluate((t) => __playTrack(t, 20), kind === 'plain' ? 'Dreams' : 'So What');
     if (surface === 'stage') { await sleep(300); await pg.evaluate(() => __card.openStage()); }
@@ -543,7 +447,7 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
     return { ok, frames: fr.length, up: Math.round(up), down: +down.toFixed(1), maxDownRel: +maxDownRel.toFixed(2), maxDownScr: +maxDownScr.toFixed(2), changes, fromBelow,
       scrollMono: mono(fr.map((f) => f.st)), colMono: mono(fr.map((f) => f.cy)) };
   }
-  for (const surface of ['overlay', 'stage', 'tab', 'saver']) for (const kind of ['synced', 'plain']) {
+  for (const surface of ['overlay', 'stage', 'saver']) for (const kind of ['synced', 'plain']) {
     const d = await direction(surface, kind);
     // the shared screen's (saver + Stage) drift block may move down by itself (< 1 px a frame); everything else never moves down at all
     const scrOk = surface === 'saver' || surface === 'stage' ? d.maxDownScr < 1 : d.maxDownScr <= 0.5;
@@ -574,7 +478,7 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   const ed = (q) => open(pg, q, 'editor.html');
   const opts = () => pg.evaluate(() => [...__editor.shadowRoot.querySelector('ha-form').querySelectorAll('[data-name=screensaver_minutes] select option')].map((o) => [o.value, o.textContent]));
   const changes = () => pg.evaluate(() => __changes);
-  const base = { type: 'custom:jukebox-card', entity: 'media_player.everywhere', config_entry_id: '01MUSICASSISTANT0000000000', mass_queue_entry_id: '01MASSQUEUE0000000000000000' };
+  const base = { type: 'custom:jukebox-card', entity: 'media_player.everywhere' };
   await ed('&cfg=' + encodeURIComponent(J(base)));
   const secs = await pg.evaluate(() => [...__editor.shadowRoot.querySelector('ha-form').querySelectorAll('details[data-section]')].map((d) => d.dataset.section));
   check('E1 editor has Display and Lyrics sections', secs.includes('display') && secs.includes('lyrics'), J(secs));
@@ -602,7 +506,7 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
     const custom = ![0, 1, 5, 10, 15, 30, 60].includes(m);
     check(`E7 existing config screensaver_minutes: ${m} loads and is selected${custom ? ' as "(custom)"' : ''}`, v === String(m) && (!custom || /custom/.test(label)), `${v} ${label}`);
   }
-  // backward compatibility: an old 0.3.x config + unrelated edit → no new lyrics keys appear
+  // an unrelated edit → only that key changes, no lyrics keys appear
   const old = { ...base, screensaver_minutes: 15, rooms: [{ name: 'Kitchen', entity: 'media_player.kitchen' }], favorite_entity: 'button.x' };
   await ed('&cfg=' + encodeURIComponent(J(old)));
   await pg.evaluate(() => { const i = __editor.shadowRoot.querySelector('ha-form').querySelector('[data-name=entity] input'); i.value = 'media_player.other'; i.dispatchEvent(new Event('change')); });
@@ -611,11 +515,7 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   const out = ch[ch.length - 1] ?? {};
   check('E8 old config, unrelated edit → only that key changes; rooms kept; no lyrics keys added', out.entity === 'media_player.other' && J(out.rooms) === J(old.rooms) && out.screensaver_minutes === 15 && !Object.keys(out).some((k) => /lyric/.test(k)), J(out));
   const lyr = await pg.evaluate(() => [...__editor.shadowRoot.querySelector('ha-form').querySelectorAll('details[data-section=lyrics] [data-name]')].map((e) => e.dataset.name));
-  check('E9 Lyrics section: show_lyrics, lyrics_tab, lyrics_seek, lyrics_offset_ms; screensaver_lyrics under Display', J(lyr) === J(['show_lyrics', 'lyrics_tab', 'lyrics_seek', 'lyrics_offset_ms']) && (await pg.evaluate(() => !!__editor.shadowRoot.querySelector('ha-form').querySelector('details[data-section=display] [data-name=screensaver_lyrics]'))), J(lyr));
-  await pg.evaluate(() => { const i = __editor.shadowRoot.querySelector('ha-form').querySelector('[data-name=lyrics_tab] input'); i.checked = false; i.dispatchEvent(new Event('change')); });
-  await sleep(150);
-  ch = await changes();
-  check('E10 unticking Lyrics tab → lyrics_tab: false', ch[ch.length - 1]?.lyrics_tab === false);
+  check('E9 Lyrics section: show_lyrics, lyrics_seek, lyrics_offset_ms (no Lyrics tab switch); screensaver_lyrics under Display', J(lyr) === J(['show_lyrics', 'lyrics_seek', 'lyrics_offset_ms']) && (await pg.evaluate(() => !!__editor.shadowRoot.querySelector('ha-form').querySelector('details[data-section=display] [data-name=screensaver_lyrics]'))), J(lyr));
   await pg.close();
 }
 

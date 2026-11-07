@@ -1,12 +1,12 @@
 # Jukebox Kiosk (`ha-jukebox-kiosk`) 0.7.8
 
-> This README covers the integration and the card bundled in it. Sections marked *(legacy)* describe the `mass_queue` backend, which still works.
+> This README covers the integration and the card bundled in it. Since 0.7.9 the card works only through the Jukebox Kiosk integration (or, with fewer features, the official Music Assistant integration); mass_queue support is gone.
 
-Jukebox Kiosk is a Home Assistant integration that ships the **Jukebox Card**, a Lovelace card for a Home Assistant + Music Assistant jukebox kiosk. It also gives the card its own WebSocket API to Music Assistant, so the card no longer needs [mass_queue](https://github.com/droans/mass_queue).
+Jukebox Kiosk is a Home Assistant integration that ships the **Jukebox Card**, a Lovelace card for a Home Assistant + Music Assistant jukebox kiosk. It also gives the card its own WebSocket API to Music Assistant.
 
 - **One install.** Setting up the integration serves the card from `/jukebox_kiosk_static/jukebox-card.js` and loads it on every dashboard. You don't add a resource, and you don't unzip fonts.
 - **Its own Music Assistant API.** The integration borrows the connection the official Music Assistant integration already holds and exposes it as `jukebox_kiosk/*` WebSocket commands. It forwards only an allowlist of Music Assistant commands, and every one is checked against the calling Home Assistant user (see [Permissions](#permissions)).
-- **Every card feature without mass_queue.** Queue reading and editing (Play Now, Play Next, Move, Remove with Undo), album/artist/playlist/podcast track lists with server-side paging, lyrics, speaker grouping and transfer, and removing favourites.
+- **Every card feature through one integration.** Queue reading and editing (Play Now, Play Next, Move, Remove with Undo), album/artist/playlist/podcast track lists with server-side paging, lyrics, speaker grouping and transfer, and favourites.
 - **Live queue.** The card subscribes to queue changes (`jukebox_kiosk/subscribe_queue`) instead of polling.
 
 The card's element is still `custom:jukebox-card`, so existing dashboards keep working. Version history is in [CHANGELOG.md](CHANGELOG.md), and building and tests are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
@@ -32,7 +32,7 @@ The card's element is still `custom:jukebox-card`, so existing dashboards keep w
 - **Home Assistant 2026.10.0** or newer.
 - **[Music Assistant](https://music-assistant.io)** 2.10 or newer, and the official **Music Assistant** integration (`music_assistant`) set up in Home Assistant. Jukebox Kiosk uses that integration's connection, so it has no server URL or token of its own.
 - **A Music Assistant player** to play to. Group players such as `media_player.everywhere` work too.
-- mass_queue is **not** needed. You can keep it installed: once Jukebox Kiosk is set up, the card uses mass_queue only if you set `backend: mass_queue`.
+- mass_queue is **not** used. The card no longer knows it; you can uninstall it.
 
 > **Music licensing and lyrics.** Jukebox Kiosk plays whatever your Music Assistant providers give it; it ships no music and no lyrics. Personal streaming subscriptions are usually for private listening only, so a public or commercial venue (a bar, shop, gym or event) needs music services and performance licenses that cover public playback. Lyrics are fetched live through Music Assistant's metadata providers when you open them; they are never bundled, and the card keeps lyric text in memory only.
 
@@ -55,16 +55,15 @@ The integration finds dashboard resources that still point at `/hacsfiles/ha-juk
 
 ## Backends
 
-The card talks to Music Assistant through one of three backends. Set `backend` in the card config. The resolved backend is shown on the element as `data-backend`.
+The card picks its backend by itself; you don't set anything. The resolved backend is shown on the element as `data-backend`. *(Advanced, YAML only)* `backend: kiosk` or `backend: native` forces one.
 
 | `backend` | Uses | Notes |
 |---|---|---|
-| `auto` (default) | `kiosk` if `jukebox_kiosk` is loaded; otherwise `mass_queue` if `mass_queue_entry_id` is set or mass_queue is loaded (or the loaded integrations can't be read); otherwise `native` | The 0.5.x behaviour is kept when the integration isn't installed. |
+| `auto` (default) | `kiosk` if `jukebox_kiosk` is loaded, otherwise `native` | |
 | `kiosk` | `jukebox_kiosk/*` WebSocket commands | Every feature. Controls the server doesn't allow for this user are hidden. |
-| `mass_queue` *(legacy)* | `mass_queue.*` services, as in 0.5.x | Needs `mass_queue_entry_id`. Kept for anyone not ready to install the integration. |
 | `native` | the official `music_assistant` services only | Search, Browse grid, transport, volume and playing music. No queue tab, track lists, lyrics or grouping. |
 
-On the kiosk backend the card asks `jukebox_kiosk/capabilities` once per connection and hides what the server reports as unavailable: Move up and Move down when `queue_edit` is off, Undo, the remove-favourite heart (`unfavorite`), the Speakers panel's grouping (`speakers`) and the Lyrics tab (`lyrics`). Play Next, Play Now and Remove stay on the Queue rows; they are greyed when `queue_play` is off.
+On the kiosk backend the card asks `jukebox_kiosk/capabilities` once per connection and hides what the server reports as unavailable: Move up and Move down when `queue_edit` is off, Undo, the remove-favourite heart (`unfavorite`), the Speakers panel's grouping (`speakers`) and lyrics (`lyrics`). Play Next, Play Now and Remove stay on the Queue rows; they are greyed when `queue_play` is off. The capabilities also carry the Music Assistant entry id (`ma_entry_id`), which is how the card finds Music Assistant for every user, admin or not.
 
 ## Permissions
 
@@ -103,9 +102,9 @@ No allowlisted command in `MA_COMMANDS` (`custom_components/jukebox_kiosk/const.
 
 ## Configuration
 
-> The card reference below was written for 0.5.x. Wherever it names a `mass_queue.*` action, the kiosk backend sends the matching `jukebox_kiosk/*` command instead and behaves the same, except that the server pages track lists 100 at a time. `mass_queue_entry_id` applies only to `backend: mass_queue`.
+> The card reference below was written for 0.5.x. Wherever it still names a `mass_queue.*` action, read the matching `jukebox_kiosk/*` command: that is what the card sends since 0.7.9. Track lists are paged by the server 100 at a time.
 
-Add `backend: auto` (the default) or one of the values in [Backends](#backends).
+**A fresh card needs nothing typed.** Add the card, pick the player, and it plays: the card finds the Music Assistant entry through the integration (non-admins too), and the heart finds a way to favourite by itself.
 
 Add the card to a dashboard. A single **panel** view is the layout it is built for. Entity ids in the example are labeled `example:`. Keys you leave out use the defaults in [Options](#options); those defaults are unchanged.
 
@@ -118,16 +117,13 @@ views:
     cards:
       - type: custom:jukebox-card
         entity: media_player.everywhere                # example: Music Assistant group player; every play_media goes here
-        config_entry_id: <music assistant entry id>    # Settings → Devices & services → Music Assistant (id is in the URL)
-        mass_queue_entry_id: <mass_queue entry id>     # optional, enables album/artist/playlist track lists
-        favorite_entity: button.everywhere_favorite_current_song  # example
         rooms:                                         # example
           - { name: Living Room, entity: media_player.living_room }
           - { name: Kitchen,     entity: media_player.kitchen }
           - { name: Garage,      entity: media_player.garage }
         screensaver_minutes: 10
-        default_tab: now                               # now | browse | search | queue | lyrics
-        show_lyrics: true                              # needs mass_queue_entry_id
+        default_tab: now                               # now | browse | search (separate layout) | queue
+        show_lyrics: true
         backdrop: auto                                 # full | light | static | off | auto
 ```
 
@@ -191,7 +187,7 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 
   Shuffle and repeat are queue settings: they always go to the active target (the group or player the card is playing on, e.g. Everywhere), never to individual member speakers, and there is no per-track or per-row shuffle or repeat. If the player ever reports repeat "one" (set somewhere else), the card shows it as repeat queue and, with `coerce_repeat_one` on (the default), sends a single `repeat_set {repeat: all}` to that player: once per detection, about 1.5 s after it is seen, at most once a minute, and only for a user with Playback permission. A message is never shown for this.
   Active shuffle and repeat are white with a dot under them; inactive ones are light white. The UI updates optimistically and reconciles when HA reports the new state.
-- **Heart.** If the current song isn't a favorite, the heart sends `button.press` to `favorite_entity`. If it already is (from mass_queue's `favorite` flag), it sends `mass_queue.unfavorite_current_item {entity}` (this may only work for library items).
+- **Heart.** With nothing set, the heart adds the playing song to Music Assistant's favourites through the integration (`jukebox_kiosk/favorite_current`, needs the `library` class), or, on the native backend, presses the player's own Music Assistant "Favorite current song" button, found on the player's device. A filled heart removes it with `jukebox_kiosk/unfavorite_current`. When the card has no way to favourite, the heart is hidden. *(Advanced, YAML only)* `favorite_entity: button.…` presses that button instead; `favorite_entity: ''` hides the heart.
 - **Up next strip.** It shows the next queue item and "+ N more". Tapping it opens the Queue tab.
 - **Volume:**
   - **Everywhere** sends `volume_set` to the group player.
@@ -204,28 +200,27 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 
 ### Queue
 
-- **Reading.** The queue comes from `mass_queue.get_queue_items {entity, limit_before: 1, limit_after: queue_limit (1–1000)}` with `return_response`. It refreshes when the tab opens, when the track, state or shuffle changes, and after every action.
+- **Reading.** The queue comes from `jukebox_kiosk/queue_items {entity_id, limit_before: 1, limit_after: queue_limit (1–1000)}`, and the card subscribes to changes (`jukebox_kiosk/subscribe_queue`).
 - **Layout.** The previous track is dimmed. "Now playing" is the highlighted white row, then a numbered "Up next" list. "+ N more in Music Assistant" appears when the queue is longer than the list.
-- **Tap a row** to send `mass_queue.play_queue_item {entity, queue_item_id}`.
+- **Tapping a row** does nothing; use the row's icons.
 - **Row actions.** Every song row shows three buttons with an icon and a label, in this order: **Play Next**, **Play Now**, **Remove**. On a wide card they sit beside the title. Move up and Move down stay as the ↑ and ↓ arrows beside them (`move_queue_item_up` and `move_queue_item_down`). On a phone (the card is 520 px wide or less) Play Next, Play Now and Remove sit on their own row under the title, the arrows are hidden, and **⋯** opens an action sheet with Play Now, Play Next, Move up, Move down and Remove. A long-press opens that menu.
 - **Search queue.** **Search queue** in the header opens a box and an on-screen keyboard that stays open. The list shows songs whose title, artist or album contains what you type. **Done** closes the search and clears it.
 - **Header.** The Queue tab badge shows how many items are left, and the header says how many are up next.
-- **Play Now, Play Next and Remove** go through `mass_queue.send_command` with the MA queue id, and fall back to the 0.4 services when `mass_queue_entry_id` is not set. Someone who may not change the queue (see `grouping`, or `queue_play` off) still sees the three labels; they are greyed and do nothing.
+- **Play Now, Play Next and Remove** go through `jukebox_kiosk/ma` with the MA queue id. Someone who may not change the queue (see `grouping`, or `queue_play` off) still sees the three labels; they are greyed and do nothing.
   - **Play Now** asks first, "Play this now? The current song will stop.", then sends `player_queues/play_index {queue_id, index: queue_item_id}`. It only moves playback to that item: the queue keeps its items and order, and nothing is replaced, cleared or moved. It is greyed on the song that is playing.
   - **Play Next** sends `player_queues/move_item {queue_id, queue_item_id, pos_shift: (current + 1) − index}`, no dialog. It is greyed on the row that is already next, on the song playing now, and on songs that have already played. If MA has already buffered the next track it ignores the move and the card shows MA's order again.
   - **Move up / Move down**: no dialog.
   - **Remove** sends `player_queues/delete_item {queue_id, item_id_or_index: queue_item_id}`, no dialog, and shows "Removed <title>. Undo" for 5 s. **Undo** re-adds the track's URI (`player_queues/play_media {queue_id, media: uri, option: add}`), finds the new row (`player_queues/items`) and moves it back (`move_item`). If it can only be re-added at the end, or not at all, the toast says so. Remove is greyed on the song playing now, on songs already played, and on the track Music Assistant is already loading.
   - An action that cannot be used stays on the row, greyed. It is not hidden.
-  - The track Music Assistant is already loading (the one after the playing track, near its end) can't be moved or removed: Play Next and Remove are greyed and the Move buttons are off. If MA refuses anyway, the toast says "That track is already loading" and the queue reloads.
+  - The track Music Assistant is already loading (the one after the playing track, near its end) can't be moved or removed: Play Next and Remove are greyed and the Move buttons are off. If MA refuses a move anyway the toast says "That song is already loading, so it can't move right now."; a refused or ignored Remove says "That song is already loading, so it can't be removed right now." The queue reloads either way.
 
 ### Speakers (0.5.0)
 
 - **Header status** ("Everywhere · 3 rooms synced", or "N speakers") opens the Speakers panel. The panel opens in the middle of the card, between the header and the tab bar (so it fits the measured height below the HA toolbar), scrolls when it is taller than that, and closes on a tab tap or the ✕.
 - **Fixed mode (default).** The panel is a mixer: one volume slider per room, nothing else. Every call goes to `entity`, exactly as in 0.4.
-- **Dynamic mode.** "Play on" chips choose the target (remembered per device); joining, dropping and moving use Music Assistant only: `mass_queue.send_command` with `players/cmd/set_members` and `player_queues/transfer` (never `media_player.join` / `unjoin`). Players are read with `players/all`. A static MA sync group is shown as fixed (no join/drop). Each room shows what it is playing. Presets regroup and set volumes in one tap. Changes are optimistic and time out. Every grouping message (joined, left, Regrouping…, errors, Undo) appears in one small status chip at the top right, under the header clock; it never covers the rest of the card, hides itself after about 4 s, and a new message replaces the old one. **Undo** in the chip works while it shows. Errors use the same chip in an inverted (white) style and stay a little longer. Since 0.6.4 drops happen on tap, with no centred dialog; a question that does need an answer (taking a speaker from another group, or the last room) is asked in the chip with one action button and ✕, and ignoring it does nothing. `confirm_drop: true` brings back the centred dialogs. Any room can be dropped and re-added, including the one that leads the group: the card asks MA to remove it from the group (`players/cmd/set_members` on the group, never an ungroup of the speaker), MA re-forms the group on the other rooms after about 6 s of silence and the queue plays on; the panel says "Regrouping…" until it does. `leader_drop: block` keeps the old behaviour (hand off with Move). The last room in a group can't be dropped (MA would stop and dissolve the group): tapping it shows "<Room> is the last speaker in <Group> · Pause" in the chip; Pause keeps the room and the queue, and "<Group> paused · Undo" resumes. While the group is idle, Join is shown greyed with a hint to start playback first. For dynamic MA groups the panel also offers MA's own default line-up as a "<Group> default" preset. Moving music to another target has a silence of about 5 s on the new target.
+- **Dynamic mode.** "Play on" chips choose the target (remembered per device); joining, dropping and moving use Music Assistant only: `jukebox_kiosk/ma` with `players/cmd/set_members` and `player_queues/transfer` (never `media_player.join` / `unjoin`). Players are read with `players/all`. A static MA sync group is shown as fixed (no join/drop). Each room shows what it is playing. Presets regroup and set volumes in one tap. Changes are optimistic and time out. Every grouping message (joined, left, Regrouping…, errors, Undo) appears in one small status chip at the top right, under the header clock; it never covers the rest of the card, hides itself after about 4 s, and a new message replaces the old one. **Undo** in the chip works while it shows. Errors use the same chip in an inverted (white) style and stay a little longer. Since 0.6.4 drops happen on tap, with no centred dialog; a question that does need an answer (taking a speaker from another group, or the last room) is asked in the chip with one action button and ✕, and ignoring it does nothing. `confirm_drop: true` brings back the centred dialogs. Any room can be dropped and re-added, including the one that leads the group: the card asks MA to remove it from the group (`players/cmd/set_members` on the group, never an ungroup of the speaker), MA re-forms the group on the other rooms after about 6 s of silence and the queue plays on; the panel says "Regrouping…" until it does. `leader_drop: block` keeps the old behaviour (hand off with Move). The last room in a group can't be dropped (MA would stop and dissolve the group): tapping it shows "<Room> is the last speaker in <Group> · Pause" in the chip; Pause keeps the room and the queue, and "<Group> paused · Undo" resumes. While the group is idle, Join is shown greyed with a hint to start playback first. For dynamic MA groups the panel also offers MA's own default line-up as a "<Group> default" preset. Moving music to another target has a silence of about 5 s on the new target.
 - **Permissions are a UI lock, not security.** `grouping` / `grouping_users` / `guest_access` only hide or disable controls in this card. Anyone with dashboard access can still call the same services from elsewhere in Home Assistant. Use HA users and dashboards to restrict access.
-- **Quiet hours** cap every volume slider (panel and Now Playing) at `max_volume` during the window; guests only unless `applies: everyone`.
-- **Editor:** a Speakers section (mode, targets, grouping, grouping users, guest access, leader drop, presets, quiet hours) and `large_buttons` under Display. A 0.4 config opens without the editor writing any speaker keys.
+- **Editor:** a Speakers section. **Speakers panel** offers "Volume only: always play on the chosen player" or "Choose speakers: pick, group and drop speakers from the card". Only Choose speakers shows the rest: targets, who may change speakers, extra people, everyone else, **Removing the main speaker from a group** ("Allow: the music keeps playing on the other speakers after a short pause" / "Don't allow: use Move to hand the music to another speaker first") and the ask-before-dropping switch. Presets stay YAML only (see `presets`).
 
 ### Library (search and browse in one tab)
 
@@ -247,14 +242,14 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
   - At start the card makes one `limit: 1` call per category and **hides the categories that are empty**, such as Radio, Podcasts and Audiobooks when the library has none.
 - **Favorites and sort.** On the combined tab these are the heart and the sort button at the end of the category row. On the separate Library tab they stay in the bar above the list: a **Favorites** toggle, and a sort chip. The cycle is A–Z (`name`), then Recently added (`timestamp_added_desc`), then Recently played (`last_played_desc`). Radio starts on Popular (`play_count_desc`; `get_library` has no popularity order, so this is your own play count), then A–Z, Recently added and Recently played. Genres use A–Z and Recently added, and have no Favorites control.
 - **Layout.** Tile grid with provider badges; tracks show as rows. Pages are cached per category, favorite and sort, and load more on scroll.
-- **Tap never plays.** Artists, albums, playlists (and podcasts with mass_queue) open the detail view described under Search, with the same **Play Next**, **Play Now** and **Remove** labels and the same confirmations. Other tiles open a small sheet: Play Now, Play Next, Remove. **Long-press** opens a menu: Open (when the item has a page), Play Now, Play Next, Remove, another Play Now that asks before it replaces the queue, and Start radio… for a track, artist or album. Start radio asks first. Add to queue is not on the row or in that menu.
+- **Tap never plays.** Artists, albums, playlists (and podcasts) open the detail view described under Search, with the same **Play Next**, **Play Now** and **Remove** labels and the same confirmations. Other tiles open a small sheet: Play Now, Play Next, Remove. **Long-press** opens a menu: Open (when the item has a page), Play Now, Play Next, Remove, another Play Now that asks before it replaces the queue, and Start radio… for a track, artist or album. Start radio asks first. Add to queue is not on the row or in that menu.
 - **Radio.** Browse > Radio lists `get_library {media_type: radio}`. If the library has no stations (Radio Browser stations you haven't saved), it falls back to `music_assistant.search {name: radio, media_type: [radio]}` and says so above the grid. Station names are trimmed (Radio Browser pads some with tabs), every station has a **Radio** badge, and a station with no logo or a dead logo gets a radio-tower image. A tap sends `play_media {media_id: radiobrowser://radio/…, media_type: radio, enqueue: play}` to `media_player.everywhere`, never with `radio_mode`.
 - **Drill-down.** The › button on artist, album and playlist tiles, or Open in the menu, opens a detail page:
   - a back button, Play, Shuffle, Add to queue and Start radio (`radio_mode: true`, tracks / artists / albums only), and a track list whose rows are labeled **Play Next**, **Play Now** and **Remove** (tapping a track only highlights it)
-  - with `mass_queue_entry_id`, tracks come from `mass_queue.get_album_tracks` / `get_artist_tracks` / `get_playlist_tracks {config_entry_id: <mass_queue entry>, uri[, page]}` with `return_response`. Each row shows its duration, and the header shows the count and total time ("9 tracks · 43 min", with "+" while more pages may follow)
-  - playlists are paged: the card asks for `page: 0` first, then `page: 1, 2, …` (0–1000) when you scroll to the end or tap **Load more tracks**. mass_queue 0.10 returns the whole playlist for page 0, so usually there is one call; paging stops on an empty page, a page shorter than the first, or a page that repeats tracks already shown
+  - tracks come from `jukebox_kiosk/item_tracks {uri, page, page_size: 100}`. Each row shows its duration, and the header shows the count and total time ("9 tracks · 43 min", with "+" while more pages may follow)
+  - long lists are paged by the server: the next page loads when you scroll to the end or tap **Load more tracks**
   - artists also get an Albums row from `music_assistant.search`
-  - without `mass_queue_entry_id`, albums and artists fall back to a search, labelled "matched by search", and playlists show a note that mass_queue is needed
+  - without the integration (native backend), albums and artists fall back to a search, labelled "matched by search", and playlists show a note that the integration is needed
 - **Search's Open action** jumps to the same detail page.
 - **Target.** Every `play_media` goes to the configured player (example: `media_player.everywhere`). Room players are volume targets.
 
@@ -262,9 +257,9 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 
 *(0.7)* With the Jukebox Kiosk backend, a heart sits on Search and Library rows and tiles (tracks, albums, artists, playlists, radio), on playlist rows and in the header of album, artist and playlist pages, on Now Playing and on the radio station sheet. A filled heart means the item is a Music Assistant favourite; tapping it adds or removes it through the integration (`music/favorites/add_item` / `remove_item`). Every heart for the same item updates at once.
 
-- Needs the `library` permission class. Without it (for example a guest you removed it from) the hearts are hidden, including the one on Now Playing. With the legacy `mass_queue` backend only the Now Playing heart is shown.
+- Needs the `library` permission class. Without it (for example a guest you removed it from) the hearts are hidden, including the one on Now Playing.
 - No confirmation when you remove a heart. The heart flips immediately; if Music Assistant refuses or the call fails it flips back and the top-right status chip shows the error (with ✕). Successful changes show a short "Added … to favorites" in the same chip. There are no popups in the middle of the screen.
-- `hearts: false` hides the 0.7 row, tile and page hearts. `favorite_entity: ''` hides the Now Playing heart.
+- `hearts: false` hides the 0.7 row, tile and page hearts. *(YAML only)* `favorite_entity: ''` hides the Now Playing heart.
 
 ### Screensaver
 
@@ -300,7 +295,7 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 - **Detail views** (from Search, Browse or Enter on the top result): Back, Play, Shuffle, Add to queue and, where the seed is supported, Start radio. Play and Shuffle replace the queue, so they ask first; Add to queue does not. Tracks, an artist's albums and podcast episodes use the same **Play Next**, **Play Now** and **Remove** labels; an album row inside an artist opens that album.
   - **Play** sends `play_media … enqueue: replace`; if the player is shuffling it first sends `media_player.shuffle_set {shuffle: false}` (awaited) so the list plays in order.
   - **Shuffle** sends `media_player.shuffle_set {shuffle: true}` to the player, waits for it, then `play_media … enqueue: replace`. Music Assistant applies the queue's shuffle flag as it loads the new items, so the whole album / playlist / artist plays in random order using documented services only (no client-side reordering of URIs).
-  - Track lists come from mass_queue when `mass_queue_entry_id` is set. Without it, albums and artists fall back to a search, labelled "matched by search" with a note; playlists say that mass_queue is needed for their tracks (Play / Shuffle still work).
+  - Track lists come from the integration. Without it (native backend), albums and artists fall back to a search, labelled "matched by search" with a note; playlists say that the integration is needed for their tracks (Play / Shuffle still work).
 - **Service call:** `music_assistant.play_media {media_id: <uri>, media_type, enqueue[, radio_mode]}` with target `{entity_id: <entity>}`.
 - **Recents.** After a play or opening a detail view, the query is saved to localStorage (`jukebox-card:recents:v1`, up to 8). Tap a chip to search it again; hold a chip 0.7 s to remove it.
 - **Hardware keyboard:**
@@ -327,18 +322,17 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 
 ### Lyrics
 
-Lyrics come from Music Assistant's own metadata (its LRCLIB provider, with Genius as an optional fallback) through **mass_queue**, so `mass_queue_entry_id` is required; without it the lyrics surfaces say "Lyrics unavailable".
+Lyrics come from Music Assistant's own metadata (its LRCLIB provider, with Genius as an optional fallback) through the Jukebox Kiosk integration; without it the lyrics surfaces say "Lyrics unavailable".
 
-- **Lookup.** `mass_queue.send_command {config_entry_id: <mass_queue entry>, command: "music/item_by_uri", data: {uri}}` with `return_response`; lyrics are read from `metadata.lrc_lyrics` / `metadata.lyrics`. If both are empty the card calls `metadata/get_track_lyrics {track: <item>}`, which answers `[plain, lrc]` (`[null, null]` = not found). The reply shape is `{response: {response: …}}`. The first lookup of a song can take 8–33 s (LRCLIB rate limit); the card waits up to 60 s.
+- **Lookup.** `jukebox_kiosk/ma {command: "music/item_by_uri", args: {uri}}`; lyrics are read from `metadata.lrc_lyrics` / `metadata.lyrics`. If both are empty the card calls `metadata/get_track_lyrics {track: <provider copy>}`, which answers `[plain, lrc]`.
 - **Radio.** For a station, the card searches `music/search` for the stream's artist + title, takes the best track match (exact title first, then prefix; "(Live)" / "Remastered" variants rank below the plain title) and asks `get_track_lyrics` for it. Radio lyrics never seek.
 - **Surfaces** (all share one store, so a song is looked up once):
   - **Art overlay**: the lyrics toggle at the top right of the art; remembered per device (`localStorage`, `jukebox-card:lyrics-overlay:v1`).
   - **Stage**: the expand button next to it opens a full-screen lyrics view (Fullscreen API, WebKit fallback, or a fixed overlay where fullscreen is not allowed). Tap to show the transport controls and ✕; Esc or ✕ closes it.
-  - **Lyrics tab**: the 5th tab (`lyrics_tab`).
   - **Screensaver**: previous / current / next line for synced lyrics, a slow scroll for plain lyrics (`screensaver_lyrics`). With no lyrics to show, a small translucent status line ("No lyrics", "Lyrics unavailable", "Looking for lyrics…") sits under the track info and drifts with the clock.
 - **Synced lyrics** highlight the current line from the interpolated player position (plus `lyrics_offset_ms`) and keep it centred. **Long-press** a line for 0.55 s to send `media_player.media_seek {seek_position}` to `entity`; the line flashes and a toast confirms it. A plain tap does nothing, so scrolling never seeks.
 - **Plain lyrics** scroll in proportion to the track's progress and show an **Unsynced** chip. Scrolling by hand pauses the auto-scroll for a few seconds.
-- **States**: "Looking for lyrics…", "No lyrics found", and "Lyrics unavailable" (with Try again; a permission error adds a note that the HA user may need admin rights for `mass_queue.send_command`). Failures back off for 60 s; there is never more than one lookup per song in flight.
+- **States**: "Looking for lyrics…", "No lyrics found", and "Lyrics unavailable". Failures back off for 60 s; there is never more than one lookup per song in flight.
 - **Lyrics come only from Music Assistant.** The card fetches and displays them through Music Assistant and never stores or redistributes lyric text. Lyric text stays in memory (an LRU of 50 songs) for the page session only, and a reload fetches it again. `localStorage` (`jukebox-card:lyrics:v2`, 100 songs, keyed by URI or by `artist|title` for radio) only remembers "not found" markers, with no text, for 1 day. The old `jukebox-card:lyrics:v1` cache, which held lyric text, is deleted on load.
 - **Look**: Black Frame Mono: the current line is white, the others translucent white, over whatever `backdrop` mode is active.
 
@@ -349,29 +343,27 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | key | default | |
 |---|---|---|
 | `entity` | `media_player.everywhere` | Player for transport, the Everywhere volume, the queue and every `play_media` |
-| `config_entry_id` | (required) | MA config entry for `music_assistant.search` / `get_library` |
+| `config_entry_id` | found by itself | *(Advanced, YAML only)* Music Assistant config entry for `music_assistant.search` / `get_library`. Normally the card learns it from the integration (any user) or, on the native backend, from Home Assistant (admins). Set it only to override |
 | `rooms` | `[]` | `[{name, entity, icon?}]`, or bare entity ids (the name then comes from `friendly_name`). Each room gets its own volume slider |
-| `favorite_entity` | `button.everywhere_favorite_current_song` | Pressed by the heart (button, input_button or script). `''` hides the heart |
-| `backend` | `auto` | `auto`, `kiosk`, `mass_queue` or `native` (see [Backends](#backends)) |
-| `mass_queue_entry_id` | — | *(legacy, `backend: mass_queue` only)* mass_queue (Music Assistant Queue Actions) config entry, used for `mass_queue.get_album_tracks / get_artist_tracks / get_playlist_tracks` and for lyrics (`mass_queue.send_command`). The 0.3.0 name `queue_config_entry_id` is still accepted, and the visual editor rewrites it to the new key |
+| `favorite_entity` | found by itself | *(Advanced, YAML only)* A button, input_button or script the heart presses instead of the automatic way (see **Heart**). `''` hides the heart |
+| `backend` | `auto` | *(Advanced, YAML only)* `auto`, `kiosk` or `native` (see [Backends](#backends)) |
 | `screensaver_minutes` | `10` (0–1440) | Idle minutes before the screensaver. `0` turns it off. The editor offers Off, 1, 5, 10, 15, 30, 60 and Custom; any 0–1440 value from YAML still loads |
 | `browse_limit` | `60` (1–500) | Items per Browse page (infinite scroll pages by `offset`) |
-| `queue_limit` | `200` (1–1000) | Upcoming items requested from `get_queue_items` (`limit_after`); out-of-range values are clamped |
+| `queue_limit` | `200` (1–1000) | Upcoming items requested from `jukebox_kiosk/queue_items` (`limit_after`); out-of-range values are clamped |
 | `limit` | `8` (1–50) | Search results per type. 1-character queries always use 5 |
-| `default_tab` | `now` | `now`, `browse`, `search`, `queue` or `lyrics`. A tab that is turned off (or unknown) is ignored and Now Playing opens |
+| `default_tab` | `now` | `now`, `browse`, `search` (separate layout only) or `queue`. An unknown tab is ignored and Now Playing opens |
 | `library_only` | `false` | Search only the MA library |
 | `search_filters` | `true` | v0.7 filters. An artist page in Search offers **Search in JJ Grey** (an album page: **Search in** that album); the next searches stay inside it, shown as a removable chip (`Artist: JJ Grey ✕`) with **Clear filters**. Library gets a **Filter** button (type to narrow the list) and **Filter by** on artist pages (that artist's albums / tracks). `false` hides all of it |
 | `idle_clear_filters` | `true` | When the screensaver comes on (`screensaver_minutes`), the Search scope chips (`Artist: … ✕`) and the Library filters are cleared, so the next person starts from everything. `false` keeps them until ✕ / Clear filters |
 | `library_first` | `true` | Search lists your library matches first ("In your library"), then provider results ("From your providers") with copies of library items removed. Applies to scoped searches too. `false` keeps Music Assistant's order |
 | `slow_ms` | `800` | Search replies slower than this switch on in-flight limiting |
-| `accent` | `mono` | Only `mono` exists so far |
+| `accent` | `mono` | *(YAML only)* Only `mono` exists so far, so it changes nothing |
 | `font_base` | `fonts/` next to the `.js` | Location of the woff2 files. `false` uses system fonts |
 | `height` | fits the window | Card height. By default the card fills the space from its top edge to the bottom of the window (below the HA toolbar, minimum 320 px); set a fixed value such as `700px` to override |
 | `backdrop` | `auto` | `full`, `light`, `static`, `off` or `auto`. See [Backdrop and performance](#backdrop-and-performance) |
 | `scale` | `auto` | Large-screen zoom. `auto` scales the whole UI by min(width/1420, height/800) once that is ≥ 1.15 (1920x1080 → 1.35, capped at 1.8). A number forces it; `1` turns it off |
 | `title` | `Jukebox` | Brand text in the header |
-| `show_lyrics` | `true` | Master switch for lyrics: art overlay toggle, Stage, Lyrics tab and screensaver lyrics. Needs `mass_queue_entry_id` |
-| `lyrics_tab` | `true` | Show the 5th **Lyrics** tab |
+| `show_lyrics` | `true` | Master switch for lyrics: art overlay toggle, Stage and screensaver lyrics |
 | `screensaver_lyrics` | `true` | Previous / current / next line (synced) or a slow scroll (plain) on the screensaver |
 | `lyrics_seek` | `true` | Long-press (0.55 s) a synced line to seek there. Never on radio |
 | `lyrics_offset_ms` | `500` (−5000–5000) | Shift for synced lyrics; positive shows lines sooner |
@@ -383,16 +375,14 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `leader_drop` | `allow` | Dropping the leader of a playing group: `allow` (MA re-forms the group on the other rooms after about 6 s of silence; the panel shows "Regrouping…"), or `block` (hand off with Move) |
 | `coerce_repeat_one` | `true` | A player that reports repeat "one" is switched back to repeat all (the whole queue) with one `media_player.repeat_set`, once per detection with a one-minute cooldown, only for the card's active player and only for users with Playback. `false` sends nothing (repeat "one" is still shown as repeat queue, and the card never offers it) |
 | `confirm_drop` | `false` | `true` asks in a centred dialog before a drop, a takeover or pausing the last room (the 0.6.3 behaviour). `false` (default) drops on tap and shows a small status chip top-right with Undo; a takeover or last-room question is asked in the chip |
-| `presets` | `[]` | `[{name, members: [room entities], volumes?: {entity: percent}, target?}]` (`dynamic`) |
-| `quiet_hours` | — | `{start: 'HH:MM', end: 'HH:MM', max_volume: percent, applies?: guests\|everyone}` caps volume sliders; `start === end` means all day. Guests only by default |
+| `presets` | `[]` | *(YAML only)* `[{name, members: [room entities], volumes?: {entity: percent}, target?}]` (`dynamic`) |
 | `large_buttons` | `false` | Bigger touch targets and text everywhere |
 | `hearts` | `true` | *(0.7)* A favourite heart on Search and Library rows and tiles, on playlist rows and on album, artist and playlist pages. See [Favourites (hearts)](#favourites-hearts). Needs the Jukebox Kiosk backend and the `library` class. `false` keeps the 0.6 hearts only (Search radio rows, the station sheet and Now Playing) |
-| `show_autoplay` | `false` | *(0.7)* Autoplay (Music Assistant "don't stop the music") toggle in the Queue header plus an indicator on Now Playing. Jukebox Kiosk backend, class `queue` |
 | `radio_favorites_only` | `false` | *(0.7)* Browse › Radio **My stations** lists favourite stations only. Default: favourites first, then the other library stations |
 | `library_keyboard` | `always` | *(0.7.3, combined Library tab)* `always`: the on-screen keyboard is always shown on every screen size. `tap`: optional fallback for small screens: in portrait and on phones the list shows first and tapping the search box opens the keyboard (landscape tablets keep it on the left either way) |
 | `library_layout` | `combined` | *(0.7.2)* `combined`: one Library tab with the search box, the All sources button and the big category buttons (no Search tab). `separate`: the 0.7.1 Library + Search tabs |
 | `library_categories` | `[playlist, artist, track, genre, radio]` | *(0.7.2)* Category buttons in order; also `album`, `podcast`, `audiobook` |
-| `search_sources` | `true` | *(0.7.2)* On the combined Library tab, the **All sources** button beside the search box (All, Library, then your Music Assistant services; you can pick more than one). On the separate Search tab those buttons stay in a row under the box. `false` hides them. Jukebox Kiosk and mass_queue backends |
+| `search_sources` | `true` | *(0.7.2)* On the combined Library tab, the **All sources** button beside the search box (All, Library, then your Music Assistant services; you can pick more than one). On the separate Search tab those buttons stay in a row under the box. `false` hides them. Jukebox Kiosk backend |
 | `library_home` | `false` | *(0.7; only with `library_layout: separate`; was `true` in 0.7.1)* The Library tab opens on big shortcut tiles |
 | `library_tiles` | see right | *(0.7; only with `library_layout: separate` and `library_home: true`)* Tiles in order: `playlist`, `artist`, `album`, `radio`, `search`, `track`, `podcast`, `audiobook`, `genre`, `discover`; each an id or `{tile, label}`. Unset = playlist, artist, album, radio, search (plus discover when `discover` is set) |
 | `library_label` | `Library` | *(0.7)* The Library tab's name |
@@ -402,7 +392,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `radio_browse` | off | *(0.7)* `true` or a list of `popular`, `country`, `language`, `tag`: "Stations by" modes on Library → Radio (Radio Browser provider). Hidden on the native backend |
 | `radio_country` | HA's country | *(0.7)* Two-letter code the Country mode opens on |
 
-The visual editor covers entity, config entry, rooms (an entity list that keeps existing names), favorite entity and mass_queue entry; a **Display** section (screensaver presets Off / 1 / 5 / 10 / 15 / 30 / 60 min plus Custom, screensaver lyrics, default tab, backdrop, accent); a **Lyrics** section (lyrics, Lyrics tab, long-press seek, offset); and an Advanced section (browse limit and the rest). Options you leave at their defaults are not written to YAML, and existing 0.3.x configs load unchanged.
+The visual editor shows on-screen wording only. Top: **Player** and **Room volume sliders**. **Display**: Start tab (the bar's names: Now Playing, Library, Queue, plus Search in the separate layout), screensaver, screensaver lyrics, Background, large buttons, repeat one. **Speakers** (see [Speakers](#speakers-050)). **Lyrics**: lyrics on/off, press-and-hold to jump, timing. **Search** and **Library** sections. There is no Lyrics tab and no Autoplay switch (the Queue shows the Autoplay switch whenever Music Assistant supports it). `config_entry_id`, `favorite_entity`, `backend`, `presets` and `accent` are YAML only. Quiet hours were removed in 0.7.9.
 
 
 ## Known issues
@@ -422,7 +412,6 @@ Not in 0.7.x: joining a speaker to a dynamic group so playback resumes on it, an
 - **Lyrics say "Lyrics unavailable".** Music Assistant has no lyrics provider enabled, or the user lacks `read`. Music Assistant won't fetch lyrics for library tracks, so the card asks for the provider copy of the track.
 - **No album art.** The card never loads the player's absolute `entity_picture` (mixed content on https). It uses `entity_picture_local`, then a relative `entity_picture`, then an https queue image.
 - **Typing or volume drags stutter on a kiosk tablet.** Set `backdrop` to `light`, `static` or `off`.
-- *(legacy)* **On `backend: mass_queue` the Queue tab says "Queue unavailable".** mass_queue isn't installed, or `mass_queue_entry_id` is wrong. It must be the mass_queue entry, not the Music Assistant one.
 
 ## License
 

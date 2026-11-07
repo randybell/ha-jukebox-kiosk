@@ -226,23 +226,23 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('D12 phone: compact tiles, rows scroll sideways, no page overflow', w < 130 && ov, String(w));
   await m.close();
 }
-// ---------------- 6. Autoplay ("don't stop the music") prototype, flag show_autoplay ----------------
+// ---------------- 6. Autoplay ("don't stop the music"): the Queue always shows the switch when MA supports it ----------------
 {
   const QV = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
   const NV = `__card.shadowRoot.querySelector('jb-now').shadowRoot`;
   const AP = encodeURIComponent(J({ autoplay: true }));
-  // flag off (default): no pill even when the server supports it
+  // nothing set: the pill is there as soon as the server supports it (no editor switch since 0.7.9 #58)
   const a = await open('&tab=queue&kcaps=' + AP);
   await wait(a, `${QV}.querySelectorAll('.qr').length > 0`);
-  check('AP1 default (show_autoplay off): no Autoplay pill', !(await ev(a, `!!${QV}.querySelector('.ap')`)));
+  check('AP1 nothing set + server supports autoplay: the Autoplay pill shows', await wait(a, `!!${QV}.querySelector('.ap')`));
   await a.close();
-  // flag on, server without autoplay: still hidden
-  const b = await open('&tab=queue', { show_autoplay: true });
+  // server without autoplay: hidden
+  const b = await open('&tab=queue');
   await wait(b, `${QV}.querySelectorAll('.qr').length > 0`);
-  check('AP2 show_autoplay on but server lacks it: hidden', !(await ev(b, `!!${QV}.querySelector('.ap')`)));
+  check('AP2 server lacks autoplay: hidden', !(await ev(b, `!!${QV}.querySelector('.ap')`)));
   await b.close();
-  // flag on + server: pill off -> tap -> on, set_autoplay sent for the card's entity; Now Playing shows the indicator
-  const c = await open('&tab=queue&kcaps=' + AP, { show_autoplay: true });
+  // server supports it: pill off -> tap -> on, set_autoplay sent for the card's entity; Now Playing shows the indicator
+  const c = await open('&tab=queue&kcaps=' + AP);
   const shown = await wait(c, `${QV}.querySelector('.ap')`);
   check('AP3 pill shown, off, aria-pressed=false', shown && (await ev(c, `${QV}.querySelector('.ap').getAttribute('aria-pressed')`)) === 'false');
   await tap(c, `${QV}.querySelector('.ap')`);
@@ -256,12 +256,12 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
     && !(await ev(c, `!!${NV}.querySelector('.tb[aria-label*="Autoplay"]')`)), String(await ev(c, `${NV}.querySelector('.upn')?.textContent?.replace(/\\s+/g, ' ')`)));
   await c.close();
   // Autoplay style picker (feature autoplay_mode): chevron opens the sheet, playlist chooser, saves via set_autoplay_mode
-  const noMode = await open('&tab=queue&kcaps=' + AP, { show_autoplay: true });
+  const noMode = await open('&tab=queue&kcaps=' + AP);
   await wait(noMode, `${QV}.querySelector('.ap')`);
   check('AP6 server without autoplay_mode: no chevron, pill unchanged', !(await ev(noMode, `!!${QV}.querySelector('[data-action="autoplay-mode"]')`)));
   await noMode.close();
   const APM = encodeURIComponent(J({ autoplay: true, autoplay_mode: true }));
-  const d = await open('&tab=queue&kcaps=' + APM, { show_autoplay: true });
+  const d = await open('&tab=queue&kcaps=' + APM);
   await wait(d, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
   await tap(d, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
   await wait(d, `${QV}.querySelectorAll('.aps .apo').length > 0`);
@@ -294,7 +294,7 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('AP11 scrim / Escape closes the sheet', await wait(d, `!${QV}.querySelector('.aps')`));
   await d.close();
   // no provider for similar tracks: Similar music is hidden; long-press on the pill opens the sheet without toggling
-  const e = await open('&tab=queue&apsimilar=0&kcaps=' + APM, { show_autoplay: true }, { width: 390, height: 844, isMobile: true, hasTouch: true });
+  const e = await open('&tab=queue&apsimilar=0&kcaps=' + APM, {}, { width: 390, height: 844, isMobile: true, hasTouch: true });
   await wait(e, `${QV}.querySelector('.ap')`);
   const r = await e.evaluate((x) => { const b = eval(x).getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; }, `${QV}.querySelector('.ap')`);
   await e.mouse.move(r.x, r.y); await e.mouse.down(); await sleep(700); await e.mouse.up(); await sleep(150);

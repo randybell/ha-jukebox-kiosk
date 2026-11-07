@@ -1,31 +1,25 @@
 // Mock `hass` for the jukebox-card dev harness. No network, no Home Assistant.
-// Shapes follow the real exports in /workspace/ha-exports (HA 2026.10.4, MA 2.10.9, mass_queue 0.10.4):
+// Shapes follow the real exports in /workspace/ha-exports (HA 2026.10.4, MA 2.10.9):
 //  - music_assistant.search -> {context, response:{artists, albums, tracks, playlists, radio, audiobooks, podcasts}} (always 7 lists)
 //    items: {media_type, uri, name, version, image, favorite, explicit} (+artists[]/album{} on tracks, artists[] on albums).
 //    No provider / duration / year / owner / metadata. Provider is the uri scheme (library://, apple_music://, apple_music--XXXXXXXX://).
 //  - music_assistant.get_library -> {response:{items, limit, offset, order_by, media_type}}
 //  - music_assistant.get_queue (entity) -> {response:{<entity_id>: {current_index, current_item{queue_item_id,...}, items:<count>, shuffle_enabled, repeat_mode}}}
-//  - mass_queue.get_queue_items -> {response:{<entity_id>: [{queue_item_id, media_title, media_album_name, media_artist, media_content_id, media_image, favorite}]}}
-//  - mass_queue.get_{album,artist,playlist}_tracks {config_entry_id, uri, page?} -> {response:{tracks:[{media_title, media_content_id,
-//    duration, media_image (https or ""), favorite, media_album_name, media_artist, position (playlists only, null)}]}}
 //  - radio items: {media_type:'radio', uri:'radiobrowser://radio/<uuid>', name (often with leading tabs/spaces), image (https or null)}
 //  - media_player.everywhere: entity_picture is an absolute LAN URL (not loadable from the kiosk); entity_picture_local is
 //    /api/media_player_proxy/... (served by dev/api/ in the harness).
 // URL params: latency, jitter, mode=fixed|inverse, real=1 (search returns the real "eagles" sample),
 // radio=1 (Radio Browser stations in search only; the library has none, as on the real server), radio=lib (stations in the library too),
-// default: no radio provider at all; mqpage=all|paged (mass_queue `page`: all = falsy page returns every track, page n = 50-track
-// page n, like mass_queue 0.10; paged = 0-based 50-track pages, page 0 included; ignore = page ignored, always everything),
+// default: no radio provider at all;
 // idle=1 (nothing playing), empty=1 (empty library), noart=1 (player without entity_picture_local),
-// pods=1 (a podcast + an audiobook in the catalog), mqslow=<text> (mass_queue calls whose uri or name contains <text> take 900 ms),
-// mqfail=<service> (that one mass_queue service throws, e.g. get_artist_tracks), mqlat=<ms> (mass_queue latency, default 30-60),
+// pods=1 (a podcast + an audiobook in the catalog),
 // playlat=<ms> (play_media round trip, default 20).
-// Lyrics (mass_queue.send_command, response {context, response:{response:X}} like the real REST/websocket shape):
-// lyrlat=<ms> (send_command latency, default 40), lyrfail=perm|err (every send_command throws), lyrics=none (nothing has lyrics).
+// Lyrics (through the Jukebox Kiosk mock's jukebox_kiosk/ma): lyrics=none (nothing has lyrics); lyrlat, lyrfail: see mock-kiosk.js.
 // The mock lyrics are INVENTED placeholder text (see dev/fixtures/ma-lyrics-sample.json), never real song lyrics.
 // 'So What' = synced via metadata/get_track_lyrics, 'Teardrop' = synced in item metadata, 'Dreams' = plain, the rest = none.
 // music_assistant.search with `artist` / `album`: MA prefixes the query ("artist - name"); the mock keeps only items by that artist.
 // Speakers (0.5.0): dev/mock-ma.js adds media_player.indoor / media_player.outdoor (dynamic MA groups, each with its own queue)
-// and the players/*, player_queues/* and config/players/* send_command calls (logged in __maLog; writes also in __calls). See mock-ma.js for params.
+// and the players/*, player_queues/* and config/players/* MA commands (logged in __maLog; writes also in __calls). See mock-ma.js for params.
 // admin=1 (the user is an admin), user=<name>, uid=<user id>. nolib=1: get_library is refused (a guest without library reads).
 // jjgrey=1: the v0.7 search-filters artist (JJ Grey, library + Apple Music, one duplicate track) and look-alikes.
 // HA media_player.join / unjoin throw (their ids don't match MA's speakers; the card must use MA set_members).
@@ -47,20 +41,13 @@ window.__itemByUriLog = [];
 const REAL = params.get('real') === '1';
 const RADIO = params.get('radio') === '1' || params.get('radio') === 'lib';
 const RADIO_LIB = params.get('radio') === 'lib';
-const MQPAGE = params.get('mqpage') ?? 'all';
 const NOART = params.get('noart') === '1';
-const MQ_PAGE_SIZE = 50;
 const EMPTY = params.get('empty') === '1';
 const PODS = params.get('pods') === '1';
-const MQSLOW = (params.get('mqslow') ?? '').toLowerCase();
-const MQFAIL = params.get('mqfail') ?? '';
-const MQLAT = params.get('mqlat');
-const LYRLAT = Number(params.get('lyrlat') ?? 40);
-const LYRFAIL = params.get('lyrfail') ?? '';
 const LYRNONE = params.get('lyrics') === 'none';
+/** the Music Assistant config entry (the Jukebox Kiosk mock reports it; music_assistant.* services refuse anything else) */
+export const MA_ENTRY = '01MUSICASSISTANT0000000000';
 const fixture = async (f) => (await fetch(new URL(`./fixtures/${f}`, import.meta.url))).json();
-// real mass_queue tracks (scrubbed): library://album/1448 (Hotel California, 9 tracks), library://playlist/158 (2 tracks)
-const realTracks = await fixture('mass-queue-tracks-sample.json').then((d) => Object.fromEntries(Object.values(d).map((v) => [v.uri, v.raw.result.response.tracks]))).catch(() => ({}));
 const realRadio = await fixture('ma-search-sample-radio.json').then((d) => d.result.response.radio).catch(() => []);
 const realSample = REAL ? (await (await fetch(new URL('./fixtures/ma-search-sample.json', import.meta.url))).json()).result.response : null;
 
@@ -208,7 +195,7 @@ if (params.get('names') === 'fake') {
   }
   for (const it of CATALOG.playlists) { it.name = fp(it.name); it.image = art(it.name); }
 }
-// the real export's ids, so drill-down into "Hotel California" serves the real mass_queue response (9 tracks with durations)
+// the real export's album id
 CATALOG.albums.find((x) => (x._orig ?? x.name) === 'Hotel California').uri = 'library://album/1448';
 // jjgrey=1 (v0.7 search filters): a public artist name with invented albums/tracks, in the library and on Apple Music
 // ("Low Tide Lantern" is on both: the provider copy must be dropped), plus look-alike words by other artists
@@ -390,14 +377,12 @@ const tracksFor = (it) => {
 async function callService(domain, service, data = {}, target, notifyOnError, returnResponse) {
   const call = { t: Math.round(performance.now()), domain, service, data: structuredClone(data), target: target ? structuredClone(target) : undefined, returnResponse: !!returnResponse };
   // read-only lyrics fetches go to their own log so the user-action log (__calls) stays exactly as before 0.4.0
-  const lyr = domain === 'mass_queue' && service === 'send_command';
-  const maCmd = lyr && /^(players|player_queues|config\/players)\//.test(String(data.command ?? ''));
-  if (!maCmd) (lyr ? window.__lyricsLog : window.__calls).push(call);
-  const ctx = { id: 'mock-' + (window.__calls.length + window.__lyricsLog.length) };
+  window.__calls.push(call);
+  const ctx = { id: 'mock-' + window.__calls.length };
   const needResp = () => { if (!returnResponse) throw new Error(`${domain}.${service} needs return_response`); };
   if (domain === 'music_assistant' && service === 'search') {
     needResp();
-    if (!data.config_entry_id) throw new Error('config_entry_id missing');
+    if (data.config_entry_id !== MA_ENTRY) throw new Error(`Config entry ${data.config_entry_id || '(none)'} not found`);
     const ms = delayFor(data.name ?? '');
     await sleep(ms);
     if (mock.fail) throw new Error('mock failure');
@@ -405,20 +390,10 @@ async function callService(domain, service, data = {}, target, notifyOnError, re
     call.ms = Math.round(ms); call.replyAt = Math.round(performance.now());
     return { context: ctx, response };
   }
-  if (domain === 'mass_queue' && service === 'send_command') {
-    needResp();
-    await sleep(LYRLAT);
-    if (LYRFAIL === 'perm') throw Object.assign(new Error('Unauthorized'), { code: 'unauthorized' });
-    if (LYRFAIL === 'err') throw new Error('mass_queue.send_command: provider unavailable');
-    if (data.config_entry_id !== MQ_ENTRY) throw new Error(`Config entry ${data.config_entry_id} not found`);
-    if (maCmd) return { context: ctx, response: { response: await ma.command(data.command, data.data ?? {}) } };
-    return { context: ctx, response: { response: sendCommand(data.command, data.data ?? {}) } };
-  }
-  const slow = domain === 'mass_queue' && MQSLOW && String(data.uri ?? '').toLowerCase().includes(MQSLOW) || (domain === 'mass_queue' && MQSLOW && (byUri(data.uri)?.name ?? '').toLowerCase().includes(MQSLOW));
-  await sleep(slow ? 900 : domain === 'mass_queue' && MQLAT ? Number(MQLAT) : 30 + Math.random() * 30);
+  await sleep(30 + Math.random() * 30);
   if (domain === 'music_assistant' && service === 'get_library') {
     needResp();
-    if (!data.config_entry_id) throw new Error('config_entry_id missing');
+    if (data.config_entry_id !== MA_ENTRY) throw new Error(`Config entry ${data.config_entry_id || '(none)'} not found`);
     if (params.get('nolib') === '1') throw Object.assign(new Error('Unauthorized'), { code: 'unauthorized' });
     return { context: ctx, response: library(data) };
   }
@@ -495,69 +470,10 @@ async function callService(domain, service, data = {}, target, notifyOnError, re
     commit();
     return { context: ctx };
   }
-  if (domain === 'mass_queue') {
-    if (mock.failQueue) throw new Error('queue unavailable');
-    if (MQFAIL && service === MQFAIL) throw new Error(`mass_queue.${service}: provider unavailable`);
-    if (service === 'get_podcast_episodes') {
-      needResp();
-      if (!data.config_entry_id || !data.uri) throw new Error('config_entry_id and uri required');
-      const pod = byUri(data.uri);
-      if (!pod || pod.media_type !== 'podcast') throw new Error(`URI ${data.uri} returned no results!`);
-      const n = pod.name === 'The Mockcast' ? 6 : 3;
-      return { context: ctx, response: { episodes: Array.from({ length: n }, (_, i) => ({ media_title: `${pod.name} #${n - i}`, media_content_id: `library://podcast_episode/${h(pod.uri) % 900 + i}`,
-        duration: 1800 + i * 60, media_image: '', favorite: false, release_date: new Date(Date.UTC(2026, 9, 28 - i * 7)).toISOString() })) } };
-    }
-    if (service.startsWith('get_') && service.endsWith('_tracks')) {
-      needResp();
-      if (!data.config_entry_id || !data.uri) throw new Error('config_entry_id and uri required');
-      // mass_queue looks the item up first (get_*_details): an unknown uri is an error, not an empty list
-      if (!byUri(data.uri) && !realTracks[data.uri]) throw new Error(`URI ${data.uri} returned no results!`);
-      if (data.page !== undefined && (!Number.isInteger(data.page) || data.page < 0 || data.page > 1000)) throw new Error('page must be 0..1000');
-      const it = byUri(data.uri);
-      const pl = service === 'get_playlist_tracks';
-      let all = realTracks[data.uri] ? structuredClone(realTracks[data.uri])
-        : tracksFor(it).map((t) => ({ media_title: t.name, media_content_id: t.uri, duration: t._duration ?? 0,
-          media_image: t.image ?? '', favorite: !!t.favorite, media_album_name: t.album?.name ?? '', media_artist: (t.artists ?? []).map((a) => a.name).join(', '),
-          ...(pl ? { position: null } : {}) }));
-      // mass_queue: `if not page` -> every track; otherwise MA's page
-      if (pl && data.page !== undefined && MQPAGE !== 'ignore' && (data.page || MQPAGE === 'paged')) all = all.slice(data.page * MQ_PAGE_SIZE, (data.page + 1) * MQ_PAGE_SIZE);
-      return { context: ctx, response: { tracks: all } };
-    }
-    const ent = data.entity;
-    if (!qOf(ent)) throw new Error(`mass_queue: ${ent} is not a Music Assistant player`);
-    const Q = qOf(ent);
-    if (service === 'get_queue_items') {
-      needResp();
-      const lb = data.limit_before ?? 5, la = data.limit_after ?? 100;
-      const from = Math.max(0, Q.index - lb);
-      return { context: ctx, response: { [ent]: Q.items.slice(from, Math.max(0, Q.index) + la + 1).map(qPub) } };
-    }
-    if (service === 'unfavorite_current_item') { const cur = Q.items[Q.index]; if (cur) cur._t.favorite = false; commit(); return { context: ctx }; }
-    const i = Q.items.findIndex((q) => q.queue_item_id === data.queue_item_id);
-    if (i < 0) throw new Error(`queue item ${data.queue_item_id} not found`);
-    const move = (to) => { const [x] = Q.items.splice(i, 1); Q.items.splice(to, 0, x); };
-    // these mass_queue services call MA's move_item / delete_item: an item MA already buffered (after the playing one,
-    // up to index_in_buffer) can't move (500 "<n> is already played/buffered") and isn't deleted (200, ignored)
-    const bufEnd = Math.max(Q.index, typeof Q.buf === 'number' ? Q.buf : Q.index + (params.get('qbuf') === '1' ? 1 : 0));
-    const buffered = i > Q.index && i <= bufEnd;
-    if (buffered && /^move_queue_item_/.test(service)) throw new Error(`${i} is already played/buffered`);
-    if (buffered && service === 'remove_queue_item') { commit(); return { context: ctx }; }
-    switch (service) {
-      case 'play_queue_item': Q.index = i; syncNowPlaying(true, ent); setState(ent, 'playing'); break;
-      case 'move_queue_item_up': if (i > Q.index + 1) move(i - 1); break;
-      case 'move_queue_item_down': if (i < Q.items.length - 1 && i > Q.index) move(i + 1); break;
-      case 'move_queue_item_next': if (i !== Q.index) { const [x] = Q.items.splice(i, 1); if (i < Q.index) Q.index--; Q.items.splice(Q.index + 1, 0, x); } break;
-      case 'remove_queue_item': if (i === Q.index) throw new Error('cannot remove the playing item'); Q.items.splice(i, 1); if (i < Q.index) Q.index--; break;
-      default: throw new Error(`mock-hass: unhandled mass_queue.${service}`);
-    }
-    commit();
-    return { context: ctx };
-  }
   throw new Error(`mock-hass: unhandled ${domain}.${service}`);
 }
 
 // ---------------- lyrics (invented text only) ----------------
-const MQ_ENTRY = '01MASSQUEUE0000000000000000';
 const LYR = await fixture('ma-lyrics-sample.json').catch(() => ({ lines: ['La la la'] }));
 const stamp = (t) => `[${String(Math.floor(t / 60)).padStart(2, '0')}:${(t % 60).toFixed(2).padStart(5, '0')}]`;
 /** invented synced lyrics spanning `dur` seconds: a line every `step` s from `start`, a blank break every 8th line */
@@ -645,10 +561,26 @@ window.__playTrack = (name, position = 60) => {
 };
 
 const USER = { ...(params.get('uid') ? { id: params.get('uid') } : {}), name: params.get('user') ?? 'Kiosk', is_admin: params.get('admin') === '1' };
-// kiosk=1: the jukebox_kiosk integration is loaded (dev/mock-kiosk.js); the card's backend: auto then picks it
-const kiosk = params.get('kiosk') === '1' ? createKiosk({ DEMO_PROVIDERS, params, maApi: ma, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit: () => commit(), sleep, catalog: CATALOG, user: USER }) : null;
+// The jukebox_kiosk integration is loaded (dev/mock-kiosk.js), as in every real install; the card's backend: auto picks it.
+// kiosk=0: core Music Assistant only (the card's native backend).
+const kiosk = params.get('kiosk') !== '0' ? createKiosk({ DEMO_PROVIDERS, params, maApi: ma, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit: () => commit(), sleep, catalog: CATALOG, user: USER }) : null;
+/** entity registry display entries, like hass.entities: every MA player on its own device, plus Everywhere's MA favorite button */
+function registry() {
+  const out = {};
+  for (const id of Object.keys(states)) {
+    if (id.startsWith('media_player.')) out[id] = { entity_id: id, device_id: 'dev_' + id.slice(13), platform: 'music_assistant' };
+    if (id === 'button.everywhere_favorite_current_song') out[id] = { entity_id: id, device_id: 'dev_everywhere', platform: 'music_assistant', translation_key: 'favorite_now_playing' };
+  }
+  return out;
+}
+/** without the integration: HA's own config_entries/get (admins only), the native backend's way to find the entry */
+async function coreWS(msg) {
+  if (msg.type !== 'config_entries/get') throw Object.assign(new Error(`Unknown command ${msg.type}`), { code: 'unknown_command' });
+  if (!USER.is_admin) throw Object.assign(new Error('Unauthorized'), { code: 'unauthorized' });
+  return msg.domain === 'music_assistant' ? [{ entry_id: MA_ENTRY, domain: 'music_assistant', state: 'loaded', title: 'Music Assistant' }] : [];
+}
 function makeHass() {
-  return { states: { ...states }, user: USER, locale: { language: 'en-US' }, language: 'en-US', callService, ...(kiosk ? kiosk.extras : {}) };
+  return { states: { ...states }, entities: registry(), ...(kiosk ? {} : { callWS: coreWS }), user: USER, locale: { language: 'en-US' }, language: 'en-US', callService, ...(kiosk ? kiosk.extras : {}) };
 }
 export let hass = makeHass();
 window.__hass = hass;

@@ -4,7 +4,7 @@
  *   jukebox_kiosk/ma {command, args}    -> one allowlisted MA command (the server checks class + entity permission)
  *   jukebox_kiosk/queue_items           -> queue window in the QueueItem shape, plus queue id / indexes / total
  *   jukebox_kiosk/item_tracks           -> server-paged track lists (page is 1-based on the wire)
- *   jukebox_kiosk/unfavorite_current, jukebox_kiosk/subscribe_queue
+ *   jukebox_kiosk/favorite_current, jukebox_kiosk/unfavorite_current, jukebox_kiosk/subscribe_queue
  */
 import type { HomeAssistant } from '../types';
 import { AUTOPLAY_MODES, BackendError, Emitter, NO_EXT, type AutoplayMode, type AutoplayOptions, type Caps, type ExtCaps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
@@ -43,6 +43,7 @@ export class KioskBackend implements MaBackend {
   /** v0.7 features stay hidden until the server lists them (nothing flashes in and out) */
   ext: ExtCaps = { ...NO_EXT };
   info: any = undefined;
+  get maEntry(): string { return typeof this.info?.ma_entry_id === 'string' ? this.info.ma_entry_id : ''; }
   ready: Promise<void>;
   private em = new Emitter();
   constructor(private hassRef: () => HomeAssistant | undefined) {
@@ -106,6 +107,9 @@ export class KioskBackend implements MaBackend {
     const r = await this.ws<any>({ type: 'item_tracks', uri, page: page + 1, page_size: KIOSK_PAGE_SIZE });
     const rows = Array.isArray(r?.tracks) ? r.tracks : Array.isArray(r?.episodes) ? r.episodes : [];
     return { tracks: rows, more: !!r?.more, total: typeof r?.total === 'number' ? r.total : undefined };
+  }
+  favoriteCurrent(entity: string) {
+    return this.ws({ type: 'favorite_current', entity_id: entity });
   }
   unfavoriteCurrent(entity: string) {
     return this.ws({ type: 'unfavorite_current', entity_id: entity });

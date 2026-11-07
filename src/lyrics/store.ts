@@ -1,13 +1,12 @@
 import { parseLrc, parsePlain, toLyrics, type LyricLine } from './lrc';
 import type { HassEntity, HomeAssistant } from '../types';
 import type { MaBackend } from '../backend/types';
-import { MassQueueBackend } from '../backend/mass-queue';
 
 /**
- * One lyrics store per card, shared by every lyrics surface (art overlay, Stage, Lyrics tab, screensaver).
+ * One lyrics store per card, shared by every lyrics surface (art overlay, Stage, screensaver).
  * The card calls follow() on every hass update; a lookup starts only when the track key changes.
  *
- * Lookup through the card's MaBackend (jukebox_kiosk/ma, or mass_queue.send_command with config_entry_id = mass_queue_entry_id):
+ * Lookup through the card's MaBackend (jukebox_kiosk/ma):
  *   track with an MA uri:  music/item_by_uri {uri}           -> item.metadata.lrc_lyrics / .lyrics
  *                          metadata/get_track_lyrics {track} -> [plain, lrc]   ([null, null] = not found)
  *   radio / no MA uri:     music/search {search_query, media_types:['track'], limit}
@@ -105,7 +104,7 @@ export function bestMatch(tracks: any[], artist: string, title: string): any | u
   return best;
 }
 
-/** mass_queue.send_command result: {context, response: {response: X}} / {response: X} / X */
+/** a command result: {context, response: {response: X}} / {response: X} / X */
 export function mqResult(r: any): any {
   let d = r && typeof r === 'object' && 'response' in r ? r.response : r;
   if (d && typeof d === 'object' && !Array.isArray(d) && Object.keys(d).length === 1 && 'response' in d) d = d.response;
@@ -168,9 +167,6 @@ export class LyricsStore {
   hass?: HomeAssistant;
   /** the card's Music Assistant backend; lookups report 'error' (reason 'config') when it can't do lyrics */
   backend?: MaBackend;
-  /** 0.5.x API, kept for tests and embedders: a mass_queue config entry id selects the mass_queue backend. */
-  set entryId(id: string) { this.backend = id ? new MassQueueBackend(() => this.hass, id) : undefined; }
-  get entryId(): string { return this.backend instanceof MassQueueBackend ? this.backend.entryId : this.backend ? this.backend.kind : ''; }
   /** player entity being followed (the kiosk path reads its queue for the provider track) */
   private entity = '';
   enabled = true;
@@ -187,7 +183,7 @@ export class LyricsStore {
   follow(hass: HomeAssistant | undefined, ent: HassEntity | undefined) {
     this.hass = hass;
     this.entity = ent?.entity_id ?? '';
-    const sig = `${this.enabled}|${this.entryId}|${!!this.backend?.caps.lyrics}`;
+    const sig = `${this.enabled}|${this.backend?.kind ?? ''}|${!!this.backend?.caps.lyrics}`;
     if (sig !== this.sig) { this.sig = sig; this.key = ''; }
     if (!this.enabled) { if (this.state.status !== 'off') { this.key = ''; this.set({ status: 'off', lines: [] }); } return; }
     const ref = trackRef(ent);

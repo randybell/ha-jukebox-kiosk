@@ -6,6 +6,7 @@ import { SearchEngine } from './search-engine';
 import {
   imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, menuPos, menuTpl,
   playMedia, playMessage, drillable, canRadio, isRadio, rowActsTpl, foldedActions, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  maCall,
 } from './shared';
 import './detail-view';
 import { loadDetail, type DetailEntry } from './detail-view';
@@ -127,7 +128,7 @@ export class JbSearch extends LitElement {
   private _sel = '';
   private _resScroll = 0;
   private _kbBefore = false;
-  /** A row tap never plays: artists / albums / playlists (podcasts with mass_queue) open a detail, anything else is highlighted. */
+  /** A row tap never plays: artists / albums / playlists (podcasts with the Jukebox Kiosk integration) open a detail, anything else is highlighted. */
   private hearts = new FavController(this);
   private press = new PressController<{ it: MaItem; g: GroupKey }>(this, (p) => this.tap(p.it, p.g), (p) => this.tap(p.it, p.g));
   private _seqShown = 0;
@@ -384,10 +385,10 @@ export class JbSearch extends LitElement {
    *  artist filter, kept only when the artist matches. Library first, provider copies of library items dropped. */
   private async fetchScoped(scope: Scope, name: string, limit: number): Promise<SearchResults> {
     const extra = scope.album || !scope.artist ? Promise.resolve({} as SearchResults)
-      : this.hass!.callService('music_assistant', 'search', {
-        config_entry_id: this.config.config_entry_id, name, limit, media_type: ['album', 'track'],
+      : maCall(this.hass!, this.config, 'search', {
+        name, limit, media_type: ['album', 'track'],
         artist: scope.artist.name, library_only: this.config.library_only ?? false,
-      }, undefined, false, true).then(normaliseResponse).catch((e: unknown) => { console.warn('[jukebox-card] scoped search failed', e); return {} as SearchResults; });
+      }).then(normaliseResponse).catch((e: unknown) => { console.warn('[jukebox-card] scoped search failed', e); return {} as SearchResults; });
     const [pool, ex] = await Promise.all([this.poolFor(scope), extra]);
     return scopedResults(scope, pool, name, ex, Math.max(limit, 50));
   }
@@ -441,7 +442,6 @@ export class JbSearch extends LitElement {
   private async fetchGlobal(name: string, limit: number): Promise<SearchResults> {
     const { types, genres: wantGenres } = this.searchTypes();
     const data: Record<string, any> = {
-      config_entry_id: this.config.config_entry_id,
       name,
       limit,
       media_type: types,
@@ -454,7 +454,7 @@ export class JbSearch extends LitElement {
         .then((g: any) => (Array.isArray(g?.genres) ? g.genres : []).filter((x: any) => x && x.uri && x.name).map(normItem))
         .catch((e: unknown) => { console.warn('[jukebox-card] genre search failed', e); return [] as MaItem[]; })
       : null;
-    const svc = types.length ? this.hass!.callService('music_assistant', 'search', data, undefined, false, true).then(normaliseResponse) : Promise.resolve({} as SearchResults);
+    const svc = types.length ? maCall(this.hass!, this.config, 'search', data).then(normaliseResponse) : Promise.resolve({} as SearchResults);
     const [out, g] = await Promise.all([svc, genres]);
     if (g) out.genres = g;
     return out;

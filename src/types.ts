@@ -15,6 +15,8 @@ export interface HomeAssistant {
   language?: string;
   /** loaded integrations (backend: auto looks for jukebox_kiosk) */
   config?: { components?: string[]; country?: string | null; language?: string };
+  /** entity registry display entries (every user can read them) */
+  entities?: Record<string, { entity_id?: string; device_id?: string | null; platform?: string; translation_key?: string | null }>;
   callWS?<T = any>(msg: Record<string, unknown>): Promise<T>;
   connection?: {
     sendMessagePromise<T = any>(msg: Record<string, unknown>): Promise<T>;
@@ -51,46 +53,31 @@ export interface PresetConfig {
   /** Group to play on. Default: the current target. */
   target?: string;
 }
-export interface QuietHours {
-  /** 'HH:MM' local time. start === end means all day. */
-  start: string; end: string;
-  /** Highest volume in percent while quiet hours are on. */
-  max_volume: number;
-  /** Who is capped. Default guests (everyone who may not group speakers). */
-  applies?: 'guests' | 'everyone';
-}
-export type TabId = 'now' | 'browse' | 'search' | 'queue' | 'lyrics';
+export type TabId = 'now' | 'browse' | 'search' | 'queue';
 export type Enqueue = 'play' | 'next' | 'add' | 'replace' | 'replace_next';
 
 export interface JukeboxCardConfig {
   type: string;
   /** Player that receives play_media. Default media_player.everywhere */
   entity?: string;
-  /** Music Assistant config entry id. Required (non-admin users cannot list config entries). */
-  config_entry_id: string;
+  /** YAML-only override: the Music Assistant config entry id, for setups with several Music Assistant servers.
+   *  Unset (normal): the card asks the Jukebox Kiosk integration which entry it uses. */
+  config_entry_id?: string;
   /** Room players for the per-room volume sliders. `{name, entity}`; a bare entity id string is also accepted. */
   rooms?: Array<RoomConfig | string>;
-  /** Button that adds the current song to favorites. Default button.everywhere_favorite_current_song. Set to '' to hide. */
+  /** YAML-only override: a button / script the Now Playing heart presses to add a favorite ('' hides the heart).
+   *  Unset (normal): the heart adds through the Jukebox Kiosk integration, or presses the player's own Music Assistant
+   *  favorite button when the card finds one. */
   favorite_entity?: string;
-  /** mass_queue config entry id (a different entry from the Music Assistant one). Needed for Browse drill-down
-   *  (album/artist/playlist tracks via mass_queue.get_*_tracks). Optional. */
-  mass_queue_entry_id?: string;
-  /** Which Music Assistant path to use (0.6.0). auto (default): the Jukebox Kiosk integration when it is installed,
-   *  else mass_queue when mass_queue_entry_id is set, else core Music Assistant only (fewer features). */
-  backend?: 'auto' | 'kiosk' | 'mass_queue' | 'native';
-  /** @deprecated 0.3.0 name of mass_queue_entry_id, still accepted. */
-  queue_config_entry_id?: string;
+  /** YAML-only: which Music Assistant path to use. auto (default): the Jukebox Kiosk integration when it is loaded,
+   *  else core Music Assistant only (fewer features). */
+  backend?: 'auto' | 'kiosk' | 'native';
   /** Minutes of no touches before the screensaver. Default 10. 0 disables. Any whole number 0-1440. */
   screensaver_minutes?: number;
-  /** Lyrics (needs the Jukebox Kiosk integration or mass_queue_entry_id). Master switch for every lyrics surface and lookup. Default true. */
+  /** Lyrics (needs the Jukebox Kiosk integration). Master switch for every lyrics surface and lookup. Default true. */
   show_lyrics?: boolean;
-  /** The Lyrics tab. Default true (when show_lyrics is on). */
-  lyrics_tab?: boolean;
   /** Lyrics lines on the screensaver. Default true (when show_lyrics is on). */
   screensaver_lyrics?: boolean;
-  /** Autoplay (MA "don't stop the music") toggle in the Queue header plus an indicator on Now Playing.
-   *  Needs the Jukebox Kiosk integration (0.7+) and permission class queue. Default false. */
-  show_autoplay?: boolean;
   /** Long-press a synced line to seek there. Default true. */
   lyrics_seek?: boolean;
   /** Shift synced lyrics: positive shows lines sooner. Default 500 (HA reports whole seconds). -5000..5000. */
@@ -182,9 +169,10 @@ export interface JukeboxCardConfig {
   /** 0.6.5: a player that reports repeat 'one' is shown as 'all' and gets one repeat_set 'all' (needs Playback). Default true. */
   coerce_repeat_one?: boolean;
   presets?: PresetConfig[];
-  quiet_hours?: QuietHours;
   /** Bigger touch targets and text. Default false. */
   large_buttons?: boolean;
+  /** @internal the Music Assistant config entry the card uses (config_entry_id, else what the integration reports) */
+  _maEntry?: string;
   /** @internal the card's Music Assistant backend (set by the card, shared with every view) */
   _backend?: import('./backend/types').MaBackend;
   /** Shared active queue, used by row Remove without constructing a second queue. */

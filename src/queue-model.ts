@@ -2,9 +2,8 @@ import type { HomeAssistant } from './types';
 import { cleanName, safeImage } from './shared';
 import { BackendError, type AutoplayMode, type AutoplayOptions, type MaBackend, type QueueAction } from './backend/types';
 import { removeQueuedItem } from './queue-actions';
-import { MassQueueBackend } from './backend/mass-queue';
 
-/** One item from mass_queue.get_queue_items (v0.10.4: no duration). */
+/** One queue row (the backend's queue window shape). */
 export interface QueueItem {
   queue_item_id: string;
   media_title: string;
@@ -55,28 +54,25 @@ export function lockedRow(current: number, currentIndex?: number, bufferIndex?: 
   return current + Math.max(0, bufferIndex - currentIndex);
 }
 /** MA refused or ignored a change because the track is already played or loading in the player's buffer */
-export class QueueBusy extends Error { constructor(m = "That song is already loading, so it can't move right now.") { super(m); } }
+export const BUSY_MOVE = "That song is already loading, so it can't move right now.";
+export const BUSY_REMOVE = "That song is already loading, so it can't be removed right now.";
+/** MA refused or ignored a move or a delete; the message is the one the Queue shows */
+export class QueueBusy extends Error {
+  constructor(readonly kind: 'move' | 'remove' = 'move') { super(kind === 'remove' ? BUSY_REMOVE : BUSY_MOVE); }
+}
 export const isBufferedError = (e: unknown) => /already (played|buffered|played\/buffered)|already loaded in (the )?buffer/i.test(String((e as any)?.message ?? e));
 /**
  * Shared queue state for Now Playing (Up next strip), the Queue tab and the tab badge. All MA access goes through the
- * card's MaBackend (0.6.0); the mass_queue backend makes exactly the 0.5.x calls below.
- * Reads:  mass_queue.get_queue_items {entity, limit_before, limit_after}  (response only)
- *         music_assistant.get_queue  target entity                         (response only, keyed by entity_id)
- * Writes: mass_queue.play_queue_item / move_queue_item_up / _down / _next / remove_queue_item {entity, queue_item_id}
- * Row Play now / Play next (0.5.0): mass_queue.send_command player_queues/play_index {queue_id, index: queue_item_id} and
- *   player_queues/move_item {queue_id, queue_item_id, pos_shift} (names checked against MA 2.10.9 and music-assistant-client 1.7.0);
- *   without mass_queue_entry_id or a queue id they fall back to play_queue_item / move_queue_item_next.
+ * card's MaBackend: kiosk (jukebox_kiosk/queue_items + player_queues/* commands) or native (music_assistant.get_queue,
+ * read only).
  */
 export class QueueModel {
   snap: QueueSnapshot = { items: [], current: -1, loading: false, error: '', at: 0 };
   hass?: HomeAssistant;
   entity = 'media_player.everywhere';
   limitAfter = 200;
-  /** the card's Music Assistant backend. Default: mass_queue without an entry (0.5.x behaviour with no mass_queue_entry_id). */
-  backend?: MaBackend = new MassQueueBackend(() => this.hass, '');
-  /** 0.5.x API, kept for tests and embedders: a mass_queue config entry id selects the mass_queue backend. */
-  set entryId(id: string | undefined) { this.backend = new MassQueueBackend(() => this.hass, id ?? ''); }
-  get entryId(): string | undefined { return this.backend instanceof MassQueueBackend ? this.backend.entryId || undefined : undefined; }
+  /** the card's Music Assistant backend (set by the card) */
+  backend?: MaBackend;
   private subs = new Set<(s: QueueSnapshot) => void>();
   private seq = 0;
   private timer?: number;
@@ -128,7 +124,7 @@ export class QueueModel {
     } catch (err) {
       if (seq !== this.seq) return;
       console.warn('[jukebox-card] queue refresh failed', err);
-      this.set({ loading: false, error: be.kind === 'mass_queue' ? 'Queue unavailable. Is mass_queue installed?' : 'Queue unavailable. Check Music Assistant.' });
+      this.set({ loading: false, error: 'Queue unavailable. Check Music Assistant.' });
     }
   }
 
@@ -175,7 +171,7 @@ export class QueueModel {
       console.warn(`[jukebox-card] queue ${service} failed`, err);
       // 0.7.9 #36c: MA refused (its buffer moved on): undo the optimistic move and re-read MA's numbers at once, so the
       // arrows grey out from the new lock before the message shows
-      if (isBufferedError(err)) { this.set(prev); await this.refresh(); throw new QueueBusy(); }
+      if (isBufferedError(err)) { this.set(prev); await this.refresh(); throw new QueueBusy(/delete|remove/.test(service) ? 'remove' : 'move'); }
       throw err;
     }
     finally { this.refreshSoon(600); }
@@ -220,7 +216,7 @@ export class QueueModel {
     return removeQueuedItem(this.hass, this.configForRemove, this.backend, this.entity, it);
   }
   /** Set by the card with its runtime entity/backend; direct model tests keep using their own backend. */
-  configForRemove: { entity?: string; mass_queue_entry_id?: string; queue_config_entry_id?: string; config_entry_id?: string } = { entity: 'media_player.everywhere' };
+  configForRemove: { entity?: string } = { entity: 'media_player.everywhere' };
   remove(id: string) {
     return this.act('remove', id, (items, i) => {
       const cur = this.snap.current; items.splice(i, 1);
@@ -240,7 +236,7 @@ export class QueueModel {
   async removeRow(id: string): Promise<RemovedRow | undefined> {
     const info = this.removedInfo(id);
     if (!info) return undefined;
-    if (this.isLocked(id)) throw new QueueBusy();
+    if (this.isLocked(id)) throw new QueueBusy('remove');
     const send = this.ma('player_queues/delete_item', { item_id_or_index: id });
     if (!send) { await this.remove(id); return info; }
     await this.act('player_queues/delete_item', id, (items, j) => {
@@ -249,7 +245,7 @@ export class QueueModel {
     }, send);
     // MA answers 200 but ignores a delete at or before its buffer (live 2.10.9): re-read and tell when the row is still there
     await this.refresh();
-    if (this.snap.items.some((x) => x.queue_item_id === id)) throw new QueueBusy();
+    if (this.snap.items.some((x) => x.queue_item_id === id)) throw new QueueBusy('remove');
     return info;
   }
   /**
@@ -259,7 +255,7 @@ export class QueueModel {
    */
   async undoRemove(r: RemovedRow): Promise<'ok' | 'end'> {
     const be = this.backend, qid = this.snap.queueId;
-    if (!this.hass || !be?.caps.undo || !qid) throw new Error('Undo needs the Jukebox Kiosk integration or mass_queue_entry_id');
+    if (!this.hass || !be?.caps.undo || !qid) throw new Error('Undo needs the Jukebox Kiosk integration');
     if (!r.uri) throw new Error('No URI for this track');
     const send = (command: string, data: Record<string, unknown>) => be.send(command, { queue_id: qid, ...data });
     const known = new Set(this.snap.items.map((x) => x.queue_item_id));

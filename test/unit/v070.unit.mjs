@@ -196,10 +196,10 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
   const m = log.at(-1);
   check('A5 setAutoplay sends jukebox_kiosk/set_autoplay {entity_id, enabled} (never a raw ma command)',
     m.type === 'jukebox_kiosk/set_autoplay' && m.entity_id === ENT && m.enabled === false && !log.some((x) => x.type === 'jukebox_kiosk/ma'), J(m));
-  const mq = new B.MassQueueBackend(() => hass, 'MASS_QUEUE_ENTRY_PLACEHOLDER');
-  check('A6 mass_queue / native backends never offer autoplay', mq.ext.autoplay === false && typeof mq.setAutoplay !== 'function');
-  check('A7 editor: show_autoplay listed, labelled, default off',
-    Ed.editorSchema({}).flatMap((x) => x.schema ?? [x]).some((x) => x.name === 'show_autoplay') && /Autoplay/.test(Ed.LABELS.show_autoplay ?? ''));
+  const nb = new B.NativeBackend(() => hass);
+  check('A6 the native backend never offers autoplay', nb.ext.autoplay === false && typeof nb.setAutoplay !== 'function');
+  check('A7 editor: no Autoplay option (the Queue always shows the switch, tied to Music Assistant\'s own setting)',
+    !Ed.editorSchema({}).flatMap((x) => x.schema ?? [x]).some((x) => x.name === 'show_autoplay') && !('show_autoplay' in Ed.LABELS) && !('show_autoplay' in Ed.SHOWN_DEFAULTS));
 }
 
 // ---------------- v0.7 Library home + radio_favorites_only ----------------
@@ -236,6 +236,26 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
   const c12 = e12.toConfig({ ...e12.formData(), library_tiles: ['radio', 'playlist', 'podcast'] });
   check('LH12 YAML labels survive editing in the visual editor', J(c12.library_tiles) === J(['radio', { tile: 'playlist', label: 'Mixes' }, 'podcast']), J(c12.library_tiles));
   check('LH13 empty label removed; empty tile list removed', !('library_label' in e1.toConfig({ ...f1, library_label: ' ' })) && !('library_tiles' in e1.toConfig({ ...f1, library_tiles: [] })));
+  // 0.7.9 #58: the editor shows on-screen wording only, and nothing that was removed
+  const flat = (c) => Ed.editorSchema(c).flatMap((x) => x.schema ?? [x]);
+  const allNames = [...new Set([...flat({}), ...flat({ speaker_mode: 'dynamic' }), ...flat({ library_layout: 'separate' })].map((x) => x.name))];
+  const GONE = ['config_entry_id', 'backend', 'mass_queue_entry_id', 'queue_config_entry_id', 'favorite_entity', 'presets', 'quiet_hours', 'quiet_start', 'quiet_end', 'quiet_max', 'quiet_applies', 'show_autoplay', 'lyrics_tab', 'accent'];
+  check('NE1 editor: no removed or YAML-only option (entry id, backend, favorite button, presets, quiet hours, Autoplay, Lyrics tab, accent)', !allNames.some((n) => GONE.includes(n)) && !GONE.some((n) => n in Ed.LABELS), J(allNames.filter((n) => GONE.includes(n))));
+  const texts = [...Object.values(Ed.LABELS), ...[...flat({ speaker_mode: 'dynamic' }), ...flat({ library_layout: 'separate' })].flatMap((x) => (x.selector?.select?.options ?? []).map((o) => o.label ?? '')), ...Ed.editorSchema({}).map((x) => x.title ?? '')];
+  const bad = texts.filter((t) => /\bMA\b|mass_queue|config_entry|entity_id|_[a-z]+_|\b\d+\.\d+\.\d+\b|\b0\.\d\b|YAML|`/.test(t));
+  check('NE2 editor wording: no "MA", internal names, version numbers or code', bad.length === 0, J(bad));
+  check('NE3 no code boxes (no object / template / yaml selectors)', !allNames.length || ![...flat({ speaker_mode: 'dynamic' })].some((x) => x.selector && ('object' in x.selector || 'template' in x.selector || 'yaml' in x.selector)));
+  const spk = (c) => Ed.editorSchema(c).find((x) => x.name === 'speakers').schema.map((x) => x.name);
+  check('NE4 Speakers panel: "Volume only" shows just the choice; "Choose speakers" adds the speaker options',
+    J(spk({})) === J(['speaker_mode']) && J(spk({ speaker_mode: 'dynamic' })) === J(['speaker_mode', 'targets', 'grouping', 'grouping_users', 'guest_access', 'leader_drop', 'confirm_drop']), J([spk({}), spk({ speaker_mode: 'dynamic' })]));
+  const opt = (c, n) => flat(c).find((x) => x.name === n).selector.select.options.map((o) => o.label);
+  check('NE5 wording: Speakers panel / Removing the main speaker choices exactly as the issue says',
+    Ed.LABELS.speaker_mode === 'Speakers panel' && J(opt({}, 'speaker_mode')) === J(['Volume only: always play on the chosen player', 'Choose speakers: pick, group and drop speakers from the card'])
+    && Ed.LABELS.leader_drop === 'Removing the main speaker from a group'
+    && J(opt({ speaker_mode: 'dynamic' }, 'leader_drop')) === J(['Allow: the music keeps playing on the other speakers after a short pause', "Don't allow: use Move to hand the music to another speaker first"]), J(opt({ speaker_mode: 'dynamic' }, 'leader_drop')));
+  check('NE6 Start tab shows the bar names exactly (combined: Now Playing, Library, Queue; separate adds Search; a custom Library name follows)',
+    J(opt({}, 'default_tab')) === J(['Now Playing', 'Library', 'Queue']) && J(opt({ library_layout: 'separate' }, 'default_tab')) === J(['Now Playing', 'Library', 'Search', 'Queue'])
+    && opt({ library_label: 'Music' }, 'default_tab')[1] === 'Music', J([opt({}, 'default_tab'), opt({ library_layout: 'separate' }, 'default_tab')]));
 }
 
 // ---------------- Autoplay style (Q14) ----------------
@@ -272,8 +292,8 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
     J(log.map(({ type, ...r }) => [type.replace(/^jukebox_kiosk\//, ''), r])) === J([
       ['set_autoplay_mode', { entity_id: 'media_player.placeholder', mode: 'playlist', playlist: 'library://playlist/2' }],
       ['set_autoplay_mode', { entity_id: 'media_player.placeholder', mode: 'library' }]]), J(log));
-  const mq = new B.MassQueueBackend(() => hass, {});
-  check('AP5 mass_queue backend: no style picker', mq.ext.autoplayMode === false && typeof mq.autoplayOptions !== 'function');
+  const nb = new B.NativeBackend(() => hass);
+  check('AP5 native backend: no style picker', nb.ext.autoplayMode === false && typeof nb.autoplayOptions !== 'function');
 }
 
 // ---- v0.7 radio heart: library id lookup before removing (placeholder uris/ids only) ----

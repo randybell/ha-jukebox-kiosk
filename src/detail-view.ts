@@ -6,23 +6,22 @@ import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl,
   playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, confirmTpl, drillable,
   type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  maCall,
 } from './shared';
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem } from './types';
 import type { MaBackend, TrackListType } from './backend/types';
-import { MassQueueBackend } from './backend/mass-queue';
 import { defineElement } from './define';
 import { removeFromQueue } from './queue-row-remove';
 import { FavController, heartTpl, heartType } from './heart';
 import { genreId, parseGenreOverview, genreMeta, GENRE_ROW_LIMIT, GENRE_TRACK_PAGE, type GenreSection } from './genres';
 
-/** mass_queue `page` is 0..1000. A first page shorter than this is taken as the whole list (no "load more" call). */
+/** Track-list `page` is 0..1000. A first page shorter than this is taken as the whole list (no "load more" call). */
 export const QUEUE_PAGE_MIN = 25;
 export const QUEUE_PAGE_MAX = 1000;
 const ONE: Record<string, string> = { artist: 'artist', album: 'album', playlist: 'playlist', podcast: 'podcast', genre: 'genre' };
 
 /**
- * mass_queue get_{album,artist,playlist}_tracks / get_podcast_episodes item -> MA-like item.
- * Real shape (mass_queue 0.10.x): {media_title, media_content_id, duration (s, 0 = unknown), media_image ("" or https URL),
+ * Track-list row (jukebox_kiosk/item_tracks) -> MA-like item. Shape: {media_title, media_content_id, duration (s, 0 = unknown), media_image ("" or https URL),
  * favorite, media_album_name, media_artist, position (playlists only, may be null)}; optional local_image_encoded.
  */
 export function fromQueueTrack(t: any, mediaType = 'track'): MaItem {
@@ -42,8 +41,7 @@ export function queueTracks(r: any, mediaType = 'track'): MaItem[] {
   return raw.map((t: any) => fromQueueTrack(t, mediaType)).filter((t: MaItem) => t.uri && t.name);
 }
 /**
- * Merge one more playlist page. mass_queue does not report a page size or a total, and older builds ignore `page`
- * (or return everything for page 0), so stop when a page is empty, shorter than the first one, or a run of tracks we
+ * Merge one more playlist page when the server reports no `more` flag: stop when a page is empty, shorter than the first one, or a run of tracks we
  * already have (the server repeated itself). Playlists may legitimately contain the same track twice, so no per-uri dedupe.
  */
 export function mergePage(have: MaItem[], page: MaItem[], firstLen: number): { tracks: MaItem[]; more: boolean } {
@@ -52,8 +50,6 @@ export function mergePage(have: MaItem[], page: MaItem[], firstLen: number): { t
   if (page.length <= have.length && ('\n' + sig(have) + '\n').includes('\n' + sig(page) + '\n')) return { tracks: have, more: false };
   return { tracks: [...have, ...page], more: page.length >= firstLen };
 }
-/** mass_queue config entry id: `mass_queue_entry_id`, or the 0.3.0 name `queue_config_entry_id`. Never the MA entry. */
-export const queueEntryId = (c: JukeboxCardConfig) => c.mass_queue_entry_id || c.queue_config_entry_id || '';
 
 const same = (a?: string, b?: string) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 const byArtist = (it: MaItem) => (x: MaItem) => (x.artists ?? []).some((a: any) => (a?.uri && a.uri === it.uri) || same(typeof a === 'string' ? a : a?.name, it.name));
@@ -70,11 +66,11 @@ export function dedupeAlbums(list: MaItem[]): MaItem[] {
 const dedupeUri = (l: MaItem[]) => { const s = new Set<string>(); return l.filter((t) => !s.has(t.uri) && !!s.add(t.uri)); };
 
 /** Where the track list came from. 'search' = approximate (labelled "matched by search"). */
-/** 'kiosk' / 'mass_queue' = the backend's exact list. */
-export type TrackSrc = 'kiosk' | 'mass_queue' | 'search' | 'none';
+/** 'kiosk' = the integration's exact list. */
+export type TrackSrc = 'kiosk' | 'search' | 'none';
 export interface DetailData {
   tracks: MaItem[]; albums: MaItem[]; loading: boolean; error: string; src: TrackSrc; note: string;
-  /** playlist paging (mass_queue get_playlist_tracks `page`) */
+  /** playlist paging (item_tracks `page`) */
   page: number; more: boolean; loadingMore: boolean; firstLen: number;
   /** genre detail: artists / albums / playlists / ... folders from music/genres/overview (tracks go in `tracks`) */
   sections: GenreSection[];
@@ -89,7 +85,7 @@ async function loadGenre(be: MaBackend | undefined, it: MaItem, d: DetailData): 
   if (!id) { d.error = "This genre can't be opened (no id)."; return d; }
   try {
     const o = parseGenreOverview(await be.send('music/genres/overview', { item_id: id, provider_instance_id_or_domain: 'library', limit: GENRE_ROW_LIMIT }));
-    d.sections = o.sections; d.tracks = o.tracks; d.src = be.kind === 'kiosk' ? 'kiosk' : 'mass_queue';
+    d.sections = o.sections; d.tracks = o.tracks; d.src = 'kiosk';
     d.firstLen = o.tracks.length; d.more = o.tracks.length >= GENRE_ROW_LIMIT;
   } catch (e) {
     console.warn('[jukebox-card] genre overview failed', e);
@@ -100,26 +96,23 @@ async function loadGenre(be: MaBackend | undefined, it: MaItem, d: DetailData): 
 
 /**
  * Load a detail view. Nothing here plays anything.
- *  artist   -> mass_queue get_artist_tracks (top tracks) + music_assistant.search {name, media_type:[album,track]} for the
- *              albums (filtered by artist; mass_queue has no artist-albums call). Without mass_queue, or if it fails,
- *              the search tracks are used and labelled.
- *  album    -> mass_queue get_album_tracks; fallback search {name: album, artist, media_type:[track]} filtered by album name.
- *  playlist -> mass_queue get_playlist_tracks page 0 (more pages on scroll). No search can list a playlist: labelled note.
- *  podcast  -> mass_queue get_podcast_episodes.
+ *  artist   -> the backend's artist track list (top tracks) + music_assistant.search {name, media_type:[album,track]} for
+ *              the albums (filtered by artist). Without a track list, or if it fails, the search tracks are used and labelled.
+ *  album    -> the backend's album track list; fallback search {name: album, artist, media_type:[track]} filtered by album name.
+ *  playlist -> the backend's playlist track list page 0 (more pages on scroll). No search can list a playlist: labelled note.
+ *  podcast  -> the backend's episode list.
  *  genre    -> music/genres/overview (library only) through the backend; more tracks from music/genres/tracks.
  */
 export async function loadDetail(hass: HomeAssistant, config: JukeboxCardConfig, it: MaItem, type: string): Promise<DetailData> {
-  // the card's backend lists tracks (kiosk: jukebox_kiosk/item_tracks; mass_queue: get_*_tracks). No backend in the
-  // config (embedders, old tests): the 0.5.x mass_queue path when mass_queue_entry_id is set.
-  const be: MaBackend | undefined = config._backend ?? (queueEntryId(config) ? new MassQueueBackend(() => hass, queueEntryId(config)) : undefined);
+  // the card's backend lists tracks (kiosk: jukebox_kiosk/item_tracks; native has no track lists)
+  const be: MaBackend | undefined = config._backend;
   const lists = !!be?.caps.trackLists && (type !== 'podcast' || be.caps.podcastEpisodes);
-  const qid = lists ? be!.kind : '';
-  const src: TrackSrc = be?.kind === 'kiosk' ? 'kiosk' : 'mass_queue';
+  const src: TrackSrc = 'kiosk';
   const d = emptyDetail();
   if (type === 'genre') return loadGenre(be, it, d);
   let firstMore: boolean | undefined;
   const search = async (data: Record<string, any>) =>
-    unwrap(await hass.callService('music_assistant', 'search', { config_entry_id: config.config_entry_id, ...data }, undefined, false, true)) ?? {};
+    unwrap(await maCall(hass, config, 'search', data)) ?? {};
   const svc = ({ artist: 'get_artist_tracks', album: 'get_album_tracks', playlist: 'get_playlist_tracks', podcast: 'get_podcast_episodes' } as Record<string, string>)[type];
   let mqErr: unknown = null;
   const viaMq = lists && svc
@@ -150,11 +143,11 @@ export async function loadDetail(hass: HomeAssistant, config: JukeboxCardConfig,
       d.tracks = t; d.src = src; d.firstLen = t.length;
       d.more = firstMore ?? (type === 'playlist' && t.length >= QUEUE_PAGE_MIN);
     } else if (mqErr) d.error = `Couldn't load the ${type === 'podcast' ? 'episodes' : 'track list'}. You can still play the whole ${type}.`;
-    else d.note = `${type === 'podcast' ? 'Episode lists' : 'Playlist tracks'} need the Jukebox Kiosk integration (or mass_queue_entry_id). Play, Shuffle or Add the whole ${type} above.`;
+    else d.note = `${type === 'podcast' ? 'Episode lists' : 'Playlist tracks'} need the Jukebox Kiosk integration. Play, Shuffle or Add the whole ${type} above.`;
   }
-  if (d.src === 'search') d.note = qid
-    ? `${qid === 'kiosk' ? 'Jukebox Kiosk' : 'mass_queue'} couldn't list these tracks, so they were found by searching for “${it.name}”. Some may be missing.`
-    : `Jukebox Kiosk / mass_queue is not set up, so these tracks were found by searching for “${it.name}”. Some may be missing.`;
+  if (d.src === 'search') d.note = lists
+    ? `The Jukebox Kiosk integration couldn't list these tracks, so they were found by searching for “${it.name}”. Some may be missing.`
+    : `The Jukebox Kiosk integration is not set up, so these tracks were found by searching for “${it.name}”. Some may be missing.`;
   d.loading = false;
   return d;
 }
@@ -218,7 +211,7 @@ export class JbDetail extends LitElement {
   /** `auto` = scroll / fill-screen; a genre's first "See all tracks" only loads on the button. */
   async loadMoreTracks(auto = true) {
     const e = this.entry, d = e?.data;
-    const be = this.config._backend ?? (queueEntryId(this.config) && this.hass ? new MassQueueBackend(() => this.hass!, queueEntryId(this.config)) : undefined);
+    const be = this.config._backend;
     if (!e || !d || !d.more || d.loadingMore || !be || !this.hass) return;
     if (e.type === 'genre') { if (!(auto && d.page === 0)) this.loadMoreGenre(e, d, be); return; }
     if (e.type !== 'playlist' && be.kind !== 'kiosk') return;
@@ -228,7 +221,7 @@ export class JbDetail extends LitElement {
     try {
       const r = await be.itemTracks(e.type as TrackListType, e.item.uri, page);
       const got = queueTracks(r.tracks, e.type === 'podcast' ? 'podcast_episode' : 'track');
-      // kiosk reports `more`; mass_queue doesn't, so guess from the page sizes
+      // the server reports `more`; without it, guess from the page sizes
       const m = r.more !== undefined ? { tracks: [...e.data!.tracks, ...got], more: r.more && got.length > 0 } : mergePage(e.data!.tracks, got, d.firstLen);
       this.set(e, { tracks: m.tracks, more: m.more, page, loadingMore: false });
     } catch (err) {
@@ -439,7 +432,7 @@ export class JbDetail extends LitElement {
           ${type === 'genre' && !d.loading && !d.error && !d.note && !d.sections.length && !d.tracks.length
             ? html`<div class="empty nogenre"><span>Nothing in this genre yet.</span></div>` : nothing}
           ${d.tracks.length ? html`<h3 class="eyebrow">${tracksTitle}${d.src === 'search' ? html` <em>matched by search</em>` : nothing}</h3>
-            <div class="list tracks">${d.tracks.map((t, i) => this.row(t, type === 'album' && (d.src === 'mass_queue' || d.src === 'kiosk') ? i + 1 : undefined, i))}</div>
+            <div class="list tracks">${d.tracks.map((t, i) => this.row(t, type === 'album' && d.src === 'kiosk' ? i + 1 : undefined, i))}</div>
             ${d.more || d.loadingMore ? html`<button class="sbtn more-t" data-action="more" tabindex="-1" ?disabled=${d.loadingMore} @pointerdown=${noFocus}
               @click=${() => this.loadMoreTracks(false)}>${d.loadingMore ? 'Loading more tracks…' : type === 'genre' && d.page === 0 ? 'See all tracks' : 'Load more tracks'}</button>` : nothing}`
             : !d.loading && !d.error && !d.note && type !== 'genre' ? html`<div class="empty notracks"><span>No ${type === 'podcast' ? 'episodes' : 'tracks'} found.</span></div>` : nothing}

@@ -8,7 +8,6 @@ import type { KeyDetail } from './keyboard';
 import { canJumpQueue } from './speakers/model';
 import { QueueBusy, type QueueItem, type QueueModel, type QueueSnapshot, type RemovedRow } from './queue-model';
 /** MA refused or ignored a change on a played / buffered track (live 2.10.9: 500 "<n> is already played/buffered", delete ignored) */
-const BUSY = "That song is already loading, so it can't move right now.";
 import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
 import type { AutoplayMode, AutoplayOptions } from './backend/types';
 
@@ -63,12 +62,12 @@ export class JbQueue extends LitElement {
   private toast(t: string) { this._toast = t; window.clearTimeout(this._toastTimer); this._toastTimer = window.setTimeout(() => (this._toast = ''), 2200); }
   private async run(p: Promise<any> | undefined, ok: string) {
     this._menu = null; this.press.release();
-    try { await p; if (ok) this.toast(ok); } catch (e) { this.toast(e instanceof QueueBusy ? BUSY : 'Queue action failed'); }
+    try { await p; if (ok) this.toast(ok); } catch (e) { this.toast(e instanceof QueueBusy ? e.message : 'Queue action failed'); }
   }
-  /** Autoplay pill: only with show_autoplay, a kiosk server that lists it, and a known state for this queue.
+  /** Autoplay pill: always shown when a kiosk server that lists it, and a known state for this queue.
    *  With the autoplay_mode feature a chevron (or a long-press on the pill) opens the style sheet. */
   private autoplayTpl(s: QueueSnapshot | undefined) {
-    if (!this.config?.show_autoplay || !this.config._backend?.ext?.autoplay || typeof s?.autoplay !== 'boolean') return nothing;
+    if (!this.config?._backend?.ext?.autoplay || typeof s?.autoplay !== 'boolean') return nothing;
     const on = s.autoplay, dyn = !!s.dynamic, modes = this.apModes;
     const hold = modes && !dyn ? {
       down: () => { this._apHeld = false; window.clearTimeout(this._apHold); this._apHold = window.setTimeout(() => { this._apHeld = true; this.openAp(); }, AP_HOLD_MS); },
@@ -162,7 +161,7 @@ export class JbQueue extends LitElement {
     this._undoTimer = window.setTimeout(() => (this._undo = null), Number((window as any).__jbQueueUndoMs ?? 5000));
     try { await this.queue!.removeRow(it.queue_item_id); } catch (e) {
       if (this._undo === r) { window.clearTimeout(this._undoTimer); this._undo = null; }
-      this.toast(e instanceof QueueBusy ? BUSY : `Couldn't remove ${it.media_title}`);
+      this.toast(e instanceof QueueBusy ? e.message : `Couldn't remove ${it.media_title}`);
     }
   }
   private async undo() {

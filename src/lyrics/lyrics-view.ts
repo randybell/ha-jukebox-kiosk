@@ -7,7 +7,7 @@ import type { LyricsState, LyricsStore } from './store';
 import type { HassEntity, HomeAssistant, JukeboxCardConfig } from '../types';
 import { defineElement } from '../define';
 
-export type LyricsMode = 'overlay' | 'tab' | 'saver';
+export type LyricsMode = 'overlay' | 'saver';
 /** HA media_player SEEK feature bit */
 const SEEK = 2;
 export const LONG_PRESS_MS = 550;
@@ -21,7 +21,7 @@ export const MSG = { loading: 'Looking for lyrics…', none: 'No lyrics found', 
  * One lyrics surface. Every surface reads the same LyricsStore, so a track change costs one lookup however many are shown.
  * Synced: the current line follows the interpolated player position (media_position + time since media_position_updated_at
  * + lyrics_offset_ms). A timer is set for the next line's timestamp; there is no per-frame loop.
- * Long-press a synced line (not on radio, only when the player can seek) to jump there. A plain tap (Lyrics tab or the
+ * Long-press a synced line (not on radio, only when the player can seek) to jump there. A plain tap (the
  * artwork overlay; Stage is closed by the card on a plain tap; not the screensaver) returns to the player: ≤ 10 px, ≤ 500 ms, not on a button, not the end of a scroll.
  * Plain lyrics scroll gently in proportion to the track progress; touching or scrolling them pauses that for a few seconds.
  * Lines always move UP as the song advances: a ResizeObserver re-centres instantly when the layout changes (fonts, Stage,
@@ -31,15 +31,14 @@ export const MSG = { loading: 'Looking for lyrics…', none: 'No lyrics found', 
 export class JbLyrics extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, store: { attribute: false },
-    mode: { reflect: true }, active: { type: Boolean }, art: { attribute: false },
+    mode: { reflect: true }, active: { type: Boolean },
     _s: { state: true }, _press: { state: true }, _flash: { state: true }, _chip: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
   store?: LyricsStore;
-  mode: LyricsMode = 'tab';
+  mode: LyricsMode = 'overlay';
   active = false;
-  art = '';
   private _s: LyricsState = { status: 'idle', lines: [] };
   private _press = -1;
   private _flash = -1;
@@ -144,9 +143,8 @@ export class JbLyrics extends LitElement {
     this.cancelPress();
     if (!t || ev.pointerId !== t.id || fired || Date.now() - t.t > TAP_MAX_MS) return;
     if (Math.hypot(ev.clientX - t.x, ev.clientY - t.y) > MOVE_CANCEL_PX || this._scrollAt > t.t) return;
-    if (this.mode !== 'tab' && this.mode !== 'overlay') return; // Stage keeps its tap-to-show-controls; the screensaver is unchanged
+    if (this.mode !== 'overlay') return; // Stage keeps its tap-to-show-controls; the screensaver is unchanged
     this.dispatchEvent(new CustomEvent('jukebox-lyrics-tap', { detail: { mode: this.mode }, bubbles: true, composed: true }));
-    if (this.mode === 'tab') this.dispatchEvent(new CustomEvent('jukebox-nav', { detail: { tab: 'now' }, bubbles: true, composed: true }));
   };
   private onCancelTap = () => { this._tap = undefined; this.cancelPress(); };
   private onScroll = () => {
@@ -283,32 +281,21 @@ export class JbLyrics extends LitElement {
   }
 
   // ---------- render ----------
-  private msg(text: string, sub?: unknown) {
-    return html`<div class="msg" role="status"><span class="mt">${text}</span>${sub ?? nothing}</div>`;
+  private msg(text: string) {
+    return html`<div class="msg" role="status"><span class="mt">${text}</span></div>`;
   }
-  private header() {
-    const a = this.ent?.attributes ?? {};
-    const t = this._s.track;
-    if (!t && !a.media_title) return nothing;
-    return html`<div class="hd">${this.art ? html`<img class="ha" src=${this.art} alt="" draggable="false" @error=${(e: Event) => ((e.target as HTMLElement).style.visibility = 'hidden')} />` : html`<span class="ha ph">${icon('disc')}</span>`}
-      <span class="hm"><b>${t?.title ?? a.media_title}</b><small>${t?.artist ?? a.media_artist ?? ''}</small></span>
-      ${this._s.status === 'plain' ? html`<span class="chip">Unsynced</span>` : nothing}</div>`;
-  }
+
   render() {
     const s = this._s;
     const mode = this.mode;
     const synced = s.status === 'synced';
     this.cur = synced ? indexAt(s.lines, this.position() + this.offset()) : -1;
     if (mode === 'saver') return this.renderSaver();
-    const sub = s.status === 'error' && mode !== 'overlay'
-      ? (s.reason === 'config' ? html`<small>Lyrics need the Jukebox Kiosk integration (or mass_queue_entry_id in the card options).</small>`
-        : html`${s.reason === 'permission' ? html`<small>This Home Assistant user may not be allowed to read lyrics (check the Jukebox Kiosk permissions; mass_queue.send_command needs an admin).</small>` : nothing}<button class="retry" tabindex="-1" @click=${(e: Event) => { e.stopPropagation(); this.store?.retry(); }}>Try again</button>`)
-      : s.status === 'none' && s.track?.radio && mode !== 'overlay' ? html`<small>${s.track.artist} · ${s.track.title}</small>` : nothing;
     let body: unknown;
     switch (s.status) {
       case 'loading': body = this.msg(MSG.loading); break;
-      case 'none': body = this.msg(MSG.none, sub); break;
-      case 'error': body = this.msg(MSG.error, sub); break;
+      case 'none': body = this.msg(MSG.none); break;
+      case 'error': body = this.msg(MSG.error); break;
       case 'idle': case 'off': body = mode === 'overlay' ? nothing : this.msg(MSG.idle); break;
       default: {
         const seek = this.seekable();
@@ -322,8 +309,7 @@ export class JbLyrics extends LitElement {
     }
     return html`<div class="ly m-${mode} st-${s.status}" @pointerdown=${this.onDown} @pointermove=${this.onMove} @pointerup=${this.onUp}
         @pointercancel=${this.onCancelTap} @pointerleave=${this.cancelPress} @click=${this.onClickCapture} @contextmenu=${(e: Event) => e.preventDefault()}>
-      ${mode === 'tab' ? this.header() : nothing}
-      ${mode !== 'tab' && s.status === 'plain' ? html`<span class="chip fl">Unsynced</span>` : nothing}
+      ${s.status === 'plain' ? html`<span class="chip fl">Unsynced</span>` : nothing}
       ${body}
       ${this._chip ? html`<div class="toast" role="status">${this._chip}</div>` : nothing}
     </div>`;
@@ -366,8 +352,6 @@ export class JbLyrics extends LitElement {
     .mt { font-size: 18px; font-weight: 600; color: rgba(255, 255, 255, .78); }
     .st-loading .mt { animation: breathe 1.8s ease-in-out infinite; }
     @keyframes breathe { 50% { opacity: .45 } }
-    .msg small { font-size: 13px; color: rgba(255, 255, 255, .55); }
-    .retry { margin-top: 2px; padding: 8px 16px; border-radius: 999px; border: 1px solid #ffffff40; font-size: 14px; font-weight: 600; color: #fff; }
     .chip { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: rgba(255, 255, 255, .7);
       padding: 4px 8px; border-radius: 999px; border: 1px solid #ffffff40; background: #0000008c; white-space: nowrap; }
     .chip.fl { position: absolute; top: 10px; left: 10px; z-index: 2; }
@@ -379,16 +363,6 @@ export class JbLyrics extends LitElement {
     .m-overlay .ln { font-size: clamp(14px, 6.4cqw, 30px); text-shadow: 0 1px 12px #000c; }
     .m-overlay .msg .mt { font-size: clamp(14px, 5cqw, 20px); text-shadow: 0 1px 10px #000; }
 
-    .m-tab { padding: 0 var(--_pad); }
-    .m-tab .hd { display: flex; align-items: center; gap: 14px; padding: 16px 0 10px; border-bottom: 1px solid var(--_hairline); }
-    .m-tab .ha { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex: none; background: #111; box-shadow: 0 6px 20px #0008; }
-    .m-tab .ha.ph { display: grid; place-items: center; } .m-tab .ha.ph .i { width: 28px; height: 28px; color: #ffffff40; }
-    .m-tab .hm { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-    .m-tab .hm b { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .m-tab .hm small { font-size: 14px; color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .m-tab .sc { max-width: 980px; width: 100%; margin: 0 auto; }
-    .m-tab .ln { font-size: clamp(22px, 3.4vw, 40px); text-shadow: 0 2px 18px #0009; }
-    .m-tab .plain .ln { font-size: clamp(19px, 2.6vw, 30px); }
 
 
     /* screensaver: a clipped window over a column that slides up (transform only); --jb-ly-slide is 0ms under reduced motion */

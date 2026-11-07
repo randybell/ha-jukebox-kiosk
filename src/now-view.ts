@@ -10,7 +10,7 @@ import './lyrics/lyrics-view';
 import type { LyricsStore } from './lyrics/store';
 import type { QueueModel, QueueSnapshot } from './queue-model';
 import type { HassEntity, HomeAssistant, JukeboxCardConfig } from './types';
-import { volumeCap, canVolume, capVol, roomElsewhere, inlineButton, inlineLine } from './speakers/model';
+import { canVolume, roomElsewhere, inlineButton, inlineLine } from './speakers/model';
 export { roomElsewhere };
 import type { InlineRoom } from './speakers-view';
 
@@ -23,6 +23,7 @@ export interface InlineSpeakers extends HTMLElement {
 }
 import { defineElement } from './define';
 import { FavController } from './heart';
+import { favoriteButtonFor } from './favorites';
 import { shownRepeat, nextRepeat } from './repeat';
 import { SLEEP_MINUTES, sleepLabel, fmtSleepRemain, remainFromExpires, sleepPlayerId, canMaSleep, parseExpires, type SleepMinutes } from './sleep';
 
@@ -176,19 +177,26 @@ export class JbNow extends LitElement {
     const base = uri && this.config._favs ? this.config._favs.isFav({ uri, favorite: !!cur?.favorite }) : !!cur?.favorite;
     return this.flag('fav:' + uri, base);
   }
-  /** v0.7: through the kiosk integration the heart needs the Library permission (hidden without it); other setups as 0.6 */
-  private canFav() {
-    if ((this.config.favorite_entity ?? 'button.everywhere_favorite_current_song') === '') return false;
-    const be = this.config._backend;
-    return be?.kind !== 'kiosk' || be.caps.libraryWrite;
+  /**
+   * Who adds the favorite: a YAML favorite_entity override ('' hides the heart), else the Jukebox Kiosk integration
+   * (Library permission), else the player's own Music Assistant favorite button when the card finds one.
+   */
+  private favAdd(): { button: string } | { kiosk: true } | null {
+    const o = this.config.favorite_entity, be = this.config._backend;
+    if (o === '') return null;
+    if (o) return be?.kind !== 'kiosk' || be.caps.libraryWrite ? { button: o } : null;
+    if (be?.kind === 'kiosk') return be.caps.libraryWrite && be.favoriteCurrent ? { kiosk: true } : null;
+    const btn = favoriteButtonFor(this.hass, this.eid);
+    return btn ? { button: btn } : null;
   }
+  private canFav() { return !!this.favAdd(); }
   /** Optimistic: the heart flips at once; when the call fails it flips back and the error shows in the top-right chip. */
   toggleFavorite() {
-    if (!this.canFav()) return;
-    const btn = this.config.favorite_entity ?? 'button.everywhere_favorite_current_song';
+    const add = this.favAdd();
+    if (!add) return;
     const fav = this.isFav();
     const be = this.config._backend;
-    if (fav && be && !be.caps.unfavorite) { status(this, "Can't remove favorites here", 'error'); return; }
+    if (fav && !be?.caps.unfavorite) { status(this, "Can't remove favorites here", 'error'); return; }
     const uri = String(this.ent?.attributes?.media_content_id ?? '');
     const title = String(this.ent?.attributes?.media_title ?? '').trim();
     const what = title || 'this track';
@@ -198,8 +206,8 @@ export class JbNow extends LitElement {
     const share = (v: boolean) => { if (uri.includes('://')) fire(this, 'jukebox-favorites-changed', { media_type: 'track', uri, favorite: v }); };
     share(!fav);
     const run = fav
-      ? (be ? be.unfavoriteCurrent(this.eid) : this.hass!.callService('mass_queue', 'unfavorite_current_item', { entity: this.eid }))
-      : this.hass!.callService('button', 'press', {}, { entity_id: btn });
+      ? be!.unfavoriteCurrent(this.eid)
+      : 'button' in add ? this.hass!.callService('button', 'press', {}, { entity_id: add.button }) : be!.favoriteCurrent!(this.eid);
     status(this, fav ? `Removed ${what} from favorites` : `Added ${what} to favorites`);
     Promise.resolve(run).catch((e: any) => {
       console.warn('[jukebox-card] favorite failed', e);
@@ -331,10 +339,8 @@ export class JbNow extends LitElement {
     }
     return s;
   }
-  /** quiet-hours cap for this user (undefined = none) */
-  private cap() { return volumeCap(this.config, this.hass?.user); }
   private onVolInput(id: string, e: CustomEvent) {
-    const v = capVol(e.detail.value, this.cap());
+    const v = e.detail.value;
     this.vol.set(id, { v, t: Date.now() });
     this.setVolLabel(id, v);
     this.sender(id)(v);
@@ -345,7 +351,7 @@ export class JbNow extends LitElement {
     return JSON.stringify([s.inlineRegrouping(), roomsOf(this.config, this.hass).map((r) => s.inline(r.entity) ?? null)]);
   }
   private onVolChange(id: string, e: CustomEvent) {
-    const v = capVol(e.detail.value, this.cap());
+    const v = e.detail.value;
     this.vol.set(id, { v, t: Date.now() });
     this.sender(id).flush(v); // always send the final value on release
     this.requestUpdate();
@@ -378,7 +384,7 @@ export class JbNow extends LitElement {
       <button class="vm" tabindex="-1" aria-label="${muted ? 'Unmute' : 'Mute'} ${name}" ?disabled=${off || ro}
         @pointerdown=${noFocus} @click=${() => this.toggleMute(id)}>${icon(ic)}</button>
       <span class="vn">${name}${off ? html` <i>offline</i>` : nothing}${elsewhere ? html`<small class="else">${elsewhere}</small>` : nothing}</span>
-      <jb-slider class="vs" .value=${muted ? 0 : v} .max=${this.cap()} ?disabled=${off || ro} .label=${`${name} volume`}
+      <jb-slider class="vs" .value=${muted ? 0 : v} ?disabled=${off || ro} .label=${`${name} volume`}
         @jb-input=${(e: CustomEvent) => this.onVolInput(id, e)} @jb-change=${(e: CustomEvent) => this.onVolChange(id, e)}></jb-slider>
       <span class="vv" data-v=${muted ? '–' : String(Math.round(v * 100))}></span>
       ${main && this.spk ? html`<button class="spkb" data-action="speakers" tabindex="-1" aria-haspopup="dialog" aria-label="Speakers: add or drop rooms"
@@ -408,8 +414,8 @@ export class JbNow extends LitElement {
     const up = this.queue?.upNext ?? [];
     const nextIt = up[0];
     const more = Math.max(0, (this.queue?.remaining ?? up.length) - 1);
-    // Autoplay indicator only (the toggle lives in the Queue header): flag on, server lists it, MA says it is on, queue not dynamic
-    const autoplay = !!this.config?.show_autoplay && !!this.config._backend?.ext?.autoplay && this._snap?.autoplay === true && !this._snap?.dynamic;
+    // Autoplay indicator only (the toggle lives in the Queue header): server lists it, MA says it is on, queue not dynamic
+    const autoplay = !!this.config._backend?.ext?.autoplay && this._snap?.autoplay === true && !this._snap?.dynamic;
     const favOn = this.isFav();
     const showFav = this.canFav();
     const sleepRem = this.sleepRemain();

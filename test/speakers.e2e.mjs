@@ -244,38 +244,6 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await p4.close();
 }
 
-// ───────────── quiet hours ─────────────
-{
-  const q = { quiet_hours: { start: '00:00', end: '00:00', max_volume: 30 } }; // start === end = all day
-  const p = await open(`&spk=dyn&target=${IN}&cfg=${encodeURIComponent(J(q))}`);
-  await openPanel(p); await waitLoaded(p);
-  const note = await ev(p, `${SR}.querySelector('.quiet')?.textContent.trim()`);
-  check('Q1 quiet hours (start === end = all day) shows the cap note to guests', /up to 30%/.test(note ?? ''), note);
-  const mx = await ev(p, `${row(KIT)}.querySelector('jb-slider').max`);
-  check('Q2 panel sliders carry max = cap (with a cap tick)', Math.abs(mx - 0.3) < 1e-9 && (await ev(p, `!!${row(KIT)}.querySelector('jb-slider').shadowRoot.querySelector('.cap')`)), String(mx));
-  const n0 = (await calls(p)).length;
-  await sliderTo(p, `${row(KIT)}.querySelector('jb-slider')`, 0.95);
-  const vs = (await calls(p)).slice(n0).filter((x) => x.service === 'volume_set');
-  check('Q3 guest dragging to 95% sends at most the cap (0.30)', vs.length >= 1 && vs.every((x) => x.data.volume_level <= 0.3 + 1e-9), J(vs.map((x) => x.data.volume_level)));
-  await tap(p, `${SR}.querySelector('.x')`); await sleep(300);
-  const ns = await ev(p, `[...${NOW}.shadowRoot.querySelectorAll('jb-slider')].filter((s) => s.max !== undefined && s.max < 1).length`);
-  check('Q4 Now Playing volume sliders are capped too', ns >= 1, String(ns));
-  await p.close();
-  const p2 = await open(`&spk=dyn&target=${IN}&admin=1&cfg=${encodeURIComponent(J(q))}`);
-  await openPanel(p2); await waitLoaded(p2);
-  const n1 = (await calls(p2)).length;
-  await sliderTo(p2, `${row(KIT)}.querySelector('jb-slider')`, 0.9);
-  const v2 = (await calls(p2)).slice(n1).filter((x) => x.service === 'volume_set');
-  check('Q5 quiet hours apply to guests only by default (admin reaches 90%)', !(await ev(p2, `!!${SR}.querySelector('.quiet')`)) && v2.at(-1)?.data.volume_level > 0.8, J(v2.map((x) => x.data.volume_level)));
-  await p2.close();
-  const h = new Date().getHours();
-  const off = { quiet_hours: { start: `${String((h + 2) % 24).padStart(2, '0')}:00`, end: `${String((h + 3) % 24).padStart(2, '0')}:00`, max_volume: 30 } };
-  const p3 = await open(`&spk=dyn&target=${IN}&cfg=${encodeURIComponent(J(off))}`);
-  await openPanel(p3); await waitLoaded(p3);
-  check('Q6 outside the quiet window there is no cap', !(await ev(p3, `!!${SR}.querySelector('.quiet')`)) && (await ev(p3, `${row(KIT)}.querySelector('jb-slider').max`)) === undefined);
-  await p3.close();
-}
-
 // ───────────── dynamic: move / start warning / presets (Everywhere playing = default mock) ─────────────
 {
   const p = await open('&spk=dyn&admin=1');
@@ -299,7 +267,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   check('M5 optimistic: the chip / card target switch at once', (await target(p)) === IN);
   await wait(p, `window.__hass.states['${IN}'].state === 'playing'`);
   const tr = await ma(p, 'player_queues/transfer');
-  check('M6 transfer = mass_queue.send_command player_queues/transfer Everywhere → Indoor (auto_play)',
+  check('M6 transfer = jukebox_kiosk/ma player_queues/transfer Everywhere → Indoor (auto_play)',
     tr.length === 1 && tr[0].data.source_queue_id === 'syncgroup_everywhere' && tr[0].data.target_queue_id === 'syncgroup_mock_indoor', J(tr));
   await wait(p, `/Moved to Indoor/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`);
   check('M7 toast "Moved to Indoor"; no Undo (Everywhere was stopped)', /Moved to Indoor/.test(await toast(p)) && !(await ev(p, `!!${SR}.querySelector('.st [data-action="undo"]')`)), await toast(p));
@@ -586,7 +554,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await wait(p, `${QV}.querySelector('.qr.now')?.dataset.id === '${target}'`, 4000);
   let sc = await sends(p);
   const nowId = await ev(p, `${QV}.querySelector('.qr.now')?.dataset.id`);
-  check('J4 confirm → one mass_queue.send_command player_queues/play_index {queue_id, index: queue_item_id}; the row becomes Now playing (the mock rejects a wrong config_entry_id)',
+  check('J4 confirm → one jukebox_kiosk/ma player_queues/play_index {queue_id, index: queue_item_id}; the row becomes Now playing',
     sc.length === 1 && sc[0].data.command === 'player_queues/play_index' && J(sc[0].data.data) === J({ queue_id: 'syncgroup_everywhere', index: target })
       && (await mass(p, 'play_queue_item')) === 0 && nowId === target, J(sc) + ' now=' + nowId);
   await sleep(900);
@@ -607,9 +575,10 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   check('J6 after the move the new next row has Play Next disabled and the old one is enabled', r.find((x) => x.id === mv).nx === 'dis' && r.filter((x) => x.k === 'next')[1].nx === 'on', J(r.slice(0, 4)));
   const pastR = r.filter((x) => x.k === 'past');
   check('J7 played rows: Play Now only (MA refuses to move or delete played items)', pastR.length > 0 && pastR.every((x) => x.pn && x.nx === 'dis' && x.rm), J(pastR));
-  const u0 = await mass(p, 'move_queue_item_up');
+  const wsMoves = (p) => ev(p, `window.__ws.filter((m) => m.type === 'ma' && m.command === 'player_queues/move_item' && m.args?.pos_shift === -1).length`);
+  const u0 = await wsMoves(p);
   await tap(p, qbtn(r.filter((x) => x.k === 'next')[2].id, 'up')); await sleep(300);
-  check('J8 Move up still acts at once (no dialog, mass_queue.move_queue_item_up)', !(await dlg(p)) && (await mass(p, 'move_queue_item_up')) === u0 + 1);
+  check('J8 Move up still acts at once (no dialog, jukebox_kiosk/ma player_queues/move_item pos_shift -1)', !(await dlg(p)) && (await wsMoves(p)) === u0 + 1 && (await mass(p, 'move_queue_item_up')) === 0);
   await p.close();
 }
 {
@@ -657,13 +626,6 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   const mv = await ev(p, `window.__calls.filter((c) => c.data?.command === 'player_queues/move_item').map((c) => c.data.data.pos_shift)`);
   check('J13 next track already buffered (index_in_buffer = current + 1): Play Next lands right after the buffered track, MA agrees after the refresh',
     J(after.slice(0, 2)) === J([ids[0], ids[3]]) && J(mv) === J([-2]) && J(await ev(p, `window.__queues['media_player.everywhere'].items.map((x) => x.queue_item_id)`)).includes(J([ids[0], ids[3]]).slice(1, -1)), J({ ids: ids.slice(0, 4), after: after.slice(0, 4), mv }));
-  await p.close();
-  // no mass_queue entry: the 0.4 services stand in
-  p = await openQ(`&admin=1&cfg=${encodeURIComponent(J({ mass_queue_entry_id: '' }))}`);
-  const ids2 = await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${ids2[2]}"] .ra-b[data-action="playnext"]')`); await sleep(400);
-  const fb = await ev(p, `window.__calls.filter((c) => c.domain === 'mass_queue' && c.service !== 'get_queue_items').map((c) => c.service + ':' + J(c.data))`.replace('J(', 'JSON.stringify('));
-  check('J14 without mass_queue_entry_id Play Next falls back to mass_queue.move_queue_item_next', fb.length === 1 && fb[0].startsWith('move_queue_item_next:'), J(fb));
   await p.close();
 }
 
@@ -721,7 +683,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
     await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   }, t);
   await p.close();
-  // 3. guest 0.4 long-press menu → Play Now (no confirm, 0.4) → mass_queue.play_queue_item
+  // 3. guest 0.4 long-press menu → Play Now (no confirm, 0.4) → jumps in place
   p = await openQ('');
   t = (await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`))[3];
   await playNowPath('0.4 long-press menu entry (guest)', p, async () => {
@@ -745,13 +707,6 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   t = (await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`))[5];
   await rowTapIdle('row tap (admin)', p, t);
   await playNowPath('icon after a row tap (admin)', p, async () => {
-    await tap(p, `${QV}.querySelector('.qr[data-id="${t}"] .ra-b[data-action="playnow"]')`);
-    await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
-  }, t);
-  await p.close();
-  p = await openQ(`&admin=1&cfg=${encodeURIComponent(J({ mass_queue_entry_id: '' }))}`);
-  t = (await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`))[3];
-  await playNowPath('icon without mass_queue_entry_id (play_queue_item fallback)', p, async () => {
     await tap(p, `${QV}.querySelector('.qr[data-id="${t}"] .ra-b[data-action="playnow"]')`);
     await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   }, t);
@@ -835,15 +790,16 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   check('D7 buffered row: labeled Remove / Play Next stay visible but disabled; Move up + down disabled',
     !!(g5.buf && g5.remove?.disabled && g5.next?.disabled && g5.up && g5.down && g5.nUp && g5.nNext === true && g5.nRemove?.disabled === false && g5.bufs === 1), J(g5));
   await p.close();
-  const BUSY36 = "That song is already loading, so it can't move right now."; // 0.7.9 #36c wording
+  const BUSY36 = "That song is already loading, so it can't move right now."; // 0.7.9 #36c wording (moves)
+  const BUSY_RM = "That song is already loading, so it can't be removed right now."; // 0.7.9 #58 wording (removes)
   // MA moved its buffer on after our read: a delete it ignores → toast + the row is back; a move it refuses → toast + reload
   p = await openQ('&admin=1');
   const v7 = (await ids(p))[0], v8 = (await ids(p))[3];
   await ev(p, `(() => { const Q = window.__queues['media_player.everywhere']; Q.buf = Q.index + 1; })()`);
   await tap(p, `${QV}.querySelector('.qr[data-id="${v7}"] .ra-b[data-action="remove"]')`);
-  await wait(p, `${QV}.querySelector('.toast')?.textContent === ${J(BUSY36)}`, 3000);
-  check('D7b delete ignored by MA (200, row still there): toast "That song is already loading, so it can\'t move right now.", the row is back, no Undo bar',
-    (await toastT(p)) === BUSY36 && (await ids(p))[0] === v7 && !(await bar(p)), J({ t: await toastT(p), ids: (await ids(p)).slice(0, 2) }));
+  await wait(p, `${QV}.querySelector('.toast')?.textContent === ${J(BUSY_RM)}`, 3000);
+  check('D7b delete ignored by MA (200, row still there): toast exactly "That song is already loading, so it can\'t be removed right now.", the row is back, no Undo bar',
+    (await toastT(p)) === BUSY_RM && (await ids(p))[0] === v7 && !(await bar(p)), J({ t: await toastT(p), ids: (await ids(p)).slice(0, 2) }));
   await sleep(2300); // let the toast clear
   // MA buffers further on between the card's read and the tap (set right before it, so the card still offers Up)
   await ev(p, `(() => { const Q = window.__queues['media_player.everywhere']; Q.buf = Q.index + 4; })()`);
@@ -885,21 +841,25 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
 {
   const pg = await browser.newPage();
   await hermetic(pg);
-  const base = { type: 'custom:jukebox-card', entity: 'media_player.everywhere', config_entry_id: '01MUSICASSISTANT0000000000', mass_queue_entry_id: '01MASSQUEUE0000000000000000' };
+  const base = { type: 'custom:jukebox-card', entity: 'media_player.everywhere' };
   await pg.goto(`${BASE.replace('index.html', 'editor.html')}?fresh=1&cfg=${encodeURIComponent(J(base))}`);
   await pg.waitForFunction(() => window.__editor?.shadowRoot?.querySelector('ha-form'));
   await sleep(300);
   const F = `__editor.shadowRoot.querySelector('ha-form')`;
   const names = await ev(pg, `[...${F}.querySelectorAll('details[data-section=speakers] [data-name]')].map((e) => e.dataset.name)`);
-  check('E1 editor: Speakers section with mode, targets, grouping, grouping_users, guest_access, leader_drop, presets, quiet hours',
-    ['speaker_mode', 'targets', 'grouping', 'grouping_users', 'guest_access', 'leader_drop', 'presets', 'quiet_start', 'quiet_end', 'quiet_max', 'quiet_applies'].every((n) => names.includes(n)), J(names));
+  check('E1 editor: Speakers section in "Volume only" mode shows just the Speakers panel choice', J(names) === J(['speaker_mode']), J(names));
   check('E2 editor: large_buttons under Display', await ev(pg, `!!${F}.querySelector('details[data-section=display] [data-name=large_buttons]')`));
   const ch0 = await ev(pg, `window.__changes.length`);
   check('E3 a 0.4 config opens without the editor writing speaker keys', ch0 === 0 || !(await ev(pg, `JSON.stringify(window.__changes.at(-1))`)).includes('speaker_mode'), String(ch0));
   await ev(pg, `(() => { const s = ${F}.querySelector('[data-name=speaker_mode] select'); s.value = 'dynamic'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await sleep(200);
   const last = await ev(pg, `window.__changes.at(-1)`);
-  check('E4 choosing Dynamic writes speaker_mode: dynamic and keeps the rest', last?.speaker_mode === 'dynamic' && last?.entity === base.entity && last?.mass_queue_entry_id === base.mass_queue_entry_id, J(last));
+  check('E4 choosing "Choose speakers" writes speaker_mode: dynamic and keeps the rest', last?.speaker_mode === 'dynamic' && last?.entity === base.entity, J(last));
+  await pg.goto(`${BASE.replace('index.html', 'editor.html')}?fresh=1&cfg=${encodeURIComponent(J({ ...base, speaker_mode: 'dynamic' }))}`);
+  await pg.waitForFunction(() => window.__editor?.shadowRoot?.querySelector('ha-form')); await sleep(300);
+  const dn = await ev(pg, `[...${F}.querySelectorAll('details[data-section=speakers] [data-name]')].map((e) => e.dataset.name)`);
+  check('E5 "Choose speakers" mode shows the speaker options; no presets or quiet hours in the editor',
+    ['speaker_mode', 'targets', 'grouping', 'grouping_users', 'guest_access', 'leader_drop', 'confirm_drop'].every((n) => dn.includes(n)) && !dn.some((n) => /^quiet|presets/.test(n)), J(dn));
   await pg.close();
 }
 

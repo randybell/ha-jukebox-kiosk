@@ -1,5 +1,5 @@
 // Mock Music Assistant players for the 0.5.0 Speakers panel (dev harness only; every id is a placeholder).
-// Reached through mass_queue.send_command (players/all, players/cmd/set_members, players/cmd/stop, player_queues/transfer).
+// Reached through the kiosk mock's ma_command (logged in __calls as ma.send_command) (players/all, players/cmd/set_members, players/cmd/stop, player_queues/transfer).
 // Topology: Everywhere = STATIC sync group (garage, living, kitchen; leader garage), Indoor = DYNAMIC (preset living, kitchen),
 // Outdoor = DYNAMIC (preset garage). Speakers are WiiM-like players (provider 'wiim', hide_in_ui, not exposed to HA).
 // Rules modelled on MA 2.10 (see the 0.5.0 plan): groups can't nest; groups may overlap and the newest one to start takes
@@ -182,7 +182,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
 
   async function command(cmd, d) {
     log.push({ t: Math.round(performance.now()), command: cmd, data: structuredClone(d) });
-    if (cmd !== 'players/all' && cmd !== 'config/players/get' && cmd !== 'player_queues/get' && cmd !== 'players/sleep_timer/get') window.__calls.push({ t: Math.round(performance.now()), domain: 'mass_queue', service: 'send_command', data: { command: cmd, data: structuredClone(d) } });
+    if (cmd !== 'players/all' && cmd !== 'config/players/get' && cmd !== 'player_queues/get' && cmd !== 'players/sleep_timer/get') window.__calls.push({ t: Math.round(performance.now()), domain: 'ma', service: 'send_command', data: { command: cmd, data: structuredClone(d) } });
     await sleep(MALAT);
     switch (cmd) {
       case 'players/all': return players();

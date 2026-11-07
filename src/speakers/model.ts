@@ -14,7 +14,7 @@
  * ~1 s with no gap; dropping the leader re-forms on the next member after ~5.9 s of silence; transfer is ~4.7 s of silence
  * and the source stops by itself. mass_player_id is null on HA's group and WiiM entities.
  */
-import type { HomeAssistant, JukeboxCardConfig, PresetConfig, QuietHours, RoomConfig, TargetConfig } from '../types';
+import type { HomeAssistant, JukeboxCardConfig, PresetConfig, RoomConfig, TargetConfig } from '../types';
 
 export interface MaPlayer {
   player_id: string;
@@ -187,29 +187,6 @@ export const canVolume = (c: JukeboxCardConfig, user: User) => (c.guest_access ?
 export const canJumpQueue = (c: JukeboxCardConfig, user: User) => canGroupAny(c, user);
 /** like canGroup, but ignoring the mode (fixed-mode admins keep volume when guests are read-only) */
 function canGroupAny(c: JukeboxCardConfig, user: User) { return canGroup({ ...c, speaker_mode: 'dynamic' }, user); }
-
-/* ---------------- quiet hours ---------------- */
-const mins = (s: string) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s ?? '').trim()); return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 60 + +m[2] : NaN; };
-export function validQuiet(q: unknown): q is QuietHours {
-  const o = q as QuietHours;
-  return !!o && typeof o === 'object' && Number.isFinite(mins(o.start)) && Number.isFinite(mins(o.end))
-    && typeof o.max_volume === 'number' && o.max_volume >= 0 && o.max_volume <= 100 && (o.applies === undefined || o.applies === 'guests' || o.applies === 'everyone');
-}
-/** true when `now` is inside [start, end) (wraps midnight; start === end = all day) */
-export function inQuiet(q: QuietHours, now = new Date()): boolean {
-  const s = mins(q.start), e = mins(q.end), t = now.getHours() * 60 + now.getMinutes();
-  if (!Number.isFinite(s) || !Number.isFinite(e)) return false;
-  if (s === e) return true;
-  return s < e ? t >= s && t < e : t >= s || t < e;
-}
-/** The volume cap (0..1) for this user right now, or undefined. */
-export function volumeCap(c: JukeboxCardConfig, user: User, now = new Date()): number | undefined {
-  const q = c.quiet_hours;
-  if (!q || !validQuiet(q) || !inQuiet(q, now)) return undefined;
-  if ((q.applies ?? 'guests') === 'guests' && canGroupAny(c, user)) return undefined;
-  return Math.max(0, Math.min(1, q.max_volume / 100));
-}
-export const capVol = (v: number, cap?: number) => (cap === undefined ? v : Math.min(v, cap));
 
 /* ---------------- grouping plans ---------------- */
 export interface Takeover {

@@ -2,7 +2,6 @@
  * 0.7.2 Search source buttons (a row under the search box, multi-select): All (library first, then every provider, as
  * before), or any mix of Library and the music providers configured in Music Assistant. The provider list comes from MA through the backend (never a fixed list):
  *   kiosk       jukebox_kiosk/search_providers (the integration reads MA's provider instances)
- *   mass_queue  MA's `providers` command through send_command
  *   native      no list (the core services can't search one provider): the picker is hidden
  * MA's own display names are used (a user-set name, or e.g. "Spotify [2]" for a second account).
  */
@@ -27,7 +26,7 @@ const plain = (v: any): string => (v == null ? '' : String(typeof v === 'object'
 const SEARCHABLE_TYPES = new Set(['music', 'plugin']);
 
 /**
- * {providers:[{instance_id, domain, name}]} (kiosk), or MA's raw provider instances (mass_queue: type,
+ * {providers:[{instance_id, domain, name}]} (kiosk), or MA's raw provider instances (type,
  * supported_features, available) -> the sources Search can be limited to, sorted by name. Raw MA rows must be an
  * available music/plugin provider that lists the `search` feature.
  */

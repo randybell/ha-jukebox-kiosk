@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 
 const OUT = new URL('../tmp/unit-backend/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
-const bundle = await rollup({ input: ['src/backend/index.ts', 'src/lyrics/store.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
+const bundle = await rollup({ input: ['src/backend/index.ts', 'src/lyrics/store.ts', 'src/favorites.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
 await bundle.write({ dir: OUT, format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name]-[hash].mjs' });
 await bundle.close();
 
@@ -18,12 +18,13 @@ globalThis.localStorage = { getItem: (k) => (LS.has(k) ? LS.get(k) : null), setI
 console.warn = () => {};
 const B = await import(OUT + 'index.mjs');
 const S = await import(OUT + 'store.mjs');
+const F = await import(OUT + 'favorites.mjs');
 
 let failures = 0, total = 0;
 function check(name, ok, info = '') { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); }
 const J = JSON.stringify;
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
-const ENT = 'media_player.kiosk_room', QID = 'QUEUE_ID_PLACEHOLDER', MQ = 'MASS_QUEUE_ENTRY_PLACEHOLDER';
+const ENT = 'media_player.kiosk_room', QID = 'QUEUE_ID_PLACEHOLDER', MA_ENTRY = 'MA_ENTRY_PLACEHOLDER';
 
 /** fake hass: callWS answers jukebox_kiosk/* from `answers` (type without prefix -> fn(msg)), logs every message */
 function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers = {}, ws = true, conn = true } = {}) {
@@ -45,22 +46,16 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
   return { hass, log, svc, subs };
 }
 
-// ---------------- pickBackend / backendKey ----------------
+// ---------------- pickBackend / createBackend ----------------
 {
   const h = (components) => ({ states: {}, config: components === undefined ? {} : { components } });
-  check('B1 auto + jukebox_kiosk loaded → kiosk (even with a mass_queue entry)', B.pickBackend({ mass_queue_entry_id: MQ }, h(['jukebox_kiosk', 'mass_queue'])) === 'kiosk');
-  check('B2 auto + mass_queue_entry_id, no kiosk → mass_queue', B.pickBackend({ mass_queue_entry_id: MQ }, h(['music_assistant'])) === 'mass_queue');
-  check('B3 auto + queue_config_entry_id (0.4 name) → mass_queue', B.pickBackend({ queue_config_entry_id: MQ }, h(['music_assistant'])) === 'mass_queue');
-  check('B4 auto + mass_queue loaded, no entry id → mass_queue (0.5.x services work without one)', B.pickBackend({}, h(['music_assistant', 'mass_queue'])) === 'mass_queue');
-  check('B5 auto + components unknown → mass_queue (0.5.x path kept)', B.pickBackend({}, h(undefined)) === 'mass_queue' && B.pickBackend({}, undefined) === 'mass_queue');
-  check('B6 auto + only music_assistant → native', B.pickBackend({}, h(['music_assistant'])) === 'native');
-  check('B7 an explicit backend always wins', B.pickBackend({ backend: 'native' }, h(['jukebox_kiosk'])) === 'native'
-    && B.pickBackend({ backend: 'kiosk' }, h(['music_assistant'])) === 'kiosk' && B.pickBackend({ backend: 'mass_queue' }, h(['jukebox_kiosk'])) === 'mass_queue');
-  check('B8 backendKey changes with the mass_queue entry only for mass_queue',
-    B.backendKey('mass_queue', { mass_queue_entry_id: 'A' }) !== B.backendKey('mass_queue', { mass_queue_entry_id: 'B' })
-    && B.backendKey('kiosk', { mass_queue_entry_id: 'A' }) === B.backendKey('kiosk', { mass_queue_entry_id: 'B' }));
-  const kinds = ['kiosk', 'mass_queue', 'native'].map((k) => B.createBackend(k, { mass_queue_entry_id: MQ }, () => undefined).kind);
-  check('B9 createBackend builds the requested kind', J(kinds) === J(['kiosk', 'mass_queue', 'native']), J(kinds));
+  check('B1 auto + jukebox_kiosk loaded → kiosk', B.pickBackend({}, h(['music_assistant', 'jukebox_kiosk'])) === 'kiosk');
+  check('B2 auto without the integration (or before hass knows its components) → native', B.pickBackend({}, h(['music_assistant'])) === 'native'
+    && B.pickBackend({}, h(undefined)) === 'native' && B.pickBackend({}, undefined) === 'native');
+  check('B3 an explicit backend (YAML) always wins', B.pickBackend({ backend: 'native' }, h(['jukebox_kiosk'])) === 'native'
+    && B.pickBackend({ backend: 'kiosk' }, h(['music_assistant'])) === 'kiosk');
+  const kinds = ['kiosk', 'native'].map((k) => B.createBackend(k, () => undefined).kind);
+  check('B4 createBackend builds the requested kind; no mass_queue backend exists any more', J(kinds) === J(['kiosk', 'native']) && !('MassQueueBackend' in B), J(kinds));
 }
 // ---------------- capsFromServer ----------------
 {
@@ -82,6 +77,7 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
     queue_items: () => ({ queue_id: QID, current_index: 7, index_in_buffer: 8, current_item_id: 'qi-7', total: 40, offset: 6, items: [{ queue_item_id: 'qi-6' }, { queue_item_id: 'qi-7' }] }),
     item_tracks: (m) => ({ tracks: [{ media_title: 'a' }], total: 230, page: m.page, more: m.page * m.page_size < 230 }),
     unfavorite_current: () => null,
+    favorite_current: () => ({ uri: 'library://track/1' }),
   } });
   const k = new B.KioskBackend(() => hass);
   check('K1 caps are optimistic before the server answers', k.caps.speakers && k.caps.queueEdit);
@@ -112,6 +108,8 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
     log.at(-2).page === 1 && log.at(-2).page_size === 100 && p0.more === true && p0.total === 230 && log.at(-1).page === 3 && p2.more === false, J({ p0, p2 }));
   await k.unfavoriteCurrent(ENT);
   check('K8 unfavoriteCurrent → unfavorite_current {entity_id}', J(log.at(-1)) === J({ type: 'jukebox_kiosk/unfavorite_current', entity_id: ENT }));
+  await k.favoriteCurrent(ENT);
+  check('K8b favoriteCurrent → favorite_current {entity_id} (the Now Playing heart needs no button entity)', J(log.at(-1)) === J({ type: 'jukebox_kiosk/favorite_current', entity_id: ENT }));
   const evs = []; const un = await k.subscribeQueue(ENT, (e) => evs.push(e));
   subs[0].cb({ event: 'queue_updated', queue_id: QID });
   check('K9 subscribeQueue → subscribe_queue {entity_id}; events reach the callback', subs[0].msg.type === 'jukebox_kiosk/subscribe_queue' && subs[0].msg.entity_id === ENT && evs.length === 1);
@@ -146,27 +144,36 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
   const nsub = await k2.subscribeQueue(ENT, () => {}).catch((x) => x);
   check('K16 subscribeQueue without a connection → BackendError unsupported', nsub instanceof B.BackendError && nsub.code === 'unsupported');
 }
-// ---------------- MassQueueBackend (0.5.x call shapes) ----------------
+// ---------------- the Music Assistant entry, found without any setting ----------------
 {
-  const { hass, svc } = fakeHass({ components: ['mass_queue'] });
-  const m = new B.MassQueueBackend(() => hass, MQ);
-  await m.send('players/all', { a: 1 });
-  check('M1 send → mass_queue.send_command {config_entry_id, command, data} with return_response',
-    svc[0].domain === 'mass_queue' && svc[0].service === 'send_command' && J(svc[0].data) === J({ config_entry_id: MQ, command: 'players/all', data: { a: 1 } }) && svc[0].ret === true);
-  for (const a of ['play', 'up', 'down', 'next', 'remove']) await m.queueAction(ENT, a, 'qi-1');
-  check('M2 queueAction → the 0.4 row services {entity, queue_item_id}',
-    J(svc.slice(1).map((c) => c.service)) === J(['play_queue_item', 'move_queue_item_up', 'move_queue_item_down', 'move_queue_item_next', 'remove_queue_item'])
-    && svc.slice(1).every((c) => J(c.data) === J({ entity: ENT, queue_item_id: 'qi-1' })));
-  svc.length = 0;
-  await m.itemTracks('playlist', 'library://playlist/1', 2); await m.itemTracks('album', 'library://album/1', 2);
-  check('M3 itemTracks: playlist passes page, album does not', J(svc[0].data) === J({ config_entry_id: MQ, uri: 'library://playlist/1', page: 2 }) && J(svc[1].data) === J({ config_entry_id: MQ, uri: 'library://album/1' }) && svc[1].service === 'get_album_tracks');
-  svc.length = 0;
-  await m.unfavoriteCurrent(ENT);
-  check('M4 unfavoriteCurrent → mass_queue.unfavorite_current_item {entity}', svc[0].service === 'unfavorite_current_item' && J(svc[0].data) === J({ entity: ENT }));
-  const m0 = new B.MassQueueBackend(() => hass, '');
-  const e = await m0.send('players/all').catch((x) => x);
-  check('M5 without an entry id: raw commands → BackendError config; caps keep queue + edits but no send / lyrics / speakers / track lists',
-    e instanceof B.BackendError && e.code === 'config' && m0.caps.queue && m0.caps.queueEdit && !m0.caps.send && !m0.caps.lyrics && !m0.caps.speakers && !m0.caps.trackLists);
+  const { hass } = fakeHass({ answers: { capabilities: () => ({ ma_entry_id: MA_ENTRY, guest: true, features: {} }) } });
+  hass.user = { name: 'Kiosk', is_admin: false };
+  const k = new B.KioskBackend(() => hass);
+  check('E1 kiosk: no entry until the integration answers', k.maEntry === '');
+  await k.ready;
+  check('E2 kiosk: the integration reports the Music Assistant entry, for a non-admin too (no config entry read)', k.maEntry === MA_ENTRY, k.maEntry);
+  const ws = [];
+  const admin = { states: {}, user: { is_admin: true }, config: { components: ['music_assistant'] }, callService: async () => ({}),
+    callWS: async (m) => { ws.push(m); return [{ entry_id: 'OTHER_NOT_LOADED', state: 'not_loaded' }, { entry_id: MA_ENTRY, state: 'loaded' }]; } };
+  const n = new B.NativeBackend(() => admin); await n.ready;
+  check('E3 native + admin: the loaded entry from config_entries/get {domain: music_assistant}', n.maEntry === MA_ENTRY && ws[0].type === 'config_entries/get' && ws[0].domain === 'music_assistant', J({ e: n.maEntry, ws }));
+  const ws2 = [];
+  const guest = { ...admin, user: { is_admin: false }, callWS: async (m) => { ws2.push(m); return []; } };
+  const g = new B.NativeBackend(() => guest); await g.ready;
+  check('E4 native + non-admin: config entries are never asked for (they are admin-only)', g.maEntry === '' && ws2.length === 0);
+}
+// ---------------- the player's own Music Assistant favorite button ----------------
+{
+  const P = 'media_player.kiosk_room', BTN = 'button.kiosk_room_favorite_current_song';
+  const hass = (entities, states = { [P]: {}, [BTN]: {} }) => ({ states, entities });
+  const reg = { [P]: { device_id: 'D1', platform: 'music_assistant' }, [BTN]: { device_id: 'D1', platform: 'music_assistant', translation_key: 'favorite_now_playing' } };
+  check('FB1 the music_assistant favorite button on the player\'s device is found', F.favoriteButtonFor(hass(reg), P) === BTN);
+  const renamed = { [P]: reg[P], 'button.heart': { device_id: 'D1', platform: 'music_assistant', translation_key: 'favorite_now_playing' } };
+  check('FB2 a renamed button is found by its device and translation key', F.favoriteButtonFor(hass(renamed, { [P]: {}, 'button.heart': {} }), P) === 'button.heart');
+  const other = { [P]: reg[P], [BTN]: { ...reg[BTN], device_id: 'D2' }, 'button.x_favorite_current_song': { device_id: 'D1', platform: 'template' } };
+  check('FB3 the player\'s name-matched button still counts; another integration\'s button on the device never does',
+    F.favoriteButtonFor(hass(other, { [P]: {}, [BTN]: {}, 'button.x_favorite_current_song': {} }), P) === BTN);
+  check('FB4 nothing found → \'\' (the heart stays hidden)', F.favoriteButtonFor(hass({ [P]: reg[P] }), P) === '' && F.favoriteButtonFor({ states: {} }, P) === '');
 }
 // ---------------- NativeBackend ----------------
 {
