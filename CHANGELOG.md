@@ -9,6 +9,7 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 - Now Playing: bigger Next/Previous buttons.
 - Now Playing: sleep timer moved to the album art corner, away from Play/Pause.
 - Now Playing: buttons and sleep timer choices fit on phones with large buttons.
+- Lyrics: tap anywhere to go back to the player.
 
 ## 0.7.7 — 2026-11-05
 

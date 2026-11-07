@@ -86,7 +86,7 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   await sleep(250);
   const btns = await pg.evaluate((s) => { const r = eval(s); const b = r.querySelector('.ab.lyr'); return { lyr: !!b, on: b?.classList.contains('on'), pressed: b?.getAttribute('aria-pressed'), stg: !!r.querySelector('.ab.stg'), ovl: !!r.querySelector('jb-lyrics') }; }, SEL.now);
   check('O1 Now Playing: lyrics + full-screen buttons on the art, overlay off by default', btns.lyr && btns.stg && !btns.on && btns.pressed === 'false' && !btns.ovl, J(btns));
-  const bx = await pg.evaluate((s) => { const r = eval(s).querySelector('.ab.lyr').getBoundingClientRect(); const a = eval(s).querySelector('.art').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, topRight: r.right > a.right - 80 && r.top < a.top + 80 }; }, SEL.now);
+  const bx = await pg.evaluate((s) => { const r = eval(s).querySelector('.ab.lyr').getBoundingClientRect(); const a = eval(s).querySelector('.art').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, topRight: r.right > a.right - 140 && r.top < a.top + 80 }; }, SEL.now);
   await pg.mouse.click(bx.x, bx.y);
   await sleep(300);
   const on = await pg.evaluate((s) => ({ on: eval(s).querySelector('.ab.lyr').classList.contains('on'), ls: localStorage.getItem('jukebox-card:lyrics-overlay:v1') }), SEL.now);
@@ -112,16 +112,20 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   const c = await cur(pg, SEL.tab);
   const target = c + 2;
   let L = await lineBox(pg, SEL.tab, target);
-  // tap: nothing
+  // 0.7.8 #49: a plain tap returns to Now Playing (and never seeks)
+  const tabNow = () => pg.evaluate(() => __card._tab);
+  const back = async () => { await pg.evaluate(() => __card.shadowRoot.querySelector('.tab[data-tab=lyrics]').click()); await waitStatus(pg, SEL.tab, 'synced'); await sleep(600); L = await lineBox(pg, SEL.tab, target); };
   await pg.mouse.click(L.x, L.y);
   await sleep(700);
-  check('P1 tap on a synced line does not seek', (await seeks(pg)).length === 0);
-  // short hold (250 ms): nothing
+  check('P1 tap on a synced line does not seek, and returns to Now Playing (#49)', (await seeks(pg)).length === 0 && (await tabNow()) === 'now', await tabNow());
+  await back();
+  // short hold (250 ms): a tap too
   await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(250); await pg.mouse.up(); await sleep(600);
-  check('P2 short press (250 ms) does not seek', (await seeks(pg)).length === 0);
+  check('P2 short press (250 ms) does not seek (it is a tap: back to Now Playing)', (await seeks(pg)).length === 0 && (await tabNow()) === 'now', await tabNow());
+  await back();
   // press + drag (scrolling): nothing
   await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(120); await pg.mouse.move(L.x, L.y + 40, { steps: 4 }); await sleep(700); await pg.mouse.up(); await sleep(200);
-  check('P3 press then move > 10 px cancels the long-press', (await seeks(pg)).length === 0);
+  check('P3 press then move > 10 px cancels the long-press, and a drag is not a tap (stays on Lyrics, #49)', (await seeks(pg)).length === 0 && (await tabNow()) === 'lyrics', await tabNow());
   // hold feedback during the press
   L = await lineBox(pg, SEL.tab, target);
   await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(250);
@@ -137,7 +141,7 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   check('P6 seek feedback: line flashes and "Jumped to m:ss" toast', fb.flash && fb.toast === `Jumped to ${Math.floor(want / 60)}:${String(want % 60).padStart(2, '0')}`, J(fb));
   const after = await cur(pg, SEL.tab);
   check('P7 after the seek the pressed line becomes current', after === target, `cur=${after} target=${target}`);
-  check('P8 releasing after a long-press does not trigger a second action', (await seeks(pg)).length === 1);
+  check('P8 releasing after a long-press does not trigger a second action (no seek, stays on Lyrics)', (await seeks(pg)).length === 1 && (await tabNow()) === 'lyrics', await tabNow());
   // touch long-press at phone size
   await pg.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
   await pg.reload(); await pg.waitForFunction('window.__ready === true');
@@ -145,12 +149,75 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   const c2 = await cur(pg, SEL.tab);
   const L2 = await lineBox(pg, SEL.tab, c2 + 1);
   await pg.touchscreen.tap(L2.x, L2.y); await sleep(700);
-  check('P9 touch tap does not seek (390x844)', (await seeks(pg)).length === 0);
+  check('P9 touch tap does not seek, returns to Now Playing (390x844)', (await seeks(pg)).length === 0 && (await tabNow()) === 'now', await tabNow());
+  await pg.evaluate(() => __card.shadowRoot.querySelector('.tab[data-tab=lyrics]').click()); await waitStatus(pg, SEL.tab, 'synced'); await sleep(700);
   await pg.touchscreen.touchStart(L2.x, L2.y); await sleep(800); await pg.touchscreen.touchEnd(); await sleep(300);
   const s2 = await seeks(pg);
   check('P10 touch long-press seeks to that line (390x844)', s2.length === 1 && s2[0].data.seek_position === Math.floor(L2.t), J(s2.map((x) => x.data)));
   // overlay long-press also works; Stage taps do not seek
   await pg.close();
+}
+
+// ---------------- 2b. #49 tap anywhere returns to the player ----------------
+{
+  const pg = await newPage();
+  const tabNow = () => pg.evaluate(() => __card._tab);
+  const center = (sel) => pg.evaluate((s) => { const r = eval(s).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, sel);
+  const LY = `${SEL.tab}.shadowRoot.querySelector('.ly')`;
+  await open(pg, '&tab=lyrics'); await waitStatus(pg, SEL.tab, 'synced'); await sleep(600);
+  // the header (track title) area is part of the lyrics body
+  let c = await center(`${SEL.tab}.shadowRoot.querySelector('.hd')`);
+  await pg.mouse.click(c.x, c.y); await sleep(400);
+  check('TP1 tap on the lyrics header/body → Now Playing', (await tabNow()) === 'now', await tabNow());
+  await pg.evaluate(() => __card.shadowRoot.querySelector('.tab[data-tab=lyrics]').click()); await waitStatus(pg, SEL.tab, 'synced'); await sleep(600);
+  // touch drag (scroll) is not a tap
+  await pg.setViewport({ width: 820, height: 1180, isMobile: true, hasTouch: true, deviceScaleFactor: 1 }); await sleep(400);
+  c = await center(LY);
+  const cdp = await pg.target().createCDPSession();
+  const tp = (type, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: c.x, y }] });
+  await tp('touchStart', c.y); for (let k = 1; k <= 8; k++) { await tp('touchMove', c.y - k * 12); await sleep(16); } await tp('touchEnd'); await sleep(500);
+  check('TP2 touch drag over the lyrics (scroll) stays on Lyrics', (await tabNow()) === 'lyrics', await tabNow());
+  // a tap that lands while the lyrics are still scrolling (ends a fling) does not count
+  await pg.evaluate((s) => { const sc = eval(s).shadowRoot.querySelector('.sc'); sc.scrollTop += 60; sc.dispatchEvent(new Event('scroll')); }, SEL.tab);
+  await pg.touchscreen.tap(c.x, c.y); await sleep(400);
+  check('TP3 a tap right after a scroll (stopping it) stays on Lyrics', (await tabNow()) === 'lyrics', await tabNow());
+  await sleep(400);
+  await pg.touchscreen.tap(c.x, c.y); await sleep(400);
+  check('TP4 a later plain touch tap → Now Playing', (await tabNow()) === 'now', await tabNow());
+  // the tab bar and the header keep their own behavior
+  await pg.evaluate(() => __card.shadowRoot.querySelector('.tab[data-tab=lyrics]').click()); await sleep(400);
+  c = await center(`__card.shadowRoot.querySelector('.tab[data-tab=queue]')`); await pg.touchscreen.tap(c.x, c.y); await sleep(400);
+  check('TP5 tab bar on the Lyrics screen: Queue tab opens Queue (not Now Playing)', (await tabNow()) === 'queue', await tabNow());
+  await pg.close();
+  // empty / loading / error states
+  const p2 = await newPage();
+  const t2 = () => p2.evaluate(() => __card._tab);
+  const mid = async () => { const r = await p2.evaluate((s) => { const b = eval(s).getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }, `${SEL.tab}.shadowRoot.querySelector('.ly')`); await p2.mouse.click(r.x, r.y); await sleep(400); };
+  await open(p2, '&tab=lyrics&lyrics=none'); await waitStatus(p2, SEL.tab, 'none'); await mid();
+  check('TP6 "No lyrics found": tap → Now Playing', (await t2()) === 'now', await t2());
+  await open(p2, '&tab=lyrics&lyrlat=60000'); await sleep(300);
+  const ld = await status(p2, SEL.tab); await mid();
+  check('TP7 "Looking for lyrics…": tap → Now Playing', ld === 'loading' && (await t2()) === 'now', J({ ld, tab: await t2() }));
+  await open(p2, '&tab=lyrics&lyrfail=perm'); await waitStatus(p2, SEL.tab, 'error');
+  const n0 = (await lyrCmds(p2)).length;
+  const rb = await p2.evaluate((s) => { const b = eval(s).shadowRoot.querySelector('.retry').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }, SEL.tab);
+  await p2.mouse.click(rb.x, rb.y); await sleep(400);
+  check('TP8 Try again button only retries (stays on Lyrics)', (await lyrCmds(p2)).length > n0 && (await t2()) === 'lyrics', J({ tab: await t2() }));
+  await mid();
+  check('TP9 error state: tap elsewhere → Now Playing', (await t2()) === 'now', await t2());
+  // Now Playing artwork overlay: a tap closes the overlay (stays on Now Playing); a drag does not
+  await open(p2, '&tab=now&overlay=1'); await waitStatus(p2, SEL.ovl, 'synced'); await sleep(500);
+  const ob = await p2.evaluate((s) => { const b = eval(s).getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height * 0.7 }; }, SEL.ovl);
+  await p2.mouse.move(ob.x, ob.y); await p2.mouse.down(); await p2.mouse.move(ob.x, ob.y - 40, { steps: 4 }); await p2.mouse.up(); await sleep(300);
+  check('TP10 drag on the artwork lyrics overlay keeps it open', await p2.evaluate((s) => !!eval(s), SEL.ovl));
+  const lyb = await p2.evaluate((s) => { const b = eval(s).querySelector('.ab.lyr').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }, SEL.now);
+  await p2.mouse.click(ob.x, ob.y); await sleep(400);
+  const ov = await p2.evaluate((s) => ({ ovl: !!eval(s).querySelector('jb-lyrics'), on: eval(s).querySelector('.ab.lyr').classList.contains('on'), ls: localStorage.getItem('jukebox-card:lyrics-overlay:v1') }), SEL.now);
+  check('TP11 tap on the artwork lyrics overlay closes it (back to the plain player), remembered', !ov.ovl && !ov.on && ov.ls !== '1' && (await t2()) === 'now', J(ov));
+  await p2.mouse.click(lyb.x, lyb.y); await sleep(400);
+  check('TP12 the corner Lyrics button still toggles the overlay on', await p2.evaluate((s) => !!eval(s).querySelector('jb-lyrics'), SEL.now));
+  // Stage: unchanged (tap toggles its controls, does not close it)
+  await p2.close();
 }
 
 // ---------------- 3. plain lyrics ----------------
