@@ -301,10 +301,11 @@ export class JbSearch extends LitElement {
 
   // ---------- 0.7.2 combined tab: category buttons + the embedded library list ----------
   get browse(): JbBrowse | null { return this.renderRoot?.querySelector('jb-browse') as JbBrowse | null; }
+  /** 0.7.9 #34: no Genres button at the top of the combined Library (it took room above the results) */
   private lcats(): Array<{ type: string; label: string }> {
     const b = this.browse;
-    if (b) return b.visibleCats().map((c) => ({ type: c.type, label: c.label }));
-    return libraryCategories(this.config).filter((t) => t !== 'genre' || !!this.config?._backend?.ext?.genres).map((t) => ({ type: t, label: libraryCatLabel(t) }));
+    if (b) return b.visibleCats().filter((c) => c.type !== 'genre').map((c) => ({ type: c.type, label: c.label }));
+    return libraryCategories(this.config).filter((t) => t !== 'genre').map((t) => ({ type: t, label: libraryCatLabel(t) }));
   }
   /** a category button: the library list (box empty) or the search results (typed) switch to it */
   selectCat(t: string) {
@@ -329,8 +330,7 @@ export class JbSearch extends LitElement {
     </div>${tools ? html`<div class="lcorner">
       ${tools.fav !== null ? html`<button class="cn ${tools.fav ? 'on' : ''}" data-act="lib-fav" tabindex="-1" aria-pressed=${tools.fav ? 'true' : 'false'}
         aria-label="Favorites only" title="Favorites only" @pointerdown=${noFocus} @click=${() => { b!.toggleFavorites(); this.requestUpdate(); }}>${icon(tools.fav ? 'heart' : 'heartline', 'i')}</button>` : nothing}
-      <button class="cn" data-act="lib-sort" tabindex="-1" aria-label=${`Sort: ${tools.sort}`} title=${`Sort: ${tools.sort}`}
-        @pointerdown=${noFocus} @click=${() => { b!.nextSort(); this.requestUpdate(); }}>${icon('sort', 'i')}<small>${tools.sort}</small></button>
+      ${nothing /* 0.7.9 #34: no Sort button here; lists keep their default order */}
     </div>` : nothing}</div>`;
   }
   /** Back to the list (tapping the Library tab again): leaves detail pages, keeps the words and filters */

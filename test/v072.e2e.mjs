@@ -82,7 +82,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   check(`T3b [${vpName}] the button row sits directly under the search box, touch-sized (>= 44px), all on screen`, geo.gap >= 0 && geo.gap <= 16 && geo.left <= 1 && geo.minH >= 44 && geo.inside, J(geo));
   check(`T3c [${vpName}] no dropdown / popover / select for sources`, !(await ev(p, `!!${SV}.querySelector('.srcb, .srcm, .srcveil, select, [aria-haspopup]')`)));
   const b = await btns(p);
-  check(`T4 [${vpName}] buttons in order: Playlists, Artists, Songs, Genres, Radio (Playlists on)`, J(b) === J(['playlist:Playlists', 'artist:Artists', 'track:Songs', 'genre:Genres', 'radio:Radio']) && (await onBtn(p)) === 'playlist', J(b));
+  check(`T4 [${vpName}] buttons in order: Playlists, Artists, Songs, Radio (0.7.9 #34: no Genres; Playlists on)`, J(b) === J(['playlist:Playlists', 'artist:Artists', 'track:Songs', 'radio:Radio']) && (await onBtn(p)) === 'playlist', J(b));
   check(`T5 [${vpName}] all five buttons on screen`, (await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].every((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.right <= innerWidth && r.bottom <= innerHeight; })`)));
   check(`T6 [${vpName}] empty box shows the library playlists`, (await libShown(p)) && (await wait(p, `${BR}.querySelectorAll('.tile[data-type=playlist]').length > 0`)));
   await p.close();
@@ -92,20 +92,14 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
 {
   const p = await open();
   await wait(p, `${SV}.querySelectorAll('.lcats .lc').length >= 5`);
-  for (const [cat, sel] of [['artist', `.tile[data-type=artist], .row[data-type=artist]`], ['track', `.row[data-type=track]`], ['genre', `.row.gen`], ['radio', `.tile[data-type=radio], [data-empty=stations]`], ['playlist', `.tile[data-type=playlist]`]]) {
+  for (const [cat, sel] of [['artist', `.tile[data-type=artist], .row[data-type=artist]`], ['track', `.row[data-type=track]`], ['radio', `.tile[data-type=radio], [data-empty=stations]`], ['playlist', `.tile[data-type=playlist]`]]) {
     await tap(p, `${SV}.querySelector('.lcats .lc[data-lcat=${cat}]')`);
     const ok = await wait(p, `${BR}.querySelectorAll('${sel}').length > 0`);
     check(`B1 ${cat}: button on, library list shown`, ok && (await onBtn(p)) === cat && (await libShown(p)) && (await ev(p, `${SH}.browse.cat`)) === cat, J({ on: await onBtn(p) }));
   }
-  // genre detail
-  await tap(p, `${SV}.querySelector('.lcats .lc[data-lcat=genre]')`);
-  await wait(p, `${BR}.querySelectorAll('.row.gen').length > 0`);
-  const gname = await ev(p, `${BR}.querySelector('.row.gen b')?.textContent.trim()`);
-  await tap(p, `${BR}.querySelector('.row.gen')`);
-  const gd = await wait(p, `${BD}?.querySelector('h2')?.textContent.trim() === ${J(gname)}`);
-  check('G1 Genres list → tapping a genre opens its detail page', gd, gname);
-  const ma = await ev(p, `window.__ws.filter((m) => m.type === 'ma').map((m) => m.command)`);
-  check('G2 genres come from music/genres/library_items', ma.includes('music/genres/library_items'), J([...new Set(ma)]));
+  // 0.7.9 #34: no Genres button at the top of the combined Library
+  check('G1 (0.7.9 #34) no Genres category button; the others stay', !(await ev(p, `!!${SV}.querySelector('.lcats .lc[data-lcat=genre]')`))
+    && (await ev(p, `${SV}.querySelectorAll('.lcats .lc').length`)) >= 4, J(await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].map((b) => b.dataset.lcat)`)));
   check('G3 no popups', await noPopup(p));
   await p.close();
 }
@@ -278,7 +272,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   await n.close();
   const a = await open('', { library_categories: ['album', 'genre', 'podcast'] });
   await wait(a, `${SV}.querySelectorAll('.lcats .lc').length >= 2`);
-  check('K7 library_categories: Albums / Podcasts by config, in order', J((await btns(a)).map((x) => x.split(':')[0])) === J(['album', 'genre', 'podcast']), J(await btns(a)));
+  check('K7 library_categories: Albums / Podcasts by config, in order (0.7.9 #34: a configured Genres is not shown)', J((await btns(a)).map((x) => x.split(':')[0])) === J(['album', 'podcast']), J(await btns(a)));
   await a.close();
 }
 
@@ -331,8 +325,8 @@ for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobi
   const c = await ev(p, geo);
   check(`C1 [${vpName}] sources: one compact control on its tablet row (beside on phones), collapsed; keyboard open; nothing overlapping`,
     (vp.width >= 700 ? c.below : c.beside) && c.trigH >= 44 && c.expanded === 'false' && c.label === 'Sources: All sources' && !c.has.includes('opts') && c.kbOpen && !c.bad.length, J(c));
-  check(`C2 [${vpName}] category buttons: each has an icon, >= 44px tall; Favorites + sort are corner icons in the same row (no row of their own)`,
-    c.icons && c.catH >= 44 && c.cornerH >= 44 && J(c.corner) === J(['lib-fav', 'lib-sort']) && !(await ev(p, `!!${BR}.querySelector('.bar')`)), J(c));
+  check(`C2 [${vpName}] category buttons: each has an icon, >= 44px tall; Favorites is a corner icon in the same row; no Sort button (0.7.9 #34)`,
+    c.icons && c.catH >= 44 && c.cornerH >= 44 && J(c.corner) === J(['lib-fav']) && !(await ev(p, `!!${BR}.querySelector('.bar')`)), J(c));
   await tap(p, `${SV}.querySelector('.srct')`);
   await wait(p, `${SV}.querySelectorAll('.srco .src').length > 2`);
   const o = await ev(p, geo);
@@ -365,12 +359,10 @@ for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobi
   check('C8 the heart corner icon turns Favorites only on (library re-asked with favorite: true)', fav && favReq, J(await ev(p, `window.__calls.map((c) => c.service)`)));
   await tap(p, `${SV}.querySelector('[data-act=lib-fav]')`);
   check('C9 tapping it again turns Favorites off', await wait(p, `${SV}.querySelector('[data-act=lib-fav]').getAttribute('aria-pressed') === 'false'`));
-  const s1 = await ev(p, `${SV}.querySelector('[data-act=lib-sort]').getAttribute('aria-label')`);
-  await tap(p, `${SV}.querySelector('[data-act=lib-sort]')`);
-  const s2 = await ev(p, `${SV}.querySelector('[data-act=lib-sort]').getAttribute('aria-label')`);
-  check('C10 the sort corner icon cycles the sort (label follows)', s1 === 'Sort: A–Z' && s2 !== s1 && s2 === `Sort: ${await ev(p, `${SH}.browse.libTools().sort`)}`, J([s1, s2]));
-  await tap(p, `${SV}.querySelector('.lcats .lc[data-lcat=genre]')`);
-  check('C11 Genres: no Favorites icon (sort only)', await wait(p, `!${SV}.querySelector('[data-act=lib-fav]') && !!${SV}.querySelector('[data-act=lib-sort]')`));
+  // 0.7.9 #34: no Sort button; the list keeps its default order (A–Z)
+  check('C10 (0.7.9 #34) no Sort button at the top; the list stays in its default A–Z order', !(await ev(p, `!!${SV}.querySelector('[data-act=lib-sort]')`))
+    && (await ev(p, `${SH}.browse.libTools().sort`)) === 'A–Z' && (await ev(p, `window.__calls.filter((c) => c.service === 'get_library').every((c) => !c.data?.order_by || c.data.order_by === 'name' || c.data.order_by === 'sort_name')`)),
+    J(await ev(p, `window.__calls.filter((c) => c.service === 'get_library').map((c) => c.data?.order_by)`)));
   await p.close();
 }
 

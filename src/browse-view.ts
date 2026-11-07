@@ -343,7 +343,6 @@ export class JbBrowse extends LitElement {
     return { fav: this._cat === 'genre' ? null : this._fav, sort: (sortsFor(this._cat).find((s) => s.id === this._sort) ?? SORTS[0]).label };
   }
   toggleFavorites() { this.setFav(); }
-  nextSort() { this.cycleSort(); }
   private setFav() { this._fav = !this._fav; this._stack = []; this.ensure(); }
   private cycleSort() {
     const L = sortsFor(this._cat); const i = L.findIndex((s) => s.id === this._sort);

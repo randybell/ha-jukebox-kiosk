@@ -46,7 +46,7 @@ const ev = (page, expr) => page.evaluate((e) => eval(e), expr);
 
 {
   const p = await open();
-  check('R1 category buttons still present', await wait(p, `${SV}.querySelectorAll('.lcats .lc').length >= 5`));
+  check('R1 category buttons still present', await wait(p, `${SV}.querySelectorAll('.lcats .lc').length >= 4`));
   await wait(p, `${BR}.querySelectorAll('.tile[data-type=playlist]').length > 0`);
   await sleep(900);
   check('R2 (0.7.9 #33) no Recently played row at the top of the Library', !(await ev(p, `!!${BR}.querySelector('[data-recent-row], .recent, .rtile')`))
@@ -72,7 +72,7 @@ const ev = (page, expr) => page.evaluate((e) => eval(e), expr);
 {
   // keyboard still open; search box + category buttons work
   const p = await open('', {}, { width: 1024, height: 600 });
-  await wait(p, `${SV}.querySelectorAll('.lcats .lc').length >= 5`);
+  await wait(p, `${SV}.querySelectorAll('.lcats .lc').length >= 4`);
   check('R11 on-screen keyboard still open (kb-always)',
     await ev(p, `${SV}.querySelector('.sx')?.classList.contains('kb-always')`) === true
     && await ev(p, `!!${SV}.querySelector('jb-keyboard')`));
