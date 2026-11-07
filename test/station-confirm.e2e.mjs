@@ -96,18 +96,11 @@ async function searchStation(q) {
   await p.close();
 }
 {
-  // Recently played: a station tile
+  // 0.7.9 #33: the Recently played strip is gone, so there is no station tile there to confirm
   const p = await open('&tab=browse&radio=lib&stations=fake');
   const RB = `${BR}.shadowRoot`;
-  const has = await wait(p, `!!${RB}.querySelector('[data-recent-row] [data-recent-type=radio]')`, 8000);
-  if (has) {
-    await clearPlays(p);
-    await tap(p, `${RB}.querySelector('[data-recent-row] [data-recent-type=radio]')`); await sleep(400);
-    // a station tile may open the station sheet first: then use its Play
-    if (await ev(p, `!!${ST}?.shadowRoot?.querySelector('[data-action=play]')`)) { await tap(p, `${ST}.shadowRoot.querySelector('[data-action=play]')`); await sleep(300); }
-    const d = await dlg(p);
-    check('SC10 Recently played station asks first', d?.kind === 'station' && (await plays(p)).length === 0, J(d));
-  } else check('SC10 Recently played has a station tile in the mock', false, 'no radio tile in Recently played');
+  await sleep(1200);
+  check('SC10 (0.7.9 #33) no Recently played strip in the Library (no station tile there)', !(await ev(p, `!!${RB}.querySelector('[data-recent-row]')`)));
   await p.close();
 }
 {
