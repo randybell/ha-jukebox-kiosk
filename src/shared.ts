@@ -343,6 +343,11 @@ export const drillable = (type: string, config: JukeboxCardConfig) =>
 
 /* ---------------- shared CSS for art, tiles, rows, badges, menus, toasts ---------------- */
 export const mediaStyles = css`
+  /* 0.7.8 #51: the one labeled Close button (same look and sizes as the Speakers Close pill, #50) */
+  .cls { height: 48px; min-width: 88px; padding: 0 20px; display: grid; place-items: center; border-radius: 999px; flex: none;
+    background: #fff; color: #000; font: inherit; font-size: 16px; font-weight: 800; white-space: nowrap; }
+  .cls:active { transform: scale(.96); background: #ffffffd9; }
+  :host([large]) .cls { height: 60px; min-width: 104px; padding: 0 24px; font-size: 18px; }
   .ar { position: relative; display: block; flex: none; overflow: hidden; box-shadow: 0 0 0 1px #ffffff1a; }
   .ar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .circ { width: 64px; height: 64px; border-radius: 50%; }

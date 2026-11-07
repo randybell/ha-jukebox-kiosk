@@ -105,6 +105,19 @@ export class JbNow extends LitElement {
     return true;
   }
 
+  private sleepAway = (e: PointerEvent) => {
+    e.preventDefault(); e.stopPropagation(); this._sleepOpen = false;
+    const swallow = (ev: Event) => { ev.stopPropagation(); ev.preventDefault(); };
+    this.renderRoot.addEventListener('click', swallow, { capture: true });
+    window.setTimeout(() => this.renderRoot.removeEventListener('click', swallow, { capture: true }), 400);
+  };
+  /** #51 Esc (from the card): close the sleep choices, then the lyrics on the art */
+  escape() {
+    if (this._sleepOpen) this._sleepOpen = false;
+    else if (this._overlay && this.renderRoot.querySelector('jb-lyrics.ovl')) { this._overlay = false; writeOverlay(false); }
+    else return false;
+    return true;
+  }
   private toggleOverlay = () => { this._overlay = !this._overlay; writeOverlay(this._overlay); };
 
   // ---------- optimistic helpers ----------
@@ -405,12 +418,15 @@ export class JbNow extends LitElement {
       html`<button class="tb ${cls} ${on ? 'on' : ''}" tabindex="-1" aria-label=${label} title=${label} aria-pressed=${on === undefined ? nothing : on ? 'true' : 'false'}
         ?disabled=${dis} @pointerdown=${noFocus} @click=${fn}>${icon(ic)}${dot ? html`<i class="dot"></i>` : nothing}</button>`;
     const showLyr = !idle && this.config.show_lyrics !== false && !!this.lyrics;
-    return html`<div class="nw ${idle ? 'idle' : ''}" data-state=${e?.state ?? 'unknown'}>
+    // #51: while the sleep choices are open, a tap anywhere else closes them (the tap does nothing else)
+    const slx = this._sleepOpen ? html`<div class="slx" data-action="sleep-close" @pointerdown=${this.sleepAway}></div>` : nothing;
+    return html`<div class="nw ${idle ? 'idle' : ''} ${this._sleepOpen ? 'sl-open' : ''}" data-state=${e?.state ?? 'unknown'}>${slx}
       <div class="art ${showLyr && this._overlay ? 'lyr-on' : ''}" style="background:${ART[hash(title || 'x') % ART.length]}">
         ${pic ? html`<img src=${pic} alt="" draggable="false" @error=${(ev: Event) => ((ev.target as HTMLElement).style.display = 'none')} />`
           : html`<span class="ph">${icon('disc')}</span>`}
         ${showLyr && this._overlay ? html`<jb-lyrics class="ovl" mode="overlay" @jukebox-lyrics-tap=${() => { this._overlay = false; writeOverlay(false); }} .hass=${this.hass} .config=${this.config} .store=${this.lyrics}
           ?active=${this.active}></jb-lyrics>` : nothing}
+        ${slx}
         <div class="art-btns">
           ${idle ? nothing : html`${showLyr ? html`<button class="ab lyr ${this._overlay ? 'on' : ''}" tabindex="-1" aria-label="Lyrics" aria-pressed=${this._overlay ? 'true' : 'false'}
             @pointerdown=${noFocus} @click=${this.toggleOverlay}>${icon('lyrics')}</button>` : nothing}
@@ -473,6 +489,8 @@ export class JbNow extends LitElement {
     .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), 44cqh, 580px); aspect-ratio: 1; border-radius: 14px; overflow: hidden;
       box-shadow: 0 24px 60px #000000b3, 0 0 0 1px #ffffff14; }
     .art .ovl { position: absolute; inset: 0; z-index: 1; }
+    .slx { position: absolute; inset: 0; z-index: 4; } .art .slx { z-index: 1; }
+    .nw.sl-open .art { z-index: 5; }
     .art-btns { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 8px; }
     /* #42: ≥48px at 1x; on zoomed big screens (--_z > 1) the same 40px floor as before (54px at 1920x1080) */
     .ab { width: max(40px, calc(48px / var(--_z, 1))); height: max(40px, calc(48px / var(--_z, 1))); border-radius: 50%; display: grid; place-items: center; background: #000000a6; color: rgba(255, 255, 255, .72);

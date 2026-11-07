@@ -140,7 +140,7 @@ export class JbQueue extends LitElement {
           ${ap.view === 'playlists' ? html`<button class="qa" data-action="ap-back" tabindex="-1" aria-label="Back" @pointerdown=${noFocus}
             @click=${() => (this._ap = { ...ap, view: 'modes', error: '' })}>${icon('back')}</button>` : nothing}
           <b id="aps-t">${ap.view === 'playlists' ? 'Choose a playlist' : 'Autoplay from'}</b>
-          <button class="qa" data-action="ap-close" tabindex="-1" aria-label="Close" @pointerdown=${noFocus} @click=${close}>${icon('close')}</button>
+          <button class="cls" data-action="ap-close" tabindex="-1" @pointerdown=${noFocus} @click=${close}>Close</button>
         </div>
         ${body}
         ${o && ap.error ? html`<div class="aps-err" role="alert">${ap.error}</div>` : nothing}
@@ -173,10 +173,16 @@ export class JbQueue extends LitElement {
       this.toast(where === 'ok' ? `${r.title} is back` : `${r.title} is back, at the end of the queue (couldn't restore its place)`);
     } catch { this.toast(`Couldn't undo: ${r.title} wasn't added back`); }
   }
-  private onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && this._ap) { this._ap = null; e.stopPropagation(); return; }
-    if (e.key === 'Escape' && this._confirm) { this._confirm = null; e.stopPropagation(); }
-  };
+  private onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && this.escape()) e.stopPropagation(); };
+  /** #51 Esc (also from the card): the topmost of Autoplay sheet, confirm, options menu, then Queue search closes */
+  escape() {
+    if (this._ap) this._ap = null;
+    else if (this._confirm) this._confirm = null;
+    else if (this._menu) this._menu = null;
+    else if (this._search) { this._search = false; this._q = ''; }
+    else return false;
+    return true;
+  }
   private onSearchKey = (e: CustomEvent<KeyDetail>) => {
     const d = e.detail;
     if (d.type === 'char') this._q = (this._q + d.value).slice(0, 60).replace(/^\s+/, '');
@@ -285,7 +291,7 @@ export class JbQueue extends LitElement {
       <div class="head"><h2>Queue</h2><span class="cnt">${remaining ? `${remaining} up next` : ''}</span>
         ${s?.loading ? html`<span class="live busy"></span>` : nothing}
         <button class="qsearch ${this._search ? 'on' : ''}" data-action="queue-search" tabindex="-1" aria-pressed=${this._search ? 'true' : 'false'} @pointerdown=${noFocus}
-          @click=${() => { this._search = !this._search; this._q = ''; }}>${icon(this._search ? 'close' : 'search', 'i xs')}${this._search ? 'Done' : 'Search queue'}</button>
+          @click=${() => { this._search = !this._search; this._q = ''; }}>${this._search ? 'Close' : html`${icon('search', 'i xs')}Search queue`}</button>
         ${this.autoplayTpl(s)}</div>
       ${this._search ? html`<div class="qsx">
         <div class="qsbar"><div class="qsq" role="searchbox" aria-label="Search the queue" aria-readonly="true" data-query=${this._q}>${icon('search', 'i xs')}

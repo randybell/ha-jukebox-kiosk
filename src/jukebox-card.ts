@@ -592,7 +592,17 @@ export class JukeboxCard extends LitElement {
   private onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && this._saver === 'on') this.ambClose(e, 'saver');
     else if (e.key === 'Escape' && this._stage) this.ambClose(e, 'stage');
-    else if (e.key === 'Escape' && this._station) { e.preventDefault(); this._station = null; }
+    else if (e.key === 'Escape') {
+      // #51: Esc closes the topmost thing: the station sheet, Speakers, then whatever the current tab has open
+      const R = this.renderRoot as ShadowRoot;
+      const tabEl: any = this._tab === 'now' ? R.querySelector('jb-now') : this._tab === 'queue' ? R.querySelector('jb-queue')
+        : this._tab === 'browse' && !this.libHost() ? R.querySelector('jb-browse') : null;
+      if (this._station) this._station = null;
+      else if ((R.querySelector('jb-speakers') as any)?.escape?.()) { /* closed */ }
+      else if (this._tab === 'lyrics') this._tab = 'now';
+      else if (!tabEl?.escape?.()) return;
+      e.preventDefault();
+    }
   };
   private onOpen = (e: CustomEvent) => {
     const { item, type } = e.detail ?? {};
