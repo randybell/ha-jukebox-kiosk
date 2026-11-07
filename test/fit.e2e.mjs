@@ -22,7 +22,7 @@ const pageErrors = [];
 
 const SIZES = [[1024, 666], [1280, 720], [1366, 768], [1440, 900], [1280, 800], [1920, 1080], [390, 844, 1], [844, 390, 1], [820, 1180, 1], [1180, 820, 1], [1024, 600, 1]];
 const KEY = new Set(['1024x666', '1280x720', '1366x768', '1920x1080', '1024x600', '390x844', '844x390', '820x1180']);
-const TABS = ['now', 'browse', 'queue', 'lyrics']; // 'browse' is the combined Library tab; there is no separate search tab
+const TABS = ['now', 'browse', 'queue']; // 'browse' is the combined Library tab; there is no separate search tab and no Lyrics tab (0.7.9 #58)
 const LIB = 'browse';
 const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 
@@ -95,7 +95,7 @@ async function open(pg, q) {
 async function tapTab(pg, id, touch, kb = true) {
   const b = await pg.evaluate((id) => { const t = __card.shadowRoot.querySelector(`.tab[data-tab="${id}"]`).getBoundingClientRect(); return { x: t.left + t.width / 2, y: t.top + t.height / 2 }; }, id);
   if (touch) await pg.touchscreen.tap(b.x, b.y); else await pg.mouse.click(b.x, b.y);
-  await sleep(id === 'lyrics' || id === LIB ? 350 : 250);
+  await sleep(id === LIB ? 350 : 250);
   const sel = await pg.evaluate(() => __card.shadowRoot.querySelector('.tab.active')?.dataset.tab);
   if (sel !== id) throw new Error(`tab ${id} did not open (active=${sel})`);
   if (id === LIB && kb) await openKb(pg, touch);
@@ -235,11 +235,11 @@ const inMiddle = (pg, expr, scroller) => ev6(pg, `(() => { const el = ${expr}; i
   return { t: Math.round(b.top), b: Math.round(b.bottom), mt: Math.round(m.top), mb: Math.round(m.bottom), h: Math.round(b.height),
     inside: b.top >= m.top - 0.5 && b.bottom <= m.bottom + 0.5 && b.height > 0, sh: sc ? sc.scrollHeight : 0, ch: sc ? sc.clientHeight : 0, ov: sc ? getComputedStyle(sc).overflowY : '' }; })()`);
 const fits6 = (r) => !!r && r.inside && (r.sh <= r.ch + 2 || /auto|scroll/.test(r.ov));
-// Phone 390x844: large_buttons with the heart OFF (kiosk without library write) and ON; the sleep chooser stays on one row (also without large_buttons)
+// Phone 390x844: large_buttons with the heart OFF (kiosk without library write) and ON (library write); the sleep chooser stays on one row (also without large_buttons)
 for (const [lg, heart] of [[true, false], [true, true], [false, false]]) {
   const tag = `F7 390x844${lg ? ' large_buttons' : ''} heart ${heart ? 'on' : 'off'}`;
   const pg = await newPage({ width: 390, height: 844, isMobile: true, hasTouch: true });
-  await open(pg, `&tab=now${heart ? '' : '&kiosk=1'}${lg ? '&cfg=' + encodeURIComponent(JSON.stringify({ large_buttons: true })) : ''}`);
+  await open(pg, `&tab=now${heart ? '&kcaps=' + encodeURIComponent(JSON.stringify({ library_write: true })) : ''}${lg ? '&cfg=' + encodeURIComponent(JSON.stringify({ large_buttons: true })) : ''}`);
   await tapTab(pg, 'now', true);
   const NPf = `__card.shadowRoot.querySelector('jb-now').shadowRoot`;
   const row = await ev6(pg, `(() => { const R = ${NPf}; const tp = R.querySelector('.tp').getBoundingClientRect(); const bs = [...R.querySelectorAll('.tp .tb')].map((e) => { const b = e.getBoundingClientRect(); return { k: e.className.split(' ')[1], l: b.left, r: b.right, w: b.width }; });
@@ -366,6 +366,17 @@ writeFileSync(OUT + 'results.json', JSON.stringify({ at: new Date().toString(), 
       return { card: R('.nw'), art: R('.art'), badges: R('.badges'), ti: R('.ti'), sub: R('.sub') }; });
     const ok = m.art && m.ti && m.sub && m.badges && m.card.w <= 0 + 600 && m.art.h > 40 && m.art.b <= m.badges.t + 0.5 && m.art.b <= m.ti.t + 0.5 && m.badges.b <= m.ti.t + 0.5 && m.ti.b <= m.sub.t + 0.5;
     check(`${tag}: art bottom above badges and title; badges, title, artist don't overlap`, !!ok, JSON.stringify(m));
+    // 0.7.9 #58: the "Playing on" pill and the "Now Playing" tab label fit — nothing clipped, no ellipsis
+    const pt = await pg.evaluate(() => { const r = __card.shadowRoot; const B = (e) => e.getBoundingClientRect();
+      const shown = (e) => getComputedStyle(e).display !== 'none' && B(e).width > 0;
+      const pill = r.querySelector('.pill'), top = r.querySelector('.top'), pb = B(pill), tb = B(top);
+      const parts = [...pill.children].filter(shown).map((e) => ({ c: e.className?.baseVal ?? e.className, sw: e.scrollWidth, cw: e.clientWidth || B(e).width, l: B(e).left, r: B(e).right }));
+      const tab = r.querySelector('.tab[data-tab="now"]'), lab = tab.querySelector('span'), lb = B(lab), tbb = B(tab);
+      return { pill: { l: pb.left, r: pb.right, sw: pill.scrollWidth, cw: pill.clientWidth, top: [tb.left, tb.right], text: [...pill.querySelectorAll('span, b')].filter(shown).map((e) => e.textContent.trim()).join(' '), parts },
+        tab: { text: lab.textContent.trim(), sw: lab.scrollWidth, cw: lab.clientWidth, l: lb.left, r: lb.right, tl: tbb.left, tr: tbb.right, lines: Math.round(lb.height / parseFloat(getComputedStyle(lab).lineHeight || '16')) } }; });
+    const pillOk = pt.pill.sw <= pt.pill.cw + 1 && pt.pill.l >= pt.pill.top[0] - 0.5 && pt.pill.r <= pt.pill.top[1] + 0.5 && pt.pill.parts.every((x) => x.sw <= x.cw + 1 && x.l >= pt.pill.l - 0.5 && x.r <= pt.pill.r + 0.5);
+    const tabOk = pt.tab.text === 'Now Playing' && pt.tab.sw <= pt.tab.cw + 0.5 && pt.tab.l >= pt.tab.tl - 0.5 && pt.tab.r <= pt.tab.tr + 0.5;
+    check(`${tag}: "Playing on" pill and the "Now Playing" tab label fit (no clipping, no ellipsis)`, pillOk && tabOk, JSON.stringify(pt));
     if (process.env.PVSHOT && lg && cw === 460 && chh === 620) await pg.screenshot({ path: process.env.PVSHOT, clip: { x: 0, y: 0, width: 1280, height: 800 } });
     await pg.close();
   }

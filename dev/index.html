@@ -48,19 +48,17 @@
     if (params.get('recents') === '1' && !localStorage.getItem('jukebox-card:recents:v1'))
       localStorage.setItem('jukebox-card:recents:v1', JSON.stringify(['Miles Davis', 'Abbey Road', 'Jazz FM', 'Eagles', 'Fleetwood']));
     const card = document.createElement('jukebox-card');
-    card.setConfig({
+    // stub=1: a brand-new card exactly as Home Assistant adds it (its stub config, nothing typed; cfg=<json> still merged)
+    if (params.get('stub') === '1') card.setConfig({ type: 'custom:jukebox-card', ...customElements.get('jukebox-card').getStubConfig(hass), ...extra });
+    else card.setConfig({
       type: 'custom:jukebox-card',
       entity: 'media_player.everywhere',
-      config_entry_id: '01MUSICASSISTANT0000000000',
       rooms: [
         { name: 'Living Room', entity: 'media_player.living_room' },
         { name: 'Kitchen', entity: 'media_player.kitchen' },
         { name: 'Garage', entity: 'media_player.garage' },
       ],
-      favorite_entity: 'button.everywhere_favorite_current_song',
-      ...(params.get('noqueue') === '1' ? {} : params.get('legacyq') === '1' ? { queue_config_entry_id: '01MASSQUEUE0000000000000000' } : { mass_queue_entry_id: '01MASSQUEUE0000000000000000' }),
       screensaver_minutes: Number(params.get('saver') ?? 10),
-      accent: 'mono',
       limit: 8,
       default_tab: params.get('tab') || 'now',
       ...(params.get('backdrop') ? { backdrop: params.get('backdrop') } : {}),

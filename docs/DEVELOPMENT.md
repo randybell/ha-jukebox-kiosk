@@ -49,8 +49,7 @@ node test/perf.mjs 3                               # frame-time benchmark, see "
 - `search` always returns the 7 lists.
 - Items carry no provider field; the provider comes from the URI scheme (`library://`, `apple_music://`, `apple_music--XXXXXXXX://`).
 - `get_library` returns `{items, limit, offset, order_by, media_type}` with `library://` URIs.
-- `mass_queue.get_queue_items` returns a list keyed by entity.
-- `mass_queue.get_album_tracks` / `get_playlist_tracks` return the real 0.10.x shape (`{tracks: [{media_title, media_artist, media_album_name, media_content_id, media_image, duration, favorite, position}]}`); `library://album/1448` and `library://playlist/158` answer with the real exports in `dev/fixtures/mass-queue-tracks-sample.json`.
+- The Jukebox Kiosk mock (`dev/mock-kiosk.js`, on by default) answers `jukebox_kiosk/queue_items`, `item_tracks` (100 per page), `ma`, `favorite_current` and the rest; its capabilities carry `ma_entry_id` (`01MUSICASSISTANT0000000000`), and `search` / `get_library` only accept that entry.
 - The player has an absolute `entity_picture` (`http://<ma-host>:8095/imageproxy?…`) and a relative `entity_picture_local`, as on the real system.
 - The fixtures are scrubbed: provider instance ids are `--XXXXXXXX`, HA context ids are placeholders and `user_id` is `null`.
 - `play_media` is rejected unless the target is `media_player.everywhere`.
@@ -66,36 +65,34 @@ URL parameters:
 | `real=1` | search returns the real "eagles" export from `dev/fixtures/ma-search-sample.json` |
 | `radio=1` | Radio Browser stations in search only (library radio stays empty, so Browse > Radio uses the search fallback) |
 | `radio=lib` | the same stations also in the library (`get_library media_type: radio`) |
-| `mqpage=all\|paged\|ignore` | how `get_*_tracks` treats `page`: `all` (default, mass_queue 0.10: page 0 = everything), `paged` (50 per page), `ignore` (every page returns the same list) |
 | `noart=1` | the player has no `entity_picture_local`, so art falls back to the queue item's https image |
-| `legacyq=1` | configures the old `queue_config_entry_id` key instead of `mass_queue_entry_id` |
 | `idle=1` / `paused=1` | nothing playing / paused |
 | `empty=1` | empty library and queue |
-| `qfail=1` | `mass_queue.get_queue_items` fails |
-| `noqueue=1` | no `mass_queue_entry_id`, so drill-down uses the search fallback |
+| `qfail=1` | reading the queue fails |
 | `saver=min` | `screensaver_minutes`; for example `saver=0.05` is 3 seconds |
 | `recents=1` | seeds the recent-search chips |
 | `fresh=1` | clears localStorage |
 | `log=1` | shows a panel with every `callService` call |
-| `tab=now\|browse\|search\|queue\|lyrics` | opens that tab (default `now`) |
+| `tab=now\|browse\|search\|queue` | opens that tab (default `now`) |
 | `lyrics=none` | every lyrics lookup finds nothing |
-| `lyrfail=perm\|err` | lyrics lookups fail with a permission error / a generic error |
+| `lyrfail=perm\|err` | lyrics lookups (through the kiosk mock's `ma`) fail with a permission error / a generic error |
 | `lyrlat=ms` | lyrics reply latency (the live first lookup takes 8–33 s) |
 | `overlay=1\|0` | preset the art lyrics overlay toggle |
 | `keeplyrics=1` | with `fresh=1`, keep the lyrics "not found" markers |
 | `admin=1`, `user=<name>`, `uid=<id>` | the HA user (default: a non-admin guest) |
+| `stub=1` | a brand-new card: only `type` plus the card's own stub config (the first Music Assistant player) |
 | `spk=dyn`, `target=<entity>`, `cfg=<json>` | dynamic speaker mode, the starting target, extra card config (merged last) |
 | `ma=split\|busy`, `grp=` / `xfer=fail\|slow\|timeout`, `gap=ms`, `malat=ms` | mock Music Assistant situations and failures (`dev/mock-ma.js`, log in `window.__maLog`) |
 | `qbuf=1`, `qadd=fail`, `qitems=fail` | next track already buffered in MA; queue re-add / item lookup fails (Remove → Undo) |
 | `cfg=<json>` | merged into the card config |
-| `kiosk=1` | loads the Jukebox Kiosk integration mock (`dev/mock-kiosk.js`): `jukebox_kiosk` in `hass.config.components` and its WebSocket API on `callWS` / `connection.subscribeMessage`, so `backend: auto` picks `kiosk`. Every message is logged in `window.__ws`; `window.__kioskPush(entity)` sends a queue push, `window.__kioskSubs()` lists subscriptions |
+| `kiosk=1` (default; `kiosk=0` = core Music Assistant only, `config_entries/get` for admins) | loads the Jukebox Kiosk integration mock (`dev/mock-kiosk.js`): `jukebox_kiosk` in `hass.config.components` and its WebSocket API on `callWS` / `connection.subscribeMessage`, so `backend: auto` picks `kiosk`. Every message is logged in `window.__ws`; `window.__kioskPush(entity)` sends a queue push, `window.__kioskSubs()` lists subscriptions |
 | `kcaps=<json>` | with `kiosk=1`, overrides the `features` returned by `jukebox_kiosk/capabilities` |
 | `kfail=<type>` | with `kiosk=1`, that `jukebox_kiosk/<type>` message fails |
 | `backdrop=auto\|full\|light\|static\|off` | sets the `backdrop` option |
 | `ha=toolbar\|kiosk\|masonry` | emulates a Home Assistant view around the card: fixed 56 px toolbar (`--header-height`), toolbar hidden (kiosk mode), or a masonry view with padding and a card above |
 | `sidebar=open\|narrow\|closed\|none` | with `ha=`, the HA sidebar width (256 px, 56 px, or none; default `narrow`) |
 
-Every call is recorded in `window.__calls`, except read-only lyrics lookups (`mass_queue.send_command`), which go to `window.__lyricsLog`. `window.__setNowPlaying({artist, title, radio, uri, duration, position})` and `window.__playTrack(name, position)` change what is playing. `test/run.mjs` drives the card with real CDP mouse, touch and keyboard input and writes `test/shots/results.json`. The browser tests are hermetic (`test/intercept.mjs`): `/api/media_player_proxy/…` and https images are answered with a generated SVG, and any request to a plain-http host other than the dev server fails (test 16o checks that the card never asks the MA host directly).
+Every call is recorded in `window.__calls`, except read-only lyrics lookups (`music/item_by_uri`, `metadata/get_track_lyrics`), which go to `window.__lyricsLog`. `window.__setNowPlaying({artist, title, radio, uri, duration, position})` and `window.__playTrack(name, position)` change what is playing. `test/run.mjs` drives the card with real CDP mouse, touch and keyboard input and writes `test/shots/results.json`. The browser tests are hermetic (`test/intercept.mjs`): `/api/media_player_proxy/…` and https images are answered with a generated SVG, and any request to a plain-http host other than the dev server fails (test 16o checks that the card never asks the MA host directly).
 
 ## Real Home Assistant e2e (throwaway env on a dev machine)
 

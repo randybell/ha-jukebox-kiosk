@@ -70,7 +70,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   const p = await open('', {}, vp);
   await wait(p, `${SV}.querySelectorAll('.lcats .lc').length >= 5`);
   const t = await tabs(p);
-  check(`T1 [${vpName}] tabs: Now Playing, Library, Queue, Lyrics; no Search tab`, J(t) === J(['now:Now Playing', 'browse:Library', 'queue:Queue', 'lyrics:Lyrics']), J(t));
+  check(`T1 [${vpName}] tabs: Now Playing, Library, Queue; no Search or Lyrics tab`, J(t) === J(['now:Now Playing', 'browse:Library', 'queue:Queue']), J(t));
   check(`T2 [${vpName}] Library tab active; no tile grid anywhere`, (await ev(p, `${C}.querySelector('.tab.active')?.dataset.tab`)) === 'browse'
     && !(await ev(p, `!!${BR}.querySelector('.home, .lt')`)));
   await openSrc(p);

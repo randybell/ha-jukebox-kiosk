@@ -84,20 +84,20 @@ const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
     && J(S.mqResult({ context: {}, response: { response: 'r', other: 1 } })) === J({ response: 'r', other: 1 }));
 }
 // ---------------- store: lookup, cache, dedupe, TTLs, errors ----------------
-const ENTRY = '01MASSQUEUE0000000000000000';
 const LRC = '[00:01.00]Invented line one\n[00:05.00]Invented line two';
+/** fake hass + a fake backend whose send(command, data) answers like Music Assistant; calls logged as {data: {command, data}} */
 function fakeHass(handler, latency = 5) {
   const calls = [];
-  return { calls, user: { is_admin: false }, states: {}, callService: async (domain, service, data, target, notify, ret) => {
-    calls.push({ domain, service, data, target, ret });
+  const be = { kind: 'fake', caps: { lyrics: true, send: true }, send: async (command, data) => {
+    calls.push({ data: { command, data } });
     await tick(latency);
-    const res = await handler(data.command, data.data, data);
-    return { context: { id: 'ctx' }, response: { response: res } };
+    return handler(command, data);
   } };
+  return { calls, be, user: { is_admin: false }, states: {}, callService: async () => { throw new Error('lyrics never use HA services'); } };
 }
 const playing = (uri, title = 'Song', artist = 'Band', extra = {}) => ({ entity_id: 'media_player.x', state: 'playing', attributes: { media_title: title, media_artist: artist, media_content_id: uri, media_content_type: 'music', media_duration: 200, ...extra } });
 const waitFor = async (fn, ms = 2000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > ms) return false; await tick(5); } return true; };
-const newStore = (hass) => { const s = new S.LyricsStore(); s.entryId = ENTRY; s.follow(hass, undefined); return s; };
+const newStore = (hass) => { const s = new S.LyricsStore(); s.backend = hass.be; s.follow(hass, undefined); return s; };
 
 {
   S.clearLyricsCache(); LS.clear();
@@ -115,8 +115,7 @@ const newStore = (hass) => { const s = new S.LyricsStore(); s.entryId = ENTRY; s
   await waitFor(() => s.state.status !== 'loading');
   const cmds = hass.calls.map((c) => c.data.command);
   check('S2 item_by_uri with empty metadata → get_track_lyrics(track:item) → synced', s.state.status === 'synced' && J(cmds) === J(['music/item_by_uri', 'metadata/get_track_lyrics']) && s.state.lines.length === 2, J(cmds));
-  const c0 = hass.calls[0];
-  check('S3 calls are mass_queue.send_command with return_response and config_entry_id = mass_queue entry', c0.domain === 'mass_queue' && c0.service === 'send_command' && c0.ret === true && c0.data.config_entry_id === ENTRY && J(c0.data.data) === J({ uri: 'library://track/1' }) && hass.calls[1].data.data.track.uri === 'library://track/1');
+  check('S3 lookups go through the card\'s backend (no Home Assistant service call)', hass.calls.length === 2 && cmds[0] === 'music/item_by_uri');
   check('S4 one status change per lookup (no spinner storm): idle → loading → synced', J(seen) === J(['idle', 'loading', 'synced']), J(seen));
   for (let i = 0; i < 5; i++) s.follow(hass, playing('library://track/1', 'Song', 'Band', { media_position: i * 10 }));
   check('S5 position-only hass updates do not look up again', hass.calls.length === 2 && seen.length === 3);
@@ -209,10 +208,10 @@ const newStore = (hass) => { const s = new S.LyricsStore(); s.entryId = ENTRY; s
   await waitFor(() => s.state.status !== 'loading');
   check('E5 generic failure → error, reason error', s.state.status === 'error' && s.state.reason === 'error');
   const s3 = new S.LyricsStore(); s3.follow(hass, playing('library://track/7'));
-  check('E6 no mass_queue_entry_id → error reason config, no call', s3.state.status === 'error' && s3.state.reason === 'config' && hass.calls.every((c) => c.data.data?.uri !== 'library://track/7'));
-  s3.entryId = ENTRY; mode = 'ok'; s3.follow(hass, playing('library://track/7'));
+  check('E6 no backend that can read lyrics → error reason config, no call', s3.state.status === 'error' && s3.state.reason === 'config' && hass.calls.every((c) => c.data.data?.uri !== 'library://track/7'));
+  s3.backend = hass.be; mode = 'ok'; s3.follow(hass, playing('library://track/7'));
   await waitFor(() => s3.state.status !== 'loading');
-  check('E7 setting the entry id later re-runs the lookup', s3.state.status === 'synced', s3.state.status);
+  check('E7 a backend set later re-runs the lookup', s3.state.status === 'synced', s3.state.status);
   const s4 = newStore(hass); s4.enabled = false; s4.follow(hass, playing('library://track/7'));
   check('E8 show_lyrics:false → status off, no call', s4.state.status === 'off');
 }

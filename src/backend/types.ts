@@ -1,11 +1,10 @@
 /**
  * Music Assistant backend layer (0.6.0). Every MA read or write the card makes goes through one MaBackend:
  *   kiosk       the bundled jukebox_kiosk integration (allowlisted WebSocket API, per-user permission classes)
- *   mass_queue  the legacy mass_queue custom integration (services + send_command), as in 0.5.x
  *   native      core Music Assistant services only (no raw MA commands: no lyrics, track lists, speakers, queue edits)
  * Features a backend can't do are reported in `caps`, and the card hides those controls.
  */
-export type BackendKind = 'kiosk' | 'mass_queue' | 'native';
+export type BackendKind = 'kiosk' | 'native';
 export type BackendSetting = 'auto' | BackendKind;
 
 export interface Caps {
@@ -78,7 +77,7 @@ export interface AutoplayOptions {
   playlists: { uri: string; name: string }[];
 }
 
-/** A queue window in the mass_queue get_queue_items row shape. */
+/** A queue window in the card's queue row shape. */
 export interface QueueWindow {
   items: any[];
   queueId?: string;
@@ -93,7 +92,7 @@ export interface QueueWindow {
 }
 export type QueueAction = 'play' | 'up' | 'down' | 'next' | 'remove';
 export type TrackListType = 'album' | 'artist' | 'playlist' | 'podcast';
-/** A page of tracks (or podcast episodes) in the mass_queue get_*_tracks row shape. */
+/** A page of tracks (or podcast episodes) in the card's queue row shape. */
 export interface TrackPage { tracks: any[]; more?: boolean; total?: number }
 
 export class BackendError extends Error {
@@ -105,6 +104,9 @@ export interface MaBackend {
   caps: Caps;
   /** v0.7 features (see ExtCaps) */
   ext: ExtCaps;
+  /** the Music Assistant config entry this backend found ('' until known): kiosk asks the integration, native the
+   *  config entries (admins only) */
+  maEntry: string;
   /** resolves when caps are final (kiosk asks the server once) */
   ready: Promise<void>;
   /** called when caps change */
@@ -119,13 +121,15 @@ export interface MaBackend {
   itemTracks(type: TrackListType, uri: string, page: number): Promise<TrackPage>;
   /** Remove the playing track from favorites. */
   unfavoriteCurrent(entity: string): Promise<unknown>;
+  /** Add the playing track to favorites (kiosk only). */
+  favoriteCurrent?(entity: string): Promise<unknown>;
   /** Turn MA Autoplay on/off for the entity's queue (kiosk only). */
   setAutoplay?(entity: string, enabled: boolean): Promise<unknown>;
   /** Autoplay style for the entity's queue (kiosk only). */
   autoplayOptions?(entity: string): Promise<AutoplayOptions>;
   /** Pin the Autoplay style for the entity's queue; playlist (a library playlist uri) only with mode playlist. */
   setAutoplayMode?(entity: string, mode: AutoplayMode, playlist?: string): Promise<unknown>;
-  /** 0.7.2: MA's configured music providers that can search (raw: kiosk {providers}, mass_queue MA's list); see search-sources.ts */
+  /** 0.7.2: MA's configured music providers that can search (kiosk {providers}); see search-sources.ts */
   searchProviders?(): Promise<any>;
   /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. */
   subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;

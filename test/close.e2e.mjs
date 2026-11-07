@@ -54,7 +54,7 @@ for (const large of [false, true]) {
   check(`X3 station sheet closes with Esc${L}`, !(await ev(p, `!!${ST}.querySelector('.sheet')`)));
   await p.close();
   // ---- Autoplay sheet + Queue search ----
-  const q = await open('&tab=queue&kcaps=' + encodeURIComponent(J({ autoplay: true, autoplay_mode: true })), { show_autoplay: true, ...cfg });
+  const q = await open('&tab=queue&kcaps=' + encodeURIComponent(J({ autoplay: true, autoplay_mode: true })), cfg);
   await wait(q, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
   await tap(q, `${QV}.querySelector('[data-action="autoplay-mode"]')`); await wait(q, `!!${QV}.querySelector('.aps')`);
   const ap = await pill(q, `${QV}.querySelector('[data-action="ap-close"]')`);
@@ -104,11 +104,9 @@ for (const large of [false, true]) {
   check('X18 picking a choice still works (Off) and closes them', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)));
   await tap(p, `${NOW}.querySelector('.ab.slp')`); await sleep(200); await esc(p);
   check('X19 Esc closes the sleep choices', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)));
-  // lyrics on the art + Lyrics tab: tap anywhere (unchanged) and now Esc
+  // lyrics on the art: tap anywhere (unchanged) and now Esc
   await tap(p, `${NOW}.querySelector('.ab.lyr')`); await wait(p, `!!${NOW}.querySelector('jb-lyrics.ovl')`); await esc(p);
   check('X20 Esc closes the lyrics on the album art', !(await ev(p, `!!${NOW}.querySelector('jb-lyrics.ovl')`)));
-  await ev(p, `${C}.querySelector('.tab[data-tab=lyrics]').click()`); await sleep(300); await esc(p);
-  check('X21 Esc on the Lyrics tab goes back to Now Playing', (await ev(p, `__card._tab`)) === 'now');
   await p.close();
 }
 // ---- Library: Esc steps back (detail → list → tiles) and closes the options menu ----

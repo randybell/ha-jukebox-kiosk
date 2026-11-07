@@ -339,6 +339,9 @@ const actions = (cs) => cs.filter((c) => !passive.has(c.s));
 async function clickEl(page, expr) { const r = await rectOf(page, expr); if (!r || !r.w) throw new Error('not visible: ' + expr); await page.mouse.click(r.x, r.y); await sleep(120); }
 const EV = 'media_player.everywhere';
 const tgt = (c) => [c.target?.entity_id].flat().join(',');
+// the Jukebox Kiosk WebSocket log (window.__ws): every message the card sent, oldest first
+const nws = (page) => page.evaluate(() => window.__ws.length);
+const wsSince = (page, n = 0) => page.evaluate((k) => structuredClone(window.__ws.slice(k)), n);
 
 // ---------- 9. transport payloads ----------
 await open(page, '&latency=20&tab=now');
@@ -419,12 +422,34 @@ await page.mouse.click(r.x - r.w / 2 + r.w * 0.5, r.y); await sleep(200);
 cs = actions(await calls(page, n0));
 const dur = await page.evaluate(() => __hass.states['media_player.everywhere'].attributes.media_duration);
 check('9d seek bar → media_seek at ~50% of duration', cs.length === 1 && cs[0].s === 'media_seek' && Math.abs(cs[0].data.seek_position - dur / 2) <= dur * 0.03 && tgt(cs[0]) === EV, JSON.stringify(cs.map((c) => c.data)));
-// favorite: the mock's current song (So What) starts as a favorite → first tap unfavorites (mass_queue), second tap favorites (button.press)
-n0 = await ncalls(page);
-await clickEl(page, `${NP}.querySelector('.tb.fv')`); await sleep(400);
-await clickEl(page, `${NP}.querySelector('.tb.fv')`); await sleep(200);
-cs = actions(await calls(page, n0));
-check('9e heart: unfavorite → mass_queue.unfavorite_current_item; favorite → button.press on button.everywhere_favorite_current_song', cs.length === 2 && cs[0].s === 'unfavorite_current_item' && cs[0].data.entity === EV && cs[1].d === 'button' && cs[1].s === 'press' && tgt(cs[1]) === 'button.everywhere_favorite_current_song', cs.map((c) => `${c.d}.${c.s}→${tgt(c) || c.data.entity}`).join(' | '));
+// favorite with nothing set: the mock's current song (So What) starts as a favorite → first tap unfavorites, second favorites
+{
+  const pg = await browser.newPage(); await hermetic(pg);
+  await open(pg, '&latency=20&tab=now&kcaps=' + encodeURIComponent('{"library_write":true}'));
+  const w0 = await pg.evaluate(() => window.__ws.length), c0 = await ncalls(pg);
+  await clickEl(pg, `${NP}.querySelector('.tb.fv')`); await sleep(400);
+  await clickEl(pg, `${NP}.querySelector('.tb.fv')`); await sleep(300);
+  const ws = await pg.evaluate((n) => window.__ws.slice(n).filter((m) => /favorite/.test(m.type)).map((m) => [m.type, m.entity_id]), w0);
+  const cs = actions(await calls(pg, c0));
+  check('9e heart (Jukebox Kiosk, no favorite button set): unfavorite_current, then favorite_current, both on the player; no button press',
+    JSON.stringify(ws) === JSON.stringify([['unfavorite_current', EV], ['favorite_current', EV]]) && !cs.some((c) => c.d === 'button'), JSON.stringify({ ws, cs }));
+  await pg.close();
+}
+{
+  // core Music Assistant only: the player's own Music Assistant favorite button, found on its device
+  const pg = await browser.newPage(); await hermetic(pg);
+  await open(pg, '&latency=20&tab=now&kiosk=0');
+  // the playing song is not a favorite yet (core Music Assistant can add, not remove)
+  await pg.evaluate(() => { const Q = window.__queues['media_player.everywhere']; Q.items[Q.index]._t.favorite = false; window.__setAttrs('media_player.everywhere', {}); return __card.queue.refresh?.(); });
+  await sleep(900);
+  const c0 = await ncalls(pg);
+  const vis = await pg.evaluate((np) => !!eval(np).querySelector('.tb.fv'), NP);
+  if (vis) { await clickEl(pg, `${NP}.querySelector('.tb.fv')`); await sleep(300); }
+  const cs = actions(await calls(pg, c0));
+  check('9f heart (core Music Assistant only, nothing set): shown, and a tap presses the player\'s own favorite button (found on its device)',
+    vis && cs.some((c) => c.d === 'button' && c.s === 'press' && tgt(c) === 'button.everywhere_favorite_current_song'), JSON.stringify({ vis, cs, dbg: await pg.evaluate((np) => ({ fav: eval(np).getRootNode().host?.isFav?.(), h: eval(np).querySelector('.tb.fv')?.outerHTML.slice(0,200), cur: __card.queue.currentItem?.favorite, st: __card.shadowRoot.textContent.match(/(Can.t|Added|Removed)[^\n]{0,60}/)?.[0] }), NP) }));
+  await pg.close();
+}
 
 // ---------- 10. volume: room slider + mute ----------
 n0 = await ncalls(page);
@@ -461,20 +486,24 @@ check('10g no join/unjoin calls ever', !(await calls(page)).some((c) => /join/.t
 await open(page, '&latency=20&tab=queue');
 await page.waitForFunction((q) => eval(q).querySelectorAll('.qr.next').length > 3, {}, QV);
 s = await page.evaluate((q) => { const r = eval(q); return { now: r.querySelector('.qr.now b')?.textContent, next: [...r.querySelectorAll('.qr.next')].map((e) => e.dataset.id), nextT: r.querySelector('.qr.next b')?.textContent }; }, QV);
-cs = await calls(page);
-const gq = cs.find((c) => c.s === 'get_queue_items');
-check('11a get_queue_items {entity: everywhere} with return_response; now playing highlighted', gq && gq.d === 'mass_queue' && gq.rr && gq.data.entity === EV && s.now === 'So What' && s.nextT === 'Teardrop', `${JSON.stringify(gq?.data)} now=${s.now} next=${s.nextT}`);
+const gq = (await wsSince(page)).find((m) => m.type === 'queue_items');
+check('11a jukebox_kiosk/queue_items {entity_id: everywhere}; now playing highlighted', gq && gq.entity_id === EV && s.now === 'So What' && s.nextT === 'Teardrop', `${JSON.stringify(gq)} now=${s.now} next=${s.nextT}`);
 const [id1, id2, id3] = s.next;
 const qcall = async (fn) => { const n = await ncalls(page); await fn(); await sleep(250); return actions(await calls(page, n)); };
+// queue edits: the MA player_queues/* commands the card sent through jukebox_kiosk/ma
+const qwcall = async (fn) => { const n = await nws(page); await fn(); await sleep(250); return (await wsSince(page, n)).filter((m) => m.type === 'ma' && /^player_queues\/(move_item|delete_item|play_index)$/.test(m.command)); };
 const qrow = (id) => `${QV}.querySelector('.qr[data-id="${id}"]')`;
-let a1 = await qcall(() => clickEl(page, `${qrow(id2)}.querySelector('.qa[data-action="up"]')`));
-let a2 = await qcall(() => clickEl(page, `${qrow(id2)}.querySelector('.qa[data-action="down"]')`));
+let a1 = await qwcall(() => clickEl(page, `${qrow(id2)}.querySelector('.qa[data-action="up"]')`));
+let a2 = await qwcall(() => clickEl(page, `${qrow(id2)}.querySelector('.qa[data-action="down"]')`));
 async function qmenu(id, action) { await clickEl(page, `${qrow(id)}.querySelector('.qa.mo')`); await sleep(100); await clickEl(page, `${QV}.querySelector('.menu .mi[data-action="${action}"]')`); }
-let a3 = await qcall(() => qmenu(id3, 'next'));
-let a4 = await qcall(() => qmenu(id3, 'remove'));
-const qs = (a) => a.map((c) => `${c.d}.${c.s}`).join(',');
-const ok11 = (a, svc, id) => a.length === 1 && a[0].d === 'mass_queue' && a[0].s === svc && a[0].data.entity === EV && a[0].data.queue_item_id === id && Object.keys(a[0].data).length === 2;
-check('11b up / down / next / remove send {entity, queue_item_id}', ok11(a1, 'move_queue_item_up', id2) && ok11(a2, 'move_queue_item_down', id2) && ok11(a3, 'move_queue_item_next', id3) && ok11(a4, 'remove_queue_item', id3), [qs(a1), qs(a2), qs(a3), qs(a4)].join(' | '));
+let a3 = await qwcall(() => qmenu(id3, 'next'));
+let a4 = await qwcall(() => qmenu(id3, 'remove'));
+const qs = (a) => a.map((m) => `${m.command} ${JSON.stringify(m.args)}`).join(',');
+const QID = await page.evaluate(() => window.__hass.states['media_player.everywhere'].attributes.active_queue);
+const mv11 = (a, id, shift) => a.length === 1 && a[0].command === 'player_queues/move_item' && a[0].args.queue_id === QID && a[0].args.queue_item_id === id && a[0].args.pos_shift === shift;
+const rm11 = (a, id) => a.length === 1 && a[0].command === 'player_queues/delete_item' && a[0].args.queue_id === QID && a[0].args.item_id_or_index === id;
+check('11b up / down / next / remove → move_item pos_shift -1 / +1 / next, delete_item, on the player\'s queue', mv11(a1, id2, -1) && mv11(a2, id2, 1)
+  && a3.length === 1 && a3[0].command === 'player_queues/move_item' && a3[0].args.queue_item_id === id3 && rm11(a4, id3), [qs(a1), qs(a2), qs(a3), qs(a4)].join(' | '));
 s = await page.evaluate((q) => [...eval(q).querySelectorAll('.qr.next')].map((e) => e.dataset.id), QV);
 check('11c queue list reflects the moves (removed item gone)', !s.includes(id3) && s.length === 12, `${s.length} rows`);
 await open(page, '&latency=20&tab=queue&admin=1');
@@ -489,8 +518,8 @@ for (const c of 'PORC') await clickEl(page, qkey(`k-${c}`));
 s = await page.evaluate((q) => ({ query: eval(q).querySelector('.qsq').dataset.query, rows: [...eval(q).querySelectorAll('.qr.sr')].map((r) => ({ id: r.dataset.id, title: r.querySelector('b')?.textContent, buttons: [...r.querySelectorAll('.ra-b')].map((b) => b.querySelector('span')?.textContent), remove: r.querySelector('[data-action="remove"]')?.disabled })) }), QV);
 check('11g Queue search filters inline, keyboard stays open, every match has a labeled Remove', s.query === 'PORC' && s.rows.length === 1 && /Porcelain/.test(s.rows[0].title) && s.rows[0].buttons.join() === 'Play Next,Play Now,Remove' && s.rows[0].remove === false, JSON.stringify(s));
 const removedId = s.rows[0]?.id;
-a4 = await qcall(() => clickEl(page, `${QV}.querySelector('.qr.sr [data-action="remove"]')`));
-check('11h labeled Remove in Queue search removes that item', (ok11(a4, 'remove_queue_item', removedId) || (a4.length === 1 && a4[0].d === 'mass_queue' && a4[0].s === 'send_command' && a4[0].data.command === 'player_queues/delete_item' && a4[0].data.data.item_id_or_index === removedId)) && await page.evaluate((q) => eval(q).querySelectorAll('.qr.sr').length === 0 && !!eval(q).querySelector('[data-action="undo"]'), QV), qs(a4));
+a4 = await qwcall(() => clickEl(page, `${QV}.querySelector('.qr.sr [data-action="remove"]')`));
+check('11h labeled Remove in Queue search removes that item', rm11(a4, removedId) && await page.evaluate((q) => eval(q).querySelectorAll('.qr.sr').length === 0 && !!eval(q).querySelector('[data-action="undo"]'), QV), qs(a4));
 await clickEl(page, `${QV}.querySelector('[data-action="queue-search"]')`);
 check('11i Queue search closes back to the complete queue', await page.evaluate((q) => !eval(q).querySelector('.qsx') && eval(q).querySelectorAll('.qr.next').length > 0, QV));
 // An already-buffered item cannot be removed; search still renders its labeled, disabled Remove.
@@ -505,7 +534,7 @@ await open(page, '&latency=20&tab=queue&admin=1');
 await page.waitForFunction((q) => eval(q).querySelectorAll('.qr.next').length > 3, {}, QV);
 // 0.7.8 #40: a tap on a Queue row does nothing (use the row's play icon): no service call, no playback, no queue change
 const order0 = await page.evaluate((q) => ({ now: eval(q).querySelector('.qr.now')?.dataset.id, ids: [...eval(q).querySelectorAll('.qr.next')].map((r) => r.dataset.id) }), QV);
-let a5 = await qcall(() => clickEl(page, `${qrow(id1)}.querySelector('.rt')`));
+let a5 = [...await qwcall(() => clickEl(page, `${qrow(id1)}.querySelector('.rt')`))];
 check('11d tap a row does nothing: no service call (no play_queue_item, no queue command)', a5.length === 0, qs(a5));
 await sleep(900);
 s = await page.evaluate((q) => ({ now: eval(q).querySelector('.qr.now')?.dataset.id, ids: [...eval(q).querySelectorAll('.qr.next')].map((r) => r.dataset.id) }), QV);
@@ -537,7 +566,7 @@ check('12h2 Library playlist detail: visible Play Next / Play Now / Remove label
   const rows = [...eval(d)?.querySelectorAll('.list.tracks .row') ?? []];
   return rows.length > 0 && rows.every((r) => [...r.querySelectorAll('.ra-b[data-act]')].filter((b) => b.getBoundingClientRect().width && ['next', 'replace', 'remove'].includes(b.dataset.act)).map((b) => b.querySelector('span')?.textContent).join() === 'Play Next,Play Now,Remove');
 }, BD));
-check('12i Browse: tap opens the playlist detail (mass_queue.get_playlist_tracks page 0)', bdet && bdet.uri === t0uri && bdet.type === 'playlist' && bdet.rows > 0 && b1.some((c) => c.s === 'get_playlist_tracks' && c.data.page === 0 && c.data.uri === t0uri), JSON.stringify(bdet));
+check('12i Browse: tap opens the playlist detail (jukebox_kiosk/item_tracks page 1)', bdet && bdet.uri === t0uri && bdet.type === 'playlist' && bdet.rows > 0 && (await wsSince(page)).some((m) => m.type === 'item_tracks' && m.page === 1 && m.uri === t0uri), JSON.stringify(bdet));
 await clickEl(page, `${BD}.querySelector('[data-action="back"]')`);
 check('12j Browse: Back returns to the grid', !(await page.evaluate((b) => !!eval(b).querySelector('jb-detail'), BV)) && (await page.evaluate((b) => eval(b).querySelectorAll('.tile').length, BV)) > 0);
 r = await rectOf(page, tile0);
@@ -559,14 +588,13 @@ check('12e long-press a playlist → menu (Open/next/add/replace, no Start radio
   check('12e3 …confirm → play_media playlist enqueue replace (no radio_mode)', b5.length === 1 && b5[0].data.enqueue === 'replace' && b5[0].data.media_id === t0uri && !('radio_mode' in b5[0].data), JSON.stringify(b5[0]?.data));
 }
 await clickEl(page, `${BV}.querySelector('[data-cat="album"]')`); await sleep(300);
-n0 = await ncalls(page);
+n0 = await nws(page);
 await page.evaluate((b) => [...eval(b).querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent === 'Kind of Blue').querySelector('.open').click(), BV);
 await page.waitForFunction((d) => eval(d)?.querySelectorAll('.list.tracks .row').length > 0, { timeout: 4000 }, BD);
 await sleep(200);
-cs = await calls(page, n0);
-const at = cs.find((c) => c.s === 'get_album_tracks');
+const at = (await wsSince(page, n0)).find((m) => m.type === 'item_tracks');
 s = await page.evaluate((d) => [...eval(d).querySelectorAll('.row b')].map((e) => e.textContent), BD);
-check('12f album drill-down → mass_queue.get_album_tracks {config_entry_id, uri} and lists tracks', at && at.d === 'mass_queue' && at.rr && at.data.config_entry_id === '01MASSQUEUE0000000000000000' && /^library:\/\/album\//.test(at.data.uri) && s.includes('So What') && s.length === 4, `${JSON.stringify(at?.data)} tracks=${s.join(',')}`);
+check('12f album drill-down → jukebox_kiosk/item_tracks {uri} and lists tracks', at && /^library:\/\/album\//.test(at.uri) && s.includes('So What') && s.length === 4, `${JSON.stringify(at)} tracks=${s.join()}`);
 const dr = `${BD}.querySelector('.da [data-action="radio"]')`;
 if (!await page.evaluate((d) => !!eval(d)?.getBoundingClientRect().width, dr)) {
   await clickEl(page, `${BD}.querySelector('.da [data-action="more"]')`);
@@ -658,7 +686,7 @@ const mb = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.confirm [data-
 check('15k 1920x1080: a zoomed row icon is hit by a real click; the confirmation is centred and on screen', r.w >= 60 && mr && Math.abs(mr.x - 960) < 4 && mr.y - mr.h / 2 > 0 && mr.y + mr.h / 2 < 1080 && Math.abs(mr.y - 540) < 60 && mb.h >= 60 && (await state(page)).playCalls.length === 0, `btn ${JSON.stringify(r)} confirm ${JSON.stringify(mr)}`);
 await page.keyboard.press('Escape');
 
-// =================== 0.3.1: live API shapes (mass_queue tracks + paging, player art, radio) ===================
+// =================== 0.3.1: live API shapes (queue window, player art, radio) ===================
 {
   const pg = await browser.newPage();
   await hermetic(pg, { dead: ['rockantenne'] });
@@ -667,58 +695,13 @@ await page.keyboard.press('Escape');
   const pcalls = (since = 0) => calls(pg, since);
   const pq = async (fn) => { const n = await ncalls(pg); await fn(); await sleep(300); return actions(await pcalls(n)); };
   const BDs = `${BR}.shadowRoot.querySelector('jb-detail')?.shadowRoot`;
-  const rows = () => pg.evaluate((b) => [...(eval(b)?.querySelectorAll('.detail .list.tracks .row') ?? [])].map((r) => ({ name: r.querySelector('b')?.textContent, du: r.querySelector('.du')?.textContent?.trim() ?? '', img: r.querySelector('img')?.getAttribute('src') ?? '' })), BDs);
+  let n, cs;
   const detail = (it, type) => pg.evaluate((b, it, type) => eval(b).openDetail(it, type), BR, it, type);
-  const meta = () => pg.evaluate((b) => eval(b)?.querySelector('.detail .meta')?.textContent?.trim() ?? '', BDs);
-  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  const fx = JSON.parse(readFileSync(new URL('../dev/fixtures/mass-queue-tracks-sample.json', import.meta.url)));
-  const realAlbum = fx.get_album_tracks.raw.result.response.tracks;
-
-  // 16a-c: real get_album_tracks / get_playlist_tracks shapes
+  // 16j: queue_items limit_after clamped to 1..1000
   await open(pg, '&latency=20&tab=browse&lhome=0');
-  let n = await ncalls(pg);
-  await detail({ media_type: 'album', uri: 'library://album/1448', name: 'Hotel California', artists: [{ name: 'Eagles' }] }, 'album'); await sleep(300);
-  let rs = await rows(); let cs = (await pcalls(n)).filter((c) => c.d === 'mass_queue');
-  check('16a real get_album_tracks parses: 9 rows, names, durations m:ss per row', rs.length === realAlbum.length && rs.every((r, i) => r.name === realAlbum[i].media_title && r.du === fmt(realAlbum[i].duration)), JSON.stringify(rs.slice(0, 2)));
-  const tot = Math.round(realAlbum.reduce((a, t) => a + t.duration, 0) / 60);
-  check('16b album header shows track count + total time; rows use the https media_image', (await meta()) === `9 tracks · ${tot} min` && (await pg.evaluate((b) => eval(b).detail.data.tracks.every((t) => /^https:\/\//.test(t.image)), BR)), await meta());
-  check('16c get_album_tracks {config_entry_id: mass_queue_entry_id, uri}, return_response, no page', cs.length === 1 && cs[0].s === 'get_album_tracks' && cs[0].rr && cs[0].data.config_entry_id === '01MASSQUEUE0000000000000000' && cs[0].data.uri === 'library://album/1448' && !('page' in cs[0].data), JSON.stringify(cs[0]?.data));
-  n = await ncalls(pg);
-  await detail({ media_type: 'playlist', uri: 'library://playlist/158', name: 'Eagles' }, 'playlist'); await sleep(300);
-  rs = await rows(); cs = (await pcalls(n)).filter((c) => c.d === 'mass_queue');
-  check('16d real get_playlist_tracks (position: null) parses; page 0 sent; short list → no further page calls', rs.length === 2 && rs[0].name === 'Those Shoes' && rs[0].du === '4:54' && cs.length === 1 && cs[0].data.page === 0, `${JSON.stringify(rs)} ${JSON.stringify(cs.map((c) => c.data))}`);
-
-  // 16e-g: playlist paging (Long Drive = 120 unique tracks) in the three server behaviours
-  const longDrive = async (q) => {
-    await open(pg, `&latency=20&tab=browse&lhome=0${q}`);
-    await clickEl(pg, `${BR}.shadowRoot.querySelector('[data-cat="playlist"]')`); await sleep(300);
-    const nn = await ncalls(pg);
-    await pg.evaluate((b) => [...eval(b).shadowRoot.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent === 'Long Drive').querySelector('.open').click(), BR);
-    await sleep(500);
-    for (let i = 0; i < 8; i++) { await pg.evaluate((b) => { const s = eval(b).querySelector('.scroll'); s.scrollTop = s.scrollHeight; s.dispatchEvent(new Event('scroll')); }, BDs); await sleep(250); }
-    const r = await rows();
-    const pages = (await pcalls(nn)).filter((c) => c.s === 'get_playlist_tracks').map((c) => c.data.page);
-    const more = await pg.evaluate((b) => !!eval(b).querySelector('.more-t'), BDs);
-    return { n: r.length, uniq: new Set(r.map((x) => x.name)).size, pages, more, last: r.at(-1)?.name, meta: await meta() };
-  };
-  let ld = await longDrive('&mqpage=paged');
-  check('16e paged server (50/page): scrolling loads pages 0,1,2 → all 120 tracks, then stops', ld.n === 120 && ld.uniq === 120 && ld.pages.join() === '0,1,2' && !ld.more && ld.last === 'Highway Song 120', JSON.stringify(ld));
-  ld = await longDrive('&mqpage=all');
-  check('16f mass_queue 0.10 (page 0 = everything, page 1 = MA page): 120 tracks once, repeat run detected, ≤2 calls', ld.n === 120 && ld.uniq === 120 && ld.pages.length <= 2 && ld.pages[0] === 0 && !ld.more, JSON.stringify(ld));
-  ld = await longDrive('&mqpage=ignore');
-  check('16g server ignoring page: no duplicate tracks appended, paging stops', ld.n === 120 && ld.uniq === 120 && ld.pages.length === 2 && !ld.more, JSON.stringify(ld));
-  check('16h header for a 120-track playlist shows hours/minutes', /^120 tracks · (\d+ h )?\d+ min$/.test(ld.meta), ld.meta);
-
-  // 16i: legacy queue_config_entry_id + editor rename
-  await open(pg, '&latency=20&tab=browse&lhome=0&legacyq=1');
-  n = await ncalls(pg);
-  await detail({ media_type: 'album', uri: 'library://album/1448', name: 'Hotel California' }, 'album'); await sleep(300);
-  cs = (await pcalls(n)).filter((c) => c.s === 'get_album_tracks');
-  check('16i legacy queue_config_entry_id still drives mass_queue calls', cs.length === 1 && cs[0].data.config_entry_id === '01MASSQUEUE0000000000000000', JSON.stringify(cs[0]?.data));
-  // 16j: get_queue_items limit_after clamped to 1..1000
-  const gq = (await pcalls()).filter((c) => c.s === 'get_queue_items');
-  const lim = await pg.evaluate(async () => { const q = __card.queue; q.limitAfter = 5000; await q.refresh(); q.limitAfter = 0.2; await q.refresh(); return window.__calls.filter((c) => c.service === 'get_queue_items').slice(-2).map((c) => c.data.limit_after); });
-  check('16j get_queue_items {entity, limit_before:1, limit_after 1..1000}', gq.length > 0 && gq.every((c) => c.data.entity === EV && c.data.limit_before === 1 && c.data.limit_after >= 1 && c.data.limit_after <= 1000) && lim.join() === '1000,1', `${JSON.stringify(gq[0]?.data)} clamp=${lim}`);
+  const gq = (await pg.evaluate(() => structuredClone(window.__ws))).filter((m) => m.type === 'queue_items');
+  const lim = await pg.evaluate(async () => { const q = __card.queue; q.limitAfter = 5000; await q.refresh(); q.limitAfter = 0.2; await q.refresh(); return window.__ws.filter((m) => m.type === 'queue_items').slice(-2).map((m) => m.limit_after); });
+  check('16j jukebox_kiosk/queue_items {entity_id, limit_before:1, limit_after 1..1000}', gq.length > 0 && gq.every((m) => m.entity_id === EV && m.limit_before === 1 && m.limit_after >= 1 && m.limit_after <= 1000) && lim.join() === '1000,1', `${JSON.stringify(gq[0])} clamp=${lim}`);
 
   // 16k-o: player art never uses the absolute entity_picture
   const artState = () => pg.evaluate(() => {
@@ -831,7 +814,7 @@ await page.keyboard.press('Escape');
   check('16za 390px phone: track rows keep the duration (under the title; provider badge hidden), no overflow', ph.du === '6:31' && ph.pv === 'none' && ph.over <= 1, JSON.stringify(ph));
 
   // public-repo hygiene: fixtures are scrubbed
-  const fxText = ['ma-search-sample.json', 'ma-search-sample-radio.json', 'ma-library-radio-sample.json', 'mass-queue-tracks-sample.json'].map((f) => readFileSync(new URL(`../dev/fixtures/${f}`, import.meta.url), 'utf8')).join('\n');
+  const fxText = ['ma-search-sample.json', 'ma-search-sample-radio.json', 'ma-library-radio-sample.json'].map((f) => readFileSync(new URL(`../dev/fixtures/${f}`, import.meta.url), 'utf8')).join('\n');
   check('16zb fixtures: provider instance ids scrubbed to --XXXXXXXX, no user_id / real context ids', /apple_music--XXXXXXXX/.test(fxText) && !/apple_music--(?!XXXXXXXX)[A-Za-z0-9]+/.test(fxText) && !/"user_id": "[0-9a-f]{32}"/.test(fxText) && (fxText.match(/\b01[0-9A-HJKMNP-TV-Z]{24}\b/g) || []).every((id) => /^01(MOCK|MASSQUEUE)/.test(id)));
   await pg.close();
 }
@@ -877,8 +860,8 @@ await page.keyboard.press('Escape');
   check('17a "chicago": tap artist does not call play_media', plays(cs).length === 0, cs.map((c) => `${c.d}.${c.s}`).join(','));
   check('17b "chicago": tap opens the artist detail in place (Back + trail, keyboard tucked away)', d?.type === 'artist' && d.uri === artistUri && d.title === 'Chicago' && /Search “CHICAGO”/.test(d.trail)
     && (await pg.evaluate((sv) => eval(sv).shadowRoot.querySelector('.sx').classList.contains('kb-hidden'), SV)), JSON.stringify(d));
-  check('17c artist: top tracks via mass_queue.get_artist_tracks {config_entry_id, uri}', d.src === 'mass_queue' && d.tracks.includes('25 or 6 to 4') && d.tracks.includes('If You Leave Me Now')
-    && cs.some((c) => c.s === 'get_artist_tracks' && c.rr && c.data.uri === artistUri && c.data.config_entry_id === '01MASSQUEUE0000000000000000'), d.tracks.join(','));
+  check('17c artist: top tracks via jukebox_kiosk/item_tracks {uri}', d.src === 'kiosk' && d.tracks.includes('25 or 6 to 4') && d.tracks.includes('If You Leave Me Now')
+    && (await pg.evaluate(() => structuredClone(window.__ws))).some((m) => m.type === 'item_tracks' && m.uri === artistUri), d.tracks.join(','));
   check('17d artist: albums by that artist only (no "Chicago" musical / CSO), same album on 2 providers shown once', d.albums.join() === 'Chicago Transit Authority,Chicago X,Chicago 17', d.albums.join(','));
   await pg.screenshot({ path: V32 + 'search-artist-detail-1280x800.png' });
   // scroll the artist detail, open an album, Back → artist restored at the same scroll position, no refetch
@@ -888,8 +871,8 @@ await page.keyboard.press('Escape');
   cs = await act(() => tapEl(albumTile('Chicago Transit Authority')), 400);
   await waitDet('eval(d).querySelector(".detail").dataset.type === "album"');
   d = await det();
-  check('17e album row in the artist → album detail (get_album_tracks), never plays; trail shows the artist', plays(cs).length === 0 && d.type === 'album' && d.title === 'Chicago Transit Authority' && d.tracks.join() === '25 or 6 to 4,Beginnings,Questions 67 and 68'
-    && /Chicago$/.test(d.trail) && cs.some((c) => c.s === 'get_album_tracks'), `${JSON.stringify(d)} ${cs.map((c) => c.s)}`);
+  check('17e album row in the artist → album detail (jukebox_kiosk/item_tracks), never plays; trail shows the artist', plays(cs).length === 0 && d.type === 'album' && d.title === 'Chicago Transit Authority' && d.tracks.join() === '25 or 6 to 4,Beginnings,Questions 67 and 68'
+    && /Chicago$/.test(d.trail) && (await pg.evaluate(() => structuredClone(window.__ws))).some((m) => m.type === 'item_tracks' && m.uri === d.uri), `${JSON.stringify(d)} ${cs.map((c) => c.s)}`);
   cs = await act(() => tapEl(`${SD}.querySelector('[data-action="back"]')`), 250);
   d = await det();
   const back = await pg.evaluate((dd) => eval(dd).querySelector('.scroll').scrollTop, SD);
@@ -942,7 +925,7 @@ await page.keyboard.press('Escape');
   cs = await act(() => tapEl(searchTile('playlists', 'Chicago Blues Classics')), 400);
   await waitDet();
   d = await det();
-  check('17m tap a playlist → playlist detail (get_playlist_tracks page 0), no play', plays(cs).length === 0 && d.type === 'playlist' && cs.some((c) => c.s === 'get_playlist_tracks' && c.data.page === 0), `${JSON.stringify(d)} ${cs.map((c) => c.s)}`);
+  check('17m tap a playlist → playlist detail (jukebox_kiosk/item_tracks page 1), no play', plays(cs).length === 0 && d.type === 'playlist' && (await pg.evaluate(() => structuredClone(window.__ws))).some((m) => m.type === 'item_tracks' && m.uri === d.uri && (m.page ?? 1) === 1), `${JSON.stringify(d)} ${cs.map((c) => c.s)}`);
   await tapEl(`${SD}.querySelector('[data-action="back"]')`);
   const resBack = await pg.evaluate((sv) => ({ top: eval(sv).shadowRoot.querySelector('.res .scroll')?.scrollTop, kb: eval(sv).shadowRoot.querySelector('.sx').classList.contains('kb-hidden') }), SV);
   check('17n Back to the results: scroll position + keyboard restored', resTop > 0 && Math.abs(resBack.top - resTop) <= 1 && !resBack.kb, `${resTop} → ${JSON.stringify(resBack)}`);
@@ -973,37 +956,37 @@ await page.keyboard.press('Escape');
   d = await det();
   check('17s …and the artist view underneath is intact', d.type === 'artist' && d.albums.length === 3);
 
-  // 17t-v: without mass_queue_entry_id
-  await open(pg, '&latency=40&noqueue=1');
+  // 17t-v: without the Jukebox Kiosk integration (core Music Assistant only; an admin, so the card finds the entry)
+  await open(pg, '&latency=40&kiosk=0&admin=1');
   await typeQ('CHICAGO');
   let n17 = await ncalls(pg); await tapEl(searchTile('albums', 'Chicago X')); await sleep(400); await waitDet(); cs = await all(n17);
   d = await det();
-  check('17t no mass_queue: album detail via labelled search fallback (artist filter), no mass_queue calls', d.src === 'search' && /mass_queue is not set up/.test(d.note) && /search/.test(d.byline) && d.tracks.join() === 'If You Leave Me Now,Another Rainy Day in New York City'
-    && !cs.some((c) => c.d === 'mass_queue') && cs.some((c) => c.s === 'search' && c.data.artist === 'Chicago'), `${JSON.stringify(d)} ${JSON.stringify(cs.filter((c) => c.s === 'search').map((c) => c.data))}`);
+  check('17t no integration: album detail via labelled search fallback (artist filter)', d.src === 'search' && /Jukebox Kiosk integration is not set up/.test(d.note) && /search/.test(d.byline) && d.tracks.join() === 'If You Leave Me Now,Another Rainy Day in New York City'
+    && cs.some((c) => c.s === 'search' && c.data.artist === 'Chicago'), `${JSON.stringify(d)} ${JSON.stringify(cs.filter((c) => c.s === 'search').map((c) => c.data))}`);
   await tapEl(`${SD}.querySelector('[data-action="back"]')`);
   await tapEl(searchTile('artists', 'Chicago')); await waitDet();
   d = await det();
-  check('17u no mass_queue: artist detail still has tracks (labelled search) + albums', d.src === 'search' && d.note && d.tracks.length >= 5 && d.albums.length === 3, JSON.stringify(d));
+  check('17u no integration: artist detail still has tracks (labelled search) + albums', d.src === 'search' && d.note && d.tracks.length >= 5 && d.albums.length === 3, JSON.stringify(d));
   await tapEl(`${SD}.querySelector('[data-action="back"]')`);
   await tapEl(searchTile('playlists', 'Chicago Blues Classics')); await waitDet();
   d = await det();
   cs = await act(async () => { await tapEl(detBtn('play')); await confirm(); }, 400);
   const pRadio = await pg.evaluate((b) => !!eval(b).querySelector('.da [data-action="radio"]'), SD);
   check('17v2 playlist detail has no Start radio (seed support not confirmed)', !pRadio);
-  check('17v no mass_queue: playlist detail explains why tracks are missing, Play still works', d.type === 'playlist' && /mass_queue/.test(d.note) && d.tracks.length === 0 && plays(cs).length === 1 && plays(cs)[0].data.media_type === 'playlist', JSON.stringify(d));
+  check('17v no integration: playlist detail explains why tracks are missing, Play still works', d.type === 'playlist' && /Jukebox Kiosk integration/.test(d.note) && d.tracks.length === 0 && plays(cs).length === 1 && plays(cs)[0].data.media_type === 'playlist', JSON.stringify(d));
 
-  // 17w-x: mass_queue failures
-  await open(pg, '&latency=40&mqfail=get_album_tracks');
+  // 17w-x: the integration's track list fails
+  await open(pg, '&latency=40&kfail=item_tracks');
   await typeQ('CHICAGO');
   await tapEl(searchTile('albums', 'Chicago X')); await waitDet();
   d = await det();
-  check('17w mass_queue error on an album → labelled search fallback', d.src === 'search' && /couldn.t list/.test(d.note) && d.tracks.length === 2, JSON.stringify(d));
-  await open(pg, '&latency=40&mqfail=get_playlist_tracks');
+  check('17w track-list error on an album → labelled search fallback', d.src === 'search' && /couldn.t list/.test(d.note) && d.tracks.length === 2, JSON.stringify(d));
+  await open(pg, '&latency=40&kfail=item_tracks');
   await typeQ('CHICAGO');
   await tapEl(searchTile('playlists', 'Chicago Blues Classics')); await waitDet();
   d = await det();
   const hasRetry = await pg.evaluate((dd) => !!eval(dd).querySelector('.note.err [data-action="retry"]'), SD);
-  check('17x mass_queue error on a playlist → error note with Retry (no silent empty list)', !!d.err && hasRetry, d.err);
+  check('17x track-list error on a playlist → error note with Retry (no silent empty list)', !!d.err && hasRetry, d.err);
 
   // 17y: radio + podcasts in Search
   await open(pg, '&latency=40&radio=1&pods=1');
@@ -1036,10 +1019,10 @@ await page.keyboard.press('Escape');
   check('17z2 station Remove control hidden on radio rows', !hasRemove);
   cs = await act(() => tapEl(searchTile('podcasts', 'Chicago Stories')), 400); await waitDet();
   d = await det();
-  check('17za podcast → episodes detail via mass_queue.get_podcast_episodes, no play', plays(cs).length === 0 && d.type === 'podcast' && d.tracks.length === 3 && cs.some((c) => c.s === 'get_podcast_episodes'), JSON.stringify(d));
+  check('17za podcast → episodes detail via jukebox_kiosk/item_tracks, no play', plays(cs).length === 0 && d.type === 'podcast' && d.tracks.length === 4 && (await pg.evaluate(() => structuredClone(window.__ws))).some((m) => m.type === 'item_tracks' && /podcast/.test(m.uri)), JSON.stringify(d));
   const epIcons = await pg.evaluate((dd) => [...eval(dd).querySelectorAll('.list.tracks .row')].map((r) => [...r.querySelectorAll('.ra-b:not(.ra-more)')].map((b) => b.dataset.act).join('+')), SD);
   const podRadio = await pg.evaluate((dd) => !!eval(dd).querySelector('.da [data-action="radio"]'), SD);
-  check('17za2 podcast detail: episodes have no Start radio icon, header has no Start radio', epIcons.length === 3 && epIcons.every((x) => x === 'next+replace+remove') && !podRadio, JSON.stringify(epIcons));
+  check('17za2 podcast detail: episodes have no Start radio icon, header has no Start radio', epIcons.length === 4 && epIcons.every((x) => x === 'next+replace+remove') && !podRadio, JSON.stringify(epIcons));
   cs = await act(async () => { await tapEl(icon(`${SD}.querySelector('.list.tracks .row')`, 'replace')); await confirm(); });
   check('17zb episode Replace → confirm → play_media with the episode uri and no media_type (MA infers it)', plays(cs).length === 1 && /podcast_episode/.test(plays(cs)[0].data.media_id) && !('media_type' in plays(cs)[0].data), JSON.stringify(plays(cs)[0]?.data));
 

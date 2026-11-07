@@ -82,6 +82,9 @@ async def test_guest_default_library_write(hass: HomeAssistant, hass_ws_client: 
     res = await _call(ws, type="jukebox_kiosk/unfavorite_current", entity_id=ENTITY_A)
     assert res["success"], res
     assert fake_ma.calls[-1][0] == "music/favorites/remove_item"
+    res = await _call(ws, type="jukebox_kiosk/favorite_current", entity_id=ENTITY_A)
+    assert res["success"], res
+    assert fake_ma.calls[-1][0] == "music/favorites/add_item"
 
 
 async def test_search_radio_heart_commands(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
@@ -139,6 +142,8 @@ async def test_guest_without_library_denied(hass: HomeAssistant, hass_ws_client:
     res = await _call(ws, type="jukebox_kiosk/ma", command="music/favorites/add_item", args={"item": "library://track/1"})
     assert not res["success"] and res["error"]["code"] == "unauthorized"
     res = await _call(ws, type="jukebox_kiosk/unfavorite_current", entity_id=ENTITY_A)
+    assert res["error"]["code"] == "unauthorized"
+    res = await _call(ws, type="jukebox_kiosk/favorite_current", entity_id=ENTITY_A)
     assert res["error"]["code"] == "unauthorized"
     assert fake_ma.calls == []
 
@@ -263,6 +268,15 @@ async def test_unfavorite_current_admin(hass: HomeAssistant, hass_ws_client: Any
     res = await _call(ws, type="jukebox_kiosk/unfavorite_current", entity_id=ENTITY_A)
     assert res["success"], res
     assert fake_ma.calls[-1] == ("music/favorites/remove_item", {"media_type": "track", "library_item_id": "4"})
+
+
+async def test_favorite_current_admin(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    """The Now Playing heart adds the playing item through the integration (no button entity)."""
+    ws = await _ws(hass_ws_client, admin_token[1])
+    res = await _call(ws, type="jukebox_kiosk/favorite_current", entity_id=ENTITY_A)
+    assert res["success"], res
+    assert fake_ma.calls[-1] == ("music/favorites/add_item", {"item": res["result"]["uri"]})
+    assert res["result"]["uri"].startswith("library://track/")
 
 
 async def test_subscribe_queue_push(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:

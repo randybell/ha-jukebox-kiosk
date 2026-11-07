@@ -32,9 +32,21 @@ export class NativeBackend implements MaBackend {
   caps: Caps = { ...NO_CAPS, queue: true };
   /** core MA services have no browse / genres / recommendations: every v0.7 feature stays hidden */
   ext: ExtCaps = { ...NO_EXT };
-  ready = Promise.resolve();
+  /** found by an admin's config_entries/get; non-admins can't list config entries ('' = only a YAML config_entry_id works) */
+  maEntry = '';
+  ready: Promise<void>;
   private em = new Emitter();
-  constructor(private hassRef: () => HomeAssistant | undefined) {}
+  constructor(private hassRef: () => HomeAssistant | undefined) { this.ready = this.findEntry(); }
+  private async findEntry() {
+    for (let i = 0; i < 50 && !this.hassRef(); i++) await new Promise((r) => setTimeout(r, 100));
+    const hass = this.hassRef();
+    if (!hass?.user?.is_admin || !hass.callWS) return;
+    try {
+      const list = await hass.callWS<any[]>({ type: 'config_entries/get', domain: 'music_assistant' });
+      const e = (Array.isArray(list) ? list : []).find((x) => x?.state === 'loaded') ?? (Array.isArray(list) ? list[0] : undefined);
+      if (typeof e?.entry_id === 'string') { this.maEntry = e.entry_id; this.em.emit(); }
+    } catch (e) { console.warn('[jukebox-card] Music Assistant entry lookup failed', e); }
+  }
   onChange(fn: () => void) { return this.em.on(fn); }
   send(command: string) { return unsupported(command); }
   async queueWindow(entity: string): Promise<QueueWindow> {

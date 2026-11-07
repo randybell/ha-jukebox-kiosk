@@ -1,5 +1,5 @@
 /**
- * Music Assistant player access through the card's MaBackend (jukebox_kiosk/ma, or mass_queue.send_command):
+ * Music Assistant player access through the card's MaBackend (jukebox_kiosk/ma):
  * players/all, config/players/get (group defaults), players/cmd/set_members, player_queues/transfer, players/cmd/stop. HA's media_player.join/unjoin are
  * never used: their ids don't match MA's speaker ids. players/cmd/ungroup is never used either.
  * Calls are serialised (one grouping change at a time) and time out.
@@ -26,7 +26,7 @@ export class SpeakerStore {
   hass?: HomeAssistant;
   players: Players = new Map();
   /** config/players/get per group (MA 2.10.9 scope config.players.read: granted to guest, user and service roles, so not
-   *  admin-only; via mass_queue it runs on the integration's token). Missing entries = unreadable: card presets only. */
+   *  admin-only). Missing entries = unreadable: card presets only. */
   configs = new Map<string, GroupConfig>();
   configTried = new Set<string>();
   loaded = false;
@@ -42,7 +42,7 @@ export class SpeakerStore {
   private emit() { for (const f of this.listeners) f(); }
 
   async send(command: string, data: Record<string, unknown>, ms = timeouts().call): Promise<any> {
-    if (!this.hass || !this.backend || !this.backend.caps.send) throw new SpeakerError('config', 'Speaker grouping needs the Jukebox Kiosk integration or mass_queue_entry_id');
+    if (!this.hass || !this.backend || !this.backend.caps.send) throw new SpeakerError('config', 'Speaker grouping needs the Jukebox Kiosk integration');
     try {
       return await withTimeout(this.backend.send(command, data), ms, command);
     } catch (e: any) {

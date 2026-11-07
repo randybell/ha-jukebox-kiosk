@@ -1,4 +1,4 @@
-import type { MaItem } from './types';
+import type { HomeAssistant, MaItem } from './types';
 
 /**
  * v0.7 hearts: favourite / un-favourite any Music Assistant item (track, album, artist, playlist, radio, podcast,
@@ -125,4 +125,19 @@ export function favTypeOf(type: string | undefined, it?: Partial<MaItem>): FavTy
   if (it?.media_type && isFavType(it.media_type)) return it.media_type;
   const n = String(type ?? '').replace(/s$/, '');
   return isFavType(n) ? n : '';
+}
+
+/**
+ * The player's own Music Assistant "favorite current song" button: a music_assistant button on the same device as the
+ * player (translation key favorite_now_playing, or an entity id ending in _favorite_current_song). '' when there is none.
+ */
+export function favoriteButtonFor(hass: HomeAssistant | undefined, player: string): string {
+  const reg = hass?.entities;
+  if (!reg || !player) return '';
+  const dev = reg[player]?.device_id;
+  const isFavBtn = (id: string, e: { platform?: string; translation_key?: string | null }) =>
+    id.startsWith('button.') && e.platform === 'music_assistant' && (e.translation_key === 'favorite_now_playing' || id.endsWith('_favorite_current_song'));
+  for (const [id, e] of Object.entries(reg)) if (dev && e.device_id === dev && isFavBtn(id, e) && hass!.states[id]) return id;
+  const guess = `button.${player.slice(player.indexOf('.') + 1)}_favorite_current_song`;
+  return reg[guess] && isFavBtn(guess, reg[guess]) && hass!.states[guess] ? guess : '';
 }

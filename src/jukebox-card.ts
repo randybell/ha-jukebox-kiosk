@@ -16,10 +16,10 @@ import './station-sheet';
 import './station-confirm';
 import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
-import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, validPreset, validQuiet, liveCount, membersOf, pillPrefix } from './speakers/model';
+import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, validPreset, liveCount, membersOf, pillPrefix } from './speakers/model';
 import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type BackdropMode } from './backdrop';
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
-import { pickBackend, createBackend, backendKey, type MaBackend } from './backend';
+import { pickBackend, createBackend, type MaBackend } from './backend';
 import { defineElement } from './define';
 import { libraryTabLabel, combinedOn } from './library-home';
 import { FavStore } from './favorites';
@@ -31,7 +31,6 @@ const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'browse', label: 'Browse', icon: 'browse' },
   { id: 'search', label: 'Search', icon: 'search' },
   { id: 'queue', label: 'Queue', icon: 'queue' },
-  { id: 'lyrics', label: 'Lyrics', icon: 'lyrics' },
 ];
 const CHILDREN = ['jb-now', 'jb-browse', 'jb-search', 'jb-queue', 'jb-speakers', 'jb-station'];
 /** dynamic mode: the group this device plays on, remembered per device */
@@ -51,7 +50,7 @@ function validateSpeakers(c: JukeboxCardConfig) {
     if (c[k] !== undefined && !vals.includes(c[k] as string)) throw new Error(`jukebox-card: ${String(k)} must be one of ${vals.join(', ')}.`);
   };
   oneOf('speaker_mode', ['fixed', 'dynamic']);
-  oneOf('backend', ['auto', 'kiosk', 'mass_queue', 'native']);
+  oneOf('backend', ['auto', 'kiosk', 'native']);
   oneOf('grouping', ['admins', 'everyone', 'nobody']);
   oneOf('guest_access', ['volume', 'none']);
   oneOf('leader_drop', ['block', 'allow']);
@@ -73,8 +72,6 @@ function validateSpeakers(c: JukeboxCardConfig) {
     if (!Array.isArray(c.presets)) throw new Error('jukebox-card: presets must be a list of {name, members, volumes}.');
     for (const p of c.presets) if (!validPreset(p)) throw new Error(`jukebox-card: preset ${JSON.stringify((p as any)?.name ?? p)} needs a name, media_player members and volumes 0-100.`);
   }
-  if (c.quiet_hours !== undefined && !validQuiet(c.quiet_hours))
-    throw new Error('jukebox-card: quiet_hours needs start and end (HH:MM) and max_volume (0-100).');
 }
 
 export class JukeboxCard extends LitElement {
@@ -112,7 +109,7 @@ export class JukeboxCard extends LitElement {
   private _ro?: ResizeObserver;
   private _rm?: MediaQueryList;
   private _qunsub?: () => void;
-  /** one lyrics lookup per track, shared by the art overlay, Stage, the Lyrics tab and the screensaver */
+  /** one lyrics lookup per track, shared by the art overlay, Stage and the screensaver */
   readonly lyrics = new LyricsStore();
   private _stage = false;
   /** 0.7.9 #37: the open station confirm */
@@ -145,7 +142,7 @@ export class JukeboxCard extends LitElement {
   readonly speakers = new SpeakerStore();
   /** v0.7 hearts: one favourites store for every view (passed down as config._favs) */
   readonly favs = new FavStore();
-  /** Music Assistant backend (kiosk / mass_queue / native), shared by queue, lyrics, speakers and the views */
+  /** Music Assistant backend (kiosk / native), shared by queue, lyrics, speakers and the views */
   backend?: MaBackend;
   /** 0.6.5 coerce_repeat_one: a player on repeat 'one' gets one repeat_set 'all' per detection (debounced, never a loop) */
   readonly repeatGuard = new RepeatOneGuard({
@@ -157,28 +154,17 @@ export class JukeboxCard extends LitElement {
   private _push?: { key: string; off?: () => void };
 
   static getConfigElement() { return document.createElement('jukebox-card-editor'); }
-  static getStubConfig(): Partial<JukeboxCardConfig> {
-    return {
-      entity: 'media_player.everywhere',
-      config_entry_id: '',
-      rooms: [
-        { name: 'Living Room', entity: 'media_player.living_room' },
-        { name: 'Kitchen', entity: 'media_player.kitchen' },
-        { name: 'Garage', entity: 'media_player.garage' },
-      ],
-      favorite_entity: 'button.everywhere_favorite_current_song',
-      screensaver_minutes: 10,
-      accent: 'mono',
-      limit: 8,
-    };
+  /** A new card: the first Music Assistant player HA knows (nothing else to fill in). */
+  static getStubConfig(hass?: HomeAssistant): Partial<JukeboxCardConfig> {
+    const reg = hass?.entities ?? {};
+    const ma = Object.keys(reg).find((id) => id.startsWith('media_player.') && reg[id]?.platform === 'music_assistant' && !!hass?.states[id]);
+    return ma ? { entity: ma } : {};
   }
 
   setConfig(config: JukeboxCardConfig) {
     if (!config) throw new Error('Invalid configuration');
-    if (config.mass_queue_entry_id !== undefined && typeof config.mass_queue_entry_id !== 'string')
-      throw new Error('jukebox-card: mass_queue_entry_id must be the mass_queue config entry id (a string).');
-    if (!config.config_entry_id || typeof config.config_entry_id !== 'string')
-      throw new Error('jukebox-card: config_entry_id is required (the Music Assistant config entry id).');
+    if (config.config_entry_id !== undefined && typeof config.config_entry_id !== 'string')
+      throw new Error('jukebox-card: config_entry_id must be the Music Assistant config entry id (a string).');
     if (!num(config.limit, 1, 50)) throw new Error('jukebox-card: limit must be between 1 and 50.');
     if (!num(config.browse_limit, 1, 500)) throw new Error('jukebox-card: browse_limit must be between 1 and 500.');
     if (!num(config.queue_limit, 1, 1000)) throw new Error('jukebox-card: queue_limit must be between 1 and 1000.');
@@ -192,7 +178,7 @@ export class JukeboxCard extends LitElement {
     }
     if (config.favorite_entity && !/^(button|script|input_button)\./.test(config.favorite_entity))
       throw new Error('jukebox-card: favorite_entity must be a button, input_button or script entity.');
-    for (const k of ['show_lyrics', 'lyrics_tab', 'screensaver_lyrics', 'lyrics_seek'] as const)
+    for (const k of ['show_lyrics', 'screensaver_lyrics', 'lyrics_seek'] as const)
       if (!bool(config[k])) throw new Error(`jukebox-card: ${k} must be true or false.`);
     if (!num(config.lyrics_offset_ms, -5000, 5000)) throw new Error('jukebox-card: lyrics_offset_ms must be between -5000 and 5000.');
     if (config.backdrop !== undefined && !BACKDROPS.includes(config.backdrop))
@@ -201,7 +187,7 @@ export class JukeboxCard extends LitElement {
     const first = !this._config;
     this._base = {
       entity: 'media_player.everywhere', accent: 'mono', limit: 8,
-      favorite_entity: 'button.everywhere_favorite_current_song', screensaver_minutes: 10, ...config, _favs: this.favs, _stationGuard: this.stationGuard,
+      screensaver_minutes: 10, ...config, _favs: this.favs, _stationGuard: this.stationGuard,
     };
     this._config = this.effective();
     // 0.7.2 combined Library tab: default_tab: search opens the Library tab ready to type (back-compat)
@@ -222,17 +208,17 @@ export class JukeboxCard extends LitElement {
     this.armIdle();
   }
   /**
-   * Pick and (re)create the backend when its identity changes: `backend` in the config, or auto (kiosk when the
-   * jukebox_kiosk integration is loaded, mass_queue when mass_queue_entry_id is set, else native). Auto is re-checked
+   * Pick and (re)create the backend when its kind changes: `backend` in the YAML, or auto (kiosk when the
+   * jukebox_kiosk integration is loaded, else native). Auto is re-checked
    * whenever hass changes, since hass.config.components arrives after setConfig.
    */
   private syncBackend(force = false) {
     if (!this._base) return;
-    const kind = pickBackend(this._base, this.hass), key = backendKey(kind, this._base);
+    const kind = pickBackend(this._base, this.hass), key = kind;
     if (key !== this._bkey || !this.backend) {
       this._bkey = key;
       this._bunsub?.(); this.stopPush();
-      const be = createBackend(kind, this._base, () => this.hass);
+      const be = createBackend(kind, () => this.hass);
       this.backend = be;
       this.queue.backend = be; this.lyrics.backend = be; this.speakers.backend = be;
       this._bunsub = be.onChange(() => this.applyCaps());
@@ -322,13 +308,11 @@ export class JukeboxCard extends LitElement {
     this.dataset.backdrop = r.mode; this.dataset.backdropWhy = r.why;
   };
 
-  /** visible tabs: Lyrics only when lyrics are on and its tab is not turned off */
+  /** visible tabs: Now Playing, Library (plus Search in the separate layout), Queue */
   private tabs() {
-    const c = this._config, caps = this.backend?.caps;
+    const c = this._config;
     const comb = combinedOn(c);
-    return TABS.map((t) => (t.id === 'browse' ? { ...t, label: libraryTabLabel(c) } : t)).filter((t) => !(comb && t.id === 'search')).filter((t) => t.id !== 'lyrics' || (c?.show_lyrics !== false && c?.lyrics_tab !== false
-      // kiosk: hidden when the server says this user may not read lyrics; other backends keep the tab and its setup hint
-      && !(this.backend?.kind === 'kiosk' && caps && !caps.lyrics)));
+    return TABS.map((t) => (t.id === 'browse' ? { ...t, label: libraryTabLabel(c) } : t)).filter((t) => !(comb && t.id === 'search'));
   }
   /** 0.7.2: the combined Library tab (jb-search with the library list inside), or null in the separate layout */
   private libHost(): any { return combinedOn(this._config) ? this.renderRoot?.querySelector('jb-search[combined]') : null; }
@@ -617,7 +601,6 @@ export class JukeboxCard extends LitElement {
         : this._tab === 'browse' && !this.libHost() ? R.querySelector('jb-browse') : null;
       if (this._station) this._station = null;
       else if ((R.querySelector('jb-speakers') as any)?.escape?.()) { /* closed */ }
-      else if (this._tab === 'lyrics') this._tab = 'now';
       else if (!tabEl?.escape?.()) return;
       e.preventDefault();
     }
@@ -806,8 +789,6 @@ export class JukeboxCard extends LitElement {
             : html`${view('browse', html`<jb-browse ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-browse>`)}
           ${view('search', html`<jb-search ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'search'}></jb-search>`)}`}
           ${view('queue', html`<jb-queue ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'queue'}></jb-queue>`)}
-          ${tabs.some((t) => t.id === 'lyrics') ? view('lyrics', html`<jb-lyrics mode="tab" .hass=${h} .config=${c} .store=${this.lyrics} .art=${pic}
-            ?active=${this._tab === 'lyrics' && !this._saver && !this._stage}></jb-lyrics>`) : nothing}
           <!-- inside the middle: the fitted header and tab bar stay visible and tappable while the panel is open -->
           <jb-station-confirm ?large=${!!c.large_buttons} .state=${this._stAsk ? { kind: 'station', item: this._stAsk.item, run: () => this.stAnswer(true) } : null}
             .cancel=${() => this.stAnswer(false)}></jb-station-confirm>
@@ -833,6 +814,7 @@ export class JukeboxCard extends LitElement {
       zoom: var(--_z, 1); /* large-screen scale, set from ResizeObserver; lengths inside are multiplied, so the height is pre-divided */
       display: grid; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr);
       position: relative; isolation: isolate; overflow: hidden;
+      container: jbapp / inline-size; /* the card's own width (e.g. the ~460 px editor preview) decides the header and tab bar, not the screen's */
       background: var(--_bg); color: var(--_fg); font-family: var(--_font-body); -webkit-font-smoothing: antialiased;
       border-radius: var(--jb-card-radius, 0); border: 0; box-shadow: none;
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
@@ -923,7 +905,11 @@ export class JukeboxCard extends LitElement {
     .tab .badge { top: 4px; left: calc(50% + 6px); }
     .tab.active .badge { background: var(--_on-accent); color: var(--_active); }
     .lg .tab { min-height: 80px; font-size: 17px; } .lg .tab .i { width: 34px; height: 34px; }
-    @container np (max-width: 520px) { }
+    /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole */
+    @media (min-width: 641px) {
+      @container jbapp (max-width: 600px) { .pill b, .brand span { display: none; } .top { gap: 10px; } }
+      @container jbapp (max-width: 430px) { .lg .pill { padding: 0 12px; font-size: 15px; } .lg .tab { font-size: 15px; } .lg .clock { font-size: 18px; } }
+    }
     @media (max-width: 960px) { .pill b { display: none; } }
     @media (max-width: 800px) { .pill .pl { display: none; } }
     @media (max-width: 640px) {

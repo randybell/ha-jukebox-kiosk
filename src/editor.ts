@@ -4,12 +4,13 @@ import { defineElement } from './define';
 import { CATEGORIES, DEFAULT_CATEGORIES } from './search-categories';
 import { LIBRARY_ROWS, DEFAULT_ROWS, rowName } from './discover';
 import { RADIO_MODES, MODE_LABEL } from './radio-browse';
-import { TILES, configuredTiles, LIBRARY_CATS, DEFAULT_LIBRARY_CATEGORIES, libraryCategories } from './library-home';
+import { TILES, configuredTiles, LIBRARY_CATS, DEFAULT_LIBRARY_CATEGORIES, libraryCategories, libraryTabLabel, combinedOn } from './library-home';
 
 /**
  * Visual editor built on HA's <ha-form>. YAML remains the reference (see README).
  * Rooms are edited as an entity multi-select; custom room names/icons set in YAML are preserved.
- * Sections are ha-form "expandable" groups with flatten: true, so the saved config stays flat (backward compatible).
+ * Sections are ha-form "expandable" groups with flatten: true, so the saved config stays flat.
+ * Wording rule: every label and choice is plain on-screen text (no internal names, codes or version numbers).
  */
 export const SAVER_PRESETS = [0, 1, 5, 10, 15, 30, 60];
 export const SAVER_MAX = 1440;
@@ -37,141 +38,134 @@ export function discoverOptions(current?: unknown) {
 }
 const sameList = (a: unknown, b: readonly string[]) => Array.isArray(a) && a.length === b.length && a.every((x, i) => x === b[i]);
 
+/** Start tab choices: the bottom-bar names exactly (Search only exists as its own tab in the separate layout) */
+export function startTabOptions(c: Partial<JukeboxCardConfig> = {}) {
+  return [
+    { value: 'now', label: 'Now Playing' },
+    { value: 'browse', label: libraryTabLabel(c) },
+    ...(combinedOn(c) ? [] : [{ value: 'search', label: 'Search' }]),
+    { value: 'queue', label: 'Queue' },
+  ];
+}
+const sel = (options: Array<{ value: string; label: string }>) => ({ select: { options, mode: 'dropdown' } });
+
 export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
+  const choose = c.speaker_mode === 'dynamic';
   return [
     { name: 'entity', selector: { entity: { domain: 'media_player' } } },
-    { name: 'config_entry_id', required: true, selector: { text: {} } },
-    { name: 'backend', selector: { select: { options: [
-      { value: 'auto', label: 'Auto: Jukebox Kiosk if installed, else mass_queue, else core only' },
-      { value: 'kiosk', label: 'Jukebox Kiosk integration' },
-      { value: 'mass_queue', label: 'mass_queue (legacy)' },
-      { value: 'native', label: 'Core Music Assistant only (no lyrics, queue edits or speaker grouping)' }], mode: 'dropdown' } } },
-    { name: 'mass_queue_entry_id', selector: { text: {} } },
     { name: 'rooms', selector: { entity: { domain: 'media_player', multiple: true } } },
-    { name: 'favorite_entity', selector: { entity: { domain: ['button', 'input_button', 'script'] } } },
     {
       type: 'expandable', name: 'display', title: 'Display', icon: 'mdi:monitor', flatten: true, expanded: true,
       schema: [
+        { name: 'default_tab', selector: sel(startTabOptions(c)) },
         { name: 'screensaver_minutes', selector: { select: { options: saverOptions(c.screensaver_minutes), mode: 'dropdown', custom_value: true } } },
         { name: 'screensaver_lyrics', selector: { boolean: {} } },
-        { name: 'default_tab', selector: { select: { options: ['now', 'browse', 'search', 'queue', 'lyrics'], mode: 'dropdown' } } },
-        { name: 'backdrop', selector: { select: { options: ['auto', 'full', 'light', 'static', 'off'], mode: 'dropdown' } } },
-        { name: 'accent', selector: { select: { options: ['mono', 'fixed', 'art'], mode: 'dropdown' } } },
+        { name: 'backdrop', selector: sel([
+          { value: 'auto', label: 'Automatic: Full on fast screens, Light on slow ones' },
+          { value: 'full', label: 'Full: live blurred album art behind everything' },
+          { value: 'light', label: 'Light: blurred album art, drawn once per song (easier on slow tablets)' },
+          { value: 'static', label: 'Dark: a dark gradient, no album art' },
+          { value: 'off', label: 'Off: plain black' }]) },
         { name: 'large_buttons', selector: { boolean: {} } },
-        { name: 'show_autoplay', selector: { boolean: {} } },
         { name: 'coerce_repeat_one', selector: { boolean: {} } },
       ],
     },
     {
       type: 'expandable', name: 'speakers', title: 'Speakers', icon: 'mdi:speaker-multiple', flatten: true,
       schema: [
-        { name: 'speaker_mode', selector: { select: { options: [{ value: 'fixed', label: 'Fixed: always the player above (0.4 behaviour)' }, { value: 'dynamic', label: 'Dynamic: move between groups, join and drop speakers' }], mode: 'dropdown' } } },
-        { name: 'targets', selector: { entity: { domain: 'media_player', multiple: true } } },
-        { name: 'grouping', selector: { select: { options: [{ value: 'admins', label: 'Admins' }, { value: 'everyone', label: 'Everyone' }, { value: 'nobody', label: 'Nobody' }], mode: 'dropdown' } } },
-        { name: 'grouping_users', selector: { text: {} } },
-        { name: 'guest_access', selector: { select: { options: [{ value: 'volume', label: 'Volume and mute' }, { value: 'none', label: 'Read only' }], mode: 'dropdown' } } },
-        { name: 'leader_drop', selector: { select: { options: [{ value: 'allow', label: 'Allow (MA re-forms the group on the other speakers after a short gap)' }, { value: 'block', label: 'Block (hand off with Move)' }], mode: 'dropdown' } } },
-        { name: 'confirm_drop', selector: { boolean: {} } },
-        { name: 'presets', selector: { object: {} } },
-        { name: 'quiet_start', selector: { time: {} } },
-        { name: 'quiet_end', selector: { time: {} } },
-        { name: 'quiet_max', selector: { number: { min: 0, max: 100, step: 5, mode: 'slider', unit_of_measurement: '%' } } },
-        { name: 'quiet_applies', selector: { select: { options: [{ value: 'guests', label: 'Guests' }, { value: 'everyone', label: 'Everyone' }], mode: 'dropdown' } } },
+        { name: 'speaker_mode', selector: sel([
+          { value: 'fixed', label: 'Volume only: always play on the chosen player' },
+          { value: 'dynamic', label: 'Choose speakers: pick, group and drop speakers from the card' }]) },
+        ...(choose ? [
+          { name: 'targets', selector: { entity: { domain: 'media_player', multiple: true } } },
+          { name: 'grouping', selector: sel([{ value: 'admins', label: 'Admins' }, { value: 'everyone', label: 'Everyone' }, { value: 'nobody', label: 'Nobody' }]) },
+          { name: 'grouping_users', selector: { text: {} } },
+          { name: 'guest_access', selector: sel([{ value: 'volume', label: 'Can change the volume and mute' }, { value: 'none', label: 'Can only look' }]) },
+          { name: 'leader_drop', selector: sel([
+            { value: 'allow', label: 'Allow: the music keeps playing on the other speakers after a short pause' },
+            { value: 'block', label: "Don't allow: use Move to hand the music to another speaker first" }]) },
+          { name: 'confirm_drop', selector: { boolean: {} } },
+        ] : []),
       ],
     },
     {
       type: 'expandable', name: 'lyrics', title: 'Lyrics', icon: 'mdi:text-box-outline', flatten: true,
       schema: [
         { name: 'show_lyrics', selector: { boolean: {} } },
-        { name: 'lyrics_tab', selector: { boolean: {} } },
         { name: 'lyrics_seek', selector: { boolean: {} } },
         { name: 'lyrics_offset_ms', selector: { number: { min: -5000, max: 5000, step: 100, mode: 'box', unit_of_measurement: 'ms' } } },
       ],
     },
     {
-      type: 'expandable', name: 'advanced', title: 'Search & Browse', icon: 'mdi:magnify', flatten: true,
+      type: 'expandable', name: 'advanced', title: 'Search', icon: 'mdi:magnify', flatten: true,
       schema: [
         { name: 'limit', selector: { number: { min: 1, max: 25, mode: 'box' } } },
-        { name: 'browse_limit', selector: { number: { min: 10, max: 500, mode: 'box' } } },
-        // v0.7 (each hidden on the card when the backend can't do it)
         { name: 'search_categories', selector: { select: { multiple: true, reorder: true, mode: 'list', options: CATEGORIES.map((x) => ({ value: x.key, label: x.label })) } } },
-        { name: 'search_filters', selector: { boolean: {} } },
+        { name: 'search_default_category', selector: sel([{ value: 'all', label: 'All' }, ...CATEGORIES.map((x) => ({ value: x.key, label: x.label }))]) },
         { name: 'search_sources', selector: { boolean: {} } },
+        { name: 'search_filters', selector: { boolean: {} } },
         { name: 'library_first', selector: { boolean: {} } },
-        { name: 'search_default_category', selector: { select: { mode: 'dropdown', options: [{ value: 'all', label: 'All' }, ...CATEGORIES.map((x) => ({ value: x.key, label: x.label }))] } } },
+      ],
+    },
+    {
+      type: 'expandable', name: 'library', title: 'Library', icon: 'mdi:view-grid-outline', flatten: true,
+      schema: [
+        { name: 'library_layout', selector: sel([
+          { value: 'combined', label: 'One Library tab with the search box and category buttons' },
+          { value: 'separate', label: 'Separate Library and Search tabs' }]) },
+        { name: 'library_label', selector: { text: {} } },
+        { name: 'library_categories', selector: { select: { multiple: true, reorder: true, mode: 'list', options: LIBRARY_CATS.map((x) => ({ value: x.id, label: DEFAULT_LIBRARY_CATEGORIES.includes(x.id) ? x.label : `${x.label} (optional)` })) } } },
+        { name: 'library_home', selector: { boolean: {} } },
+        { name: 'library_tiles', selector: { select: { multiple: true, reorder: true, mode: 'list', options: TILES.map((t) => ({ value: t.id, label: t.optIn ? `${t.label} (optional)` : t.label })) } } },
+        { name: 'browse_limit', selector: { number: { min: 10, max: 500, mode: 'box' } } },
         { name: 'discover', selector: { select: { multiple: true, reorder: true, mode: 'list', custom_value: true, options: discoverOptions(c.discover) } } },
         { name: 'radio_browse', selector: { select: { multiple: true, reorder: true, mode: 'list', options: RADIO_MODES.map((m) => ({ value: m, label: MODE_LABEL[m] })) } } },
         { name: 'radio_country', selector: { text: {} } },
         { name: 'radio_favorites_only', selector: { boolean: {} } },
       ],
     },
-    {
-      // 0.7.2: combined Library tab (default) or the 0.7.1 separate tabs; the category buttons. Tile labels set in YAML
-      // ({tile, label}) are kept when the list is edited here (tiles only apply to the separate layout).
-      type: 'expandable', name: 'library', title: 'Library', icon: 'mdi:view-grid-outline', flatten: true,
-      schema: [
-        { name: 'library_layout', selector: { select: { mode: 'dropdown', options: [{ value: 'combined', label: 'Combined: one Library tab with search, source buttons and category buttons' }, { value: 'separate', label: 'Separate: Library and Search tabs (0.7.1)' }] } } },
-        { name: 'library_categories', selector: { select: { multiple: true, reorder: true, mode: 'list', options: LIBRARY_CATS.map((x) => ({ value: x.id, label: DEFAULT_LIBRARY_CATEGORIES.includes(x.id) ? x.label : `${x.label} (optional)` })) } } },
-        { name: 'library_home', selector: { boolean: {} } },
-        { name: 'library_tiles', selector: { select: { multiple: true, reorder: true, mode: 'list', options: TILES.map((t) => ({ value: t.id, label: t.optIn ? `${t.label} (optional)` : t.label })) } } },
-        { name: 'library_label', selector: { text: {} } },
-      ],
-    },
   ];
 }
 export const LABELS: Record<string, string> = {
-  entity: 'Player (default media_player.everywhere)',
-  config_entry_id: 'Music Assistant config entry id',
-  rooms: 'Room players (volume sliders)',
-  favorite_entity: 'Favorite button',
-  backend: 'Music Assistant backend',
-  mass_queue_entry_id: 'mass_queue config entry id (legacy backend only; not the Music Assistant one)',
-  screensaver_minutes: 'Screensaver after (pick or type minutes, 0-1440)',
-  screensaver_lyrics: 'Lyrics on the screensaver',
-  limit: 'Search results per type (1-letter queries use 5)',
-  browse_limit: 'Browse page size',
-  accent: 'Accent',
-  backdrop: 'Backdrop (performance): auto, full blur, light, static, off',
+  entity: 'Player',
+  rooms: 'Room volume sliders',
   default_tab: 'Start tab',
-  show_lyrics: 'Lyrics (art overlay, Stage, tab, screensaver)',
-  lyrics_tab: 'Lyrics tab',
-  show_autoplay: 'Autoplay toggle in the Queue (adds similar music when the queue runs out)',
-  lyrics_seek: 'Long-press a synced line to jump there',
-  lyrics_offset_ms: 'Synced lyrics offset (+ shows lines sooner)',
+  screensaver_minutes: 'Screensaver after (pick, or type minutes up to 1440)',
+  screensaver_lyrics: 'Lyrics on the screensaver',
+  backdrop: 'Background',
   large_buttons: 'Large buttons (bigger touch targets and text)',
-  coerce_repeat_one: 'Switch a player on "repeat one" back to repeat all (the card itself only offers off / all)',
-  speaker_mode: 'Speaker mode',
-  targets: 'Groups to play on (dynamic; empty = every Music Assistant group)',
-  grouping: 'Who may change speakers (a UI lock, not security)',
-  grouping_users: 'Also allow these users (names or ids, comma separated)',
+  coerce_repeat_one: 'Turn "repeat one" back into repeat all (the card only offers off and all)',
+  speaker_mode: 'Speakers panel',
+  targets: 'Groups to play on (empty = every speaker group)',
+  grouping: 'Who may change speakers',
+  grouping_users: 'Also allow these people (names, separated by commas)',
   guest_access: 'Everyone else',
-  leader_drop: 'Dropping the speaker that leads a group',
-  confirm_drop: 'Ask before dropping or taking speakers (centred dialog; off = small status message)',
-  presets: 'Room presets (YAML list: name, members, volumes, target)',
-  quiet_start: 'Quiet hours from',
-  quiet_end: 'Quiet hours until (same as from = all day)',
-  quiet_max: 'Quiet hours: max volume',
-  quiet_applies: 'Quiet hours apply to',
-  search_categories: 'Search categories (shown as chips, in this order)',
+  leader_drop: 'Removing the main speaker from a group',
+  confirm_drop: 'Ask before dropping or taking speakers (off = a short message instead)',
+  show_lyrics: 'Lyrics (on the album art, full screen and the screensaver)',
+  lyrics_seek: 'Press and hold a lyrics line to jump there',
+  lyrics_offset_ms: 'Lyrics timing (+ shows lines sooner)',
+  limit: 'Search results per type',
+  search_categories: 'Search categories (in this order)',
   search_default_category: 'Search opens on',
-  search_filters: 'Filters: "Search in <artist>" on artist pages, Library filter button, Clear filters',
-  library_first: 'Search shows library matches first (provider copies of library items hidden)',
-  discover: 'Discover rows on Browse (none = off; needs the Jukebox Kiosk backend)',
-  radio_browse: 'Radio: "Stations by" (none = off; Radio Browser provider)',
-  radio_country: 'Radio country code (e.g. us; empty = Home Assistant\'s country)',
-  radio_favorites_only: 'Radio: show favourite stations only (otherwise favourites first, then other library stations)',
-  search_sources: 'Source buttons under the search box (All, Library, each Music Assistant provider; tap several to combine)',
+  search_sources: 'Source buttons under the search box (All, Library and each music service)',
+  search_filters: 'Search filters ("Search in" on artist pages, Library filter, Clear filters)',
+  library_first: 'Show your library first in search results',
   library_layout: 'Library layout',
-  library_categories: 'Library category buttons (in this order)',
-  library_home: 'Separate layout only: open the Library tab on big shortcut tiles',
-  library_tiles: 'Separate layout only: Library tiles (in this order; Search opens the Search tab)',
   library_label: 'Library tab name (empty = Library)',
+  library_categories: 'Library category buttons (in this order)',
+  library_home: 'Separate tabs only: open the Library tab on big shortcut tiles',
+  library_tiles: 'Separate tabs only: Library tiles (in this order)',
+  browse_limit: 'Items per Library page',
+  discover: 'Discover rows in the Library (none = off)',
+  radio_browse: 'Radio: browse stations by (none = off)',
+  radio_country: 'Radio country code (for example us; empty = your Home Assistant country)',
+  radio_favorites_only: 'Radio: only show favourite stations',
 };
-const QUIET_KEYS = ['quiet_start', 'quiet_end', 'quiet_max', 'quiet_applies'] as const;
-const hhmm = (t: unknown) => (typeof t === 'string' ? t.slice(0, 5) : undefined);
 /** defaults shown for unset options, never written back unless the user changes them */
 export const SHOWN_DEFAULTS = {
-  show_lyrics: true, lyrics_tab: true, screensaver_lyrics: true, lyrics_seek: true, show_autoplay: false,
+  default_tab: 'now', backdrop: 'auto',
+  show_lyrics: true, screensaver_lyrics: true, lyrics_seek: true,
   large_buttons: false, radio_favorites_only: false, library_home: false, library_layout: 'combined', search_sources: true, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
   coerce_repeat_one: true,
 };
@@ -182,8 +176,6 @@ export class JukeboxCardEditor extends LitElement {
   hass?: HomeAssistant;
   private _config?: JukeboxCardConfig;
   setConfig(c: JukeboxCardConfig) {
-    // show the 0.3.0 key under its new name; saving writes mass_queue_entry_id
-    if (c && c.queue_config_entry_id && !c.mass_queue_entry_id) { const { queue_config_entry_id, ...rest } = c; c = { ...rest, mass_queue_entry_id: queue_config_entry_id } as JukeboxCardConfig; }
     this._config = c;
   }
   /** form data → config: rooms keep their YAML names/icons, minutes become a number, untouched shown defaults are not written */
@@ -206,18 +198,6 @@ export class JukeboxCardEditor extends LitElement {
     if (typeof v.grouping_users === 'string') {
       const list = v.grouping_users.split(',').map((x: string) => x.trim()).filter(Boolean);
       if (list.length) v.grouping_users = list; else delete v.grouping_users;
-    }
-    // quiet hours: four flat fields ↔ quiet_hours {start, end, max_volume, applies}
-    if (QUIET_KEYS.some((k) => k in v)) {
-      const q = { ...(this._config?.quiet_hours ?? {}) } as any;
-      if (v.quiet_start !== undefined) q.start = hhmm(v.quiet_start);
-      if (v.quiet_end !== undefined) q.end = hhmm(v.quiet_end);
-      if (v.quiet_max !== undefined && v.quiet_max !== '') q.max_volume = Math.max(0, Math.min(100, Math.round(Number(v.quiet_max))));
-      if (v.quiet_applies) q.applies = v.quiet_applies;
-      if (q.applies === 'guests') delete q.applies;
-      for (const k of QUIET_KEYS) delete v[k];
-      if (q.start && q.end && typeof q.max_volume === 'number' && Number.isFinite(q.max_volume)) v.quiet_hours = q;
-      else if (q.start || q.end || q.max_volume !== undefined) v.quiet_hours = { start: q.start ?? '22:00', end: q.end ?? '07:00', max_volume: Number.isFinite(q.max_volume) ? q.max_volume : 30, ...(q.applies ? { applies: q.applies } : {}) };
     }
     // v0.7 lists: empty = off (key removed); the shown defaults are not written back unless changed; `true` kept when still "all"
     const prevC = this._config as any;
@@ -268,12 +248,9 @@ export class JukeboxCardEditor extends LitElement {
   formData() {
     const c = this._config ?? ({} as JukeboxCardConfig);
     const m = c.screensaver_minutes;
-    const q = c.quiet_hours;
     const out: Record<string, unknown> = { ...SHOWN_DEFAULTS, ...c, rooms: (c.rooms ?? []).map(roomEntity), screensaver_minutes: String(typeof m === 'number' ? m : 10) };
     if (c.targets) out.targets = c.targets.map((t) => (typeof t === 'string' ? t : t.entity));
     if (c.grouping_users) out.grouping_users = c.grouping_users.join(', ');
-    if (q) { out.quiet_start = q.start; out.quiet_end = q.end; out.quiet_max = q.max_volume; out.quiet_applies = q.applies ?? 'guests'; }
-    delete out.quiet_hours;
     out.search_categories = Array.isArray(c.search_categories) ? c.search_categories : [...DEFAULT_CATEGORIES];
     out.search_default_category = c.search_default_category ?? 'all';
     out.discover = c.discover === true ? [...DEFAULT_ROWS] : Array.isArray(c.discover) ? c.discover : [];

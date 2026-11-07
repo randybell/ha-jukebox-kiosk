@@ -5,10 +5,11 @@ import { providerLabel } from './providers';
 import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl, foldedActions,
   playMedia, playMessage, normItem, drillable, canRadio, isRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  maCall,
 } from './shared';
 import './detail-view';
 import type { DetailEntry, JbDetail } from './detail-view';
-export { fromQueueTrack, queueTracks, mergePage, queueEntryId, QUEUE_PAGE_MIN, QUEUE_PAGE_MAX } from './detail-view';
+export { fromQueueTrack, queueTracks, mergePage, QUEUE_PAGE_MIN, QUEUE_PAGE_MAX } from './detail-view';
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem, RadioBrowseMode } from './types';
 import { defineElement } from './define';
 import { removeFromQueue } from './queue-row-remove';
@@ -26,7 +27,7 @@ import './keyboard';
 
 export interface Cat { type: string; label: string; one: string }
 /** Every Library category (0.7.2: Songs and Genres; the button row shows `library_categories`, by default
- *  Playlists, Artists, Songs, Genres, Radio). Genres come from MA's music/genres/library_items (kiosk / mass_queue). */
+ *  Playlists, Artists, Songs, Genres, Radio). Genres come from MA's music/genres/library_items (kiosk). */
 export const CATS: Cat[] = [
   { type: 'playlist', label: 'Playlists', one: 'playlist' },
   { type: 'artist', label: 'Artists', one: 'artist' },
@@ -134,7 +135,7 @@ export class JbBrowse extends LitElement {
   private _lpool: { key: string; pool?: ScopePool; error: string } | null = null;
   private lpools = new PoolCache();
   private _lqTimer?: number;
-  /** Tap never plays: artists / albums / playlists (and podcasts with mass_queue) open their detail, everything else a sheet. */
+  /** Tap never plays: artists / albums / playlists (and podcasts with the Jukebox Kiosk integration) open their detail, everything else a sheet. */
   private hearts = new FavController(this);
   private press = new PressController<{ it: MaItem; type: string }>(this, (p, el) => this.tap(p.it, p.type, el), (p, el) => this.openMenu(p.it, p.type, el));
 
@@ -214,7 +215,7 @@ export class JbBrowse extends LitElement {
   /** the text filter as sent to get_library (trimmed; '' when filters are off) */
   private lq() { return this.filtersOn() ? this._lq.trim() : ''; }
   private lib(data: Record<string, any>) {
-    return this.hass!.callService('music_assistant', 'get_library', { config_entry_id: this.config.config_entry_id, ...data }, undefined, false, true);
+    return maCall(this.hass!, this.config, 'get_library', data);
   }
 
   /** One cheap get_library per type so empty categories (e.g. Radio with no radio provider) are hidden. Radio also counts a
@@ -277,9 +278,8 @@ export class JbBrowse extends LitElement {
   }
   /** Radio Browser stations via music_assistant.search (used when the library has no radio). */
   private async radioSearch(limit: number): Promise<MaItem[]> {
-    const r = unwrap(await this.hass!.callService('music_assistant', 'search',
-      { config_entry_id: this.config.config_entry_id, name: RADIO_FALLBACK_QUERY, media_type: ['radio'], limit: Math.max(1, Math.min(100, limit)) },
-      undefined, false, true)) ?? {};
+    const r = unwrap(await maCall(this.hass!, this.config, 'search',
+      { name: RADIO_FALLBACK_QUERY, media_type: ['radio'], limit: Math.max(1, Math.min(100, limit)) })) ?? {};
     return (Array.isArray(r.radio) ? r.radio : []).filter((x: any) => x && x.uri && x.name).map(normItem).filter((x: MaItem) => x.name);
   }
 

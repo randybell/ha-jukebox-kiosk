@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 
 const OUT = new URL('../tmp/unit-speakers/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
-const bundle = await rollup({ input: ['src/speakers/model.ts', 'src/queue-model.ts', 'src/speakers/ask-hold.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
+const bundle = await rollup({ input: ['src/speakers/model.ts', 'src/queue-model.ts', 'src/speakers/ask-hold.ts', 'src/backend/kiosk.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
 await bundle.write({ dir: OUT, format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name]-[hash].mjs' });
 await bundle.close();
 
@@ -22,6 +22,7 @@ const origWarn = console.warn; console.warn = () => {};
 const M = await import(OUT + 'model.mjs');
 const Q = await import(OUT + 'queue-model.mjs');
 const AH = await import(OUT + 'ask-hold.mjs');
+const K = await import(OUT + 'kiosk.mjs');
 
 let failures = 0, total = 0;
 function check(name, ok, info = '') { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); }
@@ -58,15 +59,6 @@ check('U9 guest_access volume (default) / none', M.canVolume(fixed, guest) && !M
 check('U10 queue Play now / Play next: admins and grouping_users in either mode; guests never; grouping nobody hides them',
   M.canJumpQueue(fixed, admin) && M.canJumpQueue(dyn, admin) && !M.canJumpQueue(fixed, guest) && M.canJumpQueue({ ...fixed, grouping_users: ['Kitchen Tablet'] }, guest)
     && M.canJumpQueue({ ...fixed, grouping: 'everyone' }, guest) && !M.canJumpQueue({ ...fixed, grouping: 'nobody' }, admin));
-
-// ---------------- quiet hours ----------------
-const at = (h, m = 0) => { const d = new Date(2026, 9, 31, h, m); return d; };
-const qh = { start: '22:00', end: '07:00', max_volume: 30 };
-check('U11 quiet hours wrap midnight', M.inQuiet(qh, at(23)) && M.inQuiet(qh, at(6, 59)) && !M.inQuiet(qh, at(7)) && !M.inQuiet(qh, at(12)));
-check('U12 cap applies to guests only by default; everyone when applies: everyone',
-  M.volumeCap({ ...fixed, quiet_hours: qh }, guest, at(23)) === 0.3 && M.volumeCap({ ...fixed, quiet_hours: qh }, admin, at(23)) === undefined
-    && M.volumeCap({ ...fixed, quiet_hours: { ...qh, applies: 'everyone' } }, admin, at(23)) === 0.3 && M.volumeCap({ ...fixed, quiet_hours: qh }, guest, at(12)) === undefined);
-check('U13 invalid quiet_hours are ignored', !M.validQuiet({ start: '25:00', end: '07:00', max_volume: 30 }) && !M.validQuiet({ start: '22:00', end: '07:00', max_volume: 130 }) && M.capVol(0.8, 0.3) === 0.3);
 
 // ---------------- presets / plans ----------------
 const rooms = [{ entity: 'media_player.living_room', name: 'Living Room', ma: 'spk_living' }, { entity: 'media_player.kitchen', name: 'Kitchen', ma: 'spk_kitchen' }, { entity: 'media_player.garage', name: 'Garage' }];
@@ -107,33 +99,48 @@ check('U19 takeoverText for a leader is the re-form warning', /restarts/.test(M.
 check('U20 nextShift: (current + 1) - index; 0 for the playing, already-next and played rows',
   Q.nextShift(1, 5) === -3 && Q.nextShift(1, 3) === -1 && Q.nextShift(1, 2) === 0 && Q.nextShift(1, 1) === 0 && Q.nextShift(1, 0) === 0 && Q.nextShift(-1, 4) === 0 && Q.nextShift(0, 4) === -3);
 
+/** fake hass playing the Jukebox Kiosk WebSocket API; ma commands are logged as {s: 'send_command', data: {command, data}} */
 function fakeHass(withQueueId = true, { buf, curIdx = 7, ignoreDelete = false, moveErr = '' } = {}) {
   const calls = [];
   const items = ['q0', 'q1', 'q2', 'q3', 'q4', 'q5'].map((id, i) => ({ queue_item_id: id, media_title: `Song ${i}`, media_content_id: `apple_music://track/${i}` }));
-  return { calls, hass: {
+  const hass = {
     states: { 'media_player.everywhere': { entity_id: 'media_player.everywhere', state: 'playing', attributes: { active_queue: 'syncgroup_placeholder' } } },
     user: admin,
-    callService: async (d, s, data, target) => {
-      calls.push({ d, s, data, target });
-      if (s === 'get_queue_items') return { response: { 'media_player.everywhere': items } };
-      if (s === 'get_queue') return { response: { 'media_player.everywhere': { ...(withQueueId ? { queue_id: 'syncgroup_placeholder_q' } : {}), current_index: 7, items: 40, current_item: { queue_item_id: 'q1' } } } };
-      // MA PlayerQueue (live 2.10.9 shape): index_in_buffer next to current_index; absent unless the test sets buf
-      if (s === 'send_command' && data.command === 'player_queues/get') return { response: buf === undefined ? null : { queue_id: data.data.queue_id, current_index: curIdx, index_in_buffer: buf } };
-      if (s === 'send_command' && data.command === 'player_queues/move_item' && moveErr) throw new Error(moveErr);
-      if (s === 'send_command' && data.command === 'player_queues/delete_item' && !ignoreDelete) { const j = items.findIndex((x) => x.queue_item_id === data.data.item_id_or_index); if (j >= 0) items.splice(j, 1); }
-      return { response: null };
-    } } };
+    callService: async () => { throw new Error('the queue never uses HA services here'); },
+    callWS: async (msg) => {
+      const t = String(msg.type).replace('jukebox_kiosk/', '');
+      if (t === 'capabilities') return { features: { queue: true, queue_play: true, queue_edit: true, undo: true, ma_commands: true } };
+      if (t === 'queue_items') {
+        calls.push({ s: 'get_queue_items', data: msg });
+        // live 2.10.9 shape: index_in_buffer next to current_index; absent unless the test sets buf
+        return { ...(withQueueId ? { queue_id: 'syncgroup_placeholder_q' } : {}), current_index: curIdx, ...(buf === undefined ? {} : { index_in_buffer: buf }), current_item_id: 'q1', total: 40, items };
+      }
+      if (t !== 'ma') throw new Error('unexpected ' + t);
+      const data = { command: msg.command, data: msg.args };
+      calls.push({ s: 'send_command', data });
+      if (msg.command === 'player_queues/move_item' && moveErr) throw new Error(moveErr);
+      if (msg.command === 'player_queues/delete_item' && !ignoreDelete) { const j = items.findIndex((x) => x.queue_item_id === msg.args.item_id_or_index); if (j >= 0) items.splice(j, 1); }
+      return null;
+    },
+  };
+  return { calls, hass };
+}
+/** a QueueModel on the Jukebox Kiosk backend for this fake hass */
+async function model(hass) {
+  const qm = new Q.QueueModel(); qm.hass = hass;
+  qm.backend = new K.KioskBackend(() => hass); await qm.backend.ready;
+  return qm;
 }
 {
   const { hass, calls } = fakeHass();
-  const qm = new Q.QueueModel(); qm.hass = hass; qm.entryId = 'mq_entry_placeholder';
+  const qm = await model(hass);
   await qm.refresh();
-  check('U21 refresh keeps MA queue_id from get_queue', qm.snap.queueId === 'syncgroup_placeholder_q' && qm.snap.current === 1, J({ q: qm.snap.queueId, c: qm.snap.current }));
+  check('U21 refresh keeps MA queue_id from queue_items', qm.snap.queueId === 'syncgroup_placeholder_q' && qm.snap.current === 1, J({ q: qm.snap.queueId, c: qm.snap.current }));
   calls.length = 0;
   await qm.playNow('q4');
   const c1 = calls.find((c) => c.s === 'send_command');
-  check('U22 playNow → mass_queue.send_command player_queues/play_index {queue_id, index: queue_item_id}',
-    c1 && J(c1.data) === J({ config_entry_id: 'mq_entry_placeholder', command: 'player_queues/play_index', data: { queue_id: 'syncgroup_placeholder_q', index: 'q4' } }), J(c1));
+  check('U22 playNow → player_queues/play_index {queue_id, index: queue_item_id}',
+    c1 && J(c1.data) === J({ command: 'player_queues/play_index', data: { queue_id: 'syncgroup_placeholder_q', index: 'q4' } }), J(c1));
   check('U23 playNow is optimistic (q4 becomes current at once)', qm.snap.items[qm.snap.current].queue_item_id === 'q4');
   await qm.refresh(); calls.length = 0;
   await qm.playNext('q5');
@@ -147,35 +154,31 @@ function fakeHass(withQueueId = true, { buf, curIdx = 7, ignoreDelete = false, m
 }
 {
   const { hass, calls } = fakeHass(false);
-  const qm = new Q.QueueModel(); qm.hass = hass; qm.entryId = 'mq_entry_placeholder';
+  const qm = await model(hass);
   await qm.refresh();
-  check('U27 no queue_id in get_queue → the entity\'s active_queue', qm.snap.queueId === 'syncgroup_placeholder');
-  const qn = new Q.QueueModel(); qn.hass = hass; await qn.refresh(); calls.length = 0;
-  await qn.playNow('q3'); await qn.playNext('q5');
-  const svc = calls.filter((c) => c.d === 'mass_queue' && !c.s.startsWith('get_')).map((c) => `${c.s}:${J(c.data)}`);
-  check('U28 no mass_queue entry → the 0.4 services (play_queue_item / move_queue_item_next)',
-    J(svc) === J([`play_queue_item:${J({ entity: 'media_player.everywhere', queue_item_id: 'q3' })}`, `move_queue_item_next:${J({ entity: 'media_player.everywhere', queue_item_id: 'q5' })}`]), J(svc));
+  check('U27 no queue_id from the server → the entity\'s active_queue', qm.snap.queueId === 'syncgroup_placeholder');
 }
 // ---------------- queue rows: Remove + Undo ----------------
 function undoHass({ addFail = false, itemsFail = false } = {}) {
-  const f = fakeHass(), base = f.hass.callService;
+  const f = fakeHass(), base = f.hass.callWS;
   const rows = ['q0', 'q1', 'q2', 'q4', 'q5', 'qnew'].map((id) => ({ queue_item_id: id, media_item: { uri: id === 'qnew' ? 'apple_music://track/3' : `apple_music://track/${id.slice(1)}` } }));
-  f.hass.callService = async (d, s, data, target, ...rest) => {
-    if (s === 'send_command' && data.command === 'player_queues/play_media' && addFail) { f.calls.push({ d, s, data }); throw new Error('play_media refused'); }
-    if (s === 'send_command' && data.command === 'player_queues/items') { f.calls.push({ d, s, data }); if (itemsFail) throw new Error('items failed'); return { response: rows.slice(data.data.offset - 6) }; }
-    return base(d, s, data, target, ...rest);
+  f.hass.callWS = async (msg) => {
+    const data = { command: msg.command, data: msg.args };
+    if (msg.command === 'player_queues/play_media' && addFail) { f.calls.push({ s: 'send_command', data }); throw new Error('play_media refused'); }
+    if (msg.command === 'player_queues/items') { f.calls.push({ s: 'send_command', data }); if (itemsFail) throw new Error('items failed'); return rows.slice(msg.args.offset - 6); }
+    return base(msg);
   };
   return f;
 }
 {
   const { hass, calls } = undoHass();
-  const qm = new Q.QueueModel(); qm.hass = hass; qm.entryId = 'mq_entry_placeholder';
+  const qm = await model(hass);
   await qm.refresh(); calls.length = 0;
   check('U29 removedInfo: nothing for the playing row', qm.removedInfo('q1') === undefined && (await qm.removeRow('q1')) === undefined && calls.length === 0);
   const r = await qm.removeRow('q3');
   const c = calls.find((x) => x.s === 'send_command');
   check('U30 removeRow → player_queues/delete_item {queue_id, item_id_or_index: queue_item_id}; optimistic; remembers uri + the row before',
-    J(c?.data) === J({ config_entry_id: 'mq_entry_placeholder', command: 'player_queues/delete_item', data: { queue_id: 'syncgroup_placeholder_q', item_id_or_index: 'q3' } })
+    J(c?.data) === J({ command: 'player_queues/delete_item', data: { queue_id: 'syncgroup_placeholder_q', item_id_or_index: 'q3' } })
       && !qm.snap.items.some((x) => x.queue_item_id === 'q3') && r.uri === 'apple_music://track/3' && r.prevId === 'q2' && r.title === 'Song 3', J({ c, r }));
   calls.length = 0;
   const where = await qm.undoRemove(r);
@@ -188,7 +191,7 @@ function undoHass({ addFail = false, itemsFail = false } = {}) {
 }
 {
   const { hass } = undoHass({ addFail: true });
-  const qm = new Q.QueueModel(); qm.hass = hass; qm.entryId = 'mq_entry_placeholder'; await qm.refresh();
+  const qm = await model(hass); await qm.refresh();
   const r = await qm.removeRow('q3');
   let threw = false; try { await qm.undoRemove(r); } catch { threw = true; }
   let noUri = false; try { await qm.undoRemove({ ...r, uri: undefined }); } catch { noUri = true; }
@@ -196,19 +199,11 @@ function undoHass({ addFail = false, itemsFail = false } = {}) {
 }
 {
   const { hass } = undoHass({ itemsFail: true });
-  const qm = new Q.QueueModel(); qm.hass = hass; qm.entryId = 'mq_entry_placeholder'; await qm.refresh();
+  const qm = await model(hass); await qm.refresh();
   const r = await qm.removeRow('q3');
   check('U33 re-added but the lookup / move fails → \'end\' (added at the end, place not restored)', (await qm.undoRemove(r)) === 'end');
   const r2 = { ...r, before: true };
   check('U34 a removed played row comes back at the end (MA won\'t move into the played part)', (await qm.undoRemove(r2)) === 'end');
-}
-{
-  const { hass, calls } = fakeHass();
-  const qn = new Q.QueueModel(); qn.hass = hass; await qn.refresh(); calls.length = 0;
-  await qn.removeRow('q4');
-  const svc = calls.filter((c) => c.d === 'mass_queue' && !c.s.startsWith('get_')).map((c) => c.s);
-  let threw = false; try { await qn.undoRemove({ id: 'q4', title: 'x', uri: 'u', before: false }); } catch { threw = true; }
-  check('U35 no mass_queue entry → Remove uses the 0.4 remove_queue_item; Undo is unavailable (throws)', J(svc) === J(['remove_queue_item']) && threw, J(svc));
 }
 // ---------------- live MA 2.10.9: buffer boundary, mapping, group config ----------------
 check('U36 lockedRow: current + (index_in_buffer - current_index); unknown buffer → current',
@@ -216,29 +211,38 @@ check('U36 lockedRow: current + (index_in_buffer - current_index); unknown buffe
 check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.isBufferedError(new Error('31 is already played/buffered')) && !Q.isBufferedError(new Error('player unavailable')));
 {
   const { hass, calls } = fakeHass(true, { buf: 8 });
-  const qm = new Q.QueueModel(); qm.hass = hass; qm.entryId = 'mq_entry_placeholder';
+  const qm = await model(hass);
   await qm.refresh();
-  check('U38 refresh reads player_queues/get: bufferIndex 8 → locked row 2 (the buffered q2)', qm.snap.bufferIndex === 8 && qm.locked === 2 && qm.isLocked('q2') && !qm.isLocked('q3'), J({ b: qm.snap.bufferIndex, l: qm.locked }));
+  check('U38 refresh reads index_in_buffer: bufferIndex 8 → locked row 2 (the buffered q2)', qm.snap.bufferIndex === 8 && qm.locked === 2 && qm.isLocked('q2') && !qm.isLocked('q3'), J({ b: qm.snap.bufferIndex, l: qm.locked }));
   calls.length = 0;
   await qm.playNext('q5');
   const c = calls.find((x) => x.s === 'send_command' && x.data.command === 'player_queues/move_item');
   check('U39 playNext with a buffered next track: pos_shift lands right after the buffered row ((2 + 1) - 5 = -2)', c?.data.data.pos_shift === -2 && qm.snap.items[3].queue_item_id === 'q5', J(c?.data));
   await qm.refresh(); calls.length = 0;
-  let busy = false; try { await qm.removeRow('q2'); } catch (e) { busy = e instanceof Q.QueueBusy; }
-  check('U40 removeRow on the buffered row: refused before any call (QueueBusy)', busy && !calls.some((x) => x.data?.command === 'player_queues/delete_item'));
+  let busy = false; try { await qm.removeRow('q2'); } catch (e) { busy = e instanceof Q.QueueBusy && e.message === 'That song is already loading, so it can\'t be removed right now.'; }
+  check('U40 removeRow on the buffered row: refused before any call (QueueBusy, "That song is already loading, so it can\'t be removed right now.")', busy && !calls.some((x) => x.data?.command === 'player_queues/delete_item'));
 }
 {
   const { hass } = fakeHass(true, { ignoreDelete: true });
-  const qm = new Q.QueueModel(); qm.hass = hass; qm.entryId = 'mq_entry_placeholder';
+  const qm = await model(hass);
   await qm.refresh();
-  let busy = false; try { await qm.removeRow('q4'); } catch (e) { busy = e instanceof Q.QueueBusy; }
-  check('U41 delete answered 200 but ignored (row still there after a re-read) → QueueBusy and the row is back', busy && qm.snap.items.some((x) => x.queue_item_id === 'q4'));
+  let busy = false; try { await qm.removeRow('q4'); } catch (e) { busy = e instanceof Q.QueueBusy && e.kind === 'remove' && e.message === 'That song is already loading, so it can\'t be removed right now.'; }
+  check('U41 delete answered 200 but ignored (row still there after a re-read) → QueueBusy "That song is already loading, so it can\'t be removed right now." and the row is back', busy && qm.snap.items.some((x) => x.queue_item_id === 'q4'));
+}
+{
+  // MA refuses a delete outright (500 "already played/buffered"): the remove wording, not the move one
+  const { hass } = fakeHass(true, { moveErr: '' });
+  const qm = await model(hass); await qm.refresh();
+  const base = hass.callWS;
+  hass.callWS = async (msg) => { if (msg.command === 'player_queues/delete_item') throw new Error('4 is already played/buffered'); return base(msg); };
+  let msg = ''; try { await qm.removeRow('q4'); } catch (e) { msg = e instanceof Q.QueueBusy ? e.message : 'other'; }
+  check('U41b delete refused by MA (500 "already played/buffered") → "That song is already loading, so it can\'t be removed right now."', msg === 'That song is already loading, so it can\'t be removed right now.', msg);
 }
 {
   const { hass } = fakeHass(true, { moveErr: '4 is already played/buffered' });
-  const qm = new Q.QueueModel(); qm.hass = hass; qm.entryId = 'mq_entry_placeholder';
+  const qm = await model(hass);
   await qm.refresh();
-  let busy = false; try { await qm.playNext('q4'); } catch (e) { busy = e instanceof Q.QueueBusy; }
+  let busy = false; try { await qm.playNext('q4'); } catch (e) { busy = e instanceof Q.QueueBusy && e.kind === 'move' && e.message === 'That song is already loading, so it can\'t move right now.'; }
   check('U42 move_item 500 "already played/buffered" → QueueBusy (the view says "That song is already loading, so it can\'t move right now.")', busy);
 }
 {

@@ -342,10 +342,10 @@ export function confirmTpl(c: ConfirmState | null, close: () => void) {
     </div>`;
 }
 
-/** Types that open a detail view on tap (podcasts only when the backend lists episodes: kiosk or mass_queue). */
+/** Types that open a detail view on tap (podcasts only when the backend lists episodes). */
 export const drillable = (type: string, config: JukeboxCardConfig) =>
   type === 'artist' || type === 'album' || type === 'playlist'
-  || (type === 'podcast' && (config._backend ? config._backend.caps.podcastEpisodes : !!(config.mass_queue_entry_id || config.queue_config_entry_id)))
+  || (type === 'podcast' && !!config._backend?.caps.podcastEpisodes)
   // v0.7: a genre opens its overview (artists / albums / playlists / tracks) when the backend can read it
   || (type === 'genre' && !!config._backend?.ext?.genres);
 
@@ -455,3 +455,14 @@ export const mediaStyles = css`
   :host([large]) .mi, :host([large]) .menu.sheet .mi { height: 60px; font-size: 17px; }
   :host([large]) .toast { font-size: 16px; padding: 14px 20px; }
 `;
+
+/** The Music Assistant config entry for music_assistant.* services: the YAML override, else what the card resolved. */
+export const maEntry = (c: Pick<JukeboxCardConfig, 'config_entry_id' | '_backend'> | undefined) => c?.config_entry_id || c?._backend?.maEntry || '';
+/**
+ * A music_assistant.* service call with the card's Music Assistant entry (response returned). Waits for the backend's
+ * first answer, which is where the entry comes from when the YAML doesn't set one.
+ */
+export async function maCall(hass: HomeAssistant, c: JukeboxCardConfig, service: string, data: Record<string, unknown>) {
+  if (!c.config_entry_id) await c._backend?.ready;
+  return hass.callService('music_assistant', service, { config_entry_id: maEntry(c), ...data }, undefined, false, true);
+}
