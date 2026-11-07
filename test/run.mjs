@@ -214,19 +214,16 @@ await clickEl0(rowIcon(firstRow, 'replace'));
 await clickEl0(`${SVR}.querySelector('.confirm [data-action="confirm"]')`);
 s = await state(page);
 check('4h Replace → confirm sends enqueue replace', s.playCalls.length === 2 && s.playCalls[1].data.enqueue === 'replace' && !s.playCalls[1].data.radio_mode, JSON.stringify(s.playCalls[1]?.data));
-await clickEl0(rowIcon(firstRow, 'more'));
-await clickEl0(`${SVR}.querySelector('.menu .mi[data-action="radio"]')`);
+await clickEl0(rowIcon(firstRow, 'radio')); // 0.7.9 #35b: Start radio is a visible button on search rows (no More)
 cf = await confirmOf();
 const beforeRadio = (await state(page)).playCalls.length;
 check('4i Start radio opens a radio-worded confirmation, nothing sent yet', cf?.kind === 'radio' && /Start radio from/.test(cf.text) && /replaces the current queue for everyone/.test(cf.text) && beforeRadio === 2, JSON.stringify(cf));
 await clickEl0(`${SVR}.querySelector('.confirm [data-action="cancel"]')`);
 check('4j Start radio → Cancel sends nothing', (await state(page)).playCalls.length === 2);
-await clickEl0(rowIcon(firstRow, 'more'));
-await clickEl0(`${SVR}.querySelector('.menu .mi[data-action="radio"]')`);
+await clickEl0(rowIcon(firstRow, 'radio')); // 0.7.9 #35b: Start radio is a visible button on search rows (no More)
 await page.keyboard.press('Escape'); await sleep(80);
 check('4k Escape closes the confirmation without sending', !(await confirmOf()) && (await state(page)).playCalls.length === 2 && (await state(page)).query === 'MOCK');
-await clickEl0(rowIcon(firstRow, 'more'));
-await clickEl0(`${SVR}.querySelector('.menu .mi[data-action="radio"]')`);
+await clickEl0(rowIcon(firstRow, 'radio')); // 0.7.9 #35b: Start radio is a visible button on search rows (no More)
 await clickEl0(`${SVR}.querySelector('.confirm [data-action="confirm"]')`);
 s = await state(page);
 // tap an artist row → detail view, never play_media
@@ -1020,6 +1017,12 @@ await page.keyboard.press('Escape');
   check('17y2 (0.7.9 #35) radio rows: only Play (replace); podcasts add+next+replace; playlists/artists/albums/tracks add+next+replace+radio; no Remove',
     radioIcons.radio.every((x) => x === 'replace') && radioIcons.podcasts.every((x) => x === 'add+next+replace')
     && ['playlists', 'artists', 'albums', 'tracks'].every((g) => radioIcons[g].length && radioIcons[g].every((x) => x === 'add+next+replace+radio')), JSON.stringify(radioIcons));
+  // 0.7.9 #35b: no search row has a More button; a podcast row's three buttons sit together at the row's end (no empty slot)
+  const geo35b = await pg.evaluate((sv) => { const r = eval(sv).shadowRoot; const pod = r.querySelector('.grp.podcasts .row'), tr = r.querySelector('.grp.tracks .row');
+    const end = (row) => { const bs = [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width); return { n: bs.length, right: Math.round(row.getBoundingClientRect().right - bs[bs.length - 1].getBoundingClientRect().right), gaps: bs.slice(1).map((b, i) => Math.round(b.getBoundingClientRect().left - bs[i].getBoundingClientRect().right)) }; };
+    return { more: r.querySelectorAll('.row .ra-more').length, pod: end(pod), tr: end(tr) }; }, SV);
+  check('17y3 (0.7.9 #35b) search rows: no More; podcast row ends flush like a song row (3 buttons, same gaps, no empty slot)', geo35b.more === 0 && geo35b.pod.n === 3 && geo35b.tr.n === 4
+    && Math.abs(geo35b.pod.right - geo35b.tr.right) <= 1 && geo35b.pod.gaps.every((g) => g <= Math.max(...geo35b.tr.gaps) + 1), JSON.stringify(geo35b));
   // 0.7.9 #37: the queue has songs, so the station asks first ("This will replace your queue"); Replace plays it
   cs = await act(() => tapEl(icon(stRow, 'replace')));
   const stAsk = plays(cs).length === 0 && await pg.evaluate(() => !!__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('.confirm[data-kind=station]'));
@@ -1086,13 +1089,13 @@ await page.keyboard.press('Escape');
   await waitShown(pg, 'CHICAGO'); await sleep(150);
   const tr = searchRow('tracks', '25 or 6 to 4');
   const narrow = await pg.evaluate((e) => { const row = eval(e); return [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width).map((b) => `${b.dataset.act}:${Math.round(b.getBoundingClientRect().width)}`).join(); }, tr);
-  await tapEl(icon(tr, 'more'), true);
-  const nMenu = await pg.evaluate((sv) => [...eval(sv).shadowRoot.querySelectorAll('.menu .mi')].map((m) => m.dataset.action).join(), SV);
-  await pg.screenshot({ path: V32 + 'narrow-more-320x640.png' });
-  cs = await act(() => tapEl(`${SVR}.querySelector('.menu .mi[data-action="radio"]')`, true));
+  // 0.7.9 #35b: no More on search rows; Start radio is the fourth visible button, labels on one line
+  const nMenu = await pg.evaluate((e) => { const row = eval(e), rr = row.getBoundingClientRect(); return [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width).every((b) => { const r = b.getBoundingClientRect(), sp = b.querySelector('span'); return r.left >= rr.left - 1 && r.right <= rr.right + 1 && sp && sp.getClientRects().length === 1; }) ? 'fits' : 'overflow'; }, tr);
+  await pg.screenshot({ path: V32 + 'narrow-search-320x640.png' });
+  cs = await act(() => tapEl(icon(tr, 'radio'), true));
   const nKind = await confirmKind(SVR);
   const cs5 = await act(() => tapEl(`${SVR}.querySelector('.confirm [data-action="confirm"]')`, true));
-  check('17zg 320 px (0.7.9 #35): labeled Add to queue / Play Next / Play Now stay visible; ⋯ → Start radio… → confirmation → radio_mode + replace', narrow.split(',').map((x) => x.split(':')[0]).join() === 'add,next,replace,more' && nMenu === 'radio,cancel' && plays(cs).length === 0 && nKind === 'radio'
+  check('17zg 320 px (0.7.9 #35b): labeled Add to queue / Play Next / Play Now / Start radio visible and inside the row, no More; Start radio → confirmation → radio_mode + replace', narrow.split(',').map((x) => x.split(':')[0]).join() === 'add,next,replace,radio' && nMenu === 'fits' && plays(cs).length === 0 && nKind === 'radio'
     && plays(cs5).length === 1 && plays(cs5)[0].data.radio_mode === true && plays(cs5)[0].data.enqueue === 'replace', `${narrow} menu=${nMenu} kind=${nKind} ${JSON.stringify(plays(cs5)[0]?.data)}`);
   // every play_media this run used a valid HA media_type (the mock rejects anything else)
   const bad = (await all()).filter((c) => c.s === 'play_media' && !['artist', 'album', 'audiobook', 'folder', 'playlist', 'podcast', 'track', 'radio', undefined].includes(c.data.media_type));
