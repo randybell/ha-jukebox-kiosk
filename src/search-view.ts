@@ -44,8 +44,8 @@ const GROUPS: Array<{ key: GroupKey; label: string; type: string }> = [
   { key: 'genres', label: 'Genres', type: 'genre' },
 ];
 const SEARCH_TYPES = ['artist', 'album', 'track', 'playlist', 'radio', 'audiobook', 'podcast'];
+/** 0.7.9 #57: Recent searches were removed; this old key is cleared once so no history stays on the device. */
 const RECENTS_KEY = 'jukebox-card:recents:v1';
-const MAX_RECENTS = 8;
 const MAX_QUERY = 60;
 
 interface MenuState { item: MaItem; group: GroupKey; pos: MenuPos; actions: MenuAction[] }
@@ -82,7 +82,6 @@ export class JbSearch extends LitElement {
     _filter: { state: true },
     _menu: { state: true },
     _kbHidden: { state: true },
-    _recents: { state: true },
     _error: { state: true },
     _toast: { state: true },
     _stack: { state: true },
@@ -117,7 +116,6 @@ export class JbSearch extends LitElement {
   private _filter: GroupKey | 'all' = 'all';
   private _menu: MenuState | null = null;
   private _kbHidden = false;
-  private _recents: string[] = [];
   private _error = '';
   private _toast = '';
   private _toastTimer?: number;
@@ -132,8 +130,6 @@ export class JbSearch extends LitElement {
   /** A row tap never plays: artists / albums / playlists (podcasts with mass_queue) open a detail, anything else is highlighted. */
   private hearts = new FavController(this);
   private press = new PressController<{ it: MaItem; g: GroupKey }>(this, (p) => this.tap(p.it, p.g), (p) => this.tap(p.it, p.g));
-  private _chipTimer?: number;
-  private _chipFired = false;
   private _seqShown = 0;
   /** v0.7: configured search categories (null = 0.6 behaviour) */
   private _cats: SearchCategory[] | null = null;
@@ -169,7 +165,7 @@ export class JbSearch extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this._recents = this.loadRecents();
+    try { localStorage.removeItem(RECENTS_KEY); } catch { /* private mode */ }
     window.addEventListener('keydown', this.onHwKey, true);
   }
   disconnectedCallback() {
@@ -498,19 +494,6 @@ export class JbSearch extends LitElement {
     if (handled) { e.preventDefault(); e.stopPropagation(); }
   };
 
-  // ---------- recents ----------
-  private loadRecents(): string[] {
-    try { const v = JSON.parse(localStorage.getItem(RECENTS_KEY) || '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, MAX_RECENTS) : []; }
-    catch { return []; }
-  }
-  private saveRecents() { try { localStorage.setItem(RECENTS_KEY, JSON.stringify(this._recents)); } catch { /* private mode */ } }
-  private addRecent(q: string) {
-    q = q.trim(); if (!q) return;
-    this._recents = [q, ...this._recents.filter((r) => r.toLowerCase() !== q.toLowerCase())].slice(0, MAX_RECENTS);
-    this.saveRecents();
-  }
-  private removeRecent(q: string) { this._recents = this._recents.filter((r) => r !== q); this.saveRecents(); }
-
   // ---------- playback ----------
   private mediaType(it: MaItem, g: GroupKey) { return GROUPS.find((x) => x.key === g)?.type ?? it.media_type ?? 'track'; }
 
@@ -520,7 +503,6 @@ export class JbSearch extends LitElement {
     if ((enqueue as string) === 'remove') { await this.removeRow(it, this.mediaType(it, g)); return; }
     const type = this.mediaType(it, g);
     if (type === 'radio' || isRadio(it)) enqueue = 'replace';
-    this.addRecent(this._shownQuery || this._query);
     try {
       const r = await playMedia(this.hass, this.config, it, type, enqueue, radio);
       if (!r) return;
@@ -608,8 +590,7 @@ export class JbSearch extends LitElement {
       this._resScroll = (this.renderRoot.querySelector('.res .scroll') as HTMLElement | null)?.scrollTop ?? 0;
       this._kbBefore = this._kbHidden;
       if (!this.kbAlways()) this._kbHidden = true;
-      this.addRecent(this._shownQuery || this._query);
-    }
+      }
     this._stack = [...this._stack, { item: it, type }];
   }
   async back() {
@@ -641,7 +622,6 @@ export class JbSearch extends LitElement {
       scope = { artist: parent ?? (a0 ? { media_type: 'artist', uri: a0.uri ?? '', name: a0.name } : undefined), album: it };
     } else scope = { artist: it };
     if (data) this.pools.put(scopeKey(scope), { albums: data.albums ?? [], tracks: data.tracks ?? [] });
-    this.addRecent(this._shownQuery || this._query);
     this._stack = [];
     this._kbHidden = kb ? false : this._kbHidden;
     this._query = '';
@@ -827,12 +807,7 @@ export class JbSearch extends LitElement {
           ${this.scopeTpl()}
           <div class="qmeta" data-loading=${this._loading ? '1' : '0'}><span class="live ${this._loading ? 'busy' : ''}"></span>${status}</div>
         </div>
-        ${this._recents.length && !sc && !(this.combined && !this._query) ? html`<div class="recents" aria-label="Recent searches"><span class="rl">${icon('history', 'i xs')}Recent</span>
-          ${this._recents.map((q) => html`<button class="chip" tabindex="-1"
-              @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this._chipFired = false; this._chipTimer = window.setTimeout(() => { this._chipFired = true; this.removeRecent(q); }, 700); }}
-              @pointerup=${() => window.clearTimeout(this._chipTimer)} @pointerleave=${() => window.clearTimeout(this._chipTimer)}
-              @click=${() => { if (!this._chipFired) this.setQuery(q.toUpperCase()); }}>${q}</button>`)}
-        </div>` : html`<div class="recents"></div>`}
+        <div class="recents"></div>
         <section class="res" aria-label="Search results" data-shown-query=${this._shownQuery} data-seq=${this._seqShown} data-scope=${name}>
           ${this.combined && !this._stack.length ? this.lcatsTpl() : nothing}
           ${this.combined ? html`<div class="lib" ?hidden=${!this.libShown()}><jb-browse embedded .hass=${this.hass} .config=${this.config} .active=${this.active && this.libShown()}
