@@ -835,22 +835,23 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   check('D7 buffered row: labeled Remove / Play Next stay visible but disabled; Move up + down disabled',
     !!(g5.buf && g5.remove?.disabled && g5.next?.disabled && g5.up && g5.down && g5.nUp && g5.nNext === true && g5.nRemove?.disabled === false && g5.bufs === 1), J(g5));
   await p.close();
+  const BUSY36 = "That song is already loading, so it can't move right now."; // 0.7.9 #36c wording
   // MA moved its buffer on after our read: a delete it ignores → toast + the row is back; a move it refuses → toast + reload
   p = await openQ('&admin=1');
   const v7 = (await ids(p))[0], v8 = (await ids(p))[3];
   await ev(p, `(() => { const Q = window.__queues['media_player.everywhere']; Q.buf = Q.index + 1; })()`);
   await tap(p, `${QV}.querySelector('.qr[data-id="${v7}"] .ra-b[data-action="remove"]')`);
-  await wait(p, `${QV}.querySelector('.toast')?.textContent === 'That track is already loading'`, 3000);
-  check('D7b delete ignored by MA (200, row still there): toast "That track is already loading", the row is back, no Undo bar',
-    (await toastT(p)) === 'That track is already loading' && (await ids(p))[0] === v7 && !(await bar(p)), J({ t: await toastT(p), ids: (await ids(p)).slice(0, 2) }));
+  await wait(p, `${QV}.querySelector('.toast')?.textContent === ${J(BUSY36)}`, 3000);
+  check('D7b delete ignored by MA (200, row still there): toast "That song is already loading, so it can\'t move right now.", the row is back, no Undo bar',
+    (await toastT(p)) === BUSY36 && (await ids(p))[0] === v7 && !(await bar(p)), J({ t: await toastT(p), ids: (await ids(p)).slice(0, 2) }));
   await sleep(2300); // let the toast clear
   // MA buffers further on between the card's read and the tap (set right before it, so the card still offers Up)
   await ev(p, `(() => { const Q = window.__queues['media_player.everywhere']; Q.buf = Q.index + 4; })()`);
   await tap(p, `${QV}.querySelector('.qr[data-id="${v8}"] .qa[data-action="up"]')`);
-  await wait(p, `${QV}.querySelector('.toast')?.textContent === 'That track is already loading'`, 3000);
+  await wait(p, `${QV}.querySelector('.toast')?.textContent === ${J(BUSY36)}`, 3000);
   await wait(p, `${QV}.querySelectorAll('.qr.buf').length === 4`, 3000);
-  check('D7c move refused by MA (500 "<n> is already played/buffered"): toast "That track is already loading" and the queue reloads (4 rows now locked)',
-    (await toastT(p)) === 'That track is already loading' && (await ev(p, `${QV}.querySelectorAll('.qr.buf').length`)) === 4, J({ t: await toastT(p) }));
+  check('D7c move refused by MA (500 "<n> is already played/buffered"): toast "That song is already loading, so it can\'t move right now." and the queue reloads (4 rows now locked)',
+    (await toastT(p)) === BUSY36 && (await ev(p, `${QV}.querySelectorAll('.qr.buf').length`)) === 4, J({ t: await toastT(p) }));
   await p.close();
 
   // phone: ⋯ opens an action sheet with the rest; Play Now there still asks first; Remove there offers Undo
