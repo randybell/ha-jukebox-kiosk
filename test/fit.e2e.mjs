@@ -331,7 +331,45 @@ for (const [w, h, touch] of SIZES) {
 }
 
 check('F9 no page errors', pageErrors.length === 0, pageErrors.join(' | '));
-await browser.close();
 writeFileSync(OUT + 'results.json', JSON.stringify({ at: new Date().toString(), results }, null, 2));
+// 0.7.9 #55: portrait Now Playing — the art's bottom edge is above the badge line and the title, and the badge line, title and
+// artist never overlap each other, at every portrait size (the fit ones plus common phones/tablets), large buttons on/off, long titles
+{
+  const P55 = [[390, 844], [820, 1180], [390, 600], [360, 640], [375, 667], [414, 896], [600, 960], [600, 1024], [768, 1024], [1080, 1920]];
+  for (const lg of [false, true]) for (const long of [false, true]) for (const [w, h] of P55) {
+    const tag = `F55 ${w}x${h}${lg ? ' large_buttons' : ''}${long ? ' long title' : ''}`;
+    const pg = await newPage({ width: w, height: h, isMobile: w < 500, hasTouch: true });
+    await open(pg, `&tab=now${lg ? '&cfg=' + encodeURIComponent(JSON.stringify({ large_buttons: true })) : ''}`);
+    if (long) await pg.evaluate(() => window.__setNowPlaying({ artist: 'The Sleep Eazys, Joe Bonamassa and A Very Long List Of Guest Musicians',
+      title: 'Shine On You Crazy Diamond, Pts. 6-9 (2011 Remastered Version, Extended Live Edit)', radio: false, duration: 745, position: 30 }));
+    await sleep(500);
+    const m = await pg.evaluate(() => { const r = __card.shadowRoot.querySelector('jb-now').shadowRoot; const R = (s) => { const e = r.querySelector(s); if (!e) return null; const x = e.getBoundingClientRect(); return { t: x.top, b: x.bottom, h: x.height }; };
+      return { art: R('.art'), badges: R('.badges'), ti: R('.ti'), sub: R('.sub') }; });
+    const ok = m.art && m.badges && m.ti && m.sub && m.art.h > 40 && m.art.b <= m.badges.t + 0.5 && m.art.b <= m.ti.t + 0.5
+      && m.badges.b <= m.ti.t + 0.5 && m.ti.b <= m.sub.t + 0.5;
+    check(`${tag}: art bottom above badges and title; badges, title, artist don't overlap`, !!ok, JSON.stringify(m));
+    await pg.close();
+  }
+}
+// 0.7.9 #55: the HA card editor preview — the card alone at ~400–500 px wide inside a wide landscape page (its own container
+// size, not the screen's, decides the layout); large buttons on/off, long title
+{
+  const PV = [[400, 560], [460, 620], [500, 700], [460, 900], [520, 640]];
+  for (const lg of [false, true]) for (const [cw, chh] of PV) {
+    const tag = `F55p preview ${cw}x${chh} in 1280x800${lg ? ' large_buttons' : ''}`;
+    const pg = await newPage({ width: 1280, height: 800 });
+    await open(pg, `&tab=now${lg ? '&cfg=' + encodeURIComponent(JSON.stringify({ large_buttons: true })) : ''}`);
+    await pg.evaluate((cw, chh) => { const c = window.__card; c.style.cssText = `display:block;width:${cw}px;height:${chh}px;margin:20px auto;`;
+      window.__setNowPlaying({ artist: 'The Sleep Eazys, Joe Bonamassa and A Very Long List Of Guest Musicians', title: 'Shine On You Crazy Diamond, Pts. 6-9 (2011 Remastered Version, Extended Live Edit)', radio: false, duration: 745, position: 30 }); }, cw, chh);
+    await sleep(700);
+    const m = await pg.evaluate(() => { const r = __card.shadowRoot.querySelector('jb-now').shadowRoot; const R = (s) => { const e = r.querySelector(s); if (!e) return null; const x = e.getBoundingClientRect(); return { t: x.top, b: x.bottom, h: x.height, w: x.width }; };
+      return { card: R('.nw'), art: R('.art'), badges: R('.badges'), ti: R('.ti'), sub: R('.sub') }; });
+    const ok = m.art && m.ti && m.sub && m.badges && m.card.w <= 0 + 600 && m.art.h > 40 && m.art.b <= m.badges.t + 0.5 && m.art.b <= m.ti.t + 0.5 && m.badges.b <= m.ti.t + 0.5 && m.ti.b <= m.sub.t + 0.5;
+    check(`${tag}: art bottom above badges and title; badges, title, artist don't overlap`, !!ok, JSON.stringify(m));
+    if (process.env.PVSHOT && lg && cw === 460 && chh === 620) await pg.screenshot({ path: process.env.PVSHOT, clip: { x: 0, y: 0, width: 1280, height: 800 } });
+    await pg.close();
+  }
+}
+await browser.close();
 console.log(`\n${results.length - failures}/${results.length} checks passed`);
 process.exit(failures ? 1 : 0);

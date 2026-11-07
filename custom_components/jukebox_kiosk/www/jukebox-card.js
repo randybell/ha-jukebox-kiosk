@@ -1027,7 +1027,9 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     </div>`}}ha.properties={hass:{attribute:!1},config:{attribute:!1},queue:{attribute:!1},active:{type:Boolean},lyrics:{attribute:!1},spk:{attribute:!1},_overlay:{state:!0},_tick:{state:!0},_snap:{state:!0},_toast:{state:!0},_sleepOpen:{state:!0},_sleepExpires:{state:!0},_sleepMins:{state:!0}},ha.styles=[lt,ct,Zt,r`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     .nw { position: relative; height: 100%; display: grid; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain;
-      grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: 24px; padding: 14px calc(var(--_pad) + 12px) 20px; }
+      grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: 24px; padding: 14px calc(var(--_pad) + 12px) 20px;
+      /* 0.7.9 #55: rows as tall as their content, so the square art always pushes the title down (never under it) */
+      grid-auto-rows: max-content; }
     .nw::-webkit-scrollbar { display: none; }
     .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), 44cqh, 580px); aspect-ratio: 1; border-radius: 14px; overflow: hidden;
       box-shadow: 0 24px 60px #000000b3, 0 0 0 1px #ffffff14; }
@@ -1138,7 +1140,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
       :host([large]) .vol.acts .rooms .vr { grid-template-columns: 48px minmax(0, 1fr) 48px; }
       .rooms .ra { grid-area: a; }
     }
-    @container np (orientation: portrait) and (min-width: 521px) { .nw { align-content: center; } }
+    @container np (orientation: portrait) and (min-width: 521px) { .nw { align-content: safe center; } }
     /* landscape: art left, info right */
     @container np (orientation: landscape) and (min-width: 700px) {
       .nw { grid-template-columns: auto minmax(0, 1fr); align-items: center; justify-items: stretch; column-gap: clamp(24px, 3.5cqw, 48px); overflow: hidden; padding-top: 20px; padding-bottom: 20px; }
