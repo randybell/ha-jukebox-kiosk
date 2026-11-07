@@ -381,6 +381,35 @@ writeFileSync(OUT + 'results.json', JSON.stringify({ at: new Date().toString(), 
     await pg.close();
   }
 }
+// 0.7.9 #59: the Now Playing speaker list never runs under the tab bar; every row can be scrolled fully into view
+{
+  const R = ['media_player.living_room', 'media_player.kitchen', 'media_player.garage', 'media_player.indoor', 'media_player.outdoor'];
+  const SIZES59 = [['1024x600', { width: 1024, height: 600 }, ''], ['1024x712 (iPad, HA toolbar + sidebar)', { width: 1080, height: 768 }, '&ha=toolbar&sidebar=narrow']];
+  for (const [name, vp, q] of SIZES59) for (const n of [3, 4, 5]) for (const lg of [false, true]) {
+    const tag = `F59 ${name} ${n} speakers${lg ? ' large_buttons' : ''}`;
+    const pg = await newPage(vp);
+    await open(pg, `&tab=now&overlay=0${q}&cfg=${encodeURIComponent(JSON.stringify({ rooms: R.slice(0, n), ...(lg ? { large_buttons: true } : {}) }))}`);
+    await sleep(500);
+    const m = await pg.evaluate(async () => {
+      const c = __card.shadowRoot, r = c.querySelector('jb-now').shadowRoot, v = r.querySelector('.vol'), w = r.querySelector('.volw');
+      const tabsTop = c.querySelector('nav.tabs').getBoundingClientRect().top, card = __card.getBoundingClientRect();
+      const vb = () => v.getBoundingClientRect();
+      const rows = [...v.querySelectorAll('.vr')], out = [];
+      for (const row of rows) {
+        row.scrollIntoView({ block: 'nearest' }); await new Promise((res) => setTimeout(res, 80));
+        const b = row.getBoundingClientRect(), box = vb();
+        out.push({ name: row.querySelector('.vn')?.textContent.trim().slice(0, 14), full: b.top >= box.top - 0.5 && b.bottom <= box.bottom + 0.5 && b.bottom <= tabsTop + 0.5 && b.height > 20 });
+      }
+      v.scrollTop = 0; await new Promise((res) => setTimeout(res, 120));
+      const over = v.scrollHeight - v.clientHeight > 1;
+      return { card: [Math.round(card.width), Math.round(card.height)], tabsTop: Math.round(tabsTop), listBottom: Math.round(vb().bottom), over, hint: over ? getComputedStyle(r.querySelector('.vmore')).display !== 'none' : null, rows: out, n: rows.length };
+    });
+    check(`${tag}: the speaker list ends above the bottom bar`, m.listBottom <= m.tabsTop + 0.5, JSON.stringify(m));
+    check(`${tag}: every speaker row (${m.n}) can be scrolled fully into view above the bar`, m.n === n + 1 && m.rows.every((x) => x.full), JSON.stringify(m.rows));
+    check(`${tag}: when the list scrolls, a "More speakers" hint shows`, !m.over || m.hint === true, JSON.stringify({ over: m.over, hint: m.hint }));
+    await pg.close();
+  }
+}
 await browser.close();
 console.log(`\n${results.length - failures}/${results.length} checks passed`);
 process.exit(failures ? 1 : 0);
