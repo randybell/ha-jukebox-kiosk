@@ -55,7 +55,7 @@ export function lockedRow(current: number, currentIndex?: number, bufferIndex?: 
   return current + Math.max(0, bufferIndex - currentIndex);
 }
 /** MA refused or ignored a change because the track is already played or loading in the player's buffer */
-export class QueueBusy extends Error { constructor(m = 'That track is already loading') { super(m); } }
+export class QueueBusy extends Error { constructor(m = "That song is already loading, so it can't move right now.") { super(m); } }
 export const isBufferedError = (e: unknown) => /already (played|buffered|played\/buffered)|already loaded in (the )?buffer/i.test(String((e as any)?.message ?? e));
 /**
  * Shared queue state for Now Playing (Up next strip), the Queue tab and the tab badge. All MA access goes through the
@@ -160,6 +160,7 @@ export class QueueModel {
     send?: () => Promise<unknown>) {
     const hass = this.hass; if (!hass) return;
     const i = this.snap.items.findIndex((x) => x.queue_item_id === id);
+    const prev = { items: this.snap.items, current: this.snap.current };
     if (i >= 0) {
       const copy = this.snap.items.slice();
       const r = optimistic(copy, i);
@@ -172,7 +173,9 @@ export class QueueModel {
     }
     catch (err) {
       console.warn(`[jukebox-card] queue ${service} failed`, err);
-      if (isBufferedError(err)) { void this.refresh(); throw new QueueBusy(); }
+      // 0.7.9 #36c: MA refused (its buffer moved on): undo the optimistic move and re-read MA's numbers at once, so the
+      // arrows grey out from the new lock before the message shows
+      if (isBufferedError(err)) { this.set(prev); await this.refresh(); throw new QueueBusy(); }
       throw err;
     }
     finally { this.refreshSoon(600); }

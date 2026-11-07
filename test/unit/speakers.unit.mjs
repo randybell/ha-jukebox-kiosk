@@ -239,7 +239,7 @@ check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.is
   const qm = new Q.QueueModel(); qm.hass = hass; qm.entryId = 'mq_entry_placeholder';
   await qm.refresh();
   let busy = false; try { await qm.playNext('q4'); } catch (e) { busy = e instanceof Q.QueueBusy; }
-  check('U42 move_item 500 "already played/buffered" → QueueBusy (the view says \'That track is already loading\')', busy);
+  check('U42 move_item 500 "already played/buffered" → QueueBusy (the view says "That song is already loading, so it can\'t move right now.")', busy);
 }
 {
   // live 2.10.9 entity shapes: mass_player_id null everywhere, idle groups point active_queue at another group's queue

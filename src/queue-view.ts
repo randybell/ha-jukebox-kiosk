@@ -8,7 +8,7 @@ import type { KeyDetail } from './keyboard';
 import { canJumpQueue } from './speakers/model';
 import { QueueBusy, type QueueItem, type QueueModel, type QueueSnapshot, type RemovedRow } from './queue-model';
 /** MA refused or ignored a change on a played / buffered track (live 2.10.9: 500 "<n> is already played/buffered", delete ignored) */
-const BUSY = 'That track is already loading';
+const BUSY = "That song is already loading, so it can't move right now.";
 import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
 import type { AutoplayMode, AutoplayOptions } from './backend/types';
 

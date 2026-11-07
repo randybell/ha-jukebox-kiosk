@@ -6,6 +6,7 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## 0.7.9
 
+- Queue: if Music Assistant refuses a move because the song is already loading, the card puts the song back, reloads the queue at once so the arrows grey out, and says "That song is already loading, so it can't move right now."
 - Now Playing (portrait): the album art no longer slides over the title, the badge line or the artist on any portrait screen, with or without large buttons.
 - Library search: Recent searches are gone (no row, no saved history; any old history is cleared), so the on-screen keyboard no longer moves down when you start typing.
 - Library: the Genres and Sort buttons are gone from the top of the Library, leaving more room for results. Lists keep their usual order (A–Z; radio stations most played first). The other category buttons and the Favorites heart stay.
