@@ -4,19 +4,24 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
-## 0.7.9
+## 0.7.9 — 2026-11-07
 
-- Card setup is simpler (#58): a brand-new card needs only the player. It finds Music Assistant through the Jukebox Kiosk integration (non-admins too), and the heart works with nothing set (through the integration, or the player's own Music Assistant favourite button) and hides when favouriting isn't possible. mass_queue support, Quiet hours, the Lyrics tab and the editor's Autoplay switch are removed outright (lyrics stay on the album art, full screen and the screensaver; the Queue always shows the Autoplay switch when Music Assistant supports it). The bar is Now Playing, Library, Queue. The editor uses on-screen wording only ("Speakers panel", "Removing the main speaker from a group"); the entry id, favourite button, presets and backend are YAML only. A song that's already loading now says "That song is already loading, so it can't be removed right now." when you try to remove it. The narrow editor preview fits the "Playing on" pill and the "Now Playing" tab.
-- Music Assistant entry: when the Jukebox Kiosk integration is installed but doesn't report which Music Assistant entry to use (or can't be reached), the card now falls back to the same automatic lookup it uses without the integration (an admin's Home Assistant account can find it), so Search and the Library keep working.
-- Setup options removed (Q1): `config_entry_id`, `favorite_entity`, `presets` and `backend` no longer exist. The card always finds Music Assistant itself (through the Jukebox Kiosk integration, else an admin lookup), the heart always picks its own way (the integration, else the player's own Music Assistant favourite button, else it hides), and the backend is always automatic. Speaker presets now come only from Music Assistant's own group defaults. Old YAML lines for these options are simply ignored, so existing cards keep loading.
-- Now Playing (landscape, #59): with a big speaker group the volume list no longer runs under the bottom bar. It scrolls inside its own box, fades at the edge and shows a "More speakers" button when there are more rows, and every speaker can be scrolled fully into view (checked at 1024x600 and 1024x712 with 3, 4 and 5 speakers).
-- Queue: if Music Assistant refuses a move because the song is already loading, the card puts the song back, reloads the queue at once so the arrows grey out, and says "That song is already loading, so it can't move right now."
-- Now Playing (portrait): the album art no longer slides over the title, the badge line or the artist on any portrait screen, with or without large buttons.
-- Library search: Recent searches are gone (no row, no saved history; any old history is cleared), so the on-screen keyboard no longer moves down when you start typing.
-- Library: the Genres and Sort buttons are gone from the top of the Library, leaving more room for results. Lists keep their usual order (A–Z; radio stations most played first). The other category buttons and the Favorites heart stay.
-- Library: the "Recently played" row at the top is gone, so results get the whole screen (and nothing starts playing from a stray tap there).
-- Search: each result offers Add to queue, Play next, Play now and Start radio (in that order); no Remove. Stations just Play (with the replace-queue warning). Podcasts and episodes get no Start radio (Music Assistant can't start one from them).
-- Radio: playing a station when the queue has songs now asks first ("This will replace your queue": Replace or Cancel). With an empty queue it plays right away.
+- Radio: playing a station when the queue has songs now asks first ("This will replace your queue": Replace or Cancel). With an empty queue it plays right away. (#37)
+- Search: each result offers Add to queue, Play next, Play now and Start radio, in that order. No Remove. Stations just Play. Podcasts and episodes have no Start radio. (#35)
+- Library: the "Recently played" row at the top is gone, so results get the whole screen. (#33)
+- Library: the Genres and Sort buttons are gone from the top. Lists keep their usual order (A–Z; radio stations most played first). (#34)
+- Queue: the card only locks the song Music Assistant is already loading. If Music Assistant refuses a move, the song goes back, the arrows grey out, and the card says "That song is already loading, so it can't move right now." (#36, #36c)
+- Library search: Recent searches are gone, so the on-screen keyboard no longer jumps when you start typing. Any old history is cleared. (#57)
+- Now Playing (portrait): the album art no longer covers the title, badges or artist. (#55)
+- Setup is simpler: a new card needs only the player. Quiet hours, the Lyrics tab, the editor's Autoplay switch and mass_queue support are removed; lyrics stay on the album art, full screen and the screensaver. The bar is Now Playing, Library, Queue. The editor uses plain wording. Removing a song that's already loading says "That song is already loading, so it can't be removed right now." (#58)
+- Now Playing (landscape): with a big speaker group, the volume list scrolls inside its own box above the bottom bar, with a "More speakers" button, so every speaker can be reached. (#59)
+- Removed setup options: `config_entry_id`, `favorite_entity`, `presets` and `backend`. The card finds Music Assistant by itself, the heart picks its own way (or hides), and speaker presets come from Music Assistant's own group defaults. Old YAML lines for these are ignored, so existing cards keep loading.
+- If the Jukebox Kiosk integration doesn't say which Music Assistant to use, the card now looks it up the same way it does without the integration (needs an admin login), so Search and the Library keep working.
+- Tests: a radio test that failed now and then for a test-only reason is fixed. No change to the card.
+
+### Tested
+- Tested live on the owner's system with Apple Music and TuneIn, on Music Assistant 2.10.9. (#53)
+- Known issue unchanged: removing an Apple Music favorite still sends a Dislike in Music Assistant 2.10.9 (re-checked 2026-11-07 against the Music Assistant 2.10.9 source; 2.10.9 is still the newest stable release, and the card's un-favourite path is unchanged in 0.7.9; see #52).
 
 ## 0.7.8 — 2026-11-07
 
