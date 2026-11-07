@@ -44,9 +44,11 @@ const geom = (pg) => pg.evaluate(() => {
     srcs: [...sv.querySelectorAll('.srcs .src')].map(vis) } : null;
   const nw = sr.querySelector('jb-now')?.shadowRoot.querySelector('.nw');
   const pp = sr.querySelector('jb-now')?.shadowRoot.querySelector('.tb.pp');
+  const npR = sr.querySelector('jb-now')?.shadowRoot, slp = npR?.querySelector('.ab.slp'), artEl = npR?.querySelector('.art');
+  const moon = slp ? { ...r(slp), inArt: !!slp.closest('.art'), art: r(artEl), inRow: !!npR.querySelector('.tp .tb.sl') } : null;
   const tpb = [...(sr.querySelector('jb-now')?.shadowRoot.querySelectorAll('.tp .tb') ?? [])].map((e) => ({ k: e.className.split(' ')[1], ...r(e), iw: e.querySelector('.i')?.getBoundingClientRect().width ?? 0, gh: (() => { const sv = e.querySelector('svg'), pa = sv?.querySelector('path'); return pa ? pa.getBBox().height * sv.getBoundingClientRect().width / (sv.viewBox.baseVal?.width || 24) : 0; })() }));
   return { vw, vh, tbB, nav: r(sr.querySelector('.tabs')), top: r(sr.querySelector('.top')), tabs, could, docH: document.documentElement.scrollHeight,
-    kb: kb && kb.getBoundingClientRect().height ? r(kb) : null, nw: nw ? { sh: nw.scrollHeight, ch: nw.clientHeight } : null, pp: r(pp), tpb,
+    kb: kb && kb.getBoundingClientRect().height ? r(kb) : null, nw: nw ? { sh: nw.scrollHeight, ch: nw.clientHeight } : null, pp: r(pp), tpb, moon,
     lib, fit: __card.dataset.fitH, size: __card.dataset.fit ?? '' };
 });
 const within = (b, g, top = 0) => b && b.t >= top - 0.5 && b.b <= g.vh + 0.5 && b.l >= -0.5 && b.r <= g.vw + 0.5 && b.h > 0;
@@ -71,6 +73,9 @@ function verify(label, g, { fill = true, tab } = {}) {
     const minTap = Math.min(g.vw, g.vh) >= 520 ? 56 : 40;
     check(`${label}: #43 Next/Previous bigger than Shuffle/Repeat, smaller than Play/Pause (tap ≥ ${minTap}px), visible arrows 85–100% of the Play/Pause glyph`,
       ok && [k.pr, k.nx].every((x) => x.w > k.sh.w && x.w < k.pp.w && x.w >= minTap && x.gh <= k.pp.gh + 0.5 && x.gh >= 0.85 * k.pp.gh), JSON.stringify(g.tpb.map((x) => `${x.k}:${Math.round(x.w)}/g${x.gh.toFixed(1)}`)));
+    const m = g.moon, pp = k.pp;
+    check(`${label}: #42 sleep moon in the artwork top-right corner, ≥ 48px, not in the transport row, clear of Play/Pause`,
+      !!m && m.inArt && !m.inRow && m.w >= 47.5 && m.t - m.art.t < 30 && m.art.r - m.r < 30 && (m.r <= pp.l || m.l >= pp.r || m.b <= pp.t || m.t >= pp.b), JSON.stringify(m));
     check(`${label}: transport buttons don't overlap each other`, g.tpb.every((x, i) => i === 0 || x.l >= g.tpb[i - 1].r - 0.5), JSON.stringify(g.tpb.map((x) => [x.k, Math.round(x.l), Math.round(x.r)])));
   }
 }
