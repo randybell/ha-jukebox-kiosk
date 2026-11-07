@@ -36,11 +36,14 @@ await page.goto(`${BASE}?fresh=1&latency=20&kiosk=1&tab=now`);
 await page.waitForFunction('window.__ready === true');
 await sleep(500);
 
-check('SL1 moon button is in the transport row', !!(await ev(`${NP}.querySelector('.tb.sl')`)));
+check('SL1 moon button is in the artwork corner cluster (not the transport row)', !!(await ev(`${NP}.querySelector('.art .art-btns .ab.slp')`)) && !(await ev(`${NP}.querySelector('.tp .tb.sl, .tp [aria-label^="Sleep"]')`)));
+const mr = await ev(`(() => { const m = ${NP}.querySelector('.ab.slp').getBoundingClientRect(), a = ${NP}.querySelector('.art').getBoundingClientRect(), p = ${NP}.querySelector('.tb.pp').getBoundingClientRect();
+  return { w: m.width, h: m.height, inArt: m.left >= a.left && m.right <= a.right && m.top >= a.top && m.bottom <= a.bottom, topRight: m.top - a.top < 30 && a.right - m.right < 30, farFromPlay: !(m.right > p.left && m.left < p.right && m.bottom > p.top && m.top < p.bottom) }; })()`);
+check('SL1b moon is ≥ 48px, inside the artwork top-right corner, away from Play/Pause (1024x600)', mr.w >= 47.5 && mr.h >= 47.5 && mr.inArt && mr.topRight && mr.farFromPlay, J(mr));
 check('SL2 chooser starts closed', !(await ev(`${NP}.querySelector('.sleep-strip:not(.cd-only)')`)));
 check('SL3 no countdown chip yet', !(await ev(`${NP}.querySelector('.sp.sleep-cd')`)));
 
-await tap(`${NP}.querySelector('.tb.sl')`);
+await tap(`${NP}.querySelector('.ab.slp')`);
 await sleep(150);
 const opts = await ev(`${NP}.querySelectorAll('.sleep-strip .sp').length`);
 const labels = await ev(`[...${NP}.querySelectorAll('.sleep-strip .sp')].map((b) => b.textContent.trim())`);
@@ -54,9 +57,9 @@ check('SL5 set 30 → players/sleep_timer/set {player_id, seconds:1800}',
 check('SL6 chooser closes after pick', !(await ev(`${NP}.querySelector('.sleep-strip:not(.cd-only)')`)));
 const cd7 = await ev(`(${NP}.querySelector('.sp.sleep-cd') || { textContent: '' }).textContent.trim()`);
 check('SL7 countdown chip shows Sleep M:SS', /^Sleep \d+:\d{2}$/.test(cd7), cd7);
-check('SL8 moon button is on while timer runs', await ev(`!!${NP}.querySelector('.tb.sl.on')`));
+check('SL8 moon button is on while timer runs', await ev(`!!${NP}.querySelector('.ab.slp.on')`));
 
-await tap(`${NP}.querySelector('.tb.sl')`);
+await tap(`${NP}.querySelector('.ab.slp')`);
 await sleep(100);
 await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[0]`); // Off
 await sleep(400);
@@ -66,11 +69,11 @@ check('SL10 countdown gone after Off', !(await ev(`${NP}.querySelector('.sp.slee
 
 // Phone: no top-right status (covers art fullscreen/lyrics); large: keep "Sleep in N min"
 const chip = async () => ev(`__card.shadowRoot.querySelector('jb-speakers')?.shadowRoot?.querySelector('.st .ct')?.textContent?.trim() ?? ''`);
-await tap(`${NP}.querySelector('.tb.sl')`); await sleep(100);
+await tap(`${NP}.querySelector('.ab.slp')`); await sleep(100);
 await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[2]`); // 30
 await sleep(400);
 check('SL10b large (1024): status chip shows Sleep in 30 min', /Sleep in 30 min/.test(await chip()), await chip());
-await tap(`${NP}.querySelector('.tb.sl')`); await sleep(100);
+await tap(`${NP}.querySelector('.ab.slp')`); await sleep(100);
 await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[0]`); // Off
 await sleep(300);
 check('SL10c large: status chip shows Sleep timer off', /Sleep timer off/.test(await chip()), await chip());
@@ -79,14 +82,14 @@ await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
 await page.goto(`${BASE}?fresh=1&latency=20&kiosk=1&tab=now`);
 await page.waitForFunction('window.__ready === true');
 await sleep(500);
-await tap(`${NP}.querySelector('.tb.sl')`); await sleep(100);
+await tap(`${NP}.querySelector('.ab.slp')`); await sleep(100);
 await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[2]`); // 30
 await sleep(400);
 const phoneSet = await chip();
 const phoneCd = await ev(`(${NP}.querySelector('.sp.sleep-cd') || { textContent: '' }).textContent.trim()`);
 check('SL10d phone (390): no Sleep in status chip (art buttons stay clear)', !/Sleep in|Sleep timer/.test(phoneSet), phoneSet);
 check('SL10e phone: Sleep M:SS chip under controls still shows', /^Sleep \d+:\d{2}$/.test(phoneCd), phoneCd);
-await tap(`${NP}.querySelector('.tb.sl')`); await sleep(100);
+await tap(`${NP}.querySelector('.ab.slp')`); await sleep(100);
 await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[0]`); // Off
 await sleep(300);
 check('SL10f phone Off: still no Sleep timer status chip', !/Sleep timer|Sleep in/.test(await chip()), await chip());
@@ -96,7 +99,7 @@ await page.setViewport({ width: 1024, height: 600, deviceScaleFactor: 1 });
 await page.goto(`${BASE}?fresh=1&latency=20&tab=now&cfg=${encodeURIComponent(JSON.stringify({ backend: 'native' }))}`);
 await page.waitForFunction('window.__ready === true');
 await sleep(500);
-await tap(`${NP}.querySelector('.tb.sl')`);
+await tap(`${NP}.querySelector('.ab.slp')`);
 await sleep(100);
 await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[1]`); // 15 — card-side
 await sleep(300);

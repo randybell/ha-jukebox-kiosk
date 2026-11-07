@@ -1002,12 +1002,26 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
         ${o?N`<img src=${o} alt="" draggable="false" @error=${t=>t.target.style.display="none"} />`:N`<span class="ph">${ht("disc")}</span>`}
         ${q&&this._overlay?N`<jb-lyrics class="ovl" mode="overlay" .hass=${this.hass} .config=${this.config} .store=${this.lyrics}
           ?active=${this.active}></jb-lyrics>`:B}
-        ${s?B:N`<div class="art-btns">
-          ${q?N`<button class="ab lyr ${this._overlay?"on":""}" tabindex="-1" aria-label="Lyrics" aria-pressed=${this._overlay?"true":"false"}
+        <div class="art-btns">
+          ${s?B:N`${q?N`<button class="ab lyr ${this._overlay?"on":""}" tabindex="-1" aria-label="Lyrics" aria-pressed=${this._overlay?"true":"false"}
             @pointerdown=${yt} @click=${this.toggleOverlay}>${ht("lyrics")}</button>`:B}
           <button class="ab stg" tabindex="-1" aria-label="Full screen" @pointerdown=${yt}
-            @click=${()=>Et(this,"jukebox-stage",{open:!0})}>${ht("fullscreen")}</button>
-        </div>`}
+            @click=${()=>Et(this,"jukebox-stage",{open:!0})}>${ht("fullscreen")}</button>`}
+          <!-- #42: the sleep timer lives in the artwork corner (always shown, also when idle), away from Play/Pause -->
+          <button class="ab slp ${k||this._sleepOpen?"on":""}" tabindex="-1" aria-label=${k?`Sleep timer ${oa(w)}`:"Sleep timer"}
+            title=${k?`Sleep timer ${oa(w)}`:"Sleep timer"} aria-pressed=${k||this._sleepOpen?"true":"false"}
+            @pointerdown=${yt} @click=${()=>this.toggleSleepOpen()}>${ht("moon")}</button>
+        </div>
+        ${this._sleepOpen?N`<div class="sleep-strip" role="group" aria-label="Sleep timer">
+          <button class="sp ${0===this._sleepMins?"on":""}" tabindex="-1" aria-pressed=${0===this._sleepMins?"true":"false"}
+            @pointerdown=${yt} @click=${()=>this.setSleep(0)}>Off</button>
+          ${ra.map(t=>N`<button class="sp ${this._sleepMins===t?"on":""}" tabindex="-1"
+            aria-pressed=${this._sleepMins===t?"true":"false"}
+            @pointerdown=${yt} @click=${()=>this.setSleep(t)}>${t}</button>`)}
+        </div>`:k?N`<div class="sleep-strip cd-only" aria-live="polite">
+          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${na(w)}
+            @pointerdown=${yt} @click=${()=>this.toggleSleepOpen()}>${ht("moon","i xs")}${na(w)}</button>
+        </div>`:B}
       </div>
       <div class="info">
         <div class="badges">${n?N`<span class="pv big">${n}</span>`:B}
@@ -1026,19 +1040,8 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
           ${$("pp",l?"pause":"play",l?"Pause":"Play",()=>this.playPause())}
           ${$("nx","next","Next",()=>this.next())}
           ${$("rp","repeat","Repeat queue",()=>this.cycleRepeat(),"off"!==d,"off"!==d)}
-          ${$("sl","moon",k?`Sleep timer ${oa(w)}`:"Sleep timer",()=>this.toggleSleepOpen(),k||this._sleepOpen)}
           ${x?$("fv",v?"heart":"heartline",v?"Remove from favorites":"Add to favorites",()=>this.toggleFavorite(),v,!1,s):B}
         </div>
-        ${this._sleepOpen?N`<div class="sleep-strip" role="group" aria-label="Sleep timer">
-          <button class="sp ${0===this._sleepMins?"on":""}" tabindex="-1" aria-pressed=${0===this._sleepMins?"true":"false"}
-            @pointerdown=${yt} @click=${()=>this.setSleep(0)}>Off</button>
-          ${ra.map(t=>N`<button class="sp ${this._sleepMins===t?"on":""}" tabindex="-1"
-            aria-pressed=${this._sleepMins===t?"true":"false"}
-            @pointerdown=${yt} @click=${()=>this.setSleep(t)}>${t}</button>`)}
-        </div>`:k?N`<div class="sleep-strip cd-only" aria-live="polite">
-          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${na(w)}
-            @pointerdown=${yt} @click=${()=>this.toggleSleepOpen()}>${ht("moon","i xs")}${na(w)}</button>
-        </div>`:B}
         ${g?N`<button class="upn panel" tabindex="-1" @pointerdown=${yt} @click=${()=>Et(this,"jukebox-nav",{tab:"queue"})}>
             <span class="eyebrow">${_?"Up next · Autoplay":"Up next"}</span><b>${g.media_title}</b>${Mt(g.media_content_id)}
             <span class="more">${y?`+ ${y} more`:""}</span></button>`:_&&a?N`<button class="upn panel ap" tabindex="-1" @pointerdown=${yt} @click=${()=>Et(this,"jukebox-nav",{tab:"queue"})}>
@@ -1058,9 +1061,14 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
       box-shadow: 0 24px 60px #000000b3, 0 0 0 1px #ffffff14; }
     .art .ovl { position: absolute; inset: 0; z-index: 1; }
     .art-btns { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 8px; }
-    .ab { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: #000000a6; color: rgba(255, 255, 255, .72);
+    /* #42: ≥48px at 1x; on zoomed big screens (--_z > 1) the same 40px floor as before (54px at 1920x1080) */
+    .ab { width: max(40px, calc(48px / var(--_z, 1))); height: max(40px, calc(48px / var(--_z, 1))); border-radius: 50%; display: grid; place-items: center; background: #000000a6; color: rgba(255, 255, 255, .72);
       border: 1px solid #ffffff2e; box-shadow: 0 4px 14px #0007; transition: background 150ms, color 150ms; }
-    .ab .i { width: 22px; height: 22px; }
+    .ab .i { width: 24px; height: 24px; }
+    .art .sleep-strip { position: absolute; z-index: 2; top: calc(18px + max(40px, calc(48px / var(--_z, 1)))); right: 10px; left: 10px; margin: 0; justify-content: flex-end; }
+    :host([large]) .art .sleep-strip { top: 70px; }
+    .art .sleep-strip .sp { background: #000000b3; border-color: #ffffff3d; box-shadow: 0 4px 14px #0007; }
+    .art .sleep-strip .sp.on { background: var(--_active); }
     .ab.on { background: #fff; color: #000; border-color: #fff; }
     .ab:active { transform: scale(.94); }
     .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -1083,7 +1091,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .prog.nodur .ps { opacity: .5; }
     .tp { display: grid; grid-template-columns: repeat(6, 1fr); align-items: center; justify-items: center; margin: 2px 0; }
     .tp:has(.tb:nth-child(5):last-child) { grid-template-columns: repeat(5, 1fr); }
-    .tp:has(.tb.fv) { grid-template-columns: repeat(7, 1fr); }
+    .tp:has(.tb.fv) { grid-template-columns: repeat(7, 1fr); } .tp:has(.tb.fv) .tb.sh { grid-column: 2; } /* #42: empty first slot keeps Play/Pause centered with the heart */
     .tb { position: relative; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; color: var(--_active); }
     .tb .i { width: 30px; height: 30px; }
     .tb.sh, .tb.rp, .tb.sl { color: var(--_inactive); } .tb.sh .i, .tb.rp .i, .tb.sl .i { width: 24px; height: 24px; }
@@ -1095,7 +1103,6 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .sleep-strip .sp.on { background: var(--_active); color: var(--_on-accent, #111); border-color: transparent; }
     .sleep-strip .sp:active { transform: scale(.96); }
     .sleep-cd { letter-spacing: .04em; font-variant-numeric: tabular-nums; }
-    .sleep-strip.cd-only { margin-top: -4px; }
     .sleep-strip .sp.sleep-cd { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; }
     .sleep-strip .sp.sleep-cd .i { width: 14px; height: 14px; }
     .tb .dot { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: currentColor; }
