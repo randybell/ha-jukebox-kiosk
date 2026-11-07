@@ -44,8 +44,9 @@ const geom = (pg) => pg.evaluate(() => {
     srcs: [...sv.querySelectorAll('.srcs .src')].map(vis) } : null;
   const nw = sr.querySelector('jb-now')?.shadowRoot.querySelector('.nw');
   const pp = sr.querySelector('jb-now')?.shadowRoot.querySelector('.tb.pp');
+  const tpb = [...(sr.querySelector('jb-now')?.shadowRoot.querySelectorAll('.tp .tb') ?? [])].map((e) => ({ k: e.className.split(' ')[1], ...r(e), iw: e.querySelector('.i')?.getBoundingClientRect().width ?? 0, gh: (() => { const sv = e.querySelector('svg'), pa = sv?.querySelector('path'); return pa ? pa.getBBox().height * sv.getBoundingClientRect().width / (sv.viewBox.baseVal?.width || 24) : 0; })() }));
   return { vw, vh, tbB, nav: r(sr.querySelector('.tabs')), top: r(sr.querySelector('.top')), tabs, could, docH: document.documentElement.scrollHeight,
-    kb: kb && kb.getBoundingClientRect().height ? r(kb) : null, nw: nw ? { sh: nw.scrollHeight, ch: nw.clientHeight } : null, pp: r(pp),
+    kb: kb && kb.getBoundingClientRect().height ? r(kb) : null, nw: nw ? { sh: nw.scrollHeight, ch: nw.clientHeight } : null, pp: r(pp), tpb,
     lib, fit: __card.dataset.fitH, size: __card.dataset.fit ?? '' };
 });
 const within = (b, g, top = 0) => b && b.t >= top - 0.5 && b.b <= g.vh + 0.5 && b.l >= -0.5 && b.r <= g.vw + 0.5 && b.h > 0;
@@ -65,6 +66,13 @@ function verify(label, g, { fill = true, tab } = {}) {
     if (g.lib?.srcs.length) check(`${label}: ${g.lib.srcs.length} source buttons visible, clear of the keyboard`, g.lib.srcs.every(clear) && within(g.lib.srcs[0], g, g.top.b), JSON.stringify({ srcs: g.lib.srcs, kb: g.kb }));
   }
   if (tab === 'now') check(`${label}: Now Playing transport reachable (visible, or the middle scrolls)`, (g.pp && g.pp.t >= g.top.b && g.pp.b <= g.nav.t) || (g.nw && g.nw.sh > g.nw.ch), JSON.stringify({ pp: g.pp, nw: g.nw }));
+  if (tab === 'now' && g.tpb?.length) {
+    const k = Object.fromEntries(g.tpb.map((x) => [x.k, x])), ok = k.pr && k.nx && k.pp && k.sh;
+    const minTap = Math.min(g.vw, g.vh) >= 520 ? 56 : 40;
+    check(`${label}: #43 Next/Previous bigger than Shuffle/Repeat, smaller than Play/Pause (tap ≥ ${minTap}px), visible arrows 85–100% of the Play/Pause glyph`,
+      ok && [k.pr, k.nx].every((x) => x.w > k.sh.w && x.w < k.pp.w && x.w >= minTap && x.gh <= k.pp.gh + 0.5 && x.gh >= 0.85 * k.pp.gh), JSON.stringify(g.tpb.map((x) => `${x.k}:${Math.round(x.w)}/g${x.gh.toFixed(1)}`)));
+    check(`${label}: transport buttons don't overlap each other`, g.tpb.every((x, i) => i === 0 || x.l >= g.tpb[i - 1].r - 0.5), JSON.stringify(g.tpb.map((x) => [x.k, Math.round(x.l), Math.round(x.r)])));
+  }
 }
 async function newPage(vp, ua) {
   const pg = await browser.newPage();

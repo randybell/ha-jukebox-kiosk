@@ -513,7 +513,8 @@ export class JbNow extends LitElement {
     .sleep-strip .sp.sleep-cd .i { width: 14px; height: 14px; }
     .tb .dot { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: currentColor; }
     .tb.pp { width: 80px; height: 80px; background: var(--_active); color: var(--_on-accent); box-shadow: 0 10px 30px #0009; }
-    .tb.pp .i { width: 36px; height: 36px; }
+    .tb.pp .i { width: 44px; height: 44px; }
+    .tb.pr, .tb.nx { width: 72px; height: 72px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
     .tb:active { transform: scale(.94); }
     .tb:disabled { opacity: .3; }
     .upn { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; text-align: left; min-width: 0; width: 100%; }
@@ -554,6 +555,7 @@ export class JbNow extends LitElement {
     /* large_buttons */
     :host([large]) .tb { width: 68px; height: 68px; } :host([large]) .tb .i { width: 34px; height: 34px; }
     :host([large]) .tb.pp { width: 96px; height: 96px; } :host([large]) .tb.pp .i { width: 44px; height: 44px; }
+    :host([large]) .tb.pr, :host([large]) .tb.nx { width: 84px; height: 84px; } :host([large]) .tb.pr .i, :host([large]) .tb.nx .i { width: 48px; height: 48px; }
     :host([large]) .vr { min-height: 60px; } :host([large]) .vm { width: 48px; height: 48px; } :host([large]) .vm .i { width: 26px; height: 26px; }
     :host([large]) .vn { font-size: 17px; } :host([large]) .vs { --jb-slider-h: 10px; --jb-slider-knob: 30px; --jb-slider-hit: 52px; }
     :host([large]) .ra { width: 48px; height: 48px; } :host([large]) .spkb { height: 48px; font-size: 16px; padding: 0 16px; }
@@ -577,9 +579,11 @@ export class JbNow extends LitElement {
       .ti { font-size: clamp(28px, 3.4cqw, 40px); }
       .vs { --jb-slider-h: 6px; --jb-slider-knob: 20px; --jb-slider-hit: 36px; }
       .tb.pp { width: 74px; height: 74px; }
+      .tb.pr, .tb.nx { width: 64px; height: 64px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; }
     }
     @container np (orientation: landscape) and (max-height: 560px) {
-      .upn { display: none; } .vr { min-height: 38px; } .tb.pp { width: 62px; height: 62px; } .tb { width: 48px; height: 48px; }
+      .upn { display: none; } .vr { min-height: 38px; } .tb.pp { width: 70px; height: 70px; } .tb { width: 48px; height: 48px; }
+      .tb.pr, .tb.nx { width: 60px; height: 60px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; }
     }
     /* phone */
     @container np (max-width: 520px) {
@@ -591,8 +595,10 @@ export class JbNow extends LitElement {
       .sub { font-size: 16px; }
       .prog { grid-template-columns: 40px minmax(0, 1fr) 40px; }
       .tb { width: 48px; height: 48px; } .tb.pp { width: 70px; height: 70px; }
+      .tb.pr, .tb.nx { width: 58px; height: 58px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; }
       .tp:has(.tb.fv) .tb { width: 40px; height: 40px; } .tp:has(.tb.fv) .tb.pp { width: 60px; height: 60px; }
-      .tp:has(.tb.fv) .tb .i { width: 22px; height: 22px; } .tp:has(.tb.fv) .tb.pp .i { width: 28px; height: 28px; }
+      .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: 48px; height: 48px; } .tp:has(.tb.fv) .tb.pr .i, .tp:has(.tb.fv) .tb.nx .i { width: 34px; height: 34px; }
+      .tp:has(.tb.fv) .tb .i { width: 22px; height: 22px; } .tp:has(.tb.fv) .tb.pp .i { width: 32px; height: 32px; }
       .tp:has(.tb.fv) .tb.sh .i, .tp:has(.tb.fv) .tb.rp .i, .tp:has(.tb.fv) .tb.sl .i { width: 20px; height: 20px; }
       .sleep-strip .sp { height: 32px; padding: 0 12px; font-size: 12px; }
       .upn { display: none; }
