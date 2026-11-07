@@ -51,7 +51,7 @@ export class JbQueue extends LitElement {
   private _undoTimer?: number;
   private _toastTimer?: number;
   private _unsub?: () => void;
-  private press = new PressController<QueueItem>(this, (it) => this.play(it), (it, el) => this.openMenu(it, el));
+  private press = new PressController<QueueItem>(this, () => {}, (it, el) => this.openMenu(it, el));
 
   protected shouldUpdate(ch: PropertyValues) { return !(ch.size === 1 && ch.has('hass')); }
   protected willUpdate(ch: PropertyValues) {
@@ -357,7 +357,7 @@ export class JbQueue extends LitElement {
     .scroll::-webkit-scrollbar { display: none; }
     h3.eyebrow { font-size: 11px; color: var(--_inactive); margin: 12px 6px 6px; }
     h3.eyebrow:first-child { margin-top: 2px; }
-    .qr { display: grid; grid-template-columns: 28px 48px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 72px; padding: 6px 8px; border-radius: 12px; cursor: pointer; }
+    .qr { display: grid; grid-template-columns: 28px 48px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 72px; padding: 6px 8px; border-radius: 12px; }
     .qr + .qr { border-top: 1px solid var(--_divider); }
     .qr .th { width: 48px; height: 48px; }
     .n { font-size: 13px; color: var(--_inactive); text-align: center; font-variant-numeric: tabular-nums; }
