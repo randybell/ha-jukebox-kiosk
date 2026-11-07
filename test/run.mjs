@@ -88,7 +88,8 @@ const state = (page) => page.evaluate((sv) => {
     focusViolations: window.__focusViolations.length,
     focusLog: window.__focusLog.slice(),
     editableCount: (function count(root) { let n = root.querySelectorAll('input,textarea,select,[contenteditable]').length; root.querySelectorAll('*').forEach((e) => { if (e.shadowRoot) n += count(e.shadowRoot); }); return n; })(document),
-    recents: JSON.parse(localStorage.getItem('jukebox-card:recents:v1') || '[]'),
+    recents: localStorage.getItem('jukebox-card:recents:v1'),
+    recentsRow: !!__card.shadowRoot.querySelector('jb-search')?.shadowRoot.querySelector('.recents:not(:empty), .recents .chip'),
   };
 }, H.sv);
 const waitShown = (page, q, timeout = 4000) => page.waitForFunction((sv, q) => eval(sv).shadowRoot.querySelector('.res').dataset.shownQuery === q, { timeout }, H.sv, q);
@@ -255,7 +256,7 @@ const expect = [
 const same = (a, b) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
 check('4o Add to queue / Play Now / radio payloads; no Remove on an artist result', artistNoRemove && s.playCalls.length === 3 && s.playCalls.every((c, i) => same(c.data, expect[i]) && same(c.target, T)) && !(await page.evaluate((d) => !!eval(d), DET)),
   '\n      ' + s.playCalls.map((c) => `music_assistant.play_media ${JSON.stringify(c.data)} target=${JSON.stringify(c.target)}`).join('\n      '));
-check('4p recents saved to localStorage after playing', s.recents[0] === 'MOCK', JSON.stringify(s.recents));
+check('4p (0.7.9 #57) no Recent searches: nothing saved after playing, no row', s.recents === null && !s.recentsRow, JSON.stringify({ stored: s.recents, row: s.recentsRow }));
 writeFileSync(SHOTS + 'play-media-log.json', JSON.stringify(s.playCalls, null, 2));
 
 // ---------- 5. hardware keyboard ----------
