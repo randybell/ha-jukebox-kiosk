@@ -207,6 +207,8 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   const vs = (await calls(p)).slice(n0).filter((x) => x.service === 'volume_set');
   check('R6 fixed panel room slider → media_player.volume_set on that room (HA only)', vs.length >= 1 && vs.at(-1).target.entity_id === GAR && Math.abs(vs.at(-1).data.volume_level - 0.5) < 0.08, J(vs.at(-1)));
   check('R7 fixed panel makes no Music Assistant players/* calls', (await page_ma(p)).length === 0, J(await page_ma(p)));
+  const cb = await ev(p, `(() => { const b = ${SR}.querySelector('.sheet .x'), r = b.getBoundingClientRect(), cs = getComputedStyle(b); return { text: b.textContent.trim(), w: r.width, h: r.height, bg: cs.backgroundColor, fg: cs.color, svg: !!b.querySelector('svg') }; })()`);
+  check('R8a Speakers close control is a labeled "Close" button (no small X), ≥ 44×44, black on white', cb.text === 'Close' && !cb.svg && cb.w >= 44 && cb.h >= 44 && cb.bg === 'rgb(255, 255, 255)' && cb.fg === 'rgb(0, 0, 0)', J(cb));
   await tap(p, `${SR}.querySelector('.x')`); await sleep(300);
   check('R8 close button closes the panel', !(await ev(p, `${SPK}.open`)));
   await a.p.close(); await b.p.close();
@@ -1312,6 +1314,20 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
   await sleep(200);
   const line = await ev(p, `${SR}.querySelector('.stl')?.textContent.trim()`);
   check('Z1 group_members: [] on a configured-rooms target counts the rooms, not "0 speakers"', rooms > 0 && new RegExp(`· ${rooms} speakers?$`).test(line) && !/· 0 speakers/.test(line), J({ line, rooms }));
+  await p.close();
+}
+
+// 0.7.8 #50: the labeled Close button at tablet, phone and large-buttons sizes: visible, fits, closes the panel
+for (const [vp, lg] of [[{ width: 1024, height: 600 }, false], [{ width: 820, height: 1180, isMobile: true, hasTouch: true }, false], [{ width: 390, height: 844, isMobile: true, hasTouch: true }, false], [{ width: 390, height: 844, isMobile: true, hasTouch: true }, true]]) {
+  const tag = `${vp.width}x${vp.height}${lg ? ' large_buttons' : ''}`;
+  const p = await open(`&spk=dyn&admin=1${lg ? '&cfg=' + encodeURIComponent(J({ large_buttons: true })) : ''}`, vp);
+  await openPanel(p);
+  const g = await ev(p, `(() => { const R = ${SR}, b = R.querySelector('.sheet .x'), r = b.getBoundingClientRect(), s = R.querySelector('.sheet').getBoundingClientRect(), h = R.querySelector('.sh');
+    const hit = R.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return { text: b.textContent.trim(), w: r.width, h: r.height, inSheet: r.left >= s.left - 0.5 && r.right <= s.right + 0.5 && r.top >= s.top - 0.5, inView: r.right <= innerWidth && r.top >= 0, hdFits: h.scrollWidth <= h.clientWidth + 1, onTop: hit === b || b.contains(hit) }; })()`);
+  check(`CL1 ${tag}: Close button visible, labeled, ≥ ${lg ? 56 : 44}px tall, inside the panel header, nothing overflows`, g.text === 'Close' && g.h >= (lg ? 56 : 44) && g.w >= 44 && g.inSheet && g.inView && g.hdFits && g.onTop, J(g));
+  await tap(p, `${SR}.querySelector('.sheet .x')`); await sleep(350);
+  check(`CL2 ${tag}: Close closes the Speakers panel`, !(await ev(p, `${SPK}.open`)) && !(await ev(p, `!!${SR}.querySelector('section.sheet')`)));
   await p.close();
 }
 
