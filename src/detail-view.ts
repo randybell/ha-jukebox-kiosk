@@ -307,7 +307,7 @@ export class JbDetail extends LitElement {
   private rowAct(it: MaItem, type: string, a: RowAct | 'more', el: HTMLElement) {
     const ask = (k: RowAct) => {
       this.closeMenu();
-      if (k === 'next') { this.play(it, type, k); return; }
+      if (k === 'next' || k === 'add') { this.play(it, type, k); return; }
       if (k === 'remove') { void this.removeRow(it, type); return; }
       if ((type === 'radio' || isRadio(it)) && k === 'replace') { this.play(it, type, 'replace'); return; }
       this._confirm = { kind: k, item: it, run: () => this.play(it, type, 'replace', k === 'radio') };

@@ -6,6 +6,7 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## 0.7.9
 
+- Search: each result offers Add to queue, Play next, Play now and Start radio (in that order); no Remove. Stations just Play (with the replace-queue warning). Podcasts and episodes get no Start radio (Music Assistant can't start one from them).
 - Radio: playing a station when the queue has songs now asks first ("This will replace your queue": Replace or Cancel). With an empty queue it plays right away.
 
 ## 0.7.8 — 2026-11-07

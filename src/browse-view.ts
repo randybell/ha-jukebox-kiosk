@@ -755,7 +755,7 @@ export class JbBrowse extends LitElement {
     const act = (a: RowAct | 'more', el: HTMLElement) => {
       const ask = (k: RowAct) => {
         this._menu = null;
-        if (k === 'next') { void this.play(it, 'track', k); return; }
+        if (k === 'next' || k === 'add') { void this.play(it, 'track', k); return; }
         if (k === 'remove') { void this.removeRow(it, 'track'); return; }
         this._confirm = { kind: k, item: it, run: () => this.play(it, 'track', 'replace', k === 'radio') };
       };

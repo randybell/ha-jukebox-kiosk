@@ -180,12 +180,13 @@ const lay = await page.evaluate((r) => {
   };
 }, SVR);
 check('4a every result group renders as a list of rows (no tiles)', lay.tiles === 0 && lay.groups.length >= 3 && lay.groups.every(([, n]) => n > 0), JSON.stringify(lay.groups));
-check('4b track row: visible Play Next / Play Now / Remove labels in fixed order; Start radio stays labeled inline or in More; rows ≥ 56 px',
-  lay.icons.filter((i) => ['next', 'replace', 'remove'].includes(i.act)).map((i) => i.act).join() === 'next,replace,remove' && lay.icons.filter((i) => ['next', 'replace', 'remove'].includes(i.act)).map((i) => i.title).join() === 'Play Next,Play Now,Remove' && lay.icons.every((i) => i.h >= 44 && i.label && i.title) && lay.minRow >= 56,
+// 0.7.9 #35: search results: Add to queue, Play Next, Play Now (+ Start radio), no Remove
+check('4b track row: visible Add to queue / Play Next / Play Now labels in fixed order, no Remove; Start radio stays labeled inline or in More; rows ≥ 56 px',
+  lay.icons.filter((i) => ['add', 'next', 'replace', 'remove'].includes(i.act)).map((i) => i.act).join() === 'add,next,replace' && lay.icons.filter((i) => ['add', 'next', 'replace'].includes(i.act)).map((i) => i.title).join() === 'Add to queue,Play Next,Play Now' && lay.icons.every((i) => i.h >= 44 && i.label && i.title) && lay.minRow >= 56,
   `minRow=${lay.minRow} ` + lay.icons.map((i) => `${i.act}:${i.w}x${i.h} "${i.label}"`).join(' | '));
 check('4b2 visible queue action wording is identical, not icon-only', await page.evaluate((r) => {
   const labels = [...eval(r).querySelectorAll('.grp.tracks .row')].map((row) => [...row.querySelectorAll('.ra-b[data-act]')].filter((b) => b.getBoundingClientRect().width).map((b) => b.querySelector('span')?.textContent));
-  return labels.length > 0 && labels.every((x) => x.slice(0, 3).join() === 'Play Next,Play Now,Remove');
+  return labels.length > 0 && labels.every((x) => x.slice(0, 3).join() === 'Add to queue,Play Next,Play Now');
 }, SVR));
 // row tap on a track: highlight only, no play, no sheet
 await see(firstRow);
@@ -198,10 +199,9 @@ check('4c tapping a track row only highlights it (no play_media, no sheet)', sel
 r = await rectOf(page, `${firstRow}.querySelector('.rt')`);
 await page.mouse.move(r.x, r.y); await page.mouse.down(); await sleep(650); await page.mouse.up(); await sleep(80);
 check('4d long-press on a row does not play', (await state(page)).playCalls.length === 0);
-await clickEl0(rowIcon(firstRow, 'remove'));
-await clickEl0(rowIcon(firstRow, 'next'));
+await clickEl0(rowIcon(firstRow, 'add'));
 s = await state(page);
-check('4e Remove deletes the matching queue row; Play Next enqueues next', s.playCalls.length === 1 && s.playCalls[0].data.enqueue === 'next' && await page.evaluate((uri) => __calls.some((c) => c.service === 'send_command' && c.data.command === 'player_queues/delete_item' || c.service === 'remove_queue_item' && c.data.queue_item_id && !__queue.items.some((q) => q._t.uri === uri && q.queue_item_id === c.data.queue_item_id)), trackUri), JSON.stringify(await page.evaluate(() => __calls.slice(-4))));
+check('4e Add to queue adds at the end (enqueue add) right away; there is no Remove in search results', s.playCalls.length === 1 && s.playCalls[0].data.enqueue === 'add' && !(await page.evaluate((e) => !!eval(e).querySelector('.ra-b[data-act="remove"]'), firstRow)), JSON.stringify(s.playCalls.map((c) => c.data)));
 await clickEl0(rowIcon(firstRow, 'replace'));
 let cf = await confirmOf();
 s = await state(page);
@@ -246,17 +246,17 @@ check('4m2 Search artist detail: visible Play Next / Play Now / Remove labels', 
 }, DET));
 await clickEl0(`${DET}.shadowRoot.querySelector('[data-action="back"]')`);
 check('4n Back returns to the results', !(await page.evaluate((d) => !!eval(d), DET)) && (await state(page)).rows > 0);
-// an artist row's own icons queue the artist without opening it
-await clickEl0(rowIcon(artistRow, 'remove'));
+// 0.7.9 #35: an artist search result has no Remove (Add to queue / Play Next / Play Now / Start radio)
+const artistNoRemove = !(await page.evaluate((e) => !!eval(e)?.querySelector('.ra-b[data-act="remove"]'), artistRow));
 s = await state(page);
 const T = { entity_id: 'media_player.everywhere' };
 const expect = [
-  { media_id: trackUri, media_type: 'track', enqueue: 'next' },
+  { media_id: trackUri, media_type: 'track', enqueue: 'add' },
   { media_id: trackUri, media_type: 'track', enqueue: 'replace' },
   { media_id: trackUri, media_type: 'track', enqueue: 'replace', radio_mode: true },
 ];
 const same = (a, b) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
-check('4o Play Next / Play Now / radio payloads; Remove never adds a collection', s.playCalls.length === 3 && s.playCalls.every((c, i) => same(c.data, expect[i]) && same(c.target, T)) && !(await page.evaluate((d) => !!eval(d), DET)),
+check('4o Add to queue / Play Now / radio payloads; no Remove on an artist result', artistNoRemove && s.playCalls.length === 3 && s.playCalls.every((c, i) => same(c.data, expect[i]) && same(c.target, T)) && !(await page.evaluate((d) => !!eval(d), DET)),
   '\n      ' + s.playCalls.map((c) => `music_assistant.play_media ${JSON.stringify(c.data)} target=${JSON.stringify(c.target)}`).join('\n      '));
 check('4p recents saved to localStorage after playing', s.recents[0] === 'MOCK', JSON.stringify(s.recents));
 writeFileSync(SHOTS + 'play-media-log.json', JSON.stringify(s.playCalls, null, 2));
@@ -796,8 +796,9 @@ await page.keyboard.press('Escape');
   const ST = `__card.shadowRoot.querySelector('jb-station').shadowRoot`;
   const stSheet = await pg.evaluate((s, b) => { const r = eval(s); return { name: r.querySelector('.nm')?.textContent, acts: [...r.querySelectorAll('[data-action]')].map((e) => e.dataset.action), menu: !!eval(b).shadowRoot.querySelector('.menu') }; }, ST, BR);
   check('16zc tap a station → station sheet (name, Play, Close; no heart without the library class), nothing played', pr.length === 0 && stSheet.name === 'Arrow Classic Rock' && stSheet.acts.join() === 'close,play' && !stSheet.menu, `${JSON.stringify(stSheet)} calls=${pr.length}`);
-  pr = await pq(() => clickEl(pg, `${ST}.querySelector('[data-action="play"]')`));
-  check('16u station Play now → play_media {library://radio/<id>, media_type radio, enqueue replace} on everywhere, no radio_mode', pr.length === 1 && pr[0].s === 'play_media' && tgt(pr[0]) === EV && /^library:\/\/radio\/\w+$/.test(pr[0].data.media_id) && pr[0].data.media_type === 'radio' && pr[0].data.enqueue === 'replace' && !('radio_mode' in pr[0].data), JSON.stringify(pr));
+  // 0.7.9 #37: the queue has songs → the station confirm first; Replace plays it
+  pr = await pq(async () => { await clickEl(pg, `${ST}.querySelector('[data-action="play"]')`); await sleep(250); await clickEl(pg, `__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('[data-action="confirm"]')`); });
+  check('16u station Play (0.7.9: confirm → Replace) → play_media {library://radio/<id>, media_type radio, enqueue replace} on everywhere, no radio_mode', pr.length === 1 && pr[0].s === 'play_media' && tgt(pr[0]) === EV && /^library:\/\/radio\/\w+$/.test(pr[0].data.media_id) && pr[0].data.media_type === 'radio' && pr[0].data.enqueue === 'replace' && !('radio_mode' in pr[0].data), JSON.stringify(pr));
   await pg.evaluate(() => { __card.shadowRoot.querySelector('[data-tab="now"]').click(); }); await sleep(500);
   a = await artState();
   check('16v Now Playing shows the station (title trimmed) with its art', /Arrow Classic Rock/.test(await pg.evaluate(() => __card.shadowRoot.querySelector('jb-now').shadowRoot.textContent)) && !!a.now, a.now.slice(0, 40));
@@ -1016,11 +1017,15 @@ await page.keyboard.press('Escape');
   const stName = await pg.evaluate(() => __card.shadowRoot.querySelector('jb-station').shadowRoot.querySelector('.nm')?.textContent.trim() ?? '');
   check('17y Search: tap a station row → nothing played, no menu; the station sheet opens (name trimmed of tabs)', plays(cs).length === 0 && menu.length === 0 && stName === 'WXRT Chicago 93.1 FM', JSON.stringify({ menu, stName }));
   await tapEl(`__card.shadowRoot.querySelector('jb-station').shadowRoot.querySelector('[data-action="close"]')`);
-  check('17y2 radio rows: only Play Now (replace); playlists/podcasts keep next+replace+remove; artists/albums/tracks keep +radio',
-    radioIcons.radio.every((x) => x === 'replace') && radioIcons.playlists.every((x) => x === 'next+replace+remove') && radioIcons.podcasts.every((x) => x === 'next+replace+remove')
-    && ['artists', 'albums', 'tracks'].every((g) => radioIcons[g].length && radioIcons[g].every((x) => x === 'next+replace+remove+radio')), JSON.stringify(radioIcons));
+  check('17y2 (0.7.9 #35) radio rows: only Play (replace); podcasts add+next+replace; playlists/artists/albums/tracks add+next+replace+radio; no Remove',
+    radioIcons.radio.every((x) => x === 'replace') && radioIcons.podcasts.every((x) => x === 'add+next+replace')
+    && ['playlists', 'artists', 'albums', 'tracks'].every((g) => radioIcons[g].length && radioIcons[g].every((x) => x === 'add+next+replace+radio')), JSON.stringify(radioIcons));
+  // 0.7.9 #37: the queue has songs, so the station asks first ("This will replace your queue"); Replace plays it
   cs = await act(() => tapEl(icon(stRow, 'replace')));
-  check('17z station Play Now → play_media radio enqueue replace immediately (no confirm, no radio_mode)', plays(cs).length === 1 && plays(cs)[0].data.media_type === 'radio' && plays(cs)[0].data.enqueue === 'replace' && !('radio_mode' in plays(cs)[0].data)
+  const stAsk = plays(cs).length === 0 && await pg.evaluate(() => !!__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('.confirm[data-kind=station]'));
+  check('17z0 station Play asks first when the queue has songs, nothing played yet', stAsk);
+  cs = await act(() => tapEl(`__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('[data-action="confirm"]')`));
+  check('17z station Play → Replace → play_media radio enqueue replace (no radio_mode)', plays(cs).length === 1 && plays(cs)[0].data.media_type === 'radio' && plays(cs)[0].data.enqueue === 'replace' && !('radio_mode' in plays(cs)[0].data)
     && !(await pg.evaluate((sv) => !!eval(sv).shadowRoot.querySelector('.confirm'), SV)), JSON.stringify(plays(cs)[0]?.data));
   // Remove is hidden on radio rows
   const hasRemove = await pg.evaluate((r) => !!eval(r)?.querySelector('[data-act="remove"]'), stRow);
@@ -1087,7 +1092,7 @@ await page.keyboard.press('Escape');
   cs = await act(() => tapEl(`${SVR}.querySelector('.menu .mi[data-action="radio"]')`, true));
   const nKind = await confirmKind(SVR);
   const cs5 = await act(() => tapEl(`${SVR}.querySelector('.confirm [data-action="confirm"]')`, true));
-  check('17zg 320 px: labeled Play Next / Play Now / Remove stay visible; ⋯ → Start radio… → confirmation → radio_mode + replace', narrow.split(',').map((x) => x.split(':')[0]).join() === 'next,replace,remove,more' && nMenu === 'radio,cancel' && plays(cs).length === 0 && nKind === 'radio'
+  check('17zg 320 px (0.7.9 #35): labeled Add to queue / Play Next / Play Now stay visible; ⋯ → Start radio… → confirmation → radio_mode + replace', narrow.split(',').map((x) => x.split(':')[0]).join() === 'add,next,replace,more' && nMenu === 'radio,cancel' && plays(cs).length === 0 && nKind === 'radio'
     && plays(cs5).length === 1 && plays(cs5)[0].data.radio_mode === true && plays(cs5)[0].data.enqueue === 'replace', `${narrow} menu=${nMenu} kind=${nKind} ${JSON.stringify(plays(cs5)[0]?.data)}`);
   // every play_media this run used a valid HA media_type (the mock rejects anything else)
   const bad = (await all()).filter((c) => c.s === 'play_media' && !['artist', 'album', 'audiobook', 'folder', 'playlist', 'podcast', 'track', 'radio', undefined].includes(c.data.media_type));

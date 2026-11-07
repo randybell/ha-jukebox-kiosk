@@ -9,7 +9,8 @@ const check = (name, ok, info) => { total++; if (!ok) failures++; console.log(`$
 async function labelGeometry(page, tag, queue = false) {
   return page.evaluate(({ tag, queue }) => {
     const root = __card.shadowRoot.querySelector(tag).shadowRoot, rows = [...root.querySelectorAll(queue ? '.qr' : '.grp .row')];
-    const acts = queue ? ['playnext', 'playnow', 'remove'] : ['next', 'replace', 'remove'];
+    // 0.7.9 #35: search results: Add to queue, Play Next, Play Now (no Remove)
+    const acts = queue ? ['playnext', 'playnow', 'remove'] : tag === 'jb-search' ? ['add', 'next', 'replace'] : ['next', 'replace', 'remove'];
     const details = rows.map(row => {
       const rr = row.getBoundingClientRect();
       return [...row.querySelectorAll('.ra-b')].filter(b => acts.includes(queue ? b.dataset.action : b.dataset.act)).map(b => {
