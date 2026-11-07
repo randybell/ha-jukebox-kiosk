@@ -397,8 +397,10 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('S6b station sheet heart: the status chip shows above the open sheet (top right)', onTop === 'jb-speakers', onTop);
   // Play replaces the queue, like the old tap's Play Now
   await tap(p, `${ST}.querySelector('[data-action=play]')`); await sleep(300);
+  const asked7 = (await plays(p)).length === 0 && await ev(p, `!!__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('.confirm[data-kind=station]')`);
+  await ev(p, `__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('[data-action=confirm]')?.click()`); await sleep(300); // 0.7.9 #37: the queue has songs → Replace
   const pl = await plays(p);
-  check('S7 Play → one play_media {station uri, media_type radio, enqueue replace}; the sheet closes', pl.length === 1 && pl[0].media_id === tileUri && pl[0].media_type === 'radio'
+  check('S7 Play → (0.7.9: asks first, Replace) one play_media {station uri, media_type radio, enqueue replace}; the sheet closes', asked7 && pl.length === 1 && pl[0].media_id === tileUri && pl[0].media_type === 'radio'
     && pl[0].enqueue === 'replace' && !('radio_mode' in pl[0]) && !(await sheet(p)), J(pl));
   await p.close();
 
@@ -431,10 +433,12 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   await ev(p, `__card.shadowRoot.querySelector('jb-station').dispatchEvent(new CustomEvent('jukebox-station-close', { bubbles: true, composed: true }))`); await sleep(150);
   // Radio rows: Play Next and Remove are hidden; Play Now replaces immediately (no confirm, no next/add)
   const acts = await ev(p, `[...${row}.querySelectorAll('.ra-b:not(.fav)')].map((b) => b.dataset.act)`);
-  check('S12a radio row actions: only Play Now (replace), no Play Next / Remove', J(acts) === J(['replace']), J(acts));
+  check('S12a radio row actions: only Play (replace), no Play Next / Remove', J(acts) === J(['replace']), J(acts));
   await tap(p, `${row}.querySelector('[data-act=replace]')`); await sleep(300);
+  const asked12 = (await plays(p)).length === 0;
+  await ev(p, `__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('[data-action=confirm]')?.click()`); await sleep(300); // 0.7.9 #37: the queue has songs → Replace
   const pa = await plays(p);
-  check('S12b radio Play Now → enqueue replace, no sheet, no confirm', pa.length === 1 && pa[0].enqueue === 'replace' && pa[0].media_id === st
+  check('S12b radio Play → (0.7.9: station confirm, Replace) enqueue replace, no sheet, no other confirm', asked12 && pa.length === 1 && pa[0].enqueue === 'replace' && pa[0].media_id === st
     && pa[0].media_type === 'radio' && !(await sheet(p)) && !(await ev(p, `!!${SV}.shadowRoot.querySelector('.confirm')`)), J(pa));
   await p.close();
 }

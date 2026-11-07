@@ -56,7 +56,7 @@ const clearPlays = (p) => ev(p, `window.__calls = window.__calls.filter((c) => !
   check('RR2 search Play Now → asks (queue has songs), Replace → enqueue replace, media_type radio', asked && pl.length === 1 && pl[0].enqueue === 'replace' && pl[0].media_type === 'radio' && pl[0].media_id === st && !('radio_mode' in pl[0]), J(pl));
   // song row still has next
   const songActs = await ev(p, `(() => { const r = [...${SV}.shadowRoot.querySelectorAll('.row')].find((x) => x.dataset.group === 'tracks'); return r ? [...r.querySelectorAll('.ra-b:not(.ra-more)')].map((b) => b.dataset.act) : null; })()`);
-  check('RR3 search song row still next+replace+remove(+radio)', songActs && songActs[0] === 'next' && songActs.includes('replace') && songActs.includes('remove'), J(songActs));
+  check('RR3 (0.7.9 #35) search song row: add+next+replace(+radio), no remove', songActs && J(songActs.slice(0, 3)) === J(['add', 'next', 'replace']) && !songActs.includes('remove'), J(songActs));
   await p.close();
 }
 
@@ -105,7 +105,7 @@ const clearPlays = (p) => ev(p, `window.__calls = window.__calls.filter((c) => !
   await wait(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].some((r) => r.dataset.group === 'playlists')`);
   await sleep(150);
   const prow = await ev(p, `(() => { const r = [...${SV}.shadowRoot.querySelectorAll('.row')].find((x) => x.dataset.group === 'playlists'); return r ? { uri: r.dataset.uri, acts: [...r.querySelectorAll('.ra-b:not(.ra-more)')].map((b) => b.dataset.act) } : null; })()`);
-  check('RR7 playlist row still next+replace+remove', prow && J(prow.acts) === J(['next', 'replace', 'remove']), J(prow));
+  check('RR7 (0.7.9 #35) search playlist row: add+next+replace+radio, no remove', prow && J(prow.acts) === J(['add', 'next', 'replace', 'radio']), J(prow));
   await clearPlays(p);
   const rowSel = `${SV}.shadowRoot.querySelector('.row[data-uri="${prow.uri}"]')`;
   await ev(p, `${rowSel}.scrollIntoView({block:'center'})`); await sleep(80);

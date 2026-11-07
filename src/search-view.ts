@@ -64,6 +64,12 @@ export function normaliseResponse(r: any): SearchResults {
   return out;
 }
 
+/** 0.7.9 #35: search results: Add to queue, Play next, Play now (+ Start radio); no Remove. Stations: Play only. */
+const SEARCH_ACTS = ['add', 'next', 'replace'] as const;
+/** Start radio (MA 2.10: a seed for its radio / endless mix): tracks, artists, albums and playlists. Not podcasts,
+ *  episodes or audiobooks (MA seeds radio from songs only), not stations. */
+const searchRadio = (type: string, it: MaItem) => canRadio(type, it) || (type === 'playlist' && !isRadio(it));
+
 export class JbSearch extends LitElement {
   static properties = {
     hass: { attribute: false },
@@ -574,18 +580,18 @@ export class JbSearch extends LitElement {
     if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.hearts.isFav(it) } }); return; }
     this._sel = this._sel === it.uri ? '' : it.uri;
   }
-  /** Play Next and Remove act at once; Play Now and Start radio ask first. Radio Play Now replaces immediately. */
+  /** 0.7.9 #35: Add to queue and Play Next act at once; Play Now and Start radio ask first. Radio Play Now replaces immediately. */
   private rowAct(it: MaItem, g: GroupKey, a: RowAct | 'more', el: HTMLElement) {
     const type = this.mediaType(it, g);
     const ask = (k: RowAct) => {
       this.closeMenu();
-      if (k === 'next') { this.play(it, g, k); return; }
+      if (k === 'next' || k === 'add') { this.play(it, g, k); return; }
       if (k === 'remove') { void this.removeRow(it, g); return; }
       // radio stations: Play Now replaces the queue right away (no confirm, no next/add)
       if ((type === 'radio' || isRadio(it)) && k === 'replace') { this.play(it, g, 'replace'); return; }
       this._confirm = { kind: k, item: it, run: () => this.play(it, g, 'replace', k === 'radio') };
     };
-    if (a === 'more') this.showMenu(it, g, el.closest('.row') as HTMLElement, foldedActions(canRadio(type, it), ask));
+    if (a === 'more') this.showMenu(it, g, el.closest('.row') as HTMLElement, foldedActions(searchRadio(type, it), ask));
     else ask(a);
   }
   private showMenu(it: MaItem, g: GroupKey, anchor: HTMLElement | null, actions: MenuAction[]) {
@@ -684,7 +690,7 @@ export class JbSearch extends LitElement {
         <small>${provTpl(it.uri, it.provider, it.media_type)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, g)}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
       ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, g)) : nothing}
-      ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, g, a, el))}
+      ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : rowActsTpl(it, searchRadio(type, it), (a, el) => this.rowAct(it, g, a, el), SEARCH_ACTS)}
     </div>`;
   }
 
@@ -960,9 +966,9 @@ export class JbSearch extends LitElement {
     .ra.go { width: 48px; height: 48px; display: grid; place-items: center; color: var(--_inactive); }
     /* Labeled search actions need their own height and enough width for an unbroken touch label. */
     .row { min-height: 68px; }
-    .row .ra-b:is([data-act="next"], [data-act="replace"], [data-act="remove"]) { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    .row .ra-b:is([data-act="add"], [data-act="next"], [data-act="replace"], [data-act="remove"]) { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
       width: auto; min-width: 72px; height: auto; min-height: 56px; padding: 6px; font-size: 13px; line-height: 1.2; }
-    .row .ra-b:is([data-act="next"], [data-act="replace"], [data-act="remove"]) span { white-space: nowrap; }
+    .row .ra-b:is([data-act="add"], [data-act="next"], [data-act="replace"], [data-act="remove"]) span { white-space: nowrap; }
 
     .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: 14px;
       padding: 12px 14px 24px; border-radius: var(--_radius); background: var(--_surface); border: 1px solid var(--_surface-border);

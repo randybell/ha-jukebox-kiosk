@@ -279,13 +279,14 @@ export function tapActions(play: (enq: Enqueue | 'remove') => void, radioStation
   ];
 }
 /* ---------------- row actions: Play Next / Play Now / Remove / Start radio ---------------- */
-export type RowAct = 'remove' | 'next' | 'replace' | 'radio';
+export type RowAct = 'add' | 'remove' | 'next' | 'replace' | 'radio';
 /** Can MA radio mode be seeded from this item? */
 export const canRadio = (type: string, it: Partial<MaItem>) =>
   ['track', 'artist', 'album'].includes(type) && !isRadio(it) && !/^(podcast|audiobook)/.test(String(it.media_type ?? ''));
 export const QUEUE_ACTIONS = ['next', 'replace', 'remove'] as const;
 export const QUEUE_ACTION_LABELS: Record<(typeof QUEUE_ACTIONS)[number], string> = { next: 'Play Next', replace: 'Play Now', remove: 'Remove' };
 const RA: Record<RowAct, { icon: string; title: string; label: (n: string) => string }> = {
+  add: { icon: 'qadd', title: 'Add to queue', label: (n) => `Add ${n} to the end of the queue` },
   remove: { icon: 'trash', title: QUEUE_ACTION_LABELS.remove, label: (n) => `Remove ${n} from the queue` },
   next: { icon: 'qnext', title: QUEUE_ACTION_LABELS.next, label: (n) => `Play ${n} next` },
   replace: { icon: 'play', title: QUEUE_ACTION_LABELS.replace, label: (n) => `Play ${n} now` },
@@ -293,11 +294,13 @@ const RA: Record<RowAct, { icon: string; title: string; label: (n: string) => st
 };
 /** Every queueing surface uses the same three visible labels, in this order.
  *  Radio stations: only Play Now (replace). No Play Next, add-to-queue, Remove, or Start radio. */
-export function rowActsTpl(it: MaItem, seedRadio: boolean, run: (a: RowAct | 'more', el: HTMLElement) => void) {
+export function rowActsTpl(it: MaItem, seedRadio: boolean, run: (a: RowAct | 'more', el: HTMLElement) => void, queueActs: readonly RowAct[] = QUEUE_ACTIONS) {
   const station = isRadio(it);
-  const acts: RowAct[] = station ? ['replace'] : [...QUEUE_ACTIONS, ...(seedRadio ? ['radio' as const] : [])];
-  const b = (a: RowAct) => html`<button class="ra-b ${a === 'radio' ? 'x2' : ''}" data-act=${a} tabindex="-1" title=${RA[a].title}
-    aria-label=${RA[a].label(it.name)} @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(a, e.currentTarget as HTMLElement); }}>${icon(RA[a].icon)}<span>${RA[a].title}</span></button>`;
+  const acts: RowAct[] = station ? ['replace'] : [...queueActs, ...(seedRadio ? ['radio' as const] : [])];
+  // 0.7.9 #35: a live station's only action reads "Play" (it replaces the queue, behind the #37 confirm)
+  const title = (a: RowAct) => (station ? 'Play' : RA[a].title), aria = (a: RowAct) => (station ? `Play ${it.name}` : RA[a].label(it.name));
+  const b = (a: RowAct) => html`<button class="ra-b ${a === 'radio' ? 'x2' : ''}" data-act=${a} tabindex="-1" title=${title(a)}
+    aria-label=${aria(a)} @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(a, e.currentTarget as HTMLElement); }}>${icon(RA[a].icon)}<span>${title(a)}</span></button>`;
   return html`<div class="ra" data-n=${acts.length}>${acts.map(b)}${!station && seedRadio ? html`<button class="ra-b ra-more" data-act="more" tabindex="-1" title="More"
     aria-label="More actions for ${it.name}" @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run('more', e.currentTarget as HTMLElement); }}>${icon('more')}<span>More</span></button>` : nothing}</div>`;
 }
