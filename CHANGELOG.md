@@ -6,6 +6,7 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## 0.7.9
 
+- Library: the Genres and Sort buttons are gone from the top of the Library, leaving more room for results. Lists keep their usual order (A–Z; radio stations most played first). The other category buttons and the Favorites heart stay.
 - Library: the "Recently played" row at the top is gone, so results get the whole screen (and nothing starts playing from a stray tap there).
 - Search: each result offers Add to queue, Play next, Play now and Start radio (in that order); no Remove. Stations just Play (with the replace-queue warning). Podcasts and episodes get no Start radio (Music Assistant can't start one from them).
 - Radio: playing a station when the queue has songs now asks first ("This will replace your queue": Replace or Cancel). With an empty queue it plays right away.
