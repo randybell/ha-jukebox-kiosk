@@ -7,7 +7,7 @@
  *   jukebox_kiosk/favorite_current, jukebox_kiosk/unfavorite_current, jukebox_kiosk/subscribe_queue
  */
 import type { HomeAssistant } from '../types';
-import { AUTOPLAY_MODES, BackendError, Emitter, NO_EXT, type AutoplayMode, type AutoplayOptions, type Caps, type ExtCaps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
+import { AUTOPLAY_MODES, BackendError, Emitter, lookupMaEntry, NO_EXT, type AutoplayMode, type AutoplayOptions, type Caps, type ExtCaps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
 
 export const KIOSK_DOMAIN = 'jukebox_kiosk';
 export const KIOSK_PAGE_SIZE = 100;
@@ -43,7 +43,9 @@ export class KioskBackend implements MaBackend {
   /** v0.7 features stay hidden until the server lists them (nothing flashes in and out) */
   ext: ExtCaps = { ...NO_EXT };
   info: any = undefined;
-  get maEntry(): string { return typeof this.info?.ma_entry_id === 'string' ? this.info.ma_entry_id : ''; }
+  /** the integration's ma_entry_id; when it is loaded but doesn't report one, the same automatic lookup as without it */
+  get maEntry(): string { return typeof this.info?.ma_entry_id === 'string' && this.info.ma_entry_id ? this.info.ma_entry_id : this.fallbackEntry; }
+  private fallbackEntry = '';
   ready: Promise<void>;
   private em = new Emitter();
   constructor(private hassRef: () => HomeAssistant | undefined) {
@@ -70,8 +72,12 @@ export class KioskBackend implements MaBackend {
       this.ext = extFromServer(this.info?.features);
     } catch (e) {
       console.warn('[jukebox-card] jukebox_kiosk/capabilities failed', e);
-      return; // keep optimistic caps; each call reports its own error
+      // keep optimistic caps; each call reports its own error. The entry can still be found the automatic way.
+      this.fallbackEntry = await lookupMaEntry(this.hassRef());
+      if (this.fallbackEntry) this.em.emit();
+      return;
     }
+    if (!this.maEntry) this.fallbackEntry = await lookupMaEntry(this.hassRef());
     this.em.emit();
   }
   send(command: string, data: Record<string, unknown> = {}) {

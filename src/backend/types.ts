@@ -4,6 +4,7 @@
  *   native      core Music Assistant services only (no raw MA commands: no lyrics, track lists, speakers, queue edits)
  * Features a backend can't do are reported in `caps`, and the card hides those controls.
  */
+import type { HomeAssistant } from '../types';
 export type BackendKind = 'kiosk' | 'native';
 export type BackendSetting = 'auto' | BackendKind;
 
@@ -146,4 +147,17 @@ export class Emitter {
   private fns = new Set<() => void>();
   on(fn: () => void) { this.fns.add(fn); return () => { this.fns.delete(fn); }; }
   emit() { for (const f of this.fns) f(); }
+}
+
+/**
+ * The automatic Music Assistant entry lookup used when the integration can't say: an admin's config_entries/get
+ * {domain: music_assistant}, the loaded entry first. Non-admins can't list config entries, so they get ''.
+ */
+export async function lookupMaEntry(hass: HomeAssistant | undefined): Promise<string> {
+  if (!hass?.user?.is_admin || !hass.callWS) return '';
+  try {
+    const list = await hass.callWS<any[]>({ type: 'config_entries/get', domain: 'music_assistant' });
+    const e = (Array.isArray(list) ? list : []).find((x) => x?.state === 'loaded') ?? (Array.isArray(list) ? list[0] : undefined);
+    return typeof e?.entry_id === 'string' ? e.entry_id : '';
+  } catch (e) { console.warn('[jukebox-card] Music Assistant entry lookup failed', e); return ''; }
 }
