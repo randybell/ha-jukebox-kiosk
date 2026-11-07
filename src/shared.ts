@@ -132,6 +132,8 @@ export async function playMedia(hass: HomeAssistant, config: JukeboxCardConfig, 
   if (inflight.has(key)) return null;
   inflight.add(key);
   try {
+    // 0.7.9 #37: a station replaces the queue: when it has songs the card asks first (Replace / Cancel)
+    if (config._stationGuard && enqueue === 'replace' && (mediaType === 'radio' || isRadio(it)) && !(await config._stationGuard(it))) return null;
     // dynamic speakers only (fixed mode has no guard): starting an idle group can take speakers from other groups, ask first
     if (config._guard && (enqueue === 'play' || enqueue === 'replace') && !(await config._guard(entity_id))) return null;
     await hass.callService('music_assistant', 'play_media', data, { entity_id });
@@ -310,7 +312,7 @@ export function foldedActions(radio: boolean, ask: (a: RowAct) => void): MenuAct
 }
 
 /* ---------------- confirmation before anything that clears the shared queue ---------------- */
-export type ConfirmKind = 'replace' | 'radio' | 'play' | 'shuffle' | 'jump';
+export type ConfirmKind = 'replace' | 'radio' | 'play' | 'shuffle' | 'jump' | 'station';
 export interface ConfirmState { kind: ConfirmKind; item: MaItem; run: () => void }
 const CONFIRM: Record<ConfirmKind, { q: (n: string) => string; body: string; ok: string; icon: string }> = {
   replace: { q: () => 'Replace the current queue?', body: 'This clears what\'s playing for everyone.', ok: 'Replace', icon: 'replace' },
@@ -319,13 +321,15 @@ const CONFIRM: Record<ConfirmKind, { q: (n: string) => string; body: string; ok:
   shuffle: { q: (n) => `Shuffle “${n}” now?`, body: 'This replaces the current queue for everyone.', ok: 'Shuffle', icon: 'shuffle' },
   // Queue-row Play Now jumps the shared queue, so it asks first
   jump: { q: () => 'Play this now?', body: 'The current song will stop.', ok: 'Play Now', icon: 'play' },
+  // 0.7.9 #37: a live radio station replaces a queue that has songs
+  station: { q: () => 'This will replace your queue', body: 'The station plays for everyone and the songs in the queue are cleared.', ok: 'Replace', icon: 'replace' },
 };
 export function confirmTpl(c: ConfirmState | null, close: () => void) {
   if (!c) return nothing;
   const t = CONFIRM[c.kind];
   return html`<div class="scrim dim" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); close(); }}></div>
     <div class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="cf-q" aria-describedby="cf-b" data-kind=${c.kind}>
-      <div class="cf-h">${artTpl(c.item, 'th')}<span><b id="cf-q">${t.q(c.item.name)}</b><small>${c.kind === 'replace' || c.kind === 'jump' ? c.item.name : ''}</small></span></div>
+      <div class="cf-h">${artTpl(c.item, 'th')}<span><b id="cf-q">${t.q(c.item.name)}</b><small>${c.kind === 'replace' || c.kind === 'jump' || c.kind === 'station' ? c.item.name : ''}</small></span></div>
       <p id="cf-b">${t.body}</p>
       <div class="cf-a">
         <button class="cbtn" data-action="cancel" tabindex="-1" @pointerdown=${noFocus} @click=${close}>Cancel</button>

@@ -193,6 +193,8 @@ export interface JukeboxCardConfig {
   _favs?: import('./favorites').FavStore;
   /** @internal set by the card in dynamic mode only: resolves false when the user cancels a start that would take speakers */
   _guard?: (entity: string) => Promise<boolean>;
+  /** @internal 0.7.9 #37: set by the card: resolves false when the user cancels a station replacing a queue with songs */
+  _stationGuard?: (it: import('./types').MaItem) => Promise<boolean>;
 }
 
 /** One MA media item as returned by music_assistant.search (defensive: most fields optional). */

@@ -4,6 +4,10 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.7.9
+
+- Radio: playing a station when the queue has songs now asks first ("This will replace your queue": Replace or Cancel). With an empty queue it plays right away.
+
 ## 0.7.8 — 2026-11-07
 
 - Queue: tapping a track no longer plays it; use the play icon.
