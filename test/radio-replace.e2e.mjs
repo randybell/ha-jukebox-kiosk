@@ -122,7 +122,8 @@ for (const [width, height] of [[1024, 600], [820, 1180], [1920, 1080]]) {
   await p.waitForFunction(() => __card.shadowRoot.querySelector('jb-search')?.browse);
   await p.evaluate(() => __card.shadowRoot.querySelector('jb-search').browse.openDetail({ uri: 'library://genre/1', name: 'Mock Jazz', media_type: 'genre', item_id: '1', provider: 'library' }, 'genre'));
   await p.waitForFunction(() => __card.shadowRoot.querySelector('jb-search').browse.detail?.entry?.data?.loading === false);
-  await p.evaluate(() => { const d = __card.shadowRoot.querySelector('jb-search').browse.detail; d.entry = { ...d.entry, data: { ...d.entry.data, tracks: [], sections: [{ type: 'radio', name: 'Radio', items: [{ uri: 'library://radio/7', name: 'Mockingbird Jazz FM', media_type: 'radio', provider: 'library', item_id: '7' }] }] } }; });
+  // patch the entry jb-browse itself holds (in place), so a later re-render of the Library can't swap the un-patched entry back in
+  await p.evaluate(() => { const d = __card.shadowRoot.querySelector('jb-search').browse.detail; d.entry.data = { ...d.entry.data, tracks: [], sections: [{ type: 'radio', name: 'Radio', items: [{ uri: 'library://radio/7', name: 'Mockingbird Jazz FM', media_type: 'radio', provider: 'library', item_id: '7' }] }] }; d.requestUpdate(); });
   await p.waitForFunction(() => __card.shadowRoot.querySelector('jb-search').browse.detail.shadowRoot.querySelector('.row[data-type=radio]'));
   const g = await p.evaluate(() => {
     const row = __card.shadowRoot.querySelector('jb-search').browse.detail.shadowRoot.querySelector('.row[data-type=radio]'), b = row.querySelector('[data-act=replace]'), t = b.querySelector('span');
