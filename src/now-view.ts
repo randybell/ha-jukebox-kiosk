@@ -409,7 +409,7 @@ export class JbNow extends LitElement {
       <div class="art ${showLyr && this._overlay ? 'lyr-on' : ''}" style="background:${ART[hash(title || 'x') % ART.length]}">
         ${pic ? html`<img src=${pic} alt="" draggable="false" @error=${(ev: Event) => ((ev.target as HTMLElement).style.display = 'none')} />`
           : html`<span class="ph">${icon('disc')}</span>`}
-        ${showLyr && this._overlay ? html`<jb-lyrics class="ovl" mode="overlay" .hass=${this.hass} .config=${this.config} .store=${this.lyrics}
+        ${showLyr && this._overlay ? html`<jb-lyrics class="ovl" mode="overlay" @jukebox-lyrics-tap=${() => { this._overlay = false; writeOverlay(false); }} .hass=${this.hass} .config=${this.config} .store=${this.lyrics}
           ?active=${this.active}></jb-lyrics>` : nothing}
         <div class="art-btns">
           ${idle ? nothing : html`${showLyr ? html`<button class="ab lyr ${this._overlay ? 'on' : ''}" tabindex="-1" aria-label="Lyrics" aria-pressed=${this._overlay ? 'true' : 'false'}

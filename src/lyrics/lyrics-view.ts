@@ -12,6 +12,7 @@ export type LyricsMode = 'overlay' | 'tab' | 'stage' | 'saver';
 const SEEK = 2;
 export const LONG_PRESS_MS = 550;
 const MOVE_CANCEL_PX = 10;
+const TAP_MAX_MS = 500;
 const USER_SCROLL_HOLD_MS = 6000;
 export const DEFAULT_LYRICS_OFFSET_MS = 500;
 export const MSG = { loading: 'Looking for lyrics…', none: 'No lyrics found', error: 'Lyrics unavailable', idle: 'Nothing playing' };
@@ -20,7 +21,8 @@ export const MSG = { loading: 'Looking for lyrics…', none: 'No lyrics found', 
  * One lyrics surface. Every surface reads the same LyricsStore, so a track change costs one lookup however many are shown.
  * Synced: the current line follows the interpolated player position (media_position + time since media_position_updated_at
  * + lyrics_offset_ms). A timer is set for the next line's timestamp; there is no per-frame loop.
- * Long-press a synced line (not on radio, only when the player can seek) to jump there. A plain tap does nothing.
+ * Long-press a synced line (not on radio, only when the player can seek) to jump there. A plain tap (Lyrics tab or the
+ * artwork overlay; not Stage or the screensaver) returns to the player: ≤ 10 px, ≤ 500 ms, not on a button, not the end of a scroll.
  * Plain lyrics scroll gently in proportion to the track progress; touching or scrolling them pauses that for a few seconds.
  * Lines always move UP as the song advances: a ResizeObserver re-centres instantly when the layout changes (fonts, Stage,
  * fit, rotation), so the next smooth scroll never has to go backwards. The screensaver slides a column of lines (transform only).
@@ -49,6 +51,9 @@ export class JbLyrics extends LitElement {
   private _start?: { x: number; y: number; id: number };
   private _suppressClick = false;
   private _userAt = 0;
+  /** #49: a plain tap (≤ 10 px, short, not the end of a scroll) returns to the player */
+  private _tap?: { x: number; y: number; t: number; id: number; top: number };
+  private _scrollAt = 0;
   private _lastCur = -2;
   private _lastLines?: unknown;
   private _seekHold?: { v: number; t: number; upd?: string };
@@ -112,6 +117,8 @@ export class JbLyrics extends LitElement {
   }
   private onDown = (ev: PointerEvent) => {
     this._userAt = Date.now();
+    this._tap = (ev.pointerType === 'mouse' && ev.button !== 0) || this.onControl(ev) || Date.now() - this._scrollAt < 250 ? undefined
+      : { x: ev.clientX, y: ev.clientY, t: Date.now(), id: ev.pointerId, top: this.scTop() };
     if (!this.seekable() || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
     const el = this.lineOf(ev); if (!el) return;
     const i = Number(el.dataset.i);
@@ -122,9 +129,28 @@ export class JbLyrics extends LitElement {
     this._holdTimer = window.setTimeout(() => this.fireSeek(i), LONG_PRESS_MS);
   };
   private onMove = (ev: PointerEvent) => {
+    if (this._tap && ev.pointerId === this._tap.id && Math.hypot(ev.clientX - this._tap.x, ev.clientY - this._tap.y) > MOVE_CANCEL_PX) this._tap = undefined;
     if (!this._start || ev.pointerId !== this._start.id) return;
     if (Math.hypot(ev.clientX - this._start.x, ev.clientY - this._start.y) > MOVE_CANCEL_PX) this.cancelPress();
   };
+  private scTop() { return (this.renderRoot.querySelector('.sc') as HTMLElement | null)?.scrollTop ?? 0; }
+  /** buttons, links and anything marked data-act keep their own behavior */
+  private onControl(ev: Event) {
+    for (const n of ev.composedPath()) { const el = n as HTMLElement; if (el === this) break; if (el?.matches?.('button, a, input, [role=button], [data-act]')) return true; }
+    return false;
+  }
+  private onUp = (ev: PointerEvent) => {
+    const t = this._tap; this._tap = undefined;
+    const fired = this._suppressClick;
+    this.cancelPress();
+    if (!t || ev.pointerId !== t.id || fired || Date.now() - t.t > TAP_MAX_MS) return;
+    if (Math.hypot(ev.clientX - t.x, ev.clientY - t.y) > MOVE_CANCEL_PX || Math.abs(this.scTop() - t.top) > 2 || this._scrollAt > t.t) return;
+    if (this.mode !== 'tab' && this.mode !== 'overlay') return; // Stage keeps its tap-to-show-controls; the screensaver is unchanged
+    this.dispatchEvent(new CustomEvent('jukebox-lyrics-tap', { detail: { mode: this.mode }, bubbles: true, composed: true }));
+    if (this.mode === 'tab') this.dispatchEvent(new CustomEvent('jukebox-nav', { detail: { tab: 'now' }, bubbles: true, composed: true }));
+  };
+  private onCancelTap = () => { this._tap = undefined; this.cancelPress(); };
+  private onScroll = () => { this._scrollAt = Date.now(); };
   private cancelPress = () => { window.clearTimeout(this._holdTimer); this._start = undefined; if (this._press >= 0) this._press = -1; };
   private onClickCapture = (ev: Event) => {
     // the click that ends a long-press must not reach anything underneath (Stage taps toggle its controls)
@@ -281,7 +307,7 @@ export class JbLyrics extends LitElement {
       case 'idle': case 'off': body = mode === 'overlay' ? nothing : this.msg(MSG.idle); break;
       default: {
         const seek = this.seekable();
-        body = html`<div class="sc ${synced ? 'synced' : 'plain'} ${seek ? 'seekable' : ''}" @wheel=${this.onUserScroll} @touchmove=${this.onUserScroll} @keydown=${this.onUserScroll}>
+        body = html`<div class="sc ${synced ? 'synced' : 'plain'} ${seek ? 'seekable' : ''}" @scroll=${this.onScroll} @wheel=${this.onUserScroll} @touchmove=${this.onUserScroll} @keydown=${this.onUserScroll}>
           <div class="pad"></div><div class="col">
           ${s.lines.map((l, i) => html`<p class="ln ${i === this.cur ? 'cur' : i < this.cur ? 'past' : ''} ${i === this._press ? 'press' : ''} ${i === this._flash ? 'flash' : ''} ${l.text ? '' : 'gap'}"
             data-i=${i} data-t=${synced ? l.t : nothing}>${l.text || (synced ? '♪' : '\u00a0')}</p>`)}
@@ -289,8 +315,8 @@ export class JbLyrics extends LitElement {
         </div>`;
       }
     }
-    return html`<div class="ly m-${mode} st-${s.status}" @pointerdown=${this.onDown} @pointermove=${this.onMove} @pointerup=${this.cancelPress}
-        @pointercancel=${this.cancelPress} @pointerleave=${this.cancelPress} @click=${this.onClickCapture} @contextmenu=${(e: Event) => e.preventDefault()}>
+    return html`<div class="ly m-${mode} st-${s.status}" @pointerdown=${this.onDown} @pointermove=${this.onMove} @pointerup=${this.onUp}
+        @pointercancel=${this.onCancelTap} @pointerleave=${this.cancelPress} @click=${this.onClickCapture} @contextmenu=${(e: Event) => e.preventDefault()}>
       ${mode === 'tab' ? this.header() : nothing}
       ${mode !== 'tab' && s.status === 'plain' ? html`<span class="chip fl">Unsynced</span>` : nothing}
       ${body}
