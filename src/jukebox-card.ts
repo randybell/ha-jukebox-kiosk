@@ -25,7 +25,7 @@ import { libraryTabLabel, combinedOn } from './library-home';
 import { FavStore } from './favorites';
 import { RepeatOneGuard } from './repeat';
 
-export const VERSION = '0.7.8';
+export const VERSION = '0.7.9';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'now', label: 'Now Playing', icon: 'disc' },
   { id: 'browse', label: 'Browse', icon: 'browse' },
