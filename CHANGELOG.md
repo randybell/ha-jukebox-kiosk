@@ -5,6 +5,7 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 ## Unreleased
 
 - Queue: tapping a track no longer plays it; use the play icon.
+- Queue: Move up/down icons now match the other icons.
 
 ## 0.7.7 — 2026-11-05
 

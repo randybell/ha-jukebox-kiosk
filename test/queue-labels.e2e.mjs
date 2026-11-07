@@ -37,6 +37,11 @@ for (const vp of [{ width: 1024, height: 600 }, { width: 390, height: 844 }, { w
  await p.close(); const s = await open(vp); await s.evaluate(() => { const x = __card.shadowRoot.querySelector('jb-search'); x._lcat = 'all'; x.setQuery('MOCK'); }); await s.waitForFunction(`${SV}.querySelectorAll('.grp.tracks .row').length > 0`);
  const se = await labelsFit(s, SV, '.grp.tracks .row'); check(`${tag} Search labels fit`, se.ok, JSON.stringify(se)); await s.close();
  const q = await open(vp); await tap(q, `${C}.querySelector('[data-tab="queue"]')`); await q.waitForFunction(`${QV}.querySelectorAll('.qr.next').length > 0`);
- const qu = await labelsFit(q, QV, '.qr.next', true); check(`${tag} Queue labels fit`, qu.ok, JSON.stringify(qu)); await q.close();
+ const qu = await labelsFit(q, QV, '.qr.next', true); check(`${tag} Queue labels fit`, qu.ok, JSON.stringify(qu));
+ // #41: Move up/down and More icons use the same color as the Play Now icon (enabled and disabled), wherever they are shown
+ const mc = await q.evaluate((qv) => { const Q = eval(qv); const play = Q.querySelector('.qr.next .ra-b[data-action="playnow"]'); const pc = getComputedStyle(play).color;
+   const mv = [...Q.querySelectorAll('.qr.next .qa[data-action="up"], .qr.next .qa[data-action="down"], .qr.next .qa.mo')].filter((b) => getComputedStyle(b).display !== 'none');
+   return { pc, n: mv.length, dis: mv.filter((b) => b.disabled).length, bad: mv.filter((b) => getComputedStyle(b).color !== pc).map((b) => (b.dataset.action || 'more') + ':' + getComputedStyle(b).color) }; }, QV);
+ check(`${tag} Queue Move up/down and More icons match the Play icon color`, mc.bad.length === 0, JSON.stringify(mc)); await q.close();
 }
 check('no page errors', errors.length === 0, errors.join('; ')); await browser.close(); console.log(`${total - failures}/${total} queue-label checks passed`); process.exit(failures ? 1 : 0);

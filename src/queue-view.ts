@@ -392,6 +392,7 @@ export class JbQueue extends LitElement {
     .qa { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--_inactive); }
     .qa:active { background: #ffffff1f; color: #fff; }
     .qa:disabled { opacity: .25; }
+    .qr .qa[data-action="up"], .qr .qa[data-action="down"], .qr .qa.mo { color: #fff; } /* #41: same color as the other row action icons */
     .qa .i { width: 22px; height: 22px; }
     .qr.jx .qa.mo { display: none; }
     .undo { position: absolute; left: 50%; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); bottom: 14px; z-index: 5; display: flex; align-items: center; gap: 12px;
