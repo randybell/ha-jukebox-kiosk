@@ -82,8 +82,30 @@ export class JbNow extends LitElement {
       if (this._sleepExpires && remainFromExpires(this._sleepExpires) <= 0) this.onSleepExpired();
     }, 1000);
   }
+  /** 0.7.9 #59: the speaker list scrolls inside its own area when it doesn't fit; mark the edges so the "More speakers" hint and fades show */
+  private _volEl?: HTMLElement;
+  private _volRo?: ResizeObserver;
+  private volEdges = () => {
+    const v = this._volEl, w = v?.parentElement; if (!v || !w) return;
+    const over = v.scrollHeight - v.clientHeight > 1;
+    w.classList.toggle('over', over);
+    w.classList.toggle('more-b', over && v.scrollTop + v.clientHeight < v.scrollHeight - 1);
+    w.classList.toggle('more-t', over && v.scrollTop > 1);
+  };
+  protected updated() {
+    const v = this.renderRoot.querySelector('.vol') as HTMLElement | null;
+    if (v && v !== this._volEl) {
+      this._volEl?.removeEventListener('scroll', this.volEdges);
+      this._volRo?.disconnect();
+      this._volEl = v;
+      v.addEventListener('scroll', this.volEdges, { passive: true });
+      if (typeof ResizeObserver !== 'undefined') { this._volRo = new ResizeObserver(this.volEdges); this._volRo.observe(v); const rm = v.querySelector('.rooms'); if (rm) this._volRo.observe(rm); }
+    }
+    this.volEdges();
+  }
   disconnectedCallback() {
     super.disconnectedCallback();
+    this._volRo?.disconnect(); this._volRo = undefined; this._volEl = undefined;
     window.clearInterval(this._timer);
     window.clearTimeout(this._sleepLocal);
     this._unsub?.(); this._unsub = undefined; this._spkUnsub?.(); this._spkUnsub = undefined;
@@ -478,9 +500,13 @@ export class JbNow extends LitElement {
             <span class="more">${more ? `+ ${more} more` : ''}</span></button>`
           : autoplay && cur ? html`<button class="upn panel ap" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
             <span class="eyebrow">Autoplay</span><b>Autoplay will add more when this ends</b></button>` : nothing}
-        <div class="vol panel ${this.spk ? 'acts' : ''}">
-          ${this.volRow(this.eid, where, true)}
-          ${rooms.length ? html`<div class="rooms">${rooms.map((r) => this.volRow(r.entity, r.name, false, this.spk?.inline(r.entity)))}</div>` : nothing}
+        <div class="volw">
+          <div class="vol panel ${this.spk ? 'acts' : ''}">
+            ${this.volRow(this.eid, where, true)}
+            ${rooms.length ? html`<div class="rooms">${rooms.map((r) => this.volRow(r.entity, r.name, false, this.spk?.inline(r.entity)))}</div>` : nothing}
+          </div>
+          <button class="vmore" tabindex="-1" aria-label="More speakers below" @pointerdown=${noFocus}
+            @click=${() => { const v = this.renderRoot.querySelector('.vol') as HTMLElement | null; v?.scrollBy({ top: Math.max(40, v.clientHeight * 0.75), behavior: 'smooth' }); }}>${icon('chev', 'i xs')}More speakers</button>
         </div>
       </div>
       ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
@@ -556,6 +582,16 @@ export class JbNow extends LitElement {
     .upn .pv { flex: none; }
     .upn .more { margin-left: auto; font-size: 12px; color: var(--_muted); flex: none; }
     .vol { container: vol / inline-size; padding: 6px 14px; display: flex; flex-direction: column; }
+    .volw { position: relative; display: flex; flex-direction: column; min-height: 0; }
+    .vmore { display: none; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 2; align-items: center; gap: 4px;
+      padding: 4px 12px; min-height: 30px; border-radius: 999px; border: 1px solid #ffffff2e; background: #000000d9; color: var(--_fg); font: 600 12px var(--_font-body); cursor: pointer; }
+    .vmore .i { width: 12px; height: 12px; }
+    .volw.more-b .vmore { display: inline-flex; }
+    .volw.over .vol { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+    .volw.over .vol::-webkit-scrollbar { display: none; }
+    .volw.more-b .vol { -webkit-mask-image: linear-gradient(#000 calc(100% - 44px), #0000); mask-image: linear-gradient(#000 calc(100% - 44px), #0000); }
+    .volw.more-t.more-b .vol { -webkit-mask-image: linear-gradient(#0000, #000 24px, #000 calc(100% - 44px), #0000); mask-image: linear-gradient(#0000, #000 24px, #000 calc(100% - 44px), #0000); }
+    .volw.more-t:not(.more-b) .vol { -webkit-mask-image: linear-gradient(#0000, #000 24px); mask-image: linear-gradient(#0000, #000 24px); }
     .rooms { display: flex; flex-direction: column; border-top: 1px solid var(--_divider); }
     .vr { display: grid; grid-template-columns: 30px minmax(80px, 30%) minmax(0, 1fr) 34px; align-items: center; gap: 8px; min-height: 46px; }
     .vm { width: 34px; height: 34px; display: grid; place-items: center; color: var(--_active); margin-left: -6px; border-radius: 50%; }
@@ -606,7 +642,13 @@ export class JbNow extends LitElement {
     @container np (orientation: portrait) and (min-width: 521px) { .nw { align-content: safe center; } }
     /* landscape: art left, info right */
     @container np (orientation: landscape) and (min-width: 700px) {
-      .nw { grid-template-columns: auto minmax(0, 1fr); align-items: center; justify-items: stretch; column-gap: clamp(24px, 3.5cqw, 48px); overflow: hidden; padding-top: 20px; padding-bottom: 20px; }
+      .nw { grid-template-columns: auto minmax(0, 1fr); align-items: center; justify-items: stretch; column-gap: clamp(24px, 3.5cqw, 48px); overflow: hidden; padding-top: 20px; padding-bottom: 20px;
+        grid-template-rows: minmax(0, 1fr); grid-auto-rows: minmax(0, 1fr); }
+      /* 0.7.9 #59: the info column never runs under the tab bar; the speaker list takes what is left and scrolls inside itself */
+      .info { max-height: 100%; min-height: 0; }
+      .info > * { flex-shrink: 0; }
+      .info > .volw { flex: 0 1 auto; min-height: 96px; }
+      .volw > .vol { min-height: 0; max-height: 100%; }
       .art { width: min(calc(100cqh - 40px), 46cqw); align-self: center; }
       .info { max-width: none; gap: 9px; }
       .ti { font-size: clamp(28px, 3.4cqw, 40px); }
