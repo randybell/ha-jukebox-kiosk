@@ -294,14 +294,15 @@ const RA: Record<RowAct, { icon: string; title: string; label: (n: string) => st
 };
 /** Every queueing surface uses the same three visible labels, in this order.
  *  Radio stations: only Play Now (replace). No Play Next, add-to-queue, Remove, or Start radio. */
-export function rowActsTpl(it: MaItem, seedRadio: boolean, run: (a: RowAct | 'more', el: HTMLElement) => void, queueActs: readonly RowAct[] = QUEUE_ACTIONS) {
+/** 0.7.9 #35b: `mix` (search rows): Start radio is a fourth labeled button in More's slot, and there is no More. */
+export function rowActsTpl(it: MaItem, seedRadio: boolean, run: (a: RowAct | 'more', el: HTMLElement) => void, queueActs: readonly RowAct[] = QUEUE_ACTIONS, mix = false) {
   const station = isRadio(it);
   const acts: RowAct[] = station ? ['replace'] : [...queueActs, ...(seedRadio ? ['radio' as const] : [])];
   // 0.7.9 #35: a live station's only action reads "Play" (it replaces the queue, behind the #37 confirm)
   const title = (a: RowAct) => (station ? 'Play' : RA[a].title), aria = (a: RowAct) => (station ? `Play ${it.name}` : RA[a].label(it.name));
-  const b = (a: RowAct) => html`<button class="ra-b ${a === 'radio' ? 'x2' : ''}" data-act=${a} tabindex="-1" title=${title(a)}
+  const b = (a: RowAct) => html`<button class="ra-b ${a === 'radio' && !mix ? 'x2' : ''}" data-act=${a} tabindex="-1" title=${title(a)}
     aria-label=${aria(a)} @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(a, e.currentTarget as HTMLElement); }}>${icon(RA[a].icon)}<span>${title(a)}</span></button>`;
-  return html`<div class="ra" data-n=${acts.length}>${acts.map(b)}${!station && seedRadio ? html`<button class="ra-b ra-more" data-act="more" tabindex="-1" title="More"
+  return html`<div class="ra" data-n=${acts.length}>${acts.map(b)}${!station && seedRadio && !mix ? html`<button class="ra-b ra-more" data-act="more" tabindex="-1" title="More"
     aria-label="More actions for ${it.name}" @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run('more', e.currentTarget as HTMLElement); }}>${icon('more')}<span>More</span></button>` : nothing}</div>`;
 }
 /** One labeled queue button for the Queue tab's exact queue-row handlers. */
