@@ -4,6 +4,8 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.7.8 — 2026-11-07
+
 - Queue: tapping a track no longer plays it; use the play icon.
 - Queue: Move up/down icons now match the other icons.
 - Now Playing: bigger Next/Previous buttons.
@@ -14,6 +16,10 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 - Lyrics full screen: tap anywhere to go back; on-screen controls removed.
 - Screensaver and full-screen lyrics are now one screen: album art fills the background, with "Tap to close".
 - Every screen now closes the same way: tap anywhere, or a clear Close button. No more small X.
+
+### Tested
+- Tested live on the owner's system with Apple Music and TuneIn, on Music Assistant 2.10.9.
+- Known issue unchanged: removing an Apple Music favorite still sends a Dislike in Music Assistant 2.10.9 (re-checked 2026-11-07, see #52).
 
 ## 0.7.7 — 2026-11-05
 
