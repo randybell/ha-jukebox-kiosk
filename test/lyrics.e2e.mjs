@@ -178,7 +178,7 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   await tp('touchStart', c.y); for (let k = 1; k <= 8; k++) { await tp('touchMove', c.y - k * 12); await sleep(16); } await tp('touchEnd'); await sleep(500);
   check('TP2 touch drag over the lyrics (scroll) stays on Lyrics', (await tabNow()) === 'lyrics', await tabNow());
   // a tap that lands while the lyrics are still scrolling (ends a fling) does not count
-  await pg.evaluate((s) => { const sc = eval(s).shadowRoot.querySelector('.sc'); sc.scrollTop += 60; sc.dispatchEvent(new Event('scroll')); }, SEL.tab);
+  await pg.evaluate((s) => { const sc = eval(s).shadowRoot.querySelector('.sc'); sc.dispatchEvent(new WheelEvent('wheel', { deltaY: 60, bubbles: true })); sc.scrollTop += 60; sc.dispatchEvent(new Event('scroll')); }, SEL.tab);
   await pg.touchscreen.tap(c.x, c.y); await sleep(400);
   check('TP3 a tap right after a scroll (stopping it) stays on Lyrics', (await tabNow()) === 'lyrics', await tabNow());
   await sleep(400);
@@ -339,20 +339,28 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   const st = await pg.evaluate(() => ({ mode: __card.dataset.stage, el: !!__card.shadowRoot.querySelector('.stage'), fs: !!(document.fullscreenElement || document.webkitFullscreenElement) }));
   check('G1 full-screen button opens the Stage (Fullscreen API or fixed overlay fallback)', st.el && (st.mode === 'fullscreen' || st.mode === 'overlay'), J(st));
   check('G2 Stage shows synced lyrics', await waitStatus(pg, SEL.stage, 'synced'));
-  const ui1 = await pg.evaluate(() => __card.shadowRoot.querySelector('.stage').classList.contains('ui'));
-  await sleep(4400);
-  const ui2 = await pg.evaluate(() => __card.shadowRoot.querySelector('.stage').classList.contains('ui'));
-  await pg.mouse.click(960, 540); await sleep(300);
-  const ui3 = await pg.evaluate(() => __card.shadowRoot.querySelector('.stage').classList.contains('ui'));
-  check('G3 Stage controls show on open, hide after ~4 s, tap shows them again', ui1 && !ui2 && ui3, J({ ui1, ui2, ui3 }));
-  const x = await pg.evaluate(() => { const r = __card.shadowRoot.querySelector('.stage .st-x').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
-  const pp = await pg.evaluate(() => { const r = __card.shadowRoot.querySelector('.stage .st-ctl .pp').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }).catch(() => null);
-  if (pp) { await pg.mouse.click(pp.x, pp.y); await sleep(200); }
-  const pcalls = await pg.evaluate(() => __calls.filter((c) => /media_(play|pause|play_pause)$/.test(c.service)).map((c) => c.service));
-  check('G4 Stage play/pause works', !!pp && pcalls.length === 1, J(pcalls));
-  await pg.mouse.click(x.x, x.y); await sleep(400);
-  check('G5 X closes the Stage', await pg.evaluate(() => !__card.shadowRoot.querySelector('.stage') && !__card.dataset.stage && !document.fullscreenElement));
-  await pg.mouse.click(b.x, b.y); await sleep(400);
+  // 0.7.8: Stage has no on-screen controls; a plain tap anywhere closes it (back to Now Playing)
+  const ctl = await pg.evaluate(() => { const st = __card.shadowRoot.querySelector('.stage'); return { buttons: st.querySelectorAll('button').length, x: !!st.querySelector('.st-x, .st-top'), ctl: !!st.querySelector('.st-ctl'), ui: st.classList.contains('ui') }; });
+  check('G3 Stage has no controls: no Close button, no Previous/Play/Next bar', ctl.buttons === 0 && !ctl.x && !ctl.ctl && !ctl.ui, J(ctl));
+  const pc0 = (await pg.evaluate(() => __calls.length));
+  await pg.mouse.click(960, 540); await sleep(400);
+  const after = await pg.evaluate((n) => ({ st: !!__card.shadowRoot.querySelector('.stage'), ds: __card.dataset.stage ?? '', fs: !!document.fullscreenElement, tab: __card._tab,
+    calls: __calls.slice(n).filter((c) => /^media_/.test(c.service)).map((c) => c.service) }), pc0);
+  check('G4 a plain tap closes the Stage, back on Now Playing; the tap does not also hit the player underneath', !after.st && !after.ds && !after.fs && after.tab === 'now' && after.calls.length === 0, J(after));
+  const ppb = await pg.evaluate((s) => { const r = eval(s).querySelector('.tb.pp').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, SEL.now);
+  await pg.mouse.click(b.x, b.y); await waitStatus(pg, SEL.stage, 'synced'); await sleep(500);
+  const pc1 = await pg.evaluate(() => __calls.length);
+  await pg.mouse.click(ppb.x, ppb.y); await sleep(500);
+  const ghost = await pg.evaluate((n) => ({ st: !!__card.shadowRoot.querySelector('.stage'), calls: __calls.slice(n).filter((c) => /^media_/.test(c.service)).map((c) => c.service) }), pc1);
+  check('G4b a tap on the Stage right where Play/Pause sits underneath closes the Stage only (no play/pause)', !ghost.st && ghost.calls.length === 0, J(ghost));
+  await pg.mouse.click(b.x, b.y); await waitStatus(pg, SEL.stage, 'synced'); await sleep(500);
+  await pg.mouse.move(600, 500); await pg.mouse.down(); await pg.mouse.move(600, 440, { steps: 5 }); await pg.mouse.up(); await sleep(300);
+  check('G5 a drag on the Stage does not close it', await pg.evaluate(() => !!__card.shadowRoot.querySelector('.stage')));
+  await pg.evaluate((s) => { const sc = eval(s).shadowRoot.querySelector('.sc'); sc.dispatchEvent(new WheelEvent('wheel', { deltaY: 80, bubbles: true })); sc.scrollTop += 80; sc.dispatchEvent(new Event('scroll')); }, SEL.stage);
+  await pg.mouse.click(1300, 500); await sleep(300);
+  check('G5b a tap right after scrolling the Stage lyrics (stopping the scroll) does not close it', await pg.evaluate(() => !!__card.shadowRoot.querySelector('.stage')));
+  await pg.mouse.move(1300, 500); await pg.mouse.down(); await sleep(650); await pg.mouse.up(); await sleep(300);
+  check('G5c a slow press (> 500 ms) on the background does not close it', await pg.evaluate(() => !!__card.shadowRoot.querySelector('.stage')));
   await pg.keyboard.press('Escape'); await sleep(400);
   check('G6 Esc closes the Stage', await pg.evaluate(() => !__card.shadowRoot.querySelector('.stage')));
   // fullscreenchange: leaving native fullscreen from outside closes the Stage
@@ -365,16 +373,16 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
     await pg.evaluate(() => __card.closeStage()); await sleep(200);
     check('G7 (fallback overlay mode in this browser) Stage closes via closeStage()', await pg.evaluate(() => !__card.shadowRoot.querySelector('.stage')), 'native fullscreen refused: ' + native);
   }
-  // Stage: long-press seeks, tap toggles controls but never seeks
+  // Stage: long-press on a line still seeks (and keeps the Stage open); a plain tap on a line closes it without seeking
   await pg.mouse.click(b.x, b.y); await waitStatus(pg, SEL.stage, 'synced'); await sleep(600);
   const n0 = (await seeks(pg)).length;
   const L = await lineBox(pg, SEL.stage, (await cur(pg, SEL.stage)) + 1);
-  await pg.mouse.click(L.x, L.y); await sleep(600);
-  check('G8 tapping a Stage line does not seek', (await seeks(pg)).length === n0);
   await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(800); await pg.mouse.up(); await sleep(300);
   const sk = (await seeks(pg)).slice(n0);
-  check('G9 long-press on a Stage line seeks', sk.length === 1 && sk[0].data.seek_position === Math.floor(L.t), J(sk.map((s) => s.data)));
-  await pg.keyboard.press('Escape'); await sleep(300);
+  check('G8 long-press on a Stage line seeks, and the Stage stays open', sk.length === 1 && sk[0].data.seek_position === Math.floor(L.t) && await pg.evaluate(() => !!__card.shadowRoot.querySelector('.stage')), J(sk.map((s) => s.data)));
+  const L2 = await lineBox(pg, SEL.stage, (await cur(pg, SEL.stage)) + 1);
+  await pg.mouse.click(L2.x, L2.y); await sleep(500);
+  check('G9 a plain tap on a Stage line closes the Stage and does not seek', (await seeks(pg)).length === n0 + 1 && await pg.evaluate(() => !__card.shadowRoot.querySelector('.stage') && __card._tab === 'now'));
   await pg.close();
 
   const sv = await newPage();
