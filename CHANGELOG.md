@@ -20,7 +20,6 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 - Tests: a radio test that failed now and then for a test-only reason is fixed. No change to the card.
 
 ### Tested
-- Tested live on the owner's system with Apple Music and TuneIn, on Music Assistant 2.10.9. (#53)
 - Known issue unchanged: removing an Apple Music favorite still sends a Dislike in Music Assistant 2.10.9 (re-checked 2026-11-07 against the Music Assistant 2.10.9 source; 2.10.9 is still the newest stable release, and the card's un-favourite path is unchanged in 0.7.9; see #52).
 
 ## 0.7.8 — 2026-11-07
