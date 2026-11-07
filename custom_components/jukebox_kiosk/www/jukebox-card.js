@@ -1405,7 +1405,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
         <header class="sh">
           <span class="ht"><span class="eyebrow">Speakers</span><b class="tn">${n}</b>
             <small class="stl">${this.statusLine(e)}</small></span>
-          <button class="x" aria-label="Close speakers" tabindex="-1" @pointerdown=${yt} @click=${this.close}>${dt("close")}</button>
+          <button class="x" data-action="close" aria-label="Close speakers" tabindex="-1" @pointerdown=${yt} @click=${this.close}>Close</button>
         </header>
         <div class="body">
           ${c?N`<p class="banner" data-kind=${this.dynamic?s?e.kind:"guest":"fixed"}>${c}</p>`:B}
@@ -1464,8 +1464,10 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .ht .eyebrow { font-size: 11px; color: var(--_inactive); }
     .tn { font-family: var(--_font-display); font-size: 22px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ht small { font-size: 13px; color: var(--_muted); }
-    .x { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; color: var(--_active); flex: none; }
-    .x .i { width: 26px; height: 26px; } .x:active { background: #ffffff1f; }
+    /* 0.7.8 #50: a labeled Close button (was a small X), high contrast, sized like the card's other buttons */
+    .x { height: 48px; min-width: 88px; padding: 0 20px; display: grid; place-items: center; border-radius: 999px; flex: none;
+      background: #fff; color: #000; font: inherit; font-size: 16px; font-weight: 800; white-space: nowrap; }
+    .x:active { transform: scale(.96); background: #ffffffd9; }
     .body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 20px 20px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
     .banner, .quiet { font-size: 14px; color: var(--_muted); padding: 10px 14px; border-radius: 12px; border: 1px solid var(--_divider); background: #ffffff0d; }
     .quiet { display: flex; align-items: center; gap: 8px; color: var(--_fg); }
@@ -1520,9 +1522,9 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .st.error .si { color: #000; flex: none; } .st.error .ca { background: #000; color: #fff; } .st.error .cx { color: #000000a0; }
     @keyframes stin { from { opacity: 0; transform: translateY(-6px); } }
     @keyframes stpulse { from { opacity: .35; } }
-    :host([open]) .st { right: 70px; top: 14px; max-width: min(360px, calc(100% - 70px - var(--_pad))); }
+    :host([open]) .st { right: 116px; top: 14px; max-width: min(360px, calc(100% - 116px - var(--_pad))); } /* #50: left of the labeled Close button */
     @container spk (max-width: 640px) { :host([open]) .st { right: var(--_pad); top: 10px; } }
-    @container spk (max-width: 640px) and (max-height: 560px) { :host([open]) .st { right: 70px; top: 6px; } }
+    @container spk (max-width: 640px) and (max-height: 560px) { :host([open]) .st { right: 116px; top: 6px; max-width: calc(100% - 116px - var(--_pad)); } }
     .confirm { z-index: 10; max-height: calc(100cqh - 24px); overflow-y: auto; }
     /* the panel only knows the card's own height (not the viewport): short cards get a full-height sheet and tighter rows */
     .sh { flex: none; }
@@ -1550,9 +1552,9 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     :host([large]) .vr { grid-template-columns: 52px minmax(0, 1fr) auto; }
     :host([large]) .vn { font-size: 18px; } :host([large]) .vn small { font-size: 14px; }
     :host([large]) .vs { --jb-slider-h: 10px; --jb-slider-knob: 30px; --jb-slider-hit: 52px; }
-    :host([large]) .x { width: 60px; height: 60px; }
+    :host([large]) .x { height: 60px; min-width: 104px; padding: 0 24px; font-size: 18px; }
     :host([large]) .st { font-size: 16px; min-height: 48px; } :host([large]) .st .ca { height: 42px; font-size: 16px; padding: 0 18px; } :host([large]) .st .cx { width: 40px; height: 40px; }
-    :host([large][open]) .st { right: 84px; }
+    :host([large][open]) .st { right: 132px; max-width: min(360px, calc(100% - 132px - var(--_pad))); }
     @media (prefers-reduced-motion: reduce) { .chip:active { transform: none; } .st, .st .dot { animation: none; } }
   `],fe("jb-speakers",lr);const hr={tunein:"TuneIn",radiobrowser:"Radio Browser",somafm:"SomaFM",radioparadise:"Radio Paradise",siriusxm:"SiriusXM",bbc_sounds:"BBC Sounds",filesystem_local:"Local files",url:"URL"};class dr extends ot{constructor(){super(...arguments),this.item=null,this.large=!1,this.open=!1,this._detail=null,this._busy=!1,this._toast="",this._req=0,this.hearts=new ke(this)}willUpdate(t){if(t.has("item")){const e=t.get("item");this.open=!!this.item,this.item?.uri!==e?.uri&&(this._detail=null,this._busy=!1,this.item&&this.load(this.item))}}async load(t){const e=this.config?._backend,i=++this._req;if(e?.caps.send&&t.uri)try{const s=await e.send("music/item_by_uri",{uri:t.uri});if(i!==this._req||!s||"object"!=typeof s||s.media_type&&"radio"!==s.media_type)return;this._detail=s}catch(t){console.debug("[jukebox-card] station details unavailable",t)}}canFav(){return!!this.config?._backend?.caps.libraryWrite}isFav(){const t=this.item,e=!!(this._detail?.favorite??t?.favorite);return t?.uri&&this.config?._favs?this.config._favs.isFav({uri:t.uri,favorite:e}):e}close(){Et(this,"jukebox-station-close")}toast(t){this._toast=t,window.clearTimeout(this._toastTimer),this._toastTimer=window.setTimeout(()=>this._toast="",2400)}async toggleFav(){const t=this.item,e=this.config?._backend;if(!t||!e?.caps.libraryWrite||this._busy)return;const i=!!(this._detail?.favorite??t.favorite);this._busy=!0;try{await this.hearts.toggle({...t,favorite:i},"radio",this._detail??t)}finally{this._busy=!1}}async play(){const t=this.item;if(t&&this.hass)try{const e=await It(this.hass,this.config,t,"radio","replace");if(!e)return;this.toast(Dt(this.hass,this.config,t,"replace",!1)),Et(this,"jukebox-played",{item:t,...e}),this.close()}catch(e){this.toast(`Couldn't play ${t.name}`),console.warn("[jukebox-card] play_media failed",e)}}render(){const t=this.item,e=this._toast?N`<div class="toast solo" role="status">${this._toast}</div>`:B;if(!t)return e;const i=this._detail,s=function(t){const e=t?.metadata??{},i=Array.isArray(t?.provider_mappings)?t.provider_mappings:[],s=i.find(t=>t&&t.provider_domain&&"library"!==t.provider_domain)??i[0],a=String(s?.provider_domain??(t?.provider&&"library"!==t.provider?String(t.provider).split("--")[0]:"")).toLowerCase(),r=a in hr?hr[a]:a?a.replace(/_/g," ").replace(/\b\w/g,t=>t.toUpperCase()):"",o=e.genres?[...e.genres].map(t=>String(t).trim()).filter(Boolean):[],n=s?.audio_format??i.find(t=>t?.audio_format)?.audio_format??{},l=Number(n.bit_rate)||0,c=String(n.content_type??"").toLowerCase(),h=c&&"unknown"!==c&&"?"!==c?c.toUpperCase():"";return{description:"string"==typeof e.description?e.description.trim():"",provider:r,genre:o.slice(0,3).join(", "),quality:[h,l>0?`${l} kbps`:""].filter(Boolean).join(" · ")}}(i??t),a=this.isFav(),r=(t,e,i)=>i?N`<div class="f" data-field=${t}><dt>${e}</dt><dd>${i}</dd></div>`:B;return N`<div class="scrim st-scrim" @pointerdown=${t=>{t.preventDefault(),this.close()}}></div>
       <div class="sheet" role="dialog" aria-modal="true" aria-label="${t.name}, radio station" @keydown=${t=>{"Escape"===t.key&&this.close()}}>

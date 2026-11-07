@@ -421,7 +421,7 @@ export class JbSpeakers extends LitElement {
         <header class="sh">
           <span class="ht"><span class="eyebrow">Speakers</span><b class="tn">${tName}</b>
             <small class="stl">${this.statusLine(x)}</small></span>
-          <button class="x" aria-label="Close speakers" tabindex="-1" @pointerdown=${noFocus} @click=${this.close}>${icon('close')}</button>
+          <button class="x" data-action="close" aria-label="Close speakers" tabindex="-1" @pointerdown=${noFocus} @click=${this.close}>Close</button>
         </header>
         <div class="body">
           ${banner ? html`<p class="banner" data-kind=${!this.dynamic ? 'fixed' : !may ? 'guest' : x.kind}>${banner}</p>` : nothing}
@@ -547,8 +547,10 @@ export class JbSpeakers extends LitElement {
     .ht .eyebrow { font-size: 11px; color: var(--_inactive); }
     .tn { font-family: var(--_font-display); font-size: 22px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ht small { font-size: 13px; color: var(--_muted); }
-    .x { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; color: var(--_active); flex: none; }
-    .x .i { width: 26px; height: 26px; } .x:active { background: #ffffff1f; }
+    /* 0.7.8 #50: a labeled Close button (was a small X), high contrast, sized like the card's other buttons */
+    .x { height: 48px; min-width: 88px; padding: 0 20px; display: grid; place-items: center; border-radius: 999px; flex: none;
+      background: #fff; color: #000; font: inherit; font-size: 16px; font-weight: 800; white-space: nowrap; }
+    .x:active { transform: scale(.96); background: #ffffffd9; }
     .body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 20px 20px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
     .banner, .quiet { font-size: 14px; color: var(--_muted); padding: 10px 14px; border-radius: 12px; border: 1px solid var(--_divider); background: #ffffff0d; }
     .quiet { display: flex; align-items: center; gap: 8px; color: var(--_fg); }
@@ -603,9 +605,9 @@ export class JbSpeakers extends LitElement {
     .st.error .si { color: #000; flex: none; } .st.error .ca { background: #000; color: #fff; } .st.error .cx { color: #000000a0; }
     @keyframes stin { from { opacity: 0; transform: translateY(-6px); } }
     @keyframes stpulse { from { opacity: .35; } }
-    :host([open]) .st { right: 70px; top: 14px; max-width: min(360px, calc(100% - 70px - var(--_pad))); }
+    :host([open]) .st { right: 116px; top: 14px; max-width: min(360px, calc(100% - 116px - var(--_pad))); } /* #50: left of the labeled Close button */
     @container spk (max-width: 640px) { :host([open]) .st { right: var(--_pad); top: 10px; } }
-    @container spk (max-width: 640px) and (max-height: 560px) { :host([open]) .st { right: 70px; top: 6px; } }
+    @container spk (max-width: 640px) and (max-height: 560px) { :host([open]) .st { right: 116px; top: 6px; max-width: calc(100% - 116px - var(--_pad)); } }
     .confirm { z-index: 10; max-height: calc(100cqh - 24px); overflow-y: auto; }
     /* the panel only knows the card's own height (not the viewport): short cards get a full-height sheet and tighter rows */
     .sh { flex: none; }
@@ -633,9 +635,9 @@ export class JbSpeakers extends LitElement {
     :host([large]) .vr { grid-template-columns: 52px minmax(0, 1fr) auto; }
     :host([large]) .vn { font-size: 18px; } :host([large]) .vn small { font-size: 14px; }
     :host([large]) .vs { --jb-slider-h: 10px; --jb-slider-knob: 30px; --jb-slider-hit: 52px; }
-    :host([large]) .x { width: 60px; height: 60px; }
+    :host([large]) .x { height: 60px; min-width: 104px; padding: 0 24px; font-size: 18px; }
     :host([large]) .st { font-size: 16px; min-height: 48px; } :host([large]) .st .ca { height: 42px; font-size: 16px; padding: 0 18px; } :host([large]) .st .cx { width: 40px; height: 40px; }
-    :host([large][open]) .st { right: 84px; }
+    :host([large][open]) .st { right: 132px; max-width: min(360px, calc(100% - 132px - var(--_pad))); }
     @media (prefers-reduced-motion: reduce) { .chip:active { transform: none; } .st, .st .dot { animation: none; } }
   `];
 }
