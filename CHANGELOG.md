@@ -12,6 +12,7 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 - Lyrics: tap anywhere to go back to the player.
 - Speakers: a clear Close button replaces the small X.
 - Lyrics full screen: tap anywhere to go back; on-screen controls removed.
+- Screensaver and full-screen lyrics are now one screen: album art fills the background, with "Tap to close".
 
 ## 0.7.7 — 2026-11-05
 

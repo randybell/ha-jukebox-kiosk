@@ -10,7 +10,7 @@ import './editor';
 import './lyrics/lyrics-view';
 import { LyricsStore, type LyricsStatus } from './lyrics/store';
 import { QueueModel } from './queue-model';
-import { roomsOf, playerArt } from './shared';
+import { roomsOf, playerArt, ART, hash } from './shared';
 import './speakers-view';
 import './station-sheet';
 import type { JbSpeakers } from './speakers-view';
@@ -86,7 +86,7 @@ export class JukeboxCard extends LitElement {
     _saver: { state: true },
     _bd: { state: true },
     _qart: { state: true },
-    _stage: { state: true },
+    _stage: { state: true }, _stageOut: { state: true },
     _spk: { state: true },
     _station: { state: true },
     _spkEl: { state: true },
@@ -118,9 +118,8 @@ export class JukeboxCard extends LitElement {
   private _lstatus = '';
   private _stageNative = false;
   /** 0.7.8: Stage has no controls; a plain tap (≤ 10 px, ≤ 500 ms, no scroll / long-press seek since, not within 250 ms of a scroll) closes it */
-  private _stTap?: { x: number; y: number; t: number; id: number };
-  private _stScrollAt = 0;
-  private _stSeekAt = 0;
+  /** the shared view is fading out of Stage */
+  private _stageOut = false;
   /** fitted height (px) written to --_fit-h; 0 = not measured yet */
   private _fitH = 0;
   private _fitRaf = 0;
@@ -516,13 +515,6 @@ export class JukeboxCard extends LitElement {
     if (!this.libHost()) (this.renderRoot.querySelector('jb-browse') as any)?.idleReset?.();
   }
   private onActivity = () => { if (!this._saver) this.armIdle(); };
-  private wake = (e: Event) => {
-    // Swallow the waking touch: keep the overlay up briefly so the follow-up click can't hit a control underneath.
-    e.preventDefault(); e.stopPropagation();
-    if (this._saver !== 'on') return;
-    this._saver = 'waking';
-    window.setTimeout(() => { this._saver = ''; this.armIdle(); }, 350);
-  };
 
   // ---------- child events ----------
   private onPlayed = () => this.queue.refreshSoon(800);
@@ -569,7 +561,7 @@ export class JukeboxCard extends LitElement {
   private onStage = (e: CustomEvent) => { if (e.detail?.open === false) this.closeStage(); else this.openStage(); };
   /** Must run synchronously inside the tap that opened it, or browsers refuse requestFullscreen. */
   openStage() {
-    this._stage = true;
+    this._stage = true; this._stageOut = false;
     this._stageNative = false;
     const el = this as any;
     const req = el.requestFullscreen ?? el.webkitRequestFullscreen;
@@ -584,7 +576,7 @@ export class JukeboxCard extends LitElement {
     this.dataset.stage = this._stageNative ? 'fullscreen' : 'overlay';
   }
   closeStage() {
-    this._stage = false; this._stTap = undefined;
+    this._stage = false; this._stageOut = false;
     delete this.dataset.stage;
     const d = document as any;
     const fs = d.fullscreenElement ?? d.webkitFullscreenElement;
@@ -598,47 +590,10 @@ export class JukeboxCard extends LitElement {
     if (!fs && this._stage && this._stageNative) { this._stageNative = false; this.closeStage(); }
   };
   private onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && this._stage) { e.preventDefault(); this.closeStage(); }
+    if (e.key === 'Escape' && this._saver === 'on') this.ambClose(e, 'saver');
+    else if (e.key === 'Escape' && this._stage) this.ambClose(e, 'stage');
     else if (e.key === 'Escape' && this._station) { e.preventDefault(); this._station = null; }
   };
-  private stDown = (e: PointerEvent) => {
-    this._stTap = (e.pointerType === 'mouse' && e.button !== 0) || Date.now() - this._stScrollAt < 250 ? undefined : { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId };
-  };
-  private stMove = (e: PointerEvent) => {
-    const t = this._stTap; if (t && e.pointerId === t.id && Math.hypot(e.clientX - t.x, e.clientY - t.y) > 10) this._stTap = undefined;
-  };
-  private stUp = (e: PointerEvent) => {
-    const t = this._stTap; this._stTap = undefined;
-    if (!t || e.pointerId !== t.id || Date.now() - t.t > 500 || Math.hypot(e.clientX - t.x, e.clientY - t.y) > 10) return;
-    if (this._stScrollAt >= t.t || this._stSeekAt >= t.t) return;
-    e.preventDefault();
-    // the click that follows this tap must not land on Now Playing underneath (e.g. on Play/Pause)
-    const swallow = (ev: Event) => { ev.stopPropagation(); ev.preventDefault(); };
-    this.addEventListener('click', swallow, { capture: true, once: true });
-    window.setTimeout(() => this.removeEventListener('click', swallow, { capture: true }), 400);
-    this.closeStage();
-  };
-  private stCancel = () => { this._stTap = undefined; };
-  private renderStage() {
-    const c = this._config, ent = this.hass?.states[c.entity!];
-    const a = ent?.attributes ?? {};
-    const pic = this.art();
-    const bd = this._bd;
-    const lyr = c.show_lyrics !== false;
-    const bg = pic && (bd === 'full' || bd === 'light') ? `background-image:url("${pic.replace(/"/g, '%22')}")` : '';
-    return html`<div class="stage ${lyr ? '' : 'nolyr'}" role="dialog" aria-label="Stage" @pointerdown=${this.stDown} @pointermove=${this.stMove}
-      @pointerup=${this.stUp} @pointercancel=${this.stCancel} @jukebox-lyrics-scroll=${() => { this._stScrollAt = Date.now(); this._stTap = undefined; }}
-      @jukebox-lyrics-seek=${() => { this._stSeekAt = Date.now(); }}>
-      ${bg ? html`<div class="st-bg st-${bd}" style=${bg}></div>` : nothing}
-      <div class="st-main">
-        <div class="st-left">
-          <div class="st-art">${pic ? html`<img src=${pic} alt="" draggable="false" />` : html`<span class="st-ph">${icon('disc')}</span>`}</div>
-          <div class="st-meta"><b>${a.media_title ?? 'Nothing playing'}</b><small>${a.media_artist ?? ''}</small></div>
-        </div>
-        ${lyr ? html`<jb-lyrics class="st-ly" mode="stage" .hass=${this.hass} .config=${c} .store=${this.lyrics} ?active=${!this._saver}></jb-lyrics>` : nothing}
-      </div>
-    </div>`;
-  }
   private onOpen = (e: CustomEvent) => {
     const { item, type } = e.detail ?? {};
     if (!item) return;
@@ -738,32 +693,51 @@ export class JukeboxCard extends LitElement {
     catch { return this._now.toLocaleTimeString(); }
   }
 
-  private renderSaver() {
-    const ent = this.hass?.states[this._config.entity!];
+  /** 0.7.8: ONE shared full-screen view for both the screensaver and Stage (identical look and behaviour; only how it
+   *  opens differs). Album art fills the background (a soft blurred colour when the song has no art), the clock and date,
+   *  the song info and a few sliding lyric lines drift over it (burn-in), "Tap to close" at the bottom. Nothing playing:
+   *  clock and date on black. A tap (or Esc) closes it; the follow-up click is swallowed so it can't hit what is underneath. */
+  private renderAmbient(use: 'saver' | 'stage') {
+    const c = this._config, ent = this.hass?.states[c.entity!];
     const at = ent?.attributes ?? {};
-    const pic = this.art();
     const playing = ent?.state === 'playing' || ent?.state === 'paused';
+    const pic = playing ? this.art() : undefined;
     const lang = this.hass?.locale?.language || this.hass?.language || undefined;
     const ls = this.lyrics.state.status;
-    const svOn = playing && this._config.show_lyrics !== false && this._config.screensaver_lyrics !== false;
-    const svLyrics = svOn && (ls === 'synced' || ls === 'plain');
+    const lyrOn = playing && c.show_lyrics !== false && c.screensaver_lyrics !== false;
+    const lyr = lyrOn && (ls === 'synced' || ls === 'plain');
     // No lyrics to show: a small, quiet status line instead, inside the drifting block so it moves with the burn-in shift.
-    const svStatus = svOn ? SAVER_LYRICS_STATUS[ls] : undefined;
+    const status = lyrOn ? SAVER_LYRICS_STATUS[ls] : undefined;
     let date = '';
     try { date = this._now.toLocaleDateString(lang, { weekday: 'long', month: 'long', day: 'numeric' }); } catch { /* */ }
-    return html`<div class="saver ${this._saver}" role="button" aria-label="Wake" @pointerdown=${this.wake} @click=${this.wake}
-        @pointerup=${(e: Event) => { e.preventDefault(); e.stopPropagation(); }}>
-      ${pic && (this._bd === 'full' || this._bd === 'light') ? html`<div class="sv-bg" style=${`background-image:url("${pic.replace(/"/g, '%22')}")`}></div>` : nothing}
-      <div class="sv-drift ${svLyrics ? 'has-ly' : ''}">
+    const bdOn = this._bd === 'full' || this._bd === 'light';
+    const state = use === 'saver' ? this._saver : this._stageOut ? 'waking' : 'on';
+    const title = playing ? at.media_title : undefined;
+    const swallow = (e: Event) => { e.preventDefault(); e.stopPropagation(); };
+    return html`<div class="amb ${use} ${state}" role="button" aria-label="Close" data-use=${use}
+        @pointerdown=${(e: Event) => this.ambClose(e, use)} @pointerup=${swallow} @click=${swallow}>
+      ${bdOn && playing && title ? pic
+        ? html`<div class="sv-bg" style=${`background-image:url("${pic.replace(/"/g, '%22')}")`}></div>`
+        : html`<div class="sv-bg noart" style=${`background:${ART[hash(String(title)) % ART.length]}`}></div>` : nothing}
+      <div class="sv-drift ${lyr ? 'has-ly' : ''}">
         <div class="sv-clock">${this.timeStr()}</div>
         <div class="sv-date">${date}</div>
-        ${playing && at.media_title ? html`<div class="sv-np">${pic ? html`<img src=${pic} alt="" draggable="false" />` : nothing}
-          <span><b>${at.media_title}</b><small>${[at.media_artist, ent?.state === 'paused' ? 'Paused' : ''].filter(Boolean).join(' · ')}</small></span></div>` : nothing}
-        ${svLyrics ? html`<jb-lyrics class="sv-ly" mode="saver" .hass=${this.hass} .config=${this._config} .store=${this.lyrics} ?active=${this._saver === 'on'}></jb-lyrics>` : nothing}
-        ${svStatus ? html`<div class="sv-lys" role="status" data-status=${ls}>${svStatus}</div>` : nothing}
+        ${title ? html`<div class="sv-np"><span><b>${title}</b><small>${[at.media_artist, ent?.state === 'paused' ? 'Paused' : ''].filter(Boolean).join(' · ')}</small></span></div>` : nothing}
+        ${lyr ? html`<jb-lyrics class="sv-ly" mode="saver" .hass=${this.hass} .config=${c} .store=${this.lyrics} ?active=${state === 'on'}></jb-lyrics>` : nothing}
+        ${status ? html`<div class="sv-lys" role="status" data-status=${ls}>${status}</div>` : nothing}
       </div>
-      <div class="sv-hint">Tap to wake</div>
+      <div class="sv-hint">Tap to close</div>
     </div>`;
+  }
+  /** Close the shared view (tap or Esc): fade out, keep it up ~350 ms and swallow the follow-up click for 400 ms. */
+  private ambClose(e: Event | undefined, use: 'saver' | 'stage') {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (use === 'saver' ? this._saver !== 'on' : !this._stage || this._stageOut) return;
+    const swallow = (ev: Event) => { ev.stopPropagation(); ev.preventDefault(); };
+    this.addEventListener('click', swallow, { capture: true });
+    window.setTimeout(() => this.removeEventListener('click', swallow, { capture: true }), 400);
+    if (use === 'saver') { this._saver = 'waking'; window.setTimeout(() => { this._saver = ''; this.armIdle(); }, 350); }
+    else { this._stageOut = true; window.setTimeout(() => this.closeStage(), 350); }
   }
 
   render() {
@@ -816,8 +790,8 @@ export class JukeboxCard extends LitElement {
               @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { if (t.id === 'browse' && this._tab === 'browse') { const lh = this.libHost(); if (lh) lh.home(); else (this.renderRoot.querySelector('jb-browse') as any)?.goHome?.(); } this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
                 ? html`<em class="badge">${this._qcount > 99 ? '99+' : this._qcount}</em>` : nothing}</button>`)}
         </nav>
-        ${this._stage ? this.renderStage() : nothing}
-        ${this._saver ? this.renderSaver() : nothing}
+        ${this._stage ? this.renderAmbient('stage') : nothing}
+        ${this._saver ? this.renderAmbient('saver') : nothing}
       </ha-card>`;
   }
 
@@ -863,26 +837,26 @@ export class JukeboxCard extends LitElement {
     .view[hidden] { display: none; }
     .badge { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--_active);
       color: var(--_on-accent); font-style: normal; font-size: 11px; font-weight: 800; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
-    .saver { position: absolute; inset: 0; z-index: 50; background: #000; overflow: hidden; cursor: none; touch-action: none; animation: svin 900ms ease both; }
-    .saver.waking { animation: svout 340ms ease both; }
+    .amb { position: absolute; inset: 0; z-index: 50; background: #000; overflow: hidden; cursor: none; touch-action: none; animation: svin 900ms ease both; }
+    .amb.waking { animation: svout 340ms ease both; }
     @keyframes svin { from { opacity: 0 } to { opacity: 1 } }
     @keyframes svout { to { opacity: 0 } }
     .sv-bg { position: absolute; inset: -4%; background-size: cover; background-position: center; opacity: .85; filter: saturate(1.05);
       animation: kb 90s ease-in-out infinite alternate; }
     .sv-bg::after { content: ""; position: absolute; inset: 0; background: radial-gradient(90% 90% at 50% 50%, #0000 40%, #000a 100%), linear-gradient(#0000004d, #00000080); }
+    .sv-bg.noart { inset: -10%; filter: blur(60px) saturate(1.2); opacity: .7; }
     @keyframes kb { from { transform: scale(1) translate(0, 0) } to { transform: scale(1.08) translate(-2%, 1.5%) } }
     .sv-drift { position: absolute; left: 8%; top: 12%; display: flex; flex-direction: column; gap: 6px; animation: drift 240s ease-in-out infinite alternate; }
     @keyframes drift {
       0% { transform: translate(0, 0) } 25% { transform: translate(calc(70cqw - 100%), 18cqh) } 50% { transform: translate(28cqw, calc(64cqh - 100%)) }
       75% { transform: translate(calc(78cqw - 100%), 4cqh) } 100% { transform: translate(6cqw, calc(60cqh - 100%)) } }
-    .saver { container-type: size; }
+    .amb { container-type: size; }
     .sv-clock { font-family: var(--_font-display); font-weight: 800; font-size: clamp(72px, 16cqw, 200px); line-height: .95; letter-spacing: -.03em; font-variant-numeric: tabular-nums; text-shadow: 0 4px 40px #0008; }
     .sv-date { font-size: clamp(16px, 2.4cqw, 26px); color: #ffffffc0; font-weight: 600; }
-    .sv-np { display: flex; align-items: center; gap: 14px; margin-top: 18px; max-width: min(560px, 80cqw); }
-    .sv-np img { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; box-shadow: 0 8px 30px #0009; }
+    .sv-np { display: flex; align-items: center; gap: 14px; margin-top: 18px; max-width: min(1100px, 80cqw); }
     .sv-np span { display: flex; flex-direction: column; min-width: 0; }
-    .sv-np b { font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sv-np small { font-size: 15px; color: #ffffffa8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sv-np b { font-family: var(--_font-display); font-size: clamp(26px, 4.2cqw, 60px); font-weight: 800; line-height: 1.12; text-shadow: 0 2px 24px #000a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sv-np small { font-size: clamp(17px, 2.4cqw, 32px); margin-top: 4px; text-shadow: 0 2px 16px #000a; color: #ffffffa8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sv-hint { position: absolute; bottom: 22px; left: 0; right: 0; text-align: center; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: #ffffff55; }
     /* reduced motion: no drift and no Ken Burns. The text block still jumps (no animation) to one of 10 spots every 60 s, so a
        static screen can't burn in. The .rm class mirrors the media query so the dev harness/tests can force it. */
@@ -890,37 +864,13 @@ export class JukeboxCard extends LitElement {
     .rm .sv-drift, .rm .sv-bg { animation: none; } .rm .sv-drift { animation: hop 600s step-end infinite; }
     .rm { --jb-ly-slide: 0ms; } /* inherited into jb-lyrics: the screensaver lyrics move without sliding */
     @keyframes hop { 0% { transform: translate(0, 0) } 10% { transform: translate(calc(70cqw - 100%), 18cqh) } 20% { transform: translate(28cqw, calc(64cqh - 100%)) } 30% { transform: translate(calc(78cqw - 100%), 4cqh) } 40% { transform: translate(6cqw, calc(60cqh - 100%)) } 50% { transform: translate(calc(50cqw - 50%), 30cqh) } 60% { transform: translate(calc(74cqw - 100%), calc(66cqh - 100%)) } 70% { transform: translate(12cqw, 10cqh) } 80% { transform: translate(calc(60cqw - 100%), calc(40cqh - 50%)) } 90% { transform: translate(20cqw, calc(66cqh - 100%)) } 100% { transform: translate(0, 0) } }
-    .bd-static .saver, .bd-off .saver { background: #000; }
+    .bd-static .amb, .bd-off .amb { background: #000; }
     .sv-drift.has-ly .sv-clock { font-size: clamp(56px, 10cqw, 140px); }
     .sv-ly { margin-top: 18px; width: min(820px, 72cqw); }
     .sv-lys { margin-top: 14px; font-size: clamp(12px, 1.1cqw, 15px); font-weight: 600; letter-spacing: .04em; color: #ffffff6b; text-shadow: 0 1px 8px #000a; white-space: nowrap; }
-    /* ---- Stage ---- */
+    /* ---- Stage: the same shared view (see renderAmbient), opened from Now Playing; it sits under the screensaver ---- */
     :host(:fullscreen), :host(:-webkit-full-screen) { background: #000; }
-    .stage { position: absolute; inset: 0; z-index: 45; background: #000; overflow: hidden; container: stage / size; animation: svin 300ms ease both; cursor: default; }
-    .st-bg { position: absolute; inset: -6%; background-size: cover; background-position: center; pointer-events: none; }
-    .st-full { filter: blur(60px) saturate(1.2); opacity: .55; transform: translateZ(0); }
-    .st-light { opacity: .22; }
-    .st-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #000d 0%, #0008 45%, #000c 100%); }
-    .st-main { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 46fr) minmax(0, 54fr); align-items: center; gap: 4cqw; padding: 6cqh 5cqw; }
-    .nolyr .st-main { grid-template-columns: minmax(0, 1fr); justify-items: center; }
-    .st-left { display: flex; flex-direction: column; gap: 18px; min-width: 0; align-items: flex-start; }
-    .nolyr .st-left { align-items: center; text-align: center; }
-    .st-art { width: min(40cqw, 68cqh); aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: #111; box-shadow: 0 30px 80px #000c; }
-    .st-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .st-ph { display: grid; place-items: center; width: 100%; height: 100%; } .st-ph .i { width: 40%; height: 40%; color: #ffffff26; }
-    .st-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: min(40cqw, 68cqh); }
-    .nolyr .st-meta { max-width: 80cqw; }
-    .st-meta b { font-family: var(--_font-display); font-size: clamp(20px, 2.6cqw, 40px); font-weight: 800; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .st-meta small { font-size: clamp(15px, 1.7cqw, 24px); color: #ffffffa8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .st-ly { height: 100%; min-height: 0; }
-    @container stage (max-aspect-ratio: 1/1) {
-      .st-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); align-items: stretch; padding: 64px 6cqw 4cqh; gap: 3cqh; }
-      .st-left { flex-direction: row; align-items: center; gap: 16px; }
-      .st-art { width: min(34cqw, 26cqh); border-radius: 10px; }
-      .st-meta { max-width: none; flex: 1; }
-      .nolyr .st-main { grid-template-rows: minmax(0, 1fr); align-content: center; }
-      .nolyr .st-left { flex-direction: column; } .nolyr .st-art { width: min(82cqw, 56cqh); }
-    }
+    .amb.stage { z-index: 45; }
     /* Tab bar (0.5.0, segmented): one rounded translucent track on the black footer, equal segments with hairline
        dividers, the active segment solid white. Only colour/transform transitions (no layout, no blur). */
     .tabs { display: grid; grid-template-columns: repeat(var(--tabs, 4), minmax(0, 1fr)); gap: 4px;
