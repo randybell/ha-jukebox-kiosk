@@ -183,14 +183,14 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
     !sent.some((c) => /set_members|transfer|cmd\/stop/.test(c)), J(sent));
   await p.close();
 }
-// ---------------- 6. explicit YAML backend: native wins over auto; mass_queue is gone ----------------
+// ---------------- 6. 0.7.9 Q1: backend, config_entry_id, favorite_entity and presets are gone; leftover YAML keys are ignored ----------------
 {
-  const p = await open(`&cfg=${encodeURIComponent(J({ backend: 'native' }))}&tab=queue&admin=1`);
+  const p = await open(`&cfg=${encodeURIComponent(J({ backend: 'native', config_entry_id: 'WRONG', favorite_entity: 'button.x' }))}&tab=queue&admin=1`);
   await wait(p, `${QV}.querySelectorAll('.qr.next').length > 3`);
-  check('X1 backend: native with the integration loaded → core services, no kiosk queue reads',
-    (await ev(p, `__card.dataset.backend`)) === 'native' && !(await ws(p)).some((x) => x.type === 'queue_items'), await ev(p, `__card.dataset.backend`));
-  const err = await ev(p, `(() => { try { __card.setConfig({ ...__card._config, backend: 'mass_queue' }); return ''; } catch (e) { return e.message; } })()`);
-  check('X2 backend: mass_queue is refused as an unknown value (no fallback)', /backend/.test(err), err);
+  check('X1 leftover backend: native is ignored → still the kiosk backend (always automatic), kiosk queue reads',
+    (await ev(p, `__card.dataset.backend`)) === 'kiosk' && (await ws(p)).some((x) => x.type === 'queue_items'), await ev(p, `__card.dataset.backend`));
+  const err = await ev(p, `(() => { try { __card.setConfig({ ...__card._config, backend: 'mass_queue', config_entry_id: 42, favorite_entity: 'light.x', presets: 'nope' }); return ''; } catch (e) { return e.message; } })()`);
+  check('X2 leftover backend / config_entry_id / favorite_entity / presets values, even invalid ones, load without an error', err === '', err);
   await p.close();
 }
 // ---------------- 7. 0.6.2 Search radio heart (library class): favourite a station from Search ----------------

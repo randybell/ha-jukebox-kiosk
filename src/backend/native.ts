@@ -32,7 +32,7 @@ export class NativeBackend implements MaBackend {
   caps: Caps = { ...NO_CAPS, queue: true };
   /** core MA services have no browse / genres / recommendations: every v0.7 feature stays hidden */
   ext: ExtCaps = { ...NO_EXT };
-  /** found by an admin's config_entries/get; non-admins can't list config entries ('' = only a YAML config_entry_id works) */
+  /** found by an admin's config_entries/get; non-admins can't list config entries ('' = not found; the integration is the normal source) */
   maEntry = '';
   ready: Promise<void>;
   private em = new Emitter();

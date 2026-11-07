@@ -55,11 +55,11 @@ The integration finds dashboard resources that still point at `/hacsfiles/ha-juk
 
 ## Backends
 
-The card picks its backend by itself; you don't set anything. The resolved backend is shown on the element as `data-backend`. *(Advanced, YAML only)* `backend: kiosk` or `backend: native` forces one.
+The card picks its backend by itself; you don't set anything. The resolved backend is shown on the element as `data-backend`. There is no option for it (since 0.7.9); an old `backend:` line in YAML is ignored.
 
-| `backend` | Uses | Notes |
+| Backend | Uses | Notes |
 |---|---|---|
-| `auto` (default) | `kiosk` if `jukebox_kiosk` is loaded, otherwise `native` | |
+| picked automatically | `kiosk` if `jukebox_kiosk` is loaded, otherwise `native` | |
 | `kiosk` | `jukebox_kiosk/*` WebSocket commands | Every feature. Controls the server doesn't allow for this user are hidden. |
 | `native` | the official `music_assistant` services only | Search, Browse grid, transport, volume and playing music. No queue tab, track lists, lyrics or grouping. |
 
@@ -187,7 +187,7 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 
   Shuffle and repeat are queue settings: they always go to the active target (the group or player the card is playing on, e.g. Everywhere), never to individual member speakers, and there is no per-track or per-row shuffle or repeat. If the player ever reports repeat "one" (set somewhere else), the card shows it as repeat queue and, with `coerce_repeat_one` on (the default), sends a single `repeat_set {repeat: all}` to that player: once per detection, about 1.5 s after it is seen, at most once a minute, and only for a user with Playback permission. A message is never shown for this.
   Active shuffle and repeat are white with a dot under them; inactive ones are light white. The UI updates optimistically and reconciles when HA reports the new state.
-- **Heart.** With nothing set, the heart adds the playing song to Music Assistant's favourites through the integration (`jukebox_kiosk/favorite_current`, needs the `library` class), or, on the native backend, presses the player's own Music Assistant "Favorite current song" button, found on the player's device. A filled heart removes it with `jukebox_kiosk/unfavorite_current`. When the card has no way to favourite, the heart is hidden. *(Advanced, YAML only)* `favorite_entity: button.…` presses that button instead; `favorite_entity: ''` hides the heart.
+- **Heart.** The heart adds the playing song to Music Assistant's favourites through the integration (`jukebox_kiosk/favorite_current`, needs the `library` class), or, on the native backend, presses the player's own Music Assistant "Favorite current song" button, found on the player's device. A filled heart removes it with `jukebox_kiosk/unfavorite_current`. When the card has no way to favourite, the heart is hidden. There is no option for it (since 0.7.9); an old `favorite_entity:` line in YAML is ignored.
 - **Up next strip.** It shows the next queue item and "+ N more". Tapping it opens the Queue tab.
 - **Volume:**
   - **Everywhere** sends `volume_set` to the group player.
@@ -218,9 +218,9 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 
 - **Header status** ("Everywhere · 3 rooms synced", or "N speakers") opens the Speakers panel. The panel opens in the middle of the card, between the header and the tab bar (so it fits the measured height below the HA toolbar), scrolls when it is taller than that, and closes on a tab tap or the ✕.
 - **Fixed mode (default).** The panel is a mixer: one volume slider per room, nothing else. Every call goes to `entity`, exactly as in 0.4.
-- **Dynamic mode.** "Play on" chips choose the target (remembered per device); joining, dropping and moving use Music Assistant only: `jukebox_kiosk/ma` with `players/cmd/set_members` and `player_queues/transfer` (never `media_player.join` / `unjoin`). Players are read with `players/all`. A static MA sync group is shown as fixed (no join/drop). Each room shows what it is playing. Presets regroup and set volumes in one tap. Changes are optimistic and time out. Every grouping message (joined, left, Regrouping…, errors, Undo) appears in one small status chip at the top right, under the header clock; it never covers the rest of the card, hides itself after about 4 s, and a new message replaces the old one. **Undo** in the chip works while it shows. Errors use the same chip in an inverted (white) style and stay a little longer. Since 0.6.4 drops happen on tap, with no centred dialog; a question that does need an answer (taking a speaker from another group, or the last room) is asked in the chip with one action button and ✕, and ignoring it does nothing. `confirm_drop: true` brings back the centred dialogs. Any room can be dropped and re-added, including the one that leads the group: the card asks MA to remove it from the group (`players/cmd/set_members` on the group, never an ungroup of the speaker), MA re-forms the group on the other rooms after about 6 s of silence and the queue plays on; the panel says "Regrouping…" until it does. `leader_drop: block` keeps the old behaviour (hand off with Move). The last room in a group can't be dropped (MA would stop and dissolve the group): tapping it shows "<Room> is the last speaker in <Group> · Pause" in the chip; Pause keeps the room and the queue, and "<Group> paused · Undo" resumes. While the group is idle, Join is shown greyed with a hint to start playback first. For dynamic MA groups the panel also offers MA's own default line-up as a "<Group> default" preset. Moving music to another target has a silence of about 5 s on the new target.
+- **Dynamic mode.** "Play on" chips choose the target (remembered per device); joining, dropping and moving use Music Assistant only: `jukebox_kiosk/ma` with `players/cmd/set_members` and `player_queues/transfer` (never `media_player.join` / `unjoin`). Players are read with `players/all`. A static MA sync group is shown as fixed (no join/drop). Each room shows what it is playing. Presets (one per dynamic group, from Music Assistant's own default members) regroup in one tap. Changes are optimistic and time out. Every grouping message (joined, left, Regrouping…, errors, Undo) appears in one small status chip at the top right, under the header clock; it never covers the rest of the card, hides itself after about 4 s, and a new message replaces the old one. **Undo** in the chip works while it shows. Errors use the same chip in an inverted (white) style and stay a little longer. Since 0.6.4 drops happen on tap, with no centred dialog; a question that does need an answer (taking a speaker from another group, or the last room) is asked in the chip with one action button and ✕, and ignoring it does nothing. `confirm_drop: true` brings back the centred dialogs. Any room can be dropped and re-added, including the one that leads the group: the card asks MA to remove it from the group (`players/cmd/set_members` on the group, never an ungroup of the speaker), MA re-forms the group on the other rooms after about 6 s of silence and the queue plays on; the panel says "Regrouping…" until it does. `leader_drop: block` keeps the old behaviour (hand off with Move). The last room in a group can't be dropped (MA would stop and dissolve the group): tapping it shows "<Room> is the last speaker in <Group> · Pause" in the chip; Pause keeps the room and the queue, and "<Group> paused · Undo" resumes. While the group is idle, Join is shown greyed with a hint to start playback first. For dynamic MA groups the panel also offers MA's own default line-up as a "<Group> default" preset. Moving music to another target has a silence of about 5 s on the new target.
 - **Permissions are a UI lock, not security.** `grouping` / `grouping_users` / `guest_access` only hide or disable controls in this card. Anyone with dashboard access can still call the same services from elsewhere in Home Assistant. Use HA users and dashboards to restrict access.
-- **Editor:** a Speakers section. **Speakers panel** offers "Volume only: always play on the chosen player" or "Choose speakers: pick, group and drop speakers from the card". Only Choose speakers shows the rest: targets, who may change speakers, extra people, everyone else, **Removing the main speaker from a group** ("Allow: the music keeps playing on the other speakers after a short pause" / "Don't allow: use Move to hand the music to another speaker first") and the ask-before-dropping switch. Presets stay YAML only (see `presets`).
+- **Editor:** a Speakers section. **Speakers panel** offers "Volume only: always play on the chosen player" or "Choose speakers: pick, group and drop speakers from the card". Only Choose speakers shows the rest: targets, who may change speakers, extra people, everyone else, **Removing the main speaker from a group** ("Allow: the music keeps playing on the other speakers after a short pause" / "Don't allow: use Move to hand the music to another speaker first") and the ask-before-dropping switch. Presets come from Music Assistant's group defaults; there is nothing to set.
 
 ### Library (search and browse in one tab)
 
@@ -259,7 +259,7 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 
 - Needs the `library` permission class. Without it (for example a guest you removed it from) the hearts are hidden, including the one on Now Playing.
 - No confirmation when you remove a heart. The heart flips immediately; if Music Assistant refuses or the call fails it flips back and the top-right status chip shows the error (with ✕). Successful changes show a short "Added … to favorites" in the same chip. There are no popups in the middle of the screen.
-- `hearts: false` hides the 0.7 row, tile and page hearts. *(YAML only)* `favorite_entity: ''` hides the Now Playing heart.
+- `hearts: false` hides the 0.7 row, tile and page hearts.
 
 ### Screensaver
 
@@ -343,10 +343,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | key | default | |
 |---|---|---|
 | `entity` | `media_player.everywhere` | Player for transport, the Everywhere volume, the queue and every `play_media` |
-| `config_entry_id` | found by itself | *(Advanced, YAML only)* Music Assistant config entry for `music_assistant.search` / `get_library`. Normally the card learns it from the integration (any user) or, on the native backend, from Home Assistant (admins). Set it only to override |
 | `rooms` | `[]` | `[{name, entity, icon?}]`, or bare entity ids (the name then comes from `friendly_name`). Each room gets its own volume slider |
-| `favorite_entity` | found by itself | *(Advanced, YAML only)* A button, input_button or script the heart presses instead of the automatic way (see **Heart**). `''` hides the heart |
-| `backend` | `auto` | *(Advanced, YAML only)* `auto`, `kiosk` or `native` (see [Backends](#backends)) |
 | `screensaver_minutes` | `10` (0–1440) | Idle minutes before the screensaver. `0` turns it off. The editor offers Off, 1, 5, 10, 15, 30, 60 and Custom; any 0–1440 value from YAML still loads |
 | `browse_limit` | `60` (1–500) | Items per Browse page (infinite scroll pages by `offset`) |
 | `queue_limit` | `200` (1–1000) | Upcoming items requested from `jukebox_kiosk/queue_items` (`limit_after`); out-of-range values are clamped |
@@ -367,7 +364,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `screensaver_lyrics` | `true` | Previous / current / next line (synced) or a slow scroll (plain) on the screensaver |
 | `lyrics_seek` | `true` | Long-press (0.55 s) a synced line to seek there. Never on radio |
 | `lyrics_offset_ms` | `500` (−5000–5000) | Shift for synced lyrics; positive shows lines sooner |
-| `speaker_mode` | `fixed` | `fixed`: always play on `entity`; the Speakers panel is a volume mixer and a 0.4 config makes exactly the same calls. `dynamic`: pick where to play, group, move and use presets. See [Speakers](#speakers-050) |
+| `speaker_mode` | `fixed` | `fixed`: always play on `entity`; the Speakers panel is a volume mixer and a 0.4 config makes exactly the same calls. `dynamic`: pick where to play, group, move and use Music Assistant's group presets. See [Speakers](#speakers-050) |
 | `targets` | all MA players | `dynamic` only: `[{entity, name?, members?}]` or entity ids the card may play on |
 | `grouping` | `admins` | Who may group, move, pick the target and use Play Now, Play Next and Remove on the queue: `admins`, `everyone` or `nobody`. Anyone else still sees those three labels, greyed. **A UI lock, not security** |
 | `grouping_users` | `[]` | Extra users (name or user id) treated like admins for the above |
@@ -375,7 +372,6 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `leader_drop` | `allow` | Dropping the leader of a playing group: `allow` (MA re-forms the group on the other rooms after about 6 s of silence; the panel shows "Regrouping…"), or `block` (hand off with Move) |
 | `coerce_repeat_one` | `true` | A player that reports repeat "one" is switched back to repeat all (the whole queue) with one `media_player.repeat_set`, once per detection with a one-minute cooldown, only for the card's active player and only for users with Playback. `false` sends nothing (repeat "one" is still shown as repeat queue, and the card never offers it) |
 | `confirm_drop` | `false` | `true` asks in a centred dialog before a drop, a takeover or pausing the last room (the 0.6.3 behaviour). `false` (default) drops on tap and shows a small status chip top-right with Undo; a takeover or last-room question is asked in the chip |
-| `presets` | `[]` | *(YAML only)* `[{name, members: [room entities], volumes?: {entity: percent}, target?}]` (`dynamic`) |
 | `large_buttons` | `false` | Bigger touch targets and text everywhere |
 | `hearts` | `true` | *(0.7)* A favourite heart on Search and Library rows and tiles, on playlist rows and on album, artist and playlist pages. See [Favourites (hearts)](#favourites-hearts). Needs the Jukebox Kiosk backend and the `library` class. `false` keeps the 0.6 hearts only (Search radio rows, the station sheet and Now Playing) |
 | `radio_favorites_only` | `false` | *(0.7)* Browse › Radio **My stations** lists favourite stations only. Default: favourites first, then the other library stations |
@@ -392,7 +388,9 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `radio_browse` | off | *(0.7)* `true` or a list of `popular`, `country`, `language`, `tag`: "Stations by" modes on Library → Radio (Radio Browser provider). Hidden on the native backend |
 | `radio_country` | HA's country | *(0.7)* Two-letter code the Country mode opens on |
 
-The visual editor shows on-screen wording only. Top: **Player** and **Room volume sliders**. **Display**: Start tab (the bar's names: Now Playing, Library, Queue, plus Search in the separate layout), screensaver, screensaver lyrics, Background, large buttons, repeat one. **Speakers** (see [Speakers](#speakers-050)). **Lyrics**: lyrics on/off, press-and-hold to jump, timing. **Search** and **Library** sections. There is no Lyrics tab and no Autoplay switch (the Queue shows the Autoplay switch whenever Music Assistant supports it). `config_entry_id`, `favorite_entity`, `backend`, `presets` and `accent` are YAML only. Quiet hours were removed in 0.7.9.
+*(0.7.9)* `config_entry_id`, `favorite_entity`, `presets` and `backend` are gone: the card always finds the Music Assistant entry itself (through the integration, else an admin lookup), the heart always works out who adds the favourite, and the backend is always automatic. Leftover lines for them in YAML are simply ignored.
+
+The visual editor shows on-screen wording only. Top: **Player** and **Room volume sliders**. **Display**: Start tab (the bar's names: Now Playing, Library, Queue, plus Search in the separate layout), screensaver, screensaver lyrics, Background, large buttons, repeat one. **Speakers** (see [Speakers](#speakers-050)). **Lyrics**: lyrics on/off, press-and-hold to jump, timing. **Search** and **Library** sections. There is no Lyrics tab and no Autoplay switch (the Queue shows the Autoplay switch whenever Music Assistant supports it). `accent` is YAML only. Quiet hours were removed in 0.7.9.
 
 
 ## Known issues

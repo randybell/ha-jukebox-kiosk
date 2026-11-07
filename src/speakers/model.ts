@@ -243,14 +243,13 @@ export function dropBlock(target: MaPlayer | undefined, speaker: string, players
   return '';
 }
 /**
- * Presets shown in the panel: card-config presets, then one per dynamic group whose default members MA reported
- * (config/players/get). When MA config can't be read (cfgs empty) the card-config presets are all there is.
- * A config preset with the same target and members hides the MA one.
+ * Presets shown in the panel: one per dynamic group whose default members MA reported (config/players/get).
+ * When MA config can't be read (cfgs empty) there are none.
  */
-export function maPresets(cfgs: Map<string, GroupConfig>, players: Players, rooms: Room[], targets: Target[], hass: HomeAssistant | undefined, own: PresetConfig[] = []): PresetConfig[] {
+export function maPresets(cfgs: Map<string, GroupConfig>, players: Players, rooms: Room[], targets: Target[], hass: HomeAssistant | undefined): PresetConfig[] {
   const out: PresetConfig[] = [];
   const key = (t: string | undefined, ms: string[]) => `${t ?? ''}|${[...ms].sort().join(',')}`;
-  const seen = new Set(own.map((p) => key(p.target, p.members)));
+  const seen = new Set<string>();
   for (const t of targets) {
     const id = targetMa(t.entity, hass, players);
     const g = id ? players.get(id) : undefined, cfg = id ? cfgs.get(id) : undefined;
@@ -260,17 +259,11 @@ export function maPresets(cfgs: Map<string, GroupConfig>, players: Players, room
     seen.add(key(t.entity, members));
     out.push({ name: `${t.name} default`, members, target: t.entity });
   }
-  return [...own, ...out];
+  return out;
 }
-/** config preset → MA ids (rooms without a mapping are skipped) */
+/** preset → MA ids (rooms without a mapping are skipped) */
 export function presetSpeakers(p: PresetConfig, rooms: Room[]): string[] {
   return p.members.map((e) => rooms.find((r) => r.entity === e)?.ma).filter((x): x is string => !!x);
-}
-export function validPreset(p: unknown): p is PresetConfig {
-  const o = p as PresetConfig;
-  return !!o && typeof o === 'object' && typeof o.name === 'string' && !!o.name && Array.isArray(o.members) && o.members.every((m) => typeof m === 'string' && m.startsWith('media_player.'))
-    && (o.volumes === undefined || (typeof o.volumes === 'object' && Object.values(o.volumes).every((v) => typeof v === 'number' && v >= 0 && v <= 100)))
-    && (o.target === undefined || (typeof o.target === 'string' && o.target.startsWith('media_player.')));
 }
 
 /** One line per takeover for confirm dialogs. nameOf maps an MA id to a display name. */

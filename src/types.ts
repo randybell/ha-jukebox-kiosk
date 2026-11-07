@@ -43,7 +43,7 @@ export interface TargetConfig {
   /** Room entities this group starts with (MA's own preset for a dynamic group is not readable). Used for takeover warnings. */
   members?: string[];
 }
-/** A named room preset: these rooms play together, optionally at these volumes (percent). */
+/** A room preset (from Music Assistant's dynamic-group defaults): these rooms play together, optionally at these volumes (percent). */
 export interface PresetConfig {
   name: string;
   /** Room entities (from `rooms`). */
@@ -60,18 +60,8 @@ export interface JukeboxCardConfig {
   type: string;
   /** Player that receives play_media. Default media_player.everywhere */
   entity?: string;
-  /** YAML-only override: the Music Assistant config entry id, for setups with several Music Assistant servers.
-   *  Unset (normal): the card asks the Jukebox Kiosk integration which entry it uses. */
-  config_entry_id?: string;
   /** Room players for the per-room volume sliders. `{name, entity}`; a bare entity id string is also accepted. */
   rooms?: Array<RoomConfig | string>;
-  /** YAML-only override: a button / script the Now Playing heart presses to add a favorite ('' hides the heart).
-   *  Unset (normal): the heart adds through the Jukebox Kiosk integration, or presses the player's own Music Assistant
-   *  favorite button when the card finds one. */
-  favorite_entity?: string;
-  /** YAML-only: which Music Assistant path to use. auto (default): the Jukebox Kiosk integration when it is loaded,
-   *  else core Music Assistant only (fewer features). */
-  backend?: 'auto' | 'kiosk' | 'native';
   /** Minutes of no touches before the screensaver. Default 10. 0 disables. Any whole number 0-1440. */
   screensaver_minutes?: number;
   /** Lyrics (needs the Jukebox Kiosk integration). Master switch for every lyrics surface and lookup. Default true. */
@@ -168,10 +158,9 @@ export interface JukeboxCardConfig {
   confirm_drop?: boolean;
   /** 0.6.5: a player that reports repeat 'one' is shown as 'all' and gets one repeat_set 'all' (needs Playback). Default true. */
   coerce_repeat_one?: boolean;
-  presets?: PresetConfig[];
   /** Bigger touch targets and text. Default false. */
   large_buttons?: boolean;
-  /** @internal the Music Assistant config entry the card uses (config_entry_id, else what the integration reports) */
+  /** @internal the Music Assistant config entry the card uses (what the integration reports, else an admin lookup) */
   _maEntry?: string;
   /** @internal the card's Music Assistant backend (set by the card, shared with every view) */
   _backend?: import('./backend/types').MaBackend;

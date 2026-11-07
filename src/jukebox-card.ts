@@ -16,7 +16,7 @@ import './station-sheet';
 import './station-confirm';
 import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
-import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, validPreset, liveCount, membersOf, pillPrefix } from './speakers/model';
+import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
 import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type BackdropMode } from './backdrop';
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { pickBackend, createBackend, type MaBackend } from './backend';
@@ -50,7 +50,6 @@ function validateSpeakers(c: JukeboxCardConfig) {
     if (c[k] !== undefined && !vals.includes(c[k] as string)) throw new Error(`jukebox-card: ${String(k)} must be one of ${vals.join(', ')}.`);
   };
   oneOf('speaker_mode', ['fixed', 'dynamic']);
-  oneOf('backend', ['auto', 'kiosk', 'native']);
   oneOf('grouping', ['admins', 'everyone', 'nobody']);
   oneOf('guest_access', ['volume', 'none']);
   oneOf('leader_drop', ['block', 'allow']);
@@ -67,10 +66,6 @@ function validateSpeakers(c: JukeboxCardConfig) {
       if (typeof t === 'object' && t.members !== undefined && (!Array.isArray(t.members) || !t.members.every((m) => typeof m === 'string' && m.startsWith('media_player.'))))
         throw new Error(`jukebox-card: target ${e}: members must be media_player entities.`);
     }
-  }
-  if (c.presets !== undefined) {
-    if (!Array.isArray(c.presets)) throw new Error('jukebox-card: presets must be a list of {name, members, volumes}.');
-    for (const p of c.presets) if (!validPreset(p)) throw new Error(`jukebox-card: preset ${JSON.stringify((p as any)?.name ?? p)} needs a name, media_player members and volumes 0-100.`);
   }
 }
 
@@ -163,8 +158,6 @@ export class JukeboxCard extends LitElement {
 
   setConfig(config: JukeboxCardConfig) {
     if (!config) throw new Error('Invalid configuration');
-    if (config.config_entry_id !== undefined && typeof config.config_entry_id !== 'string')
-      throw new Error('jukebox-card: config_entry_id must be the Music Assistant config entry id (a string).');
     if (!num(config.limit, 1, 50)) throw new Error('jukebox-card: limit must be between 1 and 50.');
     if (!num(config.browse_limit, 1, 500)) throw new Error('jukebox-card: browse_limit must be between 1 and 500.');
     if (!num(config.queue_limit, 1, 1000)) throw new Error('jukebox-card: queue_limit must be between 1 and 1000.');
@@ -176,8 +169,6 @@ export class JukeboxCard extends LitElement {
         if (typeof e !== 'string' || !e.startsWith('media_player.')) throw new Error(`jukebox-card: each room needs a media_player entity (got ${JSON.stringify(r)}).`);
       }
     }
-    if (config.favorite_entity && !/^(button|script|input_button)\./.test(config.favorite_entity))
-      throw new Error('jukebox-card: favorite_entity must be a button, input_button or script entity.');
     for (const k of ['show_lyrics', 'screensaver_lyrics', 'lyrics_seek'] as const)
       if (!bool(config[k])) throw new Error(`jukebox-card: ${k} must be true or false.`);
     if (!num(config.lyrics_offset_ms, -5000, 5000)) throw new Error('jukebox-card: lyrics_offset_ms must be between -5000 and 5000.');
@@ -214,7 +205,7 @@ export class JukeboxCard extends LitElement {
    */
   private syncBackend(force = false) {
     if (!this._base) return;
-    const kind = pickBackend(this._base, this.hass), key = kind;
+    const kind = pickBackend(this.hass), key = kind;
     if (key !== this._bkey || !this.backend) {
       this._bkey = key;
       this._bunsub?.(); this.stopPush();

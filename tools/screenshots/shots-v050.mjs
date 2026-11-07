@@ -58,7 +58,7 @@ for (const vp of VPS) {
   await shot(pg, 'move-done', vp);
   // presets
   await open(pg, `&spk=dyn&admin=1&target=${IN}`, vp); await panel(pg);
-  await tap(pg, `${SR}.querySelector('[data-preset="Dinner"]')`); await sleep(1200);
+  await tap(pg, `${SR}.querySelector('[data-preset="Indoor default"]')`); await sleep(1200);
   await shot(pg, 'preset-applied', vp);
   // guest (volume only) + quiet hours cap
   await open(pg, `&spk=dyn&target=${IN}`, vp); await panel(pg); await shot(pg, 'guest-view', vp);

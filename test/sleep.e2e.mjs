@@ -96,7 +96,7 @@ check('SL10f phone Off: still no Sleep timer status chip', !/Sleep timer|Sleep i
 
 // Card-side fallback: native backend (no kiosk / no send)
 await page.setViewport({ width: 1024, height: 600, deviceScaleFactor: 1 });
-await page.goto(`${BASE}?fresh=1&latency=20&tab=now&cfg=${encodeURIComponent(JSON.stringify({ backend: 'native' }))}`);
+await page.goto(`${BASE}?fresh=1&latency=20&tab=now&kiosk=0`);
 await page.waitForFunction('window.__ready === true');
 await sleep(500);
 await tap(`${NP}.querySelector('.ab.slp')`);
@@ -109,7 +109,7 @@ const cd12 = await ev(`(${NP}.querySelector('.sp.sleep-cd') || { textContent: ''
 check('SL12 native still shows countdown', /^Sleep \d+:\d{2}$/.test(cd12), cd12);
 
 // Fast local expiry: set a 1s card-side timer via evaluate and confirm pause
-await page.goto(`${BASE}?fresh=1&latency=10&tab=now&cfg=${encodeURIComponent(JSON.stringify({ backend: 'native' }))}`);
+await page.goto(`${BASE}?fresh=1&latency=10&tab=now&kiosk=0`);
 await page.waitForFunction('window.__ready === true');
 await sleep(400);
 await ev(`(() => { const n = __card.shadowRoot.querySelector('jb-now'); n._sleepExpires = Date.now()/1000 + 0.6; n._sleepMins = 15;

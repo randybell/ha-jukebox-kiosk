@@ -72,7 +72,7 @@ for (const vp of VPS) {
   await waitStatus(pg, TAB, 'error'); await sleep(300);
   await shot(pg, 'lyrics-unavailable', vp);
   // Editor Display section (stub ha-form, see dev/editor.html)
-  await open(pg, '&cfg=' + encodeURIComponent(JSON.stringify({ type: 'custom:jukebox-card', config_entry_id: '01MUSICASSISTANT0000000000', mass_queue_entry_id: '01MASSQUEUE0000000000000000', screensaver_minutes: 7 })), vp, 'editor.html');
+  await open(pg, '&cfg=' + encodeURIComponent(JSON.stringify({ type: 'custom:jukebox-card', mass_queue_entry_id: '01MASSQUEUE0000000000000000', screensaver_minutes: 7 })), vp, 'editor.html');
   await shot(pg, 'editor-display', vp);
   await pg.close();
 }

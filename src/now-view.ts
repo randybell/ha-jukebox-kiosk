@@ -200,13 +200,11 @@ export class JbNow extends LitElement {
     return this.flag('fav:' + uri, base);
   }
   /**
-   * Who adds the favorite: a YAML favorite_entity override ('' hides the heart), else the Jukebox Kiosk integration
-   * (Library permission), else the player's own Music Assistant favorite button when the card finds one.
+   * Who adds the favorite: the Jukebox Kiosk integration (Library permission), else the player's own Music Assistant
+   * favorite button when the card finds one, else nobody (the heart is hidden).
    */
   private favAdd(): { button: string } | { kiosk: true } | null {
-    const o = this.config.favorite_entity, be = this.config._backend;
-    if (o === '') return null;
-    if (o) return be?.kind !== 'kiosk' || be.caps.libraryWrite ? { button: o } : null;
+    const be = this.config._backend;
     if (be?.kind === 'kiosk') return be.caps.libraryWrite && be.favoriteCurrent ? { kiosk: true } : null;
     const btn = favoriteButtonFor(this.hass, this.eid);
     return btn ? { button: btn } : null;

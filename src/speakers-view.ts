@@ -419,8 +419,8 @@ export class JbSpeakers extends LitElement {
     else if (this.store?.error && !this.store.loaded) banner = `Music Assistant did not answer (${this.store.error}). Volume still works.`;
     else if (x.kind === 'static') banner = `${tName} is a fixed group in Music Assistant: no join or drop. Move to another group to change speakers.`;
     else if (x.kind === 'dynamic' && !x.active && this.store?.loaded) banner = `${tName} is not playing. Start playback to join or drop speakers (the buttons wake up), or pick a preset.`;
-    // card-config presets plus each dynamic group's MA default (config/players/get); unreadable MA config: card presets only
-    const presets = may ? maPresets(this.store?.configs ?? new Map(), x.players, x.rooms, targets, this.hass, x.c.presets ?? []) : [];
+    // each dynamic group's MA default (config/players/get); unreadable MA config: no presets
+    const presets = may ? maPresets(this.store?.configs ?? new Map(), x.players, x.rooms, targets, this.hass) : [];
     return html`<div class="scrim dim sp-scrim" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this.close(); }}></div>
       <section class="sheet" role="dialog" aria-label="Speakers" data-mode=${this.dynamic ? 'dynamic' : 'fixed'} data-guest=${may ? 'no' : 'yes'}>
         <header class="sh">

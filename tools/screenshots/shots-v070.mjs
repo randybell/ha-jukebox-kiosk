@@ -119,7 +119,7 @@ for (const vp of VPS) {
   await hermetic(pg);
   pg.on('pageerror', (e) => errors.push(e.message));
   await pg.setViewport({ deviceScaleFactor: 1, ...vp });
-  await pg.goto(`${ROOT}editor.html?cfg=${encodeURIComponent(J({ type: 'custom:jukebox-card', entity: 'media_player.placeholder', config_entry_id: 'MA_ENTRY_PLACEHOLDER', library_home: true, library_tiles: ['playlist', 'artist', 'album', 'radio', 'search', 'genre'] }))}`);
+  await pg.goto(`${ROOT}editor.html?cfg=${encodeURIComponent(J({ type: 'custom:jukebox-card', entity: 'media_player.placeholder', library_home: true, library_tiles: ['playlist', 'artist', 'album', 'radio', 'search', 'genre'] }))}`);
   await pg.waitForFunction('window.__ready === true');
   await pg.evaluate(() => { const f = __editor.shadowRoot.querySelector('ha-form'); f.querySelectorAll('details').forEach((d) => (d.open = d.dataset.section === 'library')); f.querySelector('details[data-section="library"]').scrollIntoView({ block: 'start' }); });
   await shot(pg, '12-library-editor', vp, 'Visual editor: Library section (ordered tiles, label; dev stub form)');

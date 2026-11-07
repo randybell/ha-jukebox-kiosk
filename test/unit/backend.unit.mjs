@@ -49,11 +49,10 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
 // ---------------- pickBackend / createBackend ----------------
 {
   const h = (components) => ({ states: {}, config: components === undefined ? {} : { components } });
-  check('B1 auto + jukebox_kiosk loaded → kiosk', B.pickBackend({}, h(['music_assistant', 'jukebox_kiosk'])) === 'kiosk');
-  check('B2 auto without the integration (or before hass knows its components) → native', B.pickBackend({}, h(['music_assistant'])) === 'native'
-    && B.pickBackend({}, h(undefined)) === 'native' && B.pickBackend({}, undefined) === 'native');
-  check('B3 an explicit backend (YAML) always wins', B.pickBackend({ backend: 'native' }, h(['jukebox_kiosk'])) === 'native'
-    && B.pickBackend({ backend: 'kiosk' }, h(['music_assistant'])) === 'kiosk');
+  check('B1 auto + jukebox_kiosk loaded → kiosk', B.pickBackend(h(['music_assistant', 'jukebox_kiosk'])) === 'kiosk');
+  check('B2 auto without the integration (or before hass knows its components) → native', B.pickBackend(h(['music_assistant'])) === 'native'
+    && B.pickBackend(h(undefined)) === 'native' && B.pickBackend(undefined) === 'native');
+  check('B3 always automatic: only one argument (hass), no YAML backend choice', B.pickBackend.length === 1);
   const kinds = ['kiosk', 'native'].map((k) => B.createBackend(k, () => undefined).kind);
   check('B4 createBackend builds the requested kind; no mass_queue backend exists any more', J(kinds) === J(['kiosk', 'native']) && !('MassQueueBackend' in B), J(kinds));
 }
