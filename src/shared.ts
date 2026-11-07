@@ -456,13 +456,13 @@ export const mediaStyles = css`
   :host([large]) .toast { font-size: 16px; padding: 14px 20px; }
 `;
 
-/** The Music Assistant config entry for music_assistant.* services: the YAML override, else what the card resolved. */
-export const maEntry = (c: Pick<JukeboxCardConfig, 'config_entry_id' | '_backend'> | undefined) => c?.config_entry_id || c?._backend?.maEntry || '';
+/** The Music Assistant config entry for music_assistant.* services: what the card found (integration, else admin lookup). */
+export const maEntry = (c: Pick<JukeboxCardConfig, '_backend'> | undefined) => c?._backend?.maEntry || '';
 /**
  * A music_assistant.* service call with the card's Music Assistant entry (response returned). Waits for the backend's
- * first answer, which is where the entry comes from when the YAML doesn't set one.
+ * first answer, which is where the entry comes from.
  */
 export async function maCall(hass: HomeAssistant, c: JukeboxCardConfig, service: string, data: Record<string, unknown>) {
-  if (!c.config_entry_id) await c._backend?.ready;
+  await c._backend?.ready;
   return hass.callService('music_assistant', service, { config_entry_id: maEntry(c), ...data }, undefined, false, true);
 }

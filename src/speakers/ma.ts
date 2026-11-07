@@ -26,7 +26,7 @@ export class SpeakerStore {
   hass?: HomeAssistant;
   players: Players = new Map();
   /** config/players/get per group (MA 2.10.9 scope config.players.read: granted to guest, user and service roles, so not
-   *  admin-only). Missing entries = unreadable: card presets only. */
+   *  admin-only). Missing entries = unreadable: no presets. */
   configs = new Map<string, GroupConfig>();
   configTried = new Set<string>();
   loaded = false;
@@ -67,7 +67,7 @@ export class SpeakerStore {
     groups.forEach((g) => this.configTried.add(g.player_id));
     await Promise.all(groups.map(async (g) => {
       try { const c = parseGroupConfig(await this.send('config/players/get', { player_id: g.player_id })); if (c) this.configs.set(g.player_id, c); }
-      catch { /* non-admin / older MA: fall back to card-config presets */ }
+      catch { /* non-admin / older MA: no presets */ }
     }));
     this.emit();
   }

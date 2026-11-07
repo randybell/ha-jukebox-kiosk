@@ -62,8 +62,8 @@ check('U10 queue Play now / Play next: admins and grouping_users in either mode;
 
 // ---------------- presets / plans ----------------
 const rooms = [{ entity: 'media_player.living_room', name: 'Living Room', ma: 'spk_living' }, { entity: 'media_player.kitchen', name: 'Kitchen', ma: 'spk_kitchen' }, { entity: 'media_player.garage', name: 'Garage' }];
-check('U14 presetSpeakers skips unmapped rooms; validPreset', J(M.presetSpeakers({ name: 'Dinner', members: ['media_player.kitchen', 'media_player.garage'] }, rooms)) === J(['spk_kitchen'])
-  && M.validPreset({ name: 'Dinner', members: ['media_player.kitchen'], volumes: { 'media_player.kitchen': 40 } }) && !M.validPreset({ name: 'x', members: ['light.x'] }));
+check('U14 presetSpeakers skips unmapped rooms; validPreset is gone (no card presets)', J(M.presetSpeakers({ name: 'Dinner', members: ['media_player.kitchen', 'media_player.garage'] }, rooms)) === J(['spk_kitchen'])
+  && M.validPreset === undefined);
 const p1 = M.planMembers(['spk_living', 'spk_kitchen'], ['spk_kitchen', 'spk_garage'], 'spk_living', false);
 check('U15 planMembers keeps the leader when leader_drop is block', J(p1) === J({ add: ['spk_garage'], remove: [], kept: ['spk_living'] }), J(p1));
 const p2 = M.planMembers(['spk_living', 'spk_kitchen'], [], 'spk_living', true);
@@ -271,13 +271,11 @@ check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.is
   const lrooms = [{ entity: 'media_player.a', name: 'A', ma: 'spk_a' }, { entity: 'media_player.b', name: 'B', ma: 'spk_b' }];
   const tg = [{ entity: 'media_player.all_rooms', name: 'All Rooms' }, { entity: 'media_player.inside', name: 'Inside' }];
   const cf = new Map([['grp_in', cfgIn], ['grp_all', cfgAll]]);
-  const own = [{ name: 'Mine', members: ['media_player.a'] }];
-  const ps = M.maPresets(cf, lp, lrooms, tg, lh, own);
-  check('U47 maPresets: card presets + "<Group> default" for dynamic groups only (static Everywhere-like group skipped)',
-    J(ps) === J([...own, { name: 'Inside default', members: ['media_player.a', 'media_player.b'], target: 'media_player.inside' }]), J(ps));
-  check('U48 maPresets: no MA config (unreadable / non-admin) → card presets only; same target + members as a card preset → not doubled',
-    J(M.maPresets(new Map(), lp, lrooms, tg, lh, own)) === J(own)
-      && M.maPresets(cf, lp, lrooms, tg, lh, [{ name: 'X', members: ['media_player.b', 'media_player.a'], target: 'media_player.inside' }]).length === 1);
+  const ps = M.maPresets(cf, lp, lrooms, tg, lh);
+  check('U47 maPresets: "<Group> default" for dynamic groups only (static Everywhere-like group skipped)',
+    J(ps) === J([{ name: 'Inside default', members: ['media_player.a', 'media_player.b'], target: 'media_player.inside' }]), J(ps));
+  check('U48 maPresets: no MA config (unreadable / non-admin) → no presets; an old 6th "card presets" argument is ignored',
+    J(M.maPresets(new Map(), lp, lrooms, tg, lh)) === J([]) && J(M.maPresets(cf, lp, lrooms, tg, lh, [{ name: 'X', members: ['media_player.a'] }])) === J(ps));
 }
 
 // ---------------- 0.6.3: Now Playing speaker controls ----------------

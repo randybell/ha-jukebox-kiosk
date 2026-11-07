@@ -152,7 +152,7 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
 // ---------------- editor ----------------
 {
   const ed = (cfg) => { const e = new Ed.JukeboxCardEditor(); e.setConfig(cfg); return e; };
-  const base = { config_entry_id: 'MA_ENTRY_PLACEHOLDER' };
+  const base = {};
   const names = Ed.editorSchema({}).flatMap((x) => x.schema ?? [x]).map((x) => x.name);
   check('ED1 Search & Browse has the v0.7 fields', ['search_categories', 'search_default_category', 'discover', 'radio_browse', 'radio_country'].every((n) => names.includes(n)));
   const e1 = ed(base), f1 = e1.formData();
@@ -225,7 +225,7 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
   check('LH9 editor: library_home / library_tiles / library_label / radio_favorites_only listed and labelled',
     ['library_home', 'library_tiles', 'library_label', 'radio_favorites_only'].every((n) => names.includes(n) && Ed.LABELS[n]));
   const ed = (cfg) => { const e = new Ed.JukeboxCardEditor(); e.setConfig(cfg); return e; };
-  const base = { type: 'custom:jukebox-card', entity: 'media_player.placeholder', config_entry_id: 'PLACEHOLDER' };
+  const base = { type: 'custom:jukebox-card', entity: 'media_player.placeholder' };
   const e1 = ed(base), f1 = e1.formData();
   check('LH10 editor shows the default tiles and writes nothing until changed; library_home shown off (0.7.2), radio_favorites_only off',
     J(f1.library_tiles) === J(['playlist', 'artist', 'album', 'radio', 'search']) && !('library_tiles' in e1.toConfig(f1))

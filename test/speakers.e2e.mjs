@@ -251,8 +251,8 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   check('M0 dynamic header status counts speakers', /3 speakers/.test(pill), pill);
   await openPanel(p); await waitLoaded(p);
   const d = await ev(p, `(() => { const r = ${SR}; return { mode: r.querySelector('.sheet').dataset.mode, chips: [...r.querySelectorAll('[data-target]')].map((c) => c.dataset.target + ':' + c.getAttribute('aria-checked')), presets: [...r.querySelectorAll('[data-preset]')].map((c) => c.dataset.preset), banner: r.querySelector('.banner')?.dataset.kind, acts: r.querySelectorAll('.act').length }; })()`);
-  check('M1 dynamic panel: Play-on chips (Everywhere on), card presets + the MA default "Outdoor default" (config/players/get; the Indoor default equals Dinner, so no duplicate), static Everywhere shown as fixed (no join/drop)',
-    d.mode === 'dynamic' && d.chips.length === 3 && d.chips[0] === `${EVERY}:true` && J(d.presets) === J(['Dinner', 'Whole house', 'Outdoor default']) && d.banner === 'static' && d.acts === 0, J(d));
+  check('M1 dynamic panel: Play-on chips (Everywhere on), the MA defaults "Indoor default" and "Outdoor default" only (config/players/get; card presets are gone), static Everywhere shown as fixed (no join/drop)',
+    d.mode === 'dynamic' && d.chips.length === 3 && d.chips[0] === `${EVERY}:true` && J(d.presets) === J(['Indoor default', 'Outdoor default']) && d.banner === 'static' && d.acts === 0, J(d));
   await tap(p, `${SR}.querySelector('[data-target="${OUT}"]')`);
   await wait(p, ASKQ);
   // Outdoor idle → just retarget (no transfer needed for an idle target? no: Everywhere active → transfer offers takeovers)
@@ -316,15 +316,15 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   if (asked16) await confirm(p, false);
   check('M16 the last speaker cannot be dropped: the chip offers Pause instead (no dialog), sends nothing',
     /last speaker/.test(lastT) && lastC?.act === 'Pause' && !modal16 && (await ma(p, 'players/cmd/set_members')).length === nSm && (await ev(p, `${act(LIV)}.getAttribute('aria-disabled')`)) === 'true', J({ lastT, lastC, modal16, dis: await ev(p, `${act(LIV)}.getAttribute('aria-disabled')`) }));
-  // preset: Dinner (same target) → re-adds Kitchen and sets capped volumes
+  // preset: Indoor default (same target) → re-adds Kitchen (MA defaults carry no volumes)
   const v0 = (await calls(p)).length;
-  await tap(p, `${SR}.querySelector('[data-preset="Dinner"]')`);
+  await tap(p, `${SR}.querySelector('[data-preset="Indoor default"]')`);
   await wait(p, ASKQ, 800) && (await confirm(p));
   await wait(p, `window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_kitchen')`);
-  await wait(p, `/Dinner/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`);
+  await wait(p, `/Indoor default/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`);
   const vols = (await calls(p)).slice(v0).filter((x) => x.service === 'volume_set').map((x) => `${x.target.entity_id}=${x.data.volume_level}`);
-  check('M17 preset Dinner → set_members adds Kitchen back, sets 35 % / 30 %', vols.includes(`${LIV}=0.35`) && vols.includes(`${KIT}=0.3`), J(vols));
-  check('M18 preset toast names it', /Dinner/.test(await toast(p)), await toast(p));
+  check('M17 preset Indoor default → set_members adds Kitchen back, no volume changes', vols.length === 0, J(vols));
+  check('M18 preset toast names it', /Indoor default/.test(await toast(p)), await toast(p));
   allJoins.push(...(await joins(p)));
   await p.close();
 }
@@ -919,11 +919,11 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await p.close();
 }
 {
-  // config/players/get refused (a token without the config read scope / older MA): card presets only
+  // config/players/get refused (a token without the config read scope / older MA): no presets
   const p = await open('&spk=dyn&admin=1&macfg=deny');
   await openPanel(p); await waitLoaded(p);
   const pr = await ev(p, `[...${SR}.querySelectorAll('[data-preset]')].map((c) => c.dataset.preset)`);
-  check('LV5 MA group config unreadable → the card presets only (no "<Group> default" chips), panel otherwise works', J(pr) === J(['Dinner', 'Whole house']), J(pr));
+  check('LV5 MA group config unreadable → no presets (no "<Group> default" chips), panel otherwise works', pr.length === 0, J(pr));
   await p.close();
 }
 

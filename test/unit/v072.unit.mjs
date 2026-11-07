@@ -88,7 +88,7 @@ check('P9 kiosk feature search_providers → ext.searchProviders', B.extFromServ
 const names = Ed.editorSchema({}).flatMap((x) => x.schema ?? [x]).map((x) => x.name);
 check('E1 editor lists + labels library_layout, library_categories, search_sources', ['library_layout', 'library_categories', 'search_sources'].every((n) => names.includes(n) && Ed.LABELS[n]));
 const ed = (cfg) => { const e = new Ed.JukeboxCardEditor(); e.setConfig(cfg); return e; };
-const base = { type: 'custom:jukebox-card', entity: 'media_player.placeholder', config_entry_id: 'PLACEHOLDER' };
+const base = { type: 'custom:jukebox-card', entity: 'media_player.placeholder' };
 const e1 = ed(base), f1 = e1.formData(), c1 = e1.toConfig(f1);
 check('E2 editor shows everything on by default and writes none of it back', f1.library_layout === 'combined' && f1.search_sources === true && f1.library_home === false
   && J(f1.library_categories) === J(L.DEFAULT_LIBRARY_CATEGORIES) && !['library_layout', 'search_sources', 'library_home', 'library_categories'].some((k) => k in c1), J(c1));

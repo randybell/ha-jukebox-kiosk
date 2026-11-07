@@ -44,8 +44,7 @@ i=0; until [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8123/api
 sleep 5
 # pass 1: onboarding, users, MA entry, old-plugin resource + stand-in plugin folder, jukebox_kiosk, dashboard
 $PY "$HERE/ha_setup.py" --legacy-resource
-# pass 2: the card config names the MA entry (read at runtime; never committed)
-$PY "$HERE/ha_ws.py" config_entries/get | $PY -c 'import json,sys; print([e["entry_id"] for e in json.load(sys.stdin) if e["domain"]=="music_assistant"][0])' > "$E2E_DIR/ma_entry_id"
-CARD=$($PY -c 'import json,sys; print(json.dumps({"entity":"media_player.kitchen_test","config_entry_id":open(sys.argv[1]).read().strip(),"rooms":["media_player.kitchen_test","media_player.patio_test"]}))' "$E2E_DIR/ma_entry_id")
+# pass 2: the card config (the card finds the MA entry itself through jukebox_kiosk)
+CARD='{"entity":"media_player.kitchen_test","rooms":["media_player.kitchen_test","media_player.patio_test"]}'
 $PY "$HERE/ha_setup.py" --card-config "$CARD" >/dev/null
 echo "e2e env up: HA http://127.0.0.1:8123/jukebox-e2e/jukebox  MA http://127.0.0.1:8095  (secrets in $E2E_DIR/secrets.env)"
