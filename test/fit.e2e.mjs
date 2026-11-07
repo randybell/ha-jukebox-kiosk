@@ -235,6 +235,25 @@ const inMiddle = (pg, expr, scroller) => ev6(pg, `(() => { const el = ${expr}; i
   return { t: Math.round(b.top), b: Math.round(b.bottom), mt: Math.round(m.top), mb: Math.round(m.bottom), h: Math.round(b.height),
     inside: b.top >= m.top - 0.5 && b.bottom <= m.bottom + 0.5 && b.height > 0, sh: sc ? sc.scrollHeight : 0, ch: sc ? sc.clientHeight : 0, ov: sc ? getComputedStyle(sc).overflowY : '' }; })()`);
 const fits6 = (r) => !!r && r.inside && (r.sh <= r.ch + 2 || /auto|scroll/.test(r.ov));
+// Phone 390x844: large_buttons with the heart OFF (kiosk without library write) and ON; the sleep chooser stays on one row (also without large_buttons)
+for (const [lg, heart] of [[true, false], [true, true], [false, false]]) {
+  const tag = `F7 390x844${lg ? ' large_buttons' : ''} heart ${heart ? 'on' : 'off'}`;
+  const pg = await newPage({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  await open(pg, `&tab=now${heart ? '' : '&kiosk=1'}${lg ? '&cfg=' + encodeURIComponent(JSON.stringify({ large_buttons: true })) : ''}`);
+  await tapTab(pg, 'now', true);
+  const NPf = `__card.shadowRoot.querySelector('jb-now').shadowRoot`;
+  const row = await ev6(pg, `(() => { const R = ${NPf}; const tp = R.querySelector('.tp').getBoundingClientRect(); const bs = [...R.querySelectorAll('.tp .tb')].map((e) => { const b = e.getBoundingClientRect(); return { k: e.className.split(' ')[1], l: b.left, r: b.right, w: b.width }; });
+    return { heart: !!R.querySelector('.tp .tb.fv'), tpL: tp.left, tpR: tp.right, vw: innerWidth, bs }; })()`);
+  check(`${tag}: heart is ${heart ? 'shown' : 'hidden'}`, row.heart === heart);
+  check(`${tag}: transport row fits, nothing clipped or overlapping, taps ≥ 44px`, row.bs.every((x, i) => x.l >= -0.5 && x.r <= row.vw + 0.5 && x.l >= row.tpL - 0.5 && x.r <= row.tpR + 0.5 && x.w >= (lg ? 43.5 : 39.5) && (i === 0 || x.l >= row.bs[i - 1].r - 0.5)),
+    JSON.stringify(row));
+  verify(`${tag} now`, await geom(pg), { tab: 'now' });
+  await tap6(pg, `${NPf}.querySelector('.ab.slp')`, true);
+  const ch = await ev6(pg, `(() => { const sp = [...${NPf}.querySelectorAll('.sleep-strip .sp')].map((e) => e.getBoundingClientRect()); const pp = ${NPf}.querySelector('.tb.pp').getBoundingClientRect();
+    return { n: sp.length, tops: [...new Set(sp.map((b) => Math.round(b.top)))], minH: Math.min(...sp.map((b) => b.height)), clearPlay: sp.every((b) => b.bottom <= pp.top || b.top >= pp.bottom || b.right <= pp.left || b.left >= pp.right), inView: sp.every((b) => b.left >= 0 && b.right <= innerWidth) }; })()`);
+  check(`${tag}: sleep chooser Off/15/30/60 on one row, ≥ 40px tall, clear of Play/Pause`, ch.n === 4 && ch.tops.length === 1 && ch.minH >= 39.5 && ch.clearPlay && ch.inView, JSON.stringify(ch));
+  await pg.close();
+}
 const S6 = [[1024, 666, 0, 'short'], [1024, 600, 0, 'tiny'], [1280, 720, 0, 'short'], [1280, 800, 0, ''], [844, 390, 1, 'tiny'], [390, 844, 1, ''], [390, 600, 1, 'tiny']];
 for (const [w, h, touch, size] of S6) {
   for (const lg of [false, true]) {
