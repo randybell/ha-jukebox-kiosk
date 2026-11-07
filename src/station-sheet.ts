@@ -98,7 +98,7 @@ export class JbStation extends LitElement {
     const field = (k: string, label: string, v: string) => (v ? html`<div class="f" data-field=${k}><dt>${label}</dt><dd>${v}</dd></div>` : nothing);
     return html`<div class="scrim st-scrim" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this.close(); }}></div>
       <div class="sheet" role="dialog" aria-modal="true" aria-label="${it.name}, radio station" @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this.close(); }}>
-        <button class="x" data-action="close" aria-label="Close" title="Close" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.close()}>${icon('close')}</button>
+        <button class="x cls" data-action="close" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.close()}>Close</button>
         <div class="top">
           ${artTpl({ ...it, image: it.image ?? d?.image ?? null } as MaItem, 'logo')}
           <div class="tt">
@@ -127,9 +127,9 @@ export class JbStation extends LitElement {
     .sheet { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; max-height: 92%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
       display: flex; flex-direction: column; gap: 16px; padding: 22px 20px calc(18px + env(safe-area-inset-bottom));
       background: #0b0b0bf7; border: 1px solid #ffffff2b; border-radius: 20px 20px 0 0; box-shadow: 0 -20px 60px #000c; }
-    .x { position: absolute; top: 8px; right: 8px; width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; color: var(--_active); }
-    .x .i { width: 26px; height: 26px; } .x:active { background: #ffffff1f; }
-    .top { display: flex; gap: 16px; align-items: flex-start; padding-right: 40px; }
+    .x { position: absolute; top: 12px; right: 12px; z-index: 1; } /* #51: the labeled Close pill (was an X) */
+    .top { display: flex; gap: 16px; align-items: flex-start; padding-right: 104px; }
+    :host([large]) .top { padding-right: 120px; }
     .ar.logo { width: 96px; height: 96px; flex: none; border-radius: 14px; overflow: hidden; display: block; }
     .ar.logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .tt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

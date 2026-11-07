@@ -193,6 +193,14 @@ export class JbSpeakers extends LitElement {
   }
   private setBusy(k: string, v?: string) { const m = new Map(this._busy); if (v) m.set(k, v); else m.delete(k); this._busy = m; }
   private close = () => fire(this, 'jukebox-speakers', { open: false });
+  /** #51 Esc (from the card): the question first, then the open panel, then an asking / error chip */
+  escape() {
+    if (this._ask) this.answer(false);
+    else if (this.open) this.close();
+    else if (this._chip && (this._chip.kind === 'ask' || this._chip.kind === 'error')) this.clearChip();
+    else return false;
+    return true;
+  }
 
   /* ---------------- volume (same optimistic pattern as Now playing) ---------------- */
   private held<T>(m: Map<string, Pending<T>>, k: string, a: T, eq: (x: T, y: T) => boolean): T {
@@ -515,7 +523,7 @@ export class JbSpeakers extends LitElement {
       ${c.kind === 'error' ? icon('alert', 'i xs si') : c.kind === 'busy' ? html`<i class="dot" aria-hidden="true"></i>` : nothing}
       <span class="ct">${c.text}</span>
       ${act ? html`<i class="sep" aria-hidden="true">·</i><button class="ca" data-action=${act.label === 'Undo' ? 'undo' : 'confirm'} tabindex="-1" @pointerdown=${noFocus} @click=${act.run}>${act.label}</button>` : nothing}
-      ${c.kind === 'ask' || c.kind === 'error' ? html`<button class="cx" data-action="cancel" aria-label="Dismiss" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.clearChip()}>${icon('close', 'i xs')}</button>` : nothing}
+      ${c.kind === 'ask' || c.kind === 'error' ? html`<button class="cx" data-action="cancel" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.clearChip()}>Close</button>` : nothing}
     </div>`;
   }
   private askTpl() {
@@ -599,10 +607,10 @@ export class JbSpeakers extends LitElement {
     .st .sep { font-style: normal; color: var(--_muted); margin: 0 -2px; }
     .st .ca { position: relative; flex: none; height: 34px; padding: 0 14px; border-radius: 999px; background: #fff; color: #000; font-size: 14px; font-weight: 800; }
     .st .ca::before, .st .cx::before { content: ""; position: absolute; inset: -6px -4px; }
-    .st .cx { position: relative; flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; color: var(--_muted); }
+    .st .cx { position: relative; flex: none; height: 34px; padding: 0 14px; display: grid; place-items: center; border-radius: 999px; background: #fff; color: #000; font-size: 14px; font-weight: 800; } /* #51: labeled Close (was an X) */
     .st .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: stpulse 1s ease-in-out infinite alternate; }
     .st.error { background: #fff; color: #000; border-color: #fff; }
-    .st.error .si { color: #000; flex: none; } .st.error .ca { background: #000; color: #fff; } .st.error .cx { color: #000000a0; }
+    .st.error .si { color: #000; flex: none; } .st.error .ca { background: #000; color: #fff; } .st.error .cx { background: #000; color: #fff; }
     @keyframes stin { from { opacity: 0; transform: translateY(-6px); } }
     @keyframes stpulse { from { opacity: .35; } }
     :host([open]) .st { right: 116px; top: 14px; max-width: min(360px, calc(100% - 116px - var(--_pad))); } /* #50: left of the labeled Close button */
@@ -636,7 +644,7 @@ export class JbSpeakers extends LitElement {
     :host([large]) .vn { font-size: 18px; } :host([large]) .vn small { font-size: 14px; }
     :host([large]) .vs { --jb-slider-h: 10px; --jb-slider-knob: 30px; --jb-slider-hit: 52px; }
     :host([large]) .x { height: 60px; min-width: 104px; padding: 0 24px; font-size: 18px; }
-    :host([large]) .st { font-size: 16px; min-height: 48px; } :host([large]) .st .ca { height: 42px; font-size: 16px; padding: 0 18px; } :host([large]) .st .cx { width: 40px; height: 40px; }
+    :host([large]) .st { font-size: 16px; min-height: 48px; } :host([large]) .st .ca { height: 42px; font-size: 16px; padding: 0 18px; } :host([large]) .st .cx { height: 42px; font-size: 16px; padding: 0 18px; }
     :host([large][open]) .st { right: 132px; max-width: min(360px, calc(100% - 132px - var(--_pad))); }
     @media (prefers-reduced-motion: reduce) { .chip:active { transform: none; } .st, .st .dot { animation: none; } }
   `];

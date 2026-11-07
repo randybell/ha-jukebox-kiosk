@@ -485,7 +485,7 @@ export class JbSearch extends LitElement {
     if (path.some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)))) return;
     let handled = true;
     if (e.key === 'Backspace') this.setQuery(this._query.slice(0, -1));
-    else if (e.key === 'Escape') { if (this._confirm) this._confirm = null; else if (this._menu) this.closeMenu(); else if (this._stack.length) this.back(); else if (!this._query && this._scope) this.clearFilters(); else this.setQuery(''); }
+    else if (e.key === 'Escape') { if (this._confirm) this._confirm = null; else if (this._menu) this.closeMenu(); else if (this.combined && this.libShown() && this.browse?.escape?.()) { /* #51: the Library's menu / confirm / detail */ } else if (this._stack.length) this.back(); else if (!this._query && this._scope) this.clearFilters(); else this.setQuery(''); }
     else if (e.key === 'Enter') this.openTop();
     else if (e.key.length === 1 && /[\p{L}\p{N}\p{P}\p{S} ]/u.test(e.key)) this.setQuery(this._query + e.key.toUpperCase());
     else handled = false;

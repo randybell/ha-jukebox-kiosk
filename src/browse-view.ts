@@ -189,6 +189,15 @@ export class JbBrowse extends LitElement {
     this._home = false; this._menu = null; this.setCat(id);
   }
   private homeLabel() { return String(this.config?.library_label ?? '').trim() || 'Library'; }
+  /** #51 Esc: the confirm, the options menu, then one step back (detail → list → tiles) */
+  escape() {
+    if (this._confirm) this._confirm = null;
+    else if (this._menu) { this._menu = null; this.press.release(); }
+    else if (this._stack.length) void this.back();
+    else if (!this._home && !this.embedded) this.goHome();
+    else return false;
+    return true;
+  }
   /** Back to the tile grid (the back button, or tapping the Library tab again). */
   goHome() { this._home = true; this._stack = []; this._menu = null; clearTimeout(this._lqTimer); this._lq = ''; this._lart = null; this._lpool = null; this._lkb = false; }
   /** Radio "Stations by…" modes (config order), [] when off or unsupported. */
