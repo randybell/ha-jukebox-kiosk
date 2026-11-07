@@ -608,6 +608,17 @@ export class JbNow extends LitElement {
       .tp:has(.tb.fv) .tb .i { width: 22px; height: 22px; } .tp:has(.tb.fv) .tb.pp .i { width: 32px; height: 32px; }
       .tp:has(.tb.fv) .tb.sh .i, .tp:has(.tb.fv) .tb.rp .i, .tp:has(.tb.fv) .tb.sl .i { width: 20px; height: 20px; }
       .sleep-strip .sp { height: 32px; padding: 0 12px; font-size: 12px; }
+      /* phone: the sleep choices stay on one row on the artwork (≥ 40px tall) */
+      .art .sleep-strip { flex-wrap: nowrap; gap: 4px; }
+      .art .sleep-strip .sp { height: 40px; min-width: 40px; padding: 0 9px; flex: none; }
+      /* phone + large_buttons: the row must fit (~362px); Prev/Next < Play/Pause, arrows ~90% of the Pause glyph, taps ≥ 44px */
+      :host([large]) .tb { width: 56px; height: 56px; } :host([large]) .tb .i { width: 30px; height: 30px; }
+      :host([large]) .tb.pp { width: 76px; height: 76px; } :host([large]) .tb.pp .i { width: 44px; height: 44px; }
+      :host([large]) .tb.pr, :host([large]) .tb.nx { width: 64px; height: 64px; } :host([large]) .tb.pr .i, :host([large]) .tb.nx .i { width: 46px; height: 46px; }
+      :host([large]) .tp:has(.tb.fv) .tb { width: 44px; height: 44px; } :host([large]) .tp:has(.tb.fv) .tb .i { width: 24px; height: 24px; }
+      :host([large]) .tp:has(.tb.fv) .tb.pp { width: 60px; height: 60px; } :host([large]) .tp:has(.tb.fv) .tb.pp .i { width: 32px; height: 32px; }
+      :host([large]) .tp:has(.tb.fv) .tb.pr, :host([large]) .tp:has(.tb.fv) .tb.nx { width: 50px; height: 50px; }
+      :host([large]) .tp:has(.tb.fv) .tb.pr .i, :host([large]) .tp:has(.tb.fv) .tb.nx .i { width: 36px; height: 36px; }
       .upn { display: none; }
       .vol { padding: 4px 12px; }
       .vr { grid-template-columns: 28px 86px minmax(0, 1fr) 30px; min-height: 48px; }
