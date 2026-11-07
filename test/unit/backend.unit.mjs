@@ -160,6 +160,21 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
   const guest = { ...admin, user: { is_admin: false }, callWS: async (m) => { ws2.push(m); return []; } };
   const g = new B.NativeBackend(() => guest); await g.ready;
   check('E4 native + non-admin: config entries are never asked for (they are admin-only)', g.maEntry === '' && ws2.length === 0);
+  // 0.7.9: the three ways the entry is found
+  const mk = (caps, comps) => { const log = []; const h = { states: {}, user: { is_admin: true }, config: { components: comps }, callService: async () => ({}),
+    callWS: async (m) => { log.push(m.type); if (m.type === 'jukebox_kiosk/capabilities') return caps(); if (m.type === 'config_entries/get') return [{ entry_id: 'FALLBACK_ENTRY', state: 'loaded' }]; return {}; } }; return { h, log }; };
+  const a = mk(() => ({ ma_entry_id: MA_ENTRY, features: {} }), ['music_assistant', 'jukebox_kiosk']);
+  const ka = B.createBackend(B.pickBackend(a.h), () => a.h); await ka.ready;
+  check('E5 integration reports the entry → that entry, no config entry lookup', ka.kind === 'kiosk' && ka.maEntry === MA_ENTRY && !a.log.includes('config_entries/get'), J({ e: ka.maEntry, log: a.log }));
+  const b = mk(() => ({ features: {} }), ['music_assistant', 'jukebox_kiosk']);
+  let emits = 0; const kb = B.createBackend(B.pickBackend(b.h), () => b.h); kb.onChange(() => emits++); await kb.ready;
+  check('E6 integration loaded but no entry reported → falls back to the automatic lookup (and tells the card)', kb.kind === 'kiosk' && kb.maEntry === 'FALLBACK_ENTRY' && b.log.includes('config_entries/get') && emits > 0, J({ e: kb.maEntry, log: b.log, emits }));
+  const bf = mk(() => { throw Object.assign(new Error('boom'), { code: 'unknown_error' }); }, ['music_assistant', 'jukebox_kiosk']);
+  const kf = B.createBackend(B.pickBackend(bf.h), () => bf.h); await kf.ready;
+  check('E6b integration loaded but its capabilities call fails → same automatic lookup', kf.maEntry === 'FALLBACK_ENTRY', J({ e: kf.maEntry, log: bf.log }));
+  const c = mk(() => ({}), ['music_assistant']);
+  const kc = B.createBackend(B.pickBackend(c.h), () => c.h); await kc.ready;
+  check('E7 no integration → native backend, the automatic lookup finds the entry', kc.kind === 'native' && kc.maEntry === 'FALLBACK_ENTRY' && !c.log.some((t) => t.startsWith('jukebox_kiosk/')), J({ e: kc.maEntry, log: c.log }));
 }
 // ---------------- the player's own Music Assistant favorite button ----------------
 {
