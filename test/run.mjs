@@ -505,11 +505,13 @@ s = await page.evaluate((q) => ({ query: eval(q).querySelector('.qsq').dataset.q
 check('11j buffered search match keeps labeled Remove disabled', s.query === 'TEAR' && s.rows.length === 1 && s.rows[0].title === 'Teardrop' && s.rows[0].remove && s.rows[0].label === 'Remove', JSON.stringify(s));
 await open(page, '&latency=20&tab=queue&admin=1');
 await page.waitForFunction((q) => eval(q).querySelectorAll('.qr.next').length > 3, {}, QV);
+// 0.7.8 #40: a tap on a Queue row does nothing (use the row's play icon): no service call, no playback, no queue change
+const order0 = await page.evaluate((q) => ({ now: eval(q).querySelector('.qr.now')?.dataset.id, ids: [...eval(q).querySelectorAll('.qr.next')].map((r) => r.dataset.id) }), QV);
 let a5 = await qcall(() => clickEl(page, `${qrow(id1)}.querySelector('.rt')`));
-check('11d tap a row → play_queue_item {entity, queue_item_id}', ok11(a5, 'play_queue_item', id1), qs(a5));
+check('11d tap a row does nothing: no service call (no play_queue_item, no queue command)', a5.length === 0, qs(a5));
 await sleep(900);
-s = await page.evaluate((q) => eval(q).querySelector('.qr.now')?.dataset.id, QV);
-check('11e after play, tapped item becomes now playing', s === id1, s);
+s = await page.evaluate((q) => ({ now: eval(q).querySelector('.qr.now')?.dataset.id, ids: [...eval(q).querySelectorAll('.qr.next')].map((r) => r.dataset.id) }), QV);
+check('11e after the tap, the same item is still playing and the queue order is unchanged', s.now === order0.now && s.now !== id1 && JSON.stringify(s.ids) === JSON.stringify(order0.ids), JSON.stringify({ before: order0, after: s }));
 
 // ---------- 12. browse ----------
 await open(page, '&latency=20&tab=browse&lhome=0');
