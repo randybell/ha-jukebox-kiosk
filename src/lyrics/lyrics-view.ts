@@ -7,7 +7,7 @@ import type { LyricsState, LyricsStore } from './store';
 import type { HassEntity, HomeAssistant, JukeboxCardConfig } from '../types';
 import { defineElement } from '../define';
 
-export type LyricsMode = 'overlay' | 'tab' | 'stage' | 'saver';
+export type LyricsMode = 'overlay' | 'tab' | 'saver';
 /** HA media_player SEEK feature bit */
 const SEEK = 2;
 export const LONG_PRESS_MS = 550;
@@ -154,7 +154,6 @@ export class JbLyrics extends LitElement {
     if (Date.now() - this._userScrollAt > 1500) return;
     this._scrollAt = Date.now();
     // Stage: the card closes on a plain tap and must know the lyrics were scrolling
-    if (this.mode === 'stage') this.dispatchEvent(new CustomEvent('jukebox-lyrics-scroll', { bubbles: true, composed: true }));
   };
   private cancelPress = () => { window.clearTimeout(this._holdTimer); this._start = undefined; if (this._press >= 0) this._press = -1; };
   private onClickCapture = (ev: Event) => {
@@ -391,9 +390,6 @@ export class JbLyrics extends LitElement {
     .m-tab .ln { font-size: clamp(22px, 3.4vw, 40px); text-shadow: 0 2px 18px #0009; }
     .m-tab .plain .ln { font-size: clamp(19px, 2.6vw, 30px); }
 
-    .m-stage .ln { font-size: clamp(24px, 3.6vw, 52px); text-shadow: 0 2px 24px #000b; }
-    .m-stage .plain .ln { font-size: clamp(20px, 2.8vw, 38px); }
-    .m-stage .chip.fl { top: 4px; left: 0; }
 
     /* screensaver: a clipped window over a column that slides up (transform only); --jb-ly-slide is 0ms under reduced motion */
     .m-saver { height: auto; }

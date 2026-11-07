@@ -31,8 +31,8 @@ async function open(pg, q, page = 'index.html') {
 const SEL = {
   tab: `__card.shadowRoot.querySelector('jb-lyrics[mode=tab]')`,
   ovl: `__card.shadowRoot.querySelector('jb-now')?.shadowRoot.querySelector('jb-lyrics')`,
-  stage: `__card.shadowRoot.querySelector('jb-lyrics[mode=stage]')`,
-  saver: `__card.shadowRoot.querySelector('jb-lyrics[mode=saver]')`,
+  stage: `__card.shadowRoot.querySelector('.amb.stage jb-lyrics')`,
+  saver: `__card.shadowRoot.querySelector('.amb.saver jb-lyrics')`,
   now: `__card.shadowRoot.querySelector('jb-now').shadowRoot`,
 };
 const status = (pg, sel) => pg.evaluate((s) => eval(s)?.dataset.status ?? null, sel);
@@ -216,7 +216,6 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   check('TP11 tap on the artwork lyrics overlay closes it (back to the plain player), remembered', !ov.ovl && !ov.on && ov.ls !== '1' && (await t2()) === 'now', J(ov));
   await p2.mouse.click(lyb.x, lyb.y); await sleep(400);
   check('TP12 the corner Lyrics button still toggles the overlay on', await p2.evaluate((s) => !!eval(s).querySelector('jb-lyrics'), SEL.now));
-  // Stage: unchanged (tap toggles its controls, does not close it)
   await p2.close();
 }
 
@@ -329,61 +328,86 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   await pg.close();
 }
 
-// ---------------- 7. Stage + screensaver ----------------
+// ---------------- 7. Stage + screensaver: ONE shared screen (0.7.8) ----------------
 {
   const pg = await newPage({ width: 1920, height: 1080 });
   await open(pg, '&tab=now');
   const b = await pg.evaluate((s) => { const r = eval(s).querySelector('.ab.stg').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, SEL.now);
+  const isOpen = () => pg.evaluate(() => !!__card.shadowRoot.querySelector('.amb.stage'));
+  // the shared screen's structure (tag/class tree without text), to compare Stage with the screensaver
+  const shape = (p, use) => p.evaluate((u) => { const a = __card.shadowRoot.querySelector(`.amb[data-use=${u}]`); if (!a) return null;
+    const walk = (e) => `${e.tagName.toLowerCase()}.${[...e.classList].filter((c) => !['saver', 'stage', 'on', 'waking', 'has-ly'].includes(c)).sort().join('.')}(${[...e.children].map(walk).join(',')})`;
+    return { tree: walk(a), hint: a.querySelector('.sv-hint')?.textContent.trim(), drift: getComputedStyle(a.querySelector('.sv-drift')).animationName,
+      clock: !!a.querySelector('.sv-clock'), date: !!a.querySelector('.sv-date'), img: a.querySelectorAll('img').length, buttons: a.querySelectorAll('button').length,
+      lyMode: a.querySelector('jb-lyrics')?.getAttribute('mode') ?? null, title: getComputedStyle(a.querySelector('.sv-np b') ?? a).fontSize }; }, use);
   await pg.mouse.click(b.x, b.y);
   await sleep(500);
-  const st = await pg.evaluate(() => ({ mode: __card.dataset.stage, el: !!__card.shadowRoot.querySelector('.stage'), fs: !!(document.fullscreenElement || document.webkitFullscreenElement) }));
+  const st = await pg.evaluate(() => ({ mode: __card.dataset.stage, el: !!__card.shadowRoot.querySelector('.amb.stage') }));
   check('G1 full-screen button opens the Stage (Fullscreen API or fixed overlay fallback)', st.el && (st.mode === 'fullscreen' || st.mode === 'overlay'), J(st));
-  check('G2 Stage shows synced lyrics', await waitStatus(pg, SEL.stage, 'synced'));
-  // 0.7.8: Stage has no on-screen controls; a plain tap anywhere closes it (back to Now Playing)
-  const ctl = await pg.evaluate(() => { const st = __card.shadowRoot.querySelector('.stage'); return { buttons: st.querySelectorAll('button').length, x: !!st.querySelector('.st-x, .st-top'), ctl: !!st.querySelector('.st-ctl'), ui: st.classList.contains('ui') }; });
-  check('G3 Stage has no controls: no Close button, no Previous/Play/Next bar', ctl.buttons === 0 && !ctl.x && !ctl.ctl && !ctl.ui, J(ctl));
+  check('G2 Stage shows synced lyrics (the few sliding lines of the shared screen)', await waitStatus(pg, SEL.stage, 'synced'));
+  await sleep(600);
+  const sh = await shape(pg, 'stage');
+  check('G3 Stage is the shared screen: clock + date, "Tap to close", burn-in drift, no artwork tile, no buttons, saver-style lyrics', sh.hint === 'Tap to close' && sh.drift === 'drift' && sh.clock && sh.date && sh.img === 0 && sh.buttons === 0 && sh.lyMode === 'saver', J(sh));
+  const s2 = await newPage({ width: 1920, height: 1080 });
+  await open(s2, '&tab=now&saver=0.02');
+  await s2.waitForFunction((s) => eval(s)?.dataset.status === 'synced', { timeout: 8000 }, SEL.saver).catch(() => {}); await sleep(600);
+  const shv = await shape(s2, 'saver');
+  check('G3b the screensaver renders the very same screen (same structure, hint, drift, lyrics, title size)', !!shv && J(shv) === J(sh), J({ stage: sh, saver: shv }));
+  await s2.keyboard.press('Escape'); await sleep(500);
+  check('G3c Esc closes the screensaver too', await s2.evaluate(() => !__card.shadowRoot.querySelector('.amb')));
+  await s2.close();
+  await pg.bringToFront(); // (opening another tab can drop the browser full screen, which closes the Stage)
+  if (!(await isOpen())) { await pg.mouse.click(b.x, b.y); await waitStatus(pg, SEL.stage, 'synced'); await sleep(600); }
+  // no long-press seek on the shared screen: a long press closes it (any press does), and never seeks
+  const n0 = (await seeks(pg)).length;
+  const L = await pg.evaluate((s) => { const r = eval(s).shadowRoot.querySelector('.ln.cur').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, SEL.stage);
+  await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(800); await pg.mouse.up(); await sleep(500);
+  check('G4 no long-press seek: a long press on a lyric line does not seek (it closes the screen)', (await seeks(pg)).length === n0 && !(await isOpen()), J((await seeks(pg)).slice(n0)));
   const pc0 = (await pg.evaluate(() => __calls.length));
-  await pg.mouse.click(960, 540); await sleep(400);
-  const after = await pg.evaluate((n) => ({ st: !!__card.shadowRoot.querySelector('.stage'), ds: __card.dataset.stage ?? '', fs: !!document.fullscreenElement, tab: __card._tab,
+  await pg.mouse.click(b.x, b.y); await waitStatus(pg, SEL.stage, 'synced'); await sleep(500);
+  await pg.mouse.click(960, 540); await sleep(500);
+  const after = await pg.evaluate((n) => ({ st: !!__card.shadowRoot.querySelector('.amb'), ds: __card.dataset.stage ?? '', fs: !!document.fullscreenElement, tab: __card._tab,
     calls: __calls.slice(n).filter((c) => /^media_/.test(c.service)).map((c) => c.service) }), pc0);
-  check('G4 a plain tap closes the Stage, back on Now Playing; the tap does not also hit the player underneath', !after.st && !after.ds && !after.fs && after.tab === 'now' && after.calls.length === 0, J(after));
+  check('G5 a plain tap closes the Stage, back on Now Playing', !after.st && !after.ds && !after.fs && after.tab === 'now' && after.calls.length === 0, J(after));
   const ppb = await pg.evaluate((s) => { const r = eval(s).querySelector('.tb.pp').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, SEL.now);
   await pg.mouse.click(b.x, b.y); await waitStatus(pg, SEL.stage, 'synced'); await sleep(500);
   const pc1 = await pg.evaluate(() => __calls.length);
-  await pg.mouse.click(ppb.x, ppb.y); await sleep(500);
-  const ghost = await pg.evaluate((n) => ({ st: !!__card.shadowRoot.querySelector('.stage'), calls: __calls.slice(n).filter((c) => /^media_/.test(c.service)).map((c) => c.service) }), pc1);
-  check('G4b a tap on the Stage right where Play/Pause sits underneath closes the Stage only (no play/pause)', !ghost.st && ghost.calls.length === 0, J(ghost));
-  await pg.mouse.click(b.x, b.y); await waitStatus(pg, SEL.stage, 'synced'); await sleep(500);
-  await pg.mouse.move(600, 500); await pg.mouse.down(); await pg.mouse.move(600, 440, { steps: 5 }); await pg.mouse.up(); await sleep(300);
-  check('G5 a drag on the Stage does not close it', await pg.evaluate(() => !!__card.shadowRoot.querySelector('.stage')));
-  await pg.evaluate((s) => { const sc = eval(s).shadowRoot.querySelector('.sc'); sc.dispatchEvent(new WheelEvent('wheel', { deltaY: 80, bubbles: true })); sc.scrollTop += 80; sc.dispatchEvent(new Event('scroll')); }, SEL.stage);
-  await pg.mouse.click(1300, 500); await sleep(300);
-  check('G5b a tap right after scrolling the Stage lyrics (stopping the scroll) does not close it', await pg.evaluate(() => !!__card.shadowRoot.querySelector('.stage')));
-  await pg.mouse.move(1300, 500); await pg.mouse.down(); await sleep(650); await pg.mouse.up(); await sleep(300);
-  check('G5c a slow press (> 500 ms) on the background does not close it', await pg.evaluate(() => !!__card.shadowRoot.querySelector('.stage')));
-  await pg.keyboard.press('Escape'); await sleep(400);
-  check('G6 Esc closes the Stage', await pg.evaluate(() => !__card.shadowRoot.querySelector('.stage')));
-  // fullscreenchange: leaving native fullscreen from outside closes the Stage
+  await pg.mouse.click(ppb.x, ppb.y); await sleep(600);
+  const ghost = await pg.evaluate((n) => ({ st: !!__card.shadowRoot.querySelector('.amb'), calls: __calls.slice(n).filter((c) => /^media_/.test(c.service)).map((c) => c.service) }), pc1);
+  check('G5b a tap right where Play/Pause sits underneath closes the Stage only (the click is swallowed: no play/pause)', !ghost.st && ghost.calls.length === 0, J(ghost));
+  await pg.mouse.click(b.x, b.y); await sleep(500);
+  await pg.keyboard.press('Escape'); await sleep(500);
+  check('G6 Esc closes the Stage', !(await isOpen()));
+  // fullscreenchange: leaving native fullscreen from outside closes the Stage (kept: Stage still asks the browser for full screen)
   await pg.mouse.click(b.x, b.y); await sleep(400);
   const native = await pg.evaluate(() => __card.dataset.stage);
   if (native === 'fullscreen') {
     await pg.evaluate(() => document.exitFullscreen()); await sleep(500);
-    check('G7 exiting fullscreen from outside (fullscreenchange) closes the Stage', await pg.evaluate(() => !__card.shadowRoot.querySelector('.stage')));
+    check('G7 exiting fullscreen from outside (fullscreenchange) closes the Stage', !(await isOpen()));
   } else {
     await pg.evaluate(() => __card.closeStage()); await sleep(200);
-    check('G7 (fallback overlay mode in this browser) Stage closes via closeStage()', await pg.evaluate(() => !__card.shadowRoot.querySelector('.stage')), 'native fullscreen refused: ' + native);
+    check('G7 (fallback overlay mode in this browser) Stage closes via closeStage()', !(await isOpen()), 'native fullscreen refused: ' + native);
   }
-  // Stage: long-press on a line still seeks (and keeps the Stage open); a plain tap on a line closes it without seeking
-  await pg.mouse.click(b.x, b.y); await waitStatus(pg, SEL.stage, 'synced'); await sleep(600);
-  const n0 = (await seeks(pg)).length;
-  const L = await lineBox(pg, SEL.stage, (await cur(pg, SEL.stage)) + 1);
-  await pg.mouse.move(L.x, L.y); await pg.mouse.down(); await sleep(800); await pg.mouse.up(); await sleep(300);
-  const sk = (await seeks(pg)).slice(n0);
-  check('G8 long-press on a Stage line seeks, and the Stage stays open', sk.length === 1 && sk[0].data.seek_position === Math.floor(L.t) && await pg.evaluate(() => !!__card.shadowRoot.querySelector('.stage')), J(sk.map((s) => s.data)));
-  const L2 = await lineBox(pg, SEL.stage, (await cur(pg, SEL.stage)) + 1);
-  await pg.mouse.click(L2.x, L2.y); await sleep(500);
-  check('G9 a plain tap on a Stage line closes the Stage and does not seek', (await seeks(pg)).length === n0 + 1 && await pg.evaluate(() => !__card.shadowRoot.querySelector('.stage') && __card._tab === 'now'));
+  // paused: the same "Artist · Paused" line as the screensaver
+  await pg.evaluate(() => __setAttrs('media_player.everywhere', {}, 'paused')); await sleep(300);
+  await pg.mouse.click(b.x, b.y); await sleep(500);
+  const pz = await pg.evaluate(() => __card.shadowRoot.querySelector('.amb.stage .sv-np small')?.textContent ?? '');
+  check('G8 paused song: shows "… · Paused"', / · Paused$/.test(pz), pz);
+  // no artwork: a soft blurred colour background (not black, not a placeholder picture)
+  await pg.evaluate(() => { __card.art = () => undefined; __card.requestUpdate(); }); await sleep(300);
+  const na = await pg.evaluate(() => { const bg = __card.shadowRoot.querySelector('.amb.stage .sv-bg'); const cs = bg && getComputedStyle(bg);
+    return bg ? { cls: bg.className, img: cs.backgroundImage.slice(0, 30), blur: cs.filter, pics: __card.shadowRoot.querySelectorAll('.amb img').length } : null; });
+  check('G9 song without artwork: blurred colour gradient background, no picture', !!na && /noart/.test(na.cls) && /gradient/.test(na.img) && /blur/.test(na.blur) && na.pics === 0, J(na));
+  await pg.keyboard.press('Escape'); await sleep(500);
   await pg.close();
+  // nothing playing: Full screen button hidden; the screensaver shows clock + date on black
+  const id = await newPage({ width: 1024, height: 600 });
+  await open(id, '&tab=now&idle=1&saver=0.02');
+  check('G10 nothing playing: no Full screen button on Now Playing', await id.evaluate((s) => !eval(s).querySelector('.ab.stg'), SEL.now));
+  await id.waitForFunction(() => !!__card.shadowRoot.querySelector('.amb.saver'), { timeout: 6000 }).catch(() => {}); await sleep(500);
+  const ib = await id.evaluate(() => { const a = __card.shadowRoot.querySelector('.amb'); return a && { bg: !!a.querySelector('.sv-bg'), np: !!a.querySelector('.sv-np'), clock: !!a.querySelector('.sv-clock'), date: !!a.querySelector('.sv-date'), color: getComputedStyle(a).backgroundColor, hint: a.querySelector('.sv-hint')?.textContent }; });
+  check('G11 nothing playing: clock and date on black, no song info, "Tap to close"', !!ib && !ib.bg && !ib.np && ib.clock && ib.date && ib.color === 'rgb(0, 0, 0)' && ib.hint === 'Tap to close', J(ib));
+  await id.close();
 
   const sv = await newPage();
   await open(sv, '&tab=now&saver=0.02');
@@ -521,8 +545,8 @@ const expectedCur = (pg, sel) => pg.evaluate((s) => {
   }
   for (const surface of ['overlay', 'stage', 'tab', 'saver']) for (const kind of ['synced', 'plain']) {
     const d = await direction(surface, kind);
-    // the saver's drift block may move down by itself (< 1 px a frame); everything else never moves down at all
-    const scrOk = surface === 'saver' ? d.maxDownScr < 1 : d.maxDownScr <= 0.5;
+    // the shared screen's (saver + Stage) drift block may move down by itself (< 1 px a frame); everything else never moves down at all
+    const scrOk = surface === 'saver' || surface === 'stage' ? d.maxDownScr < 1 : d.maxDownScr <= 0.5;
     const enough = kind === 'synced' ? d.changes >= 3 && d.fromBelow >= 3 && d.up > 100 : d.up > 100;
     check(`D ${surface} ${kind}: lines only move up (${kind === 'synced' ? '3+ line changes, new lines come in from the bottom' : '3+ progress steps'})`,
       d.ok && enough && d.maxDownRel <= 0.5 && scrOk && d.scrollMono && d.colMono, J(d));
