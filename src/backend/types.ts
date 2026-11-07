@@ -6,7 +6,6 @@
  */
 import type { HomeAssistant } from '../types';
 export type BackendKind = 'kiosk' | 'native';
-export type BackendSetting = 'auto' | BackendKind;
 
 export interface Caps {
   /** generic MA commands (player_queues/*, players/*, music/*) */
