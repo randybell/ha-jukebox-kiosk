@@ -15,6 +15,9 @@ const SV = `__card.shadowRoot.querySelector('jb-search')`;
 const BR = `__card.shadowRoot.querySelector('jb-browse')`;
 const ST = `__card.shadowRoot.querySelector('jb-station')`;
 const QV = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
+// 0.7.9 #37: the queue has songs, so a station asks first; Replace goes ahead
+const SC = `__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot`;
+const replace = async (p) => { const asked = await wait(p, `!!${SC}.querySelector('.confirm[data-kind=station]')`, 2000); const none = (await plays(p)).length === 0; await tap(p, `${SC}.querySelector('[data-action=confirm]')`); await sleep(250); return asked && none; };
 
 async function open(query = '', vp = { width: 1280, height: 800 }) {
   const page = await browser.newPage();
@@ -48,8 +51,9 @@ const clearPlays = (p) => ev(p, `window.__calls = window.__calls.filter((c) => !
   check('RR1 search radio row: only replace (Play Now)', J(acts) === J(['replace']), J(acts));
   await clearPlays(p);
   await tap(p, `${row}.querySelector('[data-act=replace]')`); await sleep(250);
+  const asked = await replace(p);
   const pl = await plays(p);
-  check('RR2 search Play Now → enqueue replace, media_type radio', pl.length === 1 && pl[0].enqueue === 'replace' && pl[0].media_type === 'radio' && pl[0].media_id === st && !('radio_mode' in pl[0]), J(pl));
+  check('RR2 search Play Now → asks (queue has songs), Replace → enqueue replace, media_type radio', asked && pl.length === 1 && pl[0].enqueue === 'replace' && pl[0].media_type === 'radio' && pl[0].media_id === st && !('radio_mode' in pl[0]), J(pl));
   // song row still has next
   const songActs = await ev(p, `(() => { const r = [...${SV}.shadowRoot.querySelectorAll('.row')].find((x) => x.dataset.group === 'tracks'); return r ? [...r.querySelectorAll('.ra-b:not(.ra-more)')].map((b) => b.dataset.act) : null; })()`);
   check('RR3 search song row still next+replace+remove(+radio)', songActs && songActs[0] === 'next' && songActs.includes('replace') && songActs.includes('remove'), J(songActs));
@@ -69,8 +73,9 @@ const clearPlays = (p) => ev(p, `window.__calls = window.__calls.filter((c) => !
   await wait(p, `!!${ST}?.shadowRoot?.querySelector('[data-action=play]')`);
   await clearPlays(p);
   await tap(p, `${ST}.shadowRoot.querySelector('[data-action=play]')`); await sleep(250);
+  const asked = await replace(p);
   const pl = await plays(p);
-  check('RR4 station sheet Play → enqueue replace', pl.length === 1 && pl[0].enqueue === 'replace' && pl[0].media_type === 'radio' && pl[0].media_id === tileUri, J(pl));
+  check('RR4 station sheet Play → asks, Replace → enqueue replace', asked && pl.length === 1 && pl[0].enqueue === 'replace' && pl[0].media_type === 'radio' && pl[0].media_id === tileUri, J(pl));
   await p.close();
 }
 
@@ -87,8 +92,9 @@ const clearPlays = (p) => ev(p, `window.__calls = window.__calls.filter((c) => !
   check('RR5 browse radio long-press menu: Play Now only (+cancel), no next/remove', menu.includes('play') && !menu.includes('next') && !menu.includes('remove') && menu.includes('cancel'), J(menu));
   await clearPlays(p);
   await tap(p, `${BR}.shadowRoot.querySelector('.menu .mi[data-action=play]')`); await sleep(250);
+  const asked = await replace(p);
   const pl = await plays(p);
-  check('RR6 browse menu Play Now → enqueue replace', pl.length === 1 && pl[0].enqueue === 'replace' && pl[0].media_type === 'radio' && pl[0].media_id === box.uri, J(pl));
+  check('RR6 browse menu Play Now → asks, Replace → enqueue replace', asked && pl.length === 1 && pl[0].enqueue === 'replace' && pl[0].media_type === 'radio' && pl[0].media_id === box.uri, J(pl));
   await p.close();
 }
 

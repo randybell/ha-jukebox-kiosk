@@ -10,9 +10,10 @@ import './editor';
 import './lyrics/lyrics-view';
 import { LyricsStore, type LyricsStatus } from './lyrics/store';
 import { QueueModel } from './queue-model';
-import { roomsOf, playerArt, ART, hash } from './shared';
+import { roomsOf, playerArt, ART, hash, isRadioUri } from './shared';
 import './speakers-view';
 import './station-sheet';
+import './station-confirm';
 import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
 import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, validPreset, validQuiet, liveCount, membersOf, pillPrefix } from './speakers/model';
@@ -86,7 +87,7 @@ export class JukeboxCard extends LitElement {
     _saver: { state: true },
     _bd: { state: true },
     _qart: { state: true },
-    _stage: { state: true }, _stageOut: { state: true },
+    _stage: { state: true }, _stAsk: { state: true }, _stageOut: { state: true },
     _spk: { state: true },
     _station: { state: true },
     _spkEl: { state: true },
@@ -114,6 +115,8 @@ export class JukeboxCard extends LitElement {
   /** one lyrics lookup per track, shared by the art overlay, Stage, the Lyrics tab and the screensaver */
   readonly lyrics = new LyricsStore();
   private _stage = false;
+  /** 0.7.9 #37: the open station confirm */
+  private _stAsk: { item: MaItem; resolve: (ok: boolean) => void } | null = null;
   private _lunsub?: () => void;
   private _lstatus = '';
   private _stageNative = false;
@@ -198,7 +201,7 @@ export class JukeboxCard extends LitElement {
     const first = !this._config;
     this._base = {
       entity: 'media_player.everywhere', accent: 'mono', limit: 8,
-      favorite_entity: 'button.everywhere_favorite_current_song', screensaver_minutes: 10, ...config, _favs: this.favs,
+      favorite_entity: 'button.everywhere_favorite_current_song', screensaver_minutes: 10, ...config, _favs: this.favs, _stationGuard: this.stationGuard,
     };
     this._config = this.effective();
     // 0.7.2 combined Library tab: default_tab: search opens the Library tab ready to type (back-compat)
@@ -287,6 +290,15 @@ export class JukeboxCard extends LitElement {
   private onSpeakers = (e: CustomEvent) => { this._spk = e.detail?.open !== false; };
   private onStation = (e: CustomEvent) => { if (e.detail?.item) this._station = { item: e.detail.item, tab: this._tab }; };
   private onStationClose = () => { this._station = null; };
+  /** 0.7.9 #37: a live station replaces the queue. Queue with songs (anything but stations): ask Replace / Cancel. Empty: play. */
+  private stationGuard = (it: MaItem): Promise<boolean> => {
+    const s = this.queue.snap;
+    const songs = s.items.some((x) => !isRadioUri(x.media_content_id)) || (!s.items.length && (s.total ?? 0) > 0);
+    if (!songs) return Promise.resolve(true);
+    this._stAsk?.resolve(false);
+    return new Promise((resolve) => { this._stAsk = { item: it, resolve }; });
+  };
+  private stAnswer(ok: boolean) { const a = this._stAsk; this._stAsk = null; a?.resolve(ok); }
   /** Start guard (dynamic mode): starting an idle group takes speakers from other groups: say which, and ask. */
   private guard = async (entity: string): Promise<boolean> => {
     const st = this.hass?.states[entity]?.state;
@@ -348,6 +360,7 @@ export class JukeboxCard extends LitElement {
     this.addEventListener('jukebox-station-close', this.onStationClose as EventListener);
     document.addEventListener('fullscreenchange', this.onFsChange);
     document.addEventListener('webkitfullscreenchange', this.onFsChange);
+    window.addEventListener('keydown', this.onKeyCap, true);
     window.addEventListener('keydown', this.onKey);
     this.armIdle();
     if (this.hass) this.queue.refreshSoon(0);
@@ -391,6 +404,7 @@ export class JukeboxCard extends LitElement {
     this.repeatGuard.dispose();
     document.removeEventListener('fullscreenchange', this.onFsChange);
     document.removeEventListener('webkitfullscreenchange', this.onFsChange);
+    window.removeEventListener('keydown', this.onKeyCap, true);
     window.removeEventListener('keydown', this.onKey);
     if (this._stage) this.closeStage();
     this._rm?.removeEventListener?.('change', this.applyBackdrop);
@@ -588,6 +602,10 @@ export class JukeboxCard extends LitElement {
     const fs = d.fullscreenElement ?? d.webkitFullscreenElement;
     // left fullscreen with Esc / the system gesture: close the Stage too
     if (!fs && this._stage && this._stageNative) { this._stageNative = false; this.closeStage(); }
+  };
+  /** #37: Esc on the station confirm wins over everything (capture, registered before the tabs' own key handlers) */
+  private onKeyCap = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && this._stAsk) { e.preventDefault(); e.stopImmediatePropagation(); this.stAnswer(false); }
   };
   private onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && this._saver === 'on') this.ambClose(e, 'saver');
@@ -791,6 +809,8 @@ export class JukeboxCard extends LitElement {
           ${tabs.some((t) => t.id === 'lyrics') ? view('lyrics', html`<jb-lyrics mode="tab" .hass=${h} .config=${c} .store=${this.lyrics} .art=${pic}
             ?active=${this._tab === 'lyrics' && !this._saver && !this._stage}></jb-lyrics>`) : nothing}
           <!-- inside the middle: the fitted header and tab bar stay visible and tappable while the panel is open -->
+          <jb-station-confirm ?large=${!!c.large_buttons} .state=${this._stAsk ? { kind: 'station', item: this._stAsk.item, run: () => this.stAnswer(true) } : null}
+            .cancel=${() => this.stAnswer(false)}></jb-station-confirm>
           <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null} ?large=${!!c.large_buttons}></jb-station>
           <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver} ?large=${!!c.large_buttons}></jb-speakers>
         </main>
