@@ -87,7 +87,6 @@ export class JukeboxCard extends LitElement {
     _bd: { state: true },
     _qart: { state: true },
     _stage: { state: true },
-    _stageUi: { state: true },
     _spk: { state: true },
     _station: { state: true },
     _spkEl: { state: true },
@@ -117,9 +116,11 @@ export class JukeboxCard extends LitElement {
   private _stage = false;
   private _lunsub?: () => void;
   private _lstatus = '';
-  private _stageUi = false;
   private _stageNative = false;
-  private _stageUiTimer?: number;
+  /** 0.7.8: Stage has no controls; a plain tap (≤ 10 px, ≤ 500 ms, no scroll / long-press seek since, not within 250 ms of a scroll) closes it */
+  private _stTap?: { x: number; y: number; t: number; id: number };
+  private _stScrollAt = 0;
+  private _stSeekAt = 0;
   /** fitted height (px) written to --_fit-h; 0 = not measured yet */
   private _fitH = 0;
   private _fitRaf = 0;
@@ -392,7 +393,6 @@ export class JukeboxCard extends LitElement {
     document.removeEventListener('fullscreenchange', this.onFsChange);
     document.removeEventListener('webkitfullscreenchange', this.onFsChange);
     window.removeEventListener('keydown', this.onKey);
-    window.clearTimeout(this._stageUiTimer);
     if (this._stage) this.closeStage();
     this._rm?.removeEventListener?.('change', this.applyBackdrop);
     this._ro?.disconnect(); this._ro = undefined;
@@ -570,7 +570,6 @@ export class JukeboxCard extends LitElement {
   /** Must run synchronously inside the tap that opened it, or browsers refuse requestFullscreen. */
   openStage() {
     this._stage = true;
-    this.showStageUi();
     this._stageNative = false;
     const el = this as any;
     const req = el.requestFullscreen ?? el.webkitRequestFullscreen;
@@ -585,7 +584,7 @@ export class JukeboxCard extends LitElement {
     this.dataset.stage = this._stageNative ? 'fullscreen' : 'overlay';
   }
   closeStage() {
-    this._stage = false; this._stageUi = false;
+    this._stage = false; this._stTap = undefined;
     delete this.dataset.stage;
     const d = document as any;
     const fs = d.fullscreenElement ?? d.webkitFullscreenElement;
@@ -602,25 +601,34 @@ export class JukeboxCard extends LitElement {
     if (e.key === 'Escape' && this._stage) { e.preventDefault(); this.closeStage(); }
     else if (e.key === 'Escape' && this._station) { e.preventDefault(); this._station = null; }
   };
-  private showStageUi() {
-    this._stageUi = true;
-    window.clearTimeout(this._stageUiTimer);
-    this._stageUiTimer = window.setTimeout(() => (this._stageUi = false), 4000);
-  }
-  private stageTap = () => { if (this._stageUi) { this._stageUi = false; window.clearTimeout(this._stageUiTimer); } else this.showStageUi(); };
-  private stageCall(service: string) {
-    this.showStageUi();
-    this.hass?.callService('media_player', service, {}, { entity_id: this._config.entity! })?.catch?.((err: any) => console.warn('[jukebox-card]', service, err));
-  }
+  private stDown = (e: PointerEvent) => {
+    this._stTap = (e.pointerType === 'mouse' && e.button !== 0) || Date.now() - this._stScrollAt < 250 ? undefined : { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId };
+  };
+  private stMove = (e: PointerEvent) => {
+    const t = this._stTap; if (t && e.pointerId === t.id && Math.hypot(e.clientX - t.x, e.clientY - t.y) > 10) this._stTap = undefined;
+  };
+  private stUp = (e: PointerEvent) => {
+    const t = this._stTap; this._stTap = undefined;
+    if (!t || e.pointerId !== t.id || Date.now() - t.t > 500 || Math.hypot(e.clientX - t.x, e.clientY - t.y) > 10) return;
+    if (this._stScrollAt >= t.t || this._stSeekAt >= t.t) return;
+    e.preventDefault();
+    // the click that follows this tap must not land on Now Playing underneath (e.g. on Play/Pause)
+    const swallow = (ev: Event) => { ev.stopPropagation(); ev.preventDefault(); };
+    this.addEventListener('click', swallow, { capture: true, once: true });
+    window.setTimeout(() => this.removeEventListener('click', swallow, { capture: true }), 400);
+    this.closeStage();
+  };
+  private stCancel = () => { this._stTap = undefined; };
   private renderStage() {
     const c = this._config, ent = this.hass?.states[c.entity!];
     const a = ent?.attributes ?? {};
     const pic = this.art();
     const bd = this._bd;
     const lyr = c.show_lyrics !== false;
-    const stop = (e: Event) => e.stopPropagation();
     const bg = pic && (bd === 'full' || bd === 'light') ? `background-image:url("${pic.replace(/"/g, '%22')}")` : '';
-    return html`<div class="stage ${this._stageUi ? 'ui' : ''} ${lyr ? '' : 'nolyr'}" role="dialog" aria-label="Stage" @click=${this.stageTap}>
+    return html`<div class="stage ${lyr ? '' : 'nolyr'}" role="dialog" aria-label="Stage" @pointerdown=${this.stDown} @pointermove=${this.stMove}
+      @pointerup=${this.stUp} @pointercancel=${this.stCancel} @jukebox-lyrics-scroll=${() => { this._stScrollAt = Date.now(); this._stTap = undefined; }}
+      @jukebox-lyrics-seek=${() => { this._stSeekAt = Date.now(); }}>
       ${bg ? html`<div class="st-bg st-${bd}" style=${bg}></div>` : nothing}
       <div class="st-main">
         <div class="st-left">
@@ -628,15 +636,6 @@ export class JukeboxCard extends LitElement {
           <div class="st-meta"><b>${a.media_title ?? 'Nothing playing'}</b><small>${a.media_artist ?? ''}</small></div>
         </div>
         ${lyr ? html`<jb-lyrics class="st-ly" mode="stage" .hass=${this.hass} .config=${c} .store=${this.lyrics} ?active=${!this._saver}></jb-lyrics>` : nothing}
-      </div>
-      <div class="st-top" @click=${stop}>
-        <button class="st-x" aria-label="Close" tabindex="-1" @click=${() => this.closeStage()}>${icon('close')}</button>
-      </div>
-      <div class="st-ctl" @click=${stop}>
-        <button aria-label="Previous" tabindex="-1" @click=${() => this.stageCall('media_previous_track')}>${icon('prev')}</button>
-        <button class="pp" aria-label=${ent?.state === 'playing' ? 'Pause' : 'Play'} tabindex="-1"
-          @click=${() => this.stageCall(ent?.state === 'playing' ? 'media_pause' : 'media_play')}>${icon(ent?.state === 'playing' ? 'pause' : 'play')}</button>
-        <button aria-label="Next" tabindex="-1" @click=${() => this.stageCall('media_next_track')}>${icon('next')}</button>
       </div>
     </div>`;
   }
@@ -914,15 +913,6 @@ export class JukeboxCard extends LitElement {
     .st-meta b { font-family: var(--_font-display); font-size: clamp(20px, 2.6cqw, 40px); font-weight: 800; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .st-meta small { font-size: clamp(15px, 1.7cqw, 24px); color: #ffffffa8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .st-ly { height: 100%; min-height: 0; }
-    .st-top { position: absolute; top: 16px; right: 16px; z-index: 3; }
-    .st-x, .st-ctl button { display: grid; place-items: center; border-radius: 50%; color: #fff; background: #000000a6; border: 1px solid #ffffff2e; }
-    .st-x { width: 52px; height: 52px; } .st-x .i { width: 26px; height: 26px; }
-    .st-ctl { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 3; display: flex; gap: 18px; align-items: center;
-      padding: 10px 16px; border-radius: 999px; background: #000000b3; border: 1px solid #ffffff1f; }
-    .st-ctl button { width: 56px; height: 56px; background: transparent; border: 0; } .st-ctl .i { width: 30px; height: 30px; }
-    .st-ctl .pp { width: 64px; height: 64px; background: #fff; color: #000; } .st-ctl .pp .i { width: 34px; height: 34px; }
-    .st-top, .st-ctl { opacity: 0; pointer-events: none; transition: opacity 250ms ease; }
-    .stage.ui .st-top, .stage.ui .st-ctl { opacity: 1; pointer-events: auto; }
     @container stage (max-aspect-ratio: 1/1) {
       .st-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); align-items: stretch; padding: 64px 6cqw 4cqh; gap: 3cqh; }
       .st-left { flex-direction: row; align-items: center; gap: 16px; }
