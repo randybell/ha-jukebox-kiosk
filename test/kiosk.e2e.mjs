@@ -175,7 +175,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('V2 default guest: Speakers panel = enabled volume mixer, no join/drop/move', sh.mode === 'fixed' && sh.sliders >= 1 && sh.chips === 0 && sh.acts === 0, J(sh));
   const c0 = await ev(p, `window.__calls.length`), w0 = await nws(p);
   const r = await ev(p, `(() => { const b = ${SR}.querySelector('[data-room] jb-slider').getBoundingClientRect(); return { x: b.left, y: b.top + b.height / 2, w: b.width, id: ${SR}.querySelector('[data-room]').dataset.room }; })()`);
-  await p.mouse.move(r.x + r.w * 0.4, r.y); await p.mouse.down(); await sleep(30); await p.mouse.up(); await sleep(250);
+  await p.mouse.move(r.x + r.w * 0.4, r.y); await p.mouse.down(); await p.mouse.move(r.x + r.w * 0.5, r.y, { steps: 5 }); await p.mouse.up(); /* #63: a drag, not a tap */ await sleep(250);
   await tap(p, `${SR}.querySelector('[data-room] .vm')`); await sleep(250);
   const vc = await ev(p, `window.__calls.slice(${c0}).filter((c) => c.domain === 'media_player').map((c) => ({ s: c.service, e: c.target?.entity_id }))`);
   check('V3 default guest: room slider → media_player.volume_set, mute → media_player.volume_mute (HA services)',

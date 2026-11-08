@@ -1,0 +1,30 @@
+// #63 (0.7.11): every volume slider (one jb-slider component) moves only after ~8 px of sideways movement, more sideways than vertical.
+// A tap and a vertical swipe leave the volume unchanged; a horizontal drag changes it. Usage: node test/slider-slop.e2e.mjs
+import puppeteer from 'puppeteer-core';
+import { hermetic } from './intercept.mjs';
+import { devIndex } from './serve.mjs';
+const BASE = await devIndex();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let total = 0, failures = 0;
+const check = (name, ok, info = '') => { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${!ok && info ? '  — ' + info : ''}`); };
+const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu'] });
+const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width: 1024, height: 600, deviceScaleFactor: 1 });
+await p.goto(`${BASE}?fresh=1&latency=20&kiosk=1`); await p.waitForFunction('window.__ready === true'); await sleep(1200);
+const findSlider = `(() => { const walk = (r) => { for (const e of r.querySelectorAll('*')) { if (e.tagName === 'JB-SLIDER' && e.closest('.vol') && e.getBoundingClientRect().width > 50) return e; if (e.shadowRoot) { const f = walk(e.shadowRoot); if (f) return f; } } return null; }; return walk(__card.shadowRoot); })()`;
+const box = await p.evaluate((s) => { const r = eval(s).getBoundingClientRect(); return { l: r.left, w: r.width, y: r.top + r.height / 2 }; }, findSlider);
+const vols = () => p.evaluate(() => window.__calls.filter((c) => c.service === 'volume_set').length);
+const val = () => p.evaluate((s) => eval(s).value, findSlider);
+check('a volume slider is on Now Playing', box.w > 50, JSON.stringify(box));
+let n0 = await vols(), v0 = await val();
+await p.mouse.click(box.l + box.w * 0.9, box.y); await sleep(600);
+check('a tap far along the slider leaves the volume unchanged (no volume_set)', (await vols()) === n0 && (await val()) === v0, JSON.stringify({ n: await vols(), v: await val(), v0 }));
+await p.mouse.move(box.l + box.w * 0.9, box.y); await p.mouse.down(); await p.mouse.move(box.l + box.w * 0.9 + 5, box.y, { steps: 3 }); await p.mouse.up(); await sleep(600);
+check('a 5 px wobble (under the 8 px threshold) changes nothing', (await vols()) === n0 && (await val()) === v0);
+await p.mouse.move(box.l + box.w * 0.5, box.y); await p.mouse.down(); await p.mouse.move(box.l + box.w * 0.5 + 6, box.y + 60, { steps: 8 }); await p.mouse.move(box.l + box.w * 0.9, box.y + 60, { steps: 8 }); await p.mouse.up(); await sleep(600);
+check('a vertical swipe (even drifting sideways afterwards) leaves the volume unchanged', (await vols()) === n0 && (await val()) === v0, JSON.stringify({ n: await vols(), v: await val() }));
+await p.mouse.move(box.l + box.w * 0.3, box.y); await p.mouse.down(); await p.mouse.move(box.l + box.w * 0.8, box.y + 3, { steps: 10 }); await p.mouse.up(); await sleep(900);
+const v1 = await val(), n1 = await vols();
+check('a horizontal drag changes the volume and sends volume_set', n1 > n0 && Math.abs(v1 - 0.8) < 0.03, JSON.stringify({ n1, v1 }));
+await browser.close();
+console.log(`\n${total - failures}/${total} slider-slop checks passed`);
+process.exit(failures ? 1 : 0);

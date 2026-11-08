@@ -406,7 +406,7 @@ export class JbNow extends LitElement {
       <button class="vm" tabindex="-1" aria-label="${muted ? 'Unmute' : 'Mute'} ${name}" ?disabled=${off || ro}
         @pointerdown=${noFocus} @click=${() => this.toggleMute(id)}>${icon(ic)}</button>
       <span class="vn">${name}${off ? html` <i>offline</i>` : nothing}${elsewhere ? html`<small class="else">${elsewhere}</small>` : nothing}</span>
-      <jb-slider class="vs" .value=${muted ? 0 : v} ?disabled=${off || ro} .label=${`${name} volume`}
+      <jb-slider class="vs" slop="8" .value=${muted ? 0 : v} ?disabled=${off || ro} .label=${`${name} volume`}
         @jb-input=${(e: CustomEvent) => this.onVolInput(id, e)} @jb-change=${(e: CustomEvent) => this.onVolChange(id, e)}></jb-slider>
       <span class="vv" data-v=${muted ? '–' : String(Math.round(v * 100))}></span>
       ${main && this.spk ? html`<button class="spkb" data-action="speakers" tabindex="-1" aria-haspopup="dialog" aria-label="Speakers: add or drop rooms"

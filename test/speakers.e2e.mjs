@@ -88,7 +88,9 @@ async function confirm(page, yes = true) {
 async function sliderTo(page, sliderExpr, frac) {
   const r = await rectOf(page, sliderExpr);
   const x = r.l + r.w * frac;
-  await page.mouse.move(x, r.y); await page.mouse.down(); await sleep(30); await page.mouse.up(); await sleep(150);
+  // #63 (0.7.11): a tap no longer sets the volume; slide in from 30 px away
+  const x0 = x + (frac > 0.5 ? -30 : 30);
+  await page.mouse.move(x0, r.y); await page.mouse.down(); await page.mouse.move(x, r.y, { steps: 4 }); await page.mouse.up(); await sleep(150);
 }
 const allJoins = [];
 

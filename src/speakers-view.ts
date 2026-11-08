@@ -463,7 +463,7 @@ export class JbSpeakers extends LitElement {
     return html`<div class="vr main" data-main=${id}>
       <button class="vm" tabindex="-1" aria-label="${muted ? 'Unmute' : 'Mute'} ${name}" ?disabled=${!vol} @pointerdown=${noFocus} @click=${() => this.toggleMute(id)}>${icon(muted ? 'volmute' : 'vol')}</button>
       <span class="vn">All of ${name}</span>
-      <jb-slider class="vs" .value=${muted ? 0 : v} ?disabled=${!vol} .label=${`${name} volume`}
+      <jb-slider class="vs" slop="8" .value=${muted ? 0 : v} ?disabled=${!vol} .label=${`${name} volume`}
         @jb-input=${(e: CustomEvent) => this.onVol(id, e, false)} @jb-change=${(e: CustomEvent) => this.onVol(id, e, true)}></jb-slider>
       <span class="vv" data-v=${muted ? '–' : String(Math.round(v * 100))}></span>
     </div>`;
@@ -508,7 +508,7 @@ export class JbSpeakers extends LitElement {
       <button class="vm" tabindex="-1" aria-label="${muted ? 'Unmute' : 'Mute'} ${r.name}" ?disabled=${off || !vol} @pointerdown=${noFocus} @click=${() => this.toggleMute(r.entity)}>${icon(muted ? 'volmute' : 'speaker')}</button>
       <span class="vn"><b>${r.name}</b><small class="where">${busy === 'in' ? 'Joining…' : busy === 'out' ? 'Leaving…' : where}</small></span>
       ${act ? html`<button class="act ${act.kind}" data-act=${act.kind} tabindex="-1" aria-disabled=${act.dis || act.kind === 'blocked' ? 'true' : 'false'} ?disabled=${!!busy} @pointerdown=${noFocus} @click=${act.fn}>${act.label}</button>` : html`<span></span>`}
-      <jb-slider class="vs" .value=${muted ? 0 : v} ?disabled=${off || !vol} .label=${`${r.name} volume`}
+      <jb-slider class="vs" slop="8" .value=${muted ? 0 : v} ?disabled=${off || !vol} .label=${`${r.name} volume`}
         @jb-input=${(e: CustomEvent) => this.onVol(r.entity, e, false)} @jb-change=${(e: CustomEvent) => this.onVol(r.entity, e, true)}></jb-slider>
       <span class="vv" data-v=${muted ? '–' : String(Math.round(v * 100))}></span>
     </div>`;

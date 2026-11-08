@@ -7,7 +7,7 @@ import { defineElement } from './define';
  * The visual value follows the finger immediately (optimistic); consumers throttle service calls.
  */
 export class JbSlider extends LitElement {
-  static properties = { value: { type: Number }, disabled: { type: Boolean, reflect: true }, label: {}, _drag: { state: true }, _v: { state: true } };
+  static properties = { value: { type: Number }, slop: { type: Number, reflect: true }, disabled: { type: Boolean, reflect: true }, label: {}, _drag: { state: true }, _v: { state: true } };
   value = 0;
   disabled = false;
   label = '';
@@ -24,21 +24,39 @@ export class JbSlider extends LitElement {
     return Math.max(0, Math.min(1, (e.clientX - r.left) / Math.max(1, r.width)));
   }
   private emit(type: string) { this.dispatchEvent(new CustomEvent(type, { detail: { value: Math.round(this._v * 100) / 100 }, bubbles: true, composed: true })); }
+  /** #63 (0.7.11), volume sliders only (`slop="8"`): the value moves only once the finger has slid `slop` px sideways, more sideways than
+   *  up/down. A stray touch, a tap or a vertical swipe (page scroll) changes nothing; the trade-off is that a tap no longer jumps to that
+   *  spot. 0 (default, the Seek bar) = unchanged: the value follows from the first touch. */
+  slop = 0;
+  private _x0 = 0;
+  private _y0 = 0;
+  private _armed = false;
   private down = (e: PointerEvent) => {
     if (this.disabled || (e.pointerType === 'mouse' && e.button !== 0)) return;
     e.preventDefault();
     this._rect = this.getBoundingClientRect();
-    this._pid = e.pointerId;
+    this._pid = e.pointerId; this._x0 = e.clientX; this._y0 = e.clientY; this._armed = true;
     try { this.setPointerCapture(e.pointerId); } catch { /* synthetic events */ }
-    this._drag = true; this._v = this.at(e); this.emit('jb-input');
+    if (!(this.slop > 0)) { this._drag = true; this._v = this.at(e); this.emit('jb-input'); }
   };
-  private move = (e: PointerEvent) => { if (!this._drag || e.pointerId !== this._pid) return; e.preventDefault(); this._v = this.at(e); this.emit('jb-input'); };
+  private move = (e: PointerEvent) => {
+    if (e.pointerId !== this._pid) return;
+    if (!this._drag) {
+      if (!this._armed) return;
+      const dx = Math.abs(e.clientX - this._x0), dy = Math.abs(e.clientY - this._y0);
+      if (dx >= this.slop && dx > dy) this._drag = true;
+      else { if (dy >= this.slop) this.disarm(); return; }
+    }
+    e.preventDefault(); this._v = this.at(e); this.emit('jb-input');
+  };
+  private disarm() { this._armed = false; this._rect = undefined; try { if (this._pid !== undefined) this.releasePointerCapture(this._pid); } catch { /* not captured */ } }
   private up = (e: PointerEvent) => {
-    if (!this._drag || e.pointerId !== this._pid) return;
-    this._v = this.at(e); this._drag = false; this._rect = undefined;
+    if (e.pointerId !== this._pid) return;
+    if (!this._drag) { this.disarm(); return; }
+    this._v = this.at(e); this._drag = false; this._armed = false; this._rect = undefined;
     this.value = this._v; this.emit('jb-change');
   };
-  private cancel = () => { if (!this._drag) return; this._drag = false; this.value = this._v; this.emit('jb-change'); };
+  private cancel = () => { this._armed = false; if (!this._drag) return; this._drag = false; this.value = this._v; this.emit('jb-change'); };
 
   connectedCallback() {
     super.connectedCallback();
@@ -59,6 +77,7 @@ export class JbSlider extends LitElement {
   }
   static styles = css`
     :host { position: relative; display: block; height: var(--jb-slider-hit, 36px); touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    :host([slop]:not([slop="0"])) { touch-action: pan-y; } /* #63: a vertical swipe on a volume slider scrolls the page */
     :host([disabled]) { opacity: .35; cursor: default; }
     .t { position: absolute; left: 0; right: 0; top: 50%; height: var(--jb-slider-h, 6px); transform: translateY(-50%); border-radius: 99px; background: var(--_track, #ffffff33); overflow: hidden; }
     .f { position: absolute; inset: 0 auto 0 0; background: var(--_active, #fff); border-radius: 99px; }

@@ -1,6 +1,6 @@
 // 0.7.10 volume while Home Assistant is disconnected (src/vol-send.ts): sliders send nothing while offline and keep only the last value
 // per speaker; on reconnect each is sent once (values older than 30 s are dropped); one "Reconnecting to Home Assistant…" status
-// shows while offline; every volume_set passes notifyOnError=false (no HA grey toasts); a plain tap sends exactly one volume_set.
+// shows while offline; every volume_set passes notifyOnError=false (no HA grey toasts); a plain tap sends no volume_set (#63, 0.7.11).
 // Usage: node test/volume-offline.e2e.mjs (starts its own dev server)
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -53,10 +53,10 @@ let v = await vols();
 check('connected: dragging a room slider sends volume_set as before (throttled, several calls)', v.length >= 4 && v.length <= 8 && v.every((c) => c.id === L), J(v.map((c) => c.v)));
 check('every volume_set passes notifyOnError=false (no HA grey toast)', v.length > 0 && v.every((c) => c.notify === false), J(v.map((c) => c.notify)));
 check('connected: no Reconnecting status', (await status()).length === 0);
-// a plain tap sends exactly one
+// #63 (0.7.11): a plain tap no longer sets the volume
 const r = await box(slider(K)); await p.mouse.click(r.l + r.w * 0.33, r.y); await sleep(400);
 v = await vols();
-check('a plain tap on a slider sends exactly one volume_set', v.length === 1 && v[0].id === K && Math.abs(v[0].v - 0.33) < 0.02, J(v));
+check('#63: a plain tap on a slider sends no volume_set', v.length === 0, J(v));
 
 // offline: drag a room and the main slider → nothing sent, one status; reconnect → 1 per speaker with the last value
 await ev(p, `(window.__offline = true, 1)`); await push(); await sleep(300);
@@ -64,7 +64,7 @@ let st = await status();
 check('offline: one "Reconnecting to Home Assistant…" status on the card', J(st) === J(['Reconnecting to Home Assistant…']), J(st));
 const lastL = await drag(slider(L), 1500, 0.2, 0.7);
 const lastE = await drag(slider(E), 1500, 0.3, 0.6);
-const tapK = await (async () => { const b = await box(slider(K)); await p.mouse.click(b.l + b.w * 0.5, b.y); await sleep(300); return ev(p, `${slider(K)}.value`); })();
+const tapK = await (async () => { const b = await box(slider(K)); /* #63: a short drag, a tap no longer sets it */ await p.mouse.move(b.l + b.w * 0.5 - 30, b.y); await p.mouse.down(); await p.mouse.move(b.l + b.w * 0.5, b.y, { steps: 4 }); await p.mouse.up(); await sleep(300); return ev(p, `${slider(K)}.value`); })();
 await push(); await sleep(300); // a hass refresh while still offline
 v = await vols();
 check('offline: dragging a room slider and the main slider (and a tap) sends 0 volume_set', v.length === 0, J(v));
@@ -92,7 +92,7 @@ check('…and the status clears', (await status()).length === 0);
 await ev(p, `(window.__skew = 0, 1)`);
 await p.evaluate(() => { const card = window.__card; const h = card.hass; const raw = h.__raw; let n = 0;
   card.hass = { ...raw, __raw: { ...raw, callService: (...a) => { if (a[1] === 'volume_set' && n++ < 1) { const e = new Error(''); e.error = { code: 3 }; return Promise.reject(e); } return raw.callService(...a); } } }; });
-const rr = await box(slider(L)); await p.mouse.click(rr.l + rr.w * 0.25, rr.y); await sleep(400);
+const rr = await box(slider(L)); /* #63 */ await p.mouse.move(rr.l + rr.w * 0.25 + 30, rr.y); await p.mouse.down(); await p.mouse.move(rr.l + rr.w * 0.25, rr.y, { steps: 4 }); await p.mouse.up(); await sleep(400);
 v = await vols();
 check('a volume_set that fails with "connection lost" shows the status instead of a pile of toasts', v.length === 1 && (await status()).length === 1, J(v)); // the one attempt, rejected with "connection lost" (code 3)
 await push(); await sleep(500);
