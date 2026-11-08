@@ -4,6 +4,11 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+- Artist page: the Albums rows have icon buttons for Add to queue, Play next, Play now and Start radio, under a column header that stays in place while you scroll. There's no Remove or More on these rows.
+- Search results and the artist page's Albums rows: the icon buttons now fire only on a press-and-hold of about half a second, so scrolling can't set them off. The row lights up while you hold it.
+- Press and hold a row (anywhere off its buttons) or a Library cover tile to open a large, easy-to-tap options panel showing the item's art and name: Open, Add to queue, Play next, Play now, Start radio where it's offered, and Cancel. Stations get Open, Play now and Cancel. Tap outside the panel or Cancel to close it.
+- Volume after the tablet wakes up: while Home Assistant is reconnecting, volume changes wait, and only the last one for each speaker is sent once it's back. Changes older than 30 seconds are dropped. You see a single "Reconnecting to Home Assistant…" note instead of a stack of grey error pop-ups. A quick tap on a volume slider now sends one change instead of two.
+
 ## 0.7.9 — 2026-11-07
 
 - Radio: playing a station when the queue has songs now asks first ("This will replace your queue": Replace or Cancel). With an empty queue it plays right away. (#37)
