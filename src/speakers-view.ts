@@ -3,6 +3,7 @@ import { tokens, base } from './styles';
 import { icon } from './icons';
 import { mediaStyles, noFocus, roomsOf, fire } from './shared';
 import { throttle } from './slider';
+import { sendVolume } from './vol-send';
 import './slider';
 import type { HomeAssistant, JukeboxCardConfig, PresetConfig } from './types';
 import { SpeakerError, timeouts, type SpeakerStore } from './speakers/ma';
@@ -214,9 +215,11 @@ export class JbSpeakers extends LitElement {
   private callVol(id: string, service: string, data: Record<string, any>) {
     return this.hass!.callService('media_player', service, data, { entity_id: id }).catch(() => this.fail('That did not work. Check the speaker.'));
   }
+  private sendVol(id: string, v: number) { return sendVolume(this.hass, id, v).catch(() => this.fail('That did not work. Check the speaker.')); }
   private sender(id: string) {
     let s = this.senders.get(id);
-    if (!s) { s = throttle((v: number) => { void this.callVol(id, 'volume_set', { volume_level: v }); }, VOL_THROTTLE_MS); this.senders.set(id, s); }
+    // 0.7.10: through sendVolume (kept while HA is disconnected, sent once on reconnect; notifyOnError=false)
+    if (!s) { s = throttle((v: number) => { void this.sendVol(id, v); }, VOL_THROTTLE_MS); this.senders.set(id, s); }
     return s;
   }
   private onVol(id: string, e: CustomEvent, final: boolean) {
@@ -393,7 +396,7 @@ export class JbSpeakers extends LitElement {
       for (const [e, pct] of Object.entries(p.volumes ?? {})) {
         const v = Math.max(0, Math.min(100, pct)) / 100;
         this.vol.set(e, { v, t: Date.now() });
-        void this.callVol(e, 'volume_set', { volume_level: v });
+        void this.sendVol(e, v);
       }
     } catch (e) {
       this.fail(`Couldn't apply ${p.name}: ${errText(e)}`);

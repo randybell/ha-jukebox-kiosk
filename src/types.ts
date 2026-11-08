@@ -19,6 +19,10 @@ export interface HomeAssistant {
   entities?: Record<string, { entity_id?: string; device_id?: string | null; platform?: string; translation_key?: string | null }>;
   callWS?<T = any>(msg: Record<string, unknown>): Promise<T>;
   connection?: {
+    /** home-assistant-js-websocket: false while the socket is down / reconnecting */
+    connected?: boolean;
+    addEventListener?(ev: 'ready' | 'disconnected' | 'reconnect-error', cb: () => void): void;
+    removeEventListener?(ev: 'ready' | 'disconnected' | 'reconnect-error', cb: () => void): void;
     sendMessagePromise<T = any>(msg: Record<string, unknown>): Promise<T>;
     subscribeMessage<T = any>(cb: (ev: T) => void, msg: Record<string, unknown>): Promise<() => Promise<void> | void>;
   };

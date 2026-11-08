@@ -5,6 +5,7 @@ import { providerLabel } from './providers';
 import { combinedOn, libraryTabLabel } from './library-home';
 import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, status, ART, hash, playerArt, isRadio, RADIO_ART } from './shared';
 import { throttle } from './slider';
+import { sendVolume } from './vol-send';
 import './slider';
 import './lyrics/lyrics-view';
 import type { LyricsStore } from './lyrics/store';
@@ -354,7 +355,8 @@ export class JbNow extends LitElement {
   private sender(id: string) {
     let s = this.senders.get(id);
     if (!s) {
-      s = throttle((v: number) => { this.call('media_player', 'volume_set', { volume_level: v }, id); }, VOL_THROTTLE_MS);
+      // 0.7.10: through sendVolume (kept while HA is disconnected, sent once on reconnect; notifyOnError=false)
+      s = throttle((v: number) => { sendVolume(this.hass, id, v).catch((err) => { console.warn('[jukebox-card] media_player.volume_set failed', err); this.toast('That did not work. Check the player.'); }); }, VOL_THROTTLE_MS);
       this.senders.set(id, s);
     }
     return s;
