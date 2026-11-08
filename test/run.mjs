@@ -55,8 +55,13 @@ async function rectOf(page, expr) {
     const el = eval(expr);
     if (!el) return null;
     const r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, hold: el.matches('.ra-b.hold') };
   }, expr);
+}
+// 0.7.10: search / artist Albums row buttons fire only after a 500 ms press-and-hold
+async function holdAt(page, r, touch = false) {
+  if (touch) { await page.touchscreen.touchStart(r.x, r.y); await sleep(650); await page.touchscreen.touchEnd(); }
+  else { await page.mouse.move(r.x, r.y); await page.mouse.down(); await sleep(650); await page.mouse.up(); }
 }
 // first *visible* key with that id (digits exist twice: the wide num row and inline in narrow 123 mode)
 const keyExpr = (id) => `[...${H.sv}.shadowRoot.querySelector('jb-keyboard').shadowRoot.querySelectorAll('[data-key="${id}"]')].find((k) => k.getBoundingClientRect().width > 0)`;
@@ -166,7 +171,7 @@ const SVR = `${H.sv}.shadowRoot`;
 const confirmOf = () => page.evaluate((r) => { const c = eval(r).querySelector('.confirm'); return c ? { kind: c.dataset.kind, text: c.textContent.replace(/\s+/g, ' ').trim(), role: c.getAttribute('role') } : null; }, SVR);
 // bring a result into view (the results list scrolls under the black footer) before a real pointer tap
 async function see(expr) { await page.evaluate((e) => eval(e)?.scrollIntoView({ block: 'center' }), expr); await sleep(120); }
-async function clickEl0(expr) { await see(expr); const r = await rectOf(page, expr); if (!r || !r.w) throw new Error('not visible: ' + expr); await page.mouse.click(r.x, r.y); await sleep(150); }
+async function clickEl0(expr) { await see(expr); const r = await rectOf(page, expr); if (!r || !r.w) throw new Error('not visible: ' + expr); if (r.hold) await holdAt(page, r); else await page.mouse.click(r.x, r.y); await sleep(150); }
 const rowIcon = (row, act) => `${row}.querySelector('.ra-b[data-act="${act}"]')`;
 // layout: every result group is a list of rows; 4 distinct icons, 48 px targets, rows ≥ 56 px
 const lay = await page.evaluate((r) => {
@@ -199,7 +204,9 @@ check('4c tapping a track row only highlights it (no play_media, no sheet)', sel
 // long-press does not play either
 r = await rectOf(page, `${firstRow}.querySelector('.rt')`);
 await page.mouse.move(r.x, r.y); await page.mouse.down(); await sleep(650); await page.mouse.up(); await sleep(80);
-check('4d long-press on a row does not play', (await state(page)).playCalls.length === 0);
+s = await state(page);
+check('4d long-press on a row does not play; (0.7.10) it opens the row pop-up', s.playCalls.length === 0 && !!s.menu, `menu=${s.menu}`);
+await page.keyboard.press('Escape'); await sleep(120);
 await clickEl0(rowIcon(firstRow, 'add'));
 s = await state(page);
 check('4e Add to queue adds at the end (enqueue add) right away; there is no Remove in search results', s.playCalls.length === 1 && s.playCalls[0].data.enqueue === 'add' && !(await page.evaluate((e) => !!eval(e).querySelector('.ra-b[data-act="remove"]'), firstRow)), JSON.stringify(s.playCalls.map((c) => c.data)));
@@ -306,7 +313,7 @@ check('7a 390 px: every row keeps its icons ≥ 44 px on one line inside the row
 check('7b 390 px: long titles truncate instead of pushing the icons', ph.some((x) => x.trunc) && ph.every((x) => x.tw > 60), ph.map((x) => x.tw).join(','));
 await page.evaluate((e) => eval(e).scrollIntoView({ block: 'center' }), `${H.sv}.shadowRoot.querySelector('.grp.tracks .row')`); await sleep(150);
 r = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.grp.tracks .row .ra-b[data-act="replace"]')`);
-await page.touchscreen.tap(r.x, r.y); await sleep(150);
+await holdAt(page, r, true); await sleep(150);
 await page.screenshot({ path: SHOTS + 'replace-confirm-390x844.png' });
 s = await state(page);
 const cf7 = await page.evaluate((r) => eval(r).querySelector('.confirm')?.dataset.kind, `${H.sv}.shadowRoot`);
@@ -336,7 +343,7 @@ const calls = (page, since = 0) => page.evaluate((n) => window.__calls.slice(n).
 const ncalls = (page) => page.evaluate(() => window.__calls.length);
 const passive = new Set(['search', 'get_library', 'get_queue', 'get_queue_items']);
 const actions = (cs) => cs.filter((c) => !passive.has(c.s));
-async function clickEl(page, expr) { const r = await rectOf(page, expr); if (!r || !r.w) throw new Error('not visible: ' + expr); await page.mouse.click(r.x, r.y); await sleep(120); }
+async function clickEl(page, expr) { const r = await rectOf(page, expr); if (!r || !r.w) throw new Error('not visible: ' + expr); if (r.hold) await holdAt(page, r); else await page.mouse.click(r.x, r.y); await sleep(120); }
 const EV = 'media_player.everywhere';
 const tgt = (c) => [c.target?.entity_id].flat().join(',');
 // the Jukebox Kiosk WebSocket log (window.__ws): every message the card sent, oldest first
@@ -573,7 +580,7 @@ r = await rectOf(page, tile0);
 await page.mouse.move(r.x - r.w / 4, r.y - r.h / 4); await page.mouse.down(); await sleep(650); await page.mouse.up(); await sleep(100);
 s = await page.evaluate((b) => [...eval(b).querySelectorAll('.menu .mi')].map((e) => e.dataset.action), BV);
 let b2 = await qcall(() => clickEl(page, `${BV}.querySelector('.menu .mi[data-action="next"]')`));
-check('12e long-press a playlist → menu (Open/next/add/replace, no Start radio); Play next → enqueue next', ['open', 'next', 'remove', 'replace'].every((a) => s.includes(a)) && !s.includes('radio') && b2.length === 1 && b2[0].data.enqueue === 'next' && tgt(b2[0]) === EV, `${s.join(',')} ${JSON.stringify(b2[0]?.data)}`);
+check('12e long-press a playlist → menu 5 (0.7.10: Open, Add to queue, Play next, Play now; no Remove, no Start radio); Play next → enqueue next', s.join() === 'open,add,next,replace,cancel' && b2.length === 1 && b2[0].data.enqueue === 'next' && tgt(b2[0]) === EV, `${s.join(',')} ${JSON.stringify(b2[0]?.data)}`);
 {
   const lp = async () => { const rr = await rectOf(page, tile0); await page.mouse.move(rr.x - rr.w / 4, rr.y - rr.h / 4); await page.mouse.down(); await sleep(650); await page.mouse.up(); await sleep(100); };
   const bconf = () => page.evaluate((b) => eval(b).querySelector('.confirm')?.dataset.kind ?? null, BV);
@@ -680,7 +687,7 @@ s = await page.evaluate(() => { const a = __card.shadowRoot.querySelector('ha-ca
 check('15j 1920x1080 → scale 1.35, card exactly fills the viewport', s.scale === '1.35' && Math.abs(s.h - 1080) < 2 && Math.abs(s.w - 1920) < 2, JSON.stringify(s));
 await see(firstRow);
 r = await rectOf(page, `${firstRow}.querySelector('.ra-b[data-act="replace"]')`);
-await page.mouse.click(r.x, r.y); await sleep(150);
+await holdAt(page, r); await sleep(150);
 const mr = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.confirm')`);
 const mb = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.confirm [data-action="confirm"]')`);
 check('15k 1920x1080: a zoomed row icon is hit by a real click; the confirmation is centred and on screen', r.w >= 60 && mr && Math.abs(mr.x - 960) < 4 && mr.y - mr.h / 2 > 0 && mr.y + mr.h / 2 < 1080 && Math.abs(mr.y - 540) < 60 && mb.h >= 60 && (await state(page)).playCalls.length === 0, `btn ${JSON.stringify(r)} confirm ${JSON.stringify(mr)}`);
@@ -787,7 +794,7 @@ await page.keyboard.press('Escape');
   let r0 = await rectOf(pg, `${BR}.shadowRoot.querySelector('.tile')`);
   await pg.mouse.move(r0.x - r0.w / 4, r0.y - r0.h / 4); await pg.mouse.down(); await sleep(650); await pg.mouse.up(); await sleep(150);
   let mi = await pg.evaluate((b) => [...eval(b).shadowRoot.querySelectorAll('.menu .mi')].map((e) => e.dataset.action), BR);
-  check('16w station menu: Play Now only (replace), no next/remove/Start radio', mi.includes('play') && !mi.includes('radio') && !mi.includes('next') && !mi.includes('remove') && !mi.includes('replace'), mi.join(','));
+  check('16w station menu (0.7.10 menu 5): Open + Play now only, no next/remove/Start radio', mi.join() === 'open,replace,cancel', mi.join(','));
   await pg.keyboard.press('Escape');
   await open(pg, '&latency=20&tab=browse&lhome=0&radio=lib');
   await pg.waitForFunction((b) => !!eval(b).shadowRoot.querySelector('[data-cat="radio"]'), { timeout: 4000 }, BR).catch(() => {});
@@ -840,7 +847,7 @@ await page.keyboard.press('Escape');
       byline: x.querySelector('h3 em')?.textContent ?? '', menu: [...r.querySelectorAll('.menu .mi')].map((m) => m.dataset.action), sheet: !!r.querySelector('.menu.sheet'), confirm: r.querySelector('.confirm')?.dataset.kind ?? null }; }, SD);
   const waitDet = (pred = 'true') => pg.waitForFunction((d, p) => { const x = eval(d)?.querySelector('.detail'); return !!x && !x.hasAttribute('data-loading') && eval(p); }, { timeout: 5000 }, SD, pred).catch(() => {});
   const typeQ = async (q) => { for (const c of q) await tapKey(pg, keyIdFor(c)); await waitShown(pg, q); await sleep(150); };
-  const tapEl = async (expr, touch = false) => { await pg.evaluate((e) => eval(e)?.scrollIntoView({ block: 'nearest' }), expr); await sleep(60); const r = await rectOf(pg, expr); if (!r || !r.w) throw new Error('not visible: ' + expr); if (touch) await pg.touchscreen.tap(r.x, r.y); else await pg.mouse.click(r.x, r.y, { delay: 40 }); await sleep(200); };
+  const tapEl = async (expr, touch = false) => { await pg.evaluate((e) => eval(e)?.scrollIntoView({ block: 'nearest' }), expr); await sleep(60); const r = await rectOf(pg, expr); if (!r || !r.w) throw new Error('not visible: ' + expr); if (r.hold) await holdAt(pg, r, touch); else if (touch) await pg.touchscreen.tap(r.x, r.y); else await pg.mouse.click(r.x, r.y, { delay: 40 }); await sleep(200); };
   const searchRow = (g, name) => `[...${SV}.shadowRoot.querySelectorAll('.grp.${g} .row')].find((e) => e.querySelector('b')?.textContent === ${JSON.stringify(name)})`;
   const searchTile = (g, name) => `${searchRow(g, name)}?.querySelector('.rt')`; // the row body (not its icons)
   const icon = (row, a) => `${row}?.querySelector('.ra-b[data-act="${a}"]')`;

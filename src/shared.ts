@@ -10,6 +10,16 @@ export const ART = [
 ];
 export const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
 export const noFocus = (e: PointerEvent) => e.preventDefault();
+/** 0.7.10: press-and-hold time (ms) for row action buttons, the row-hold pop-up and the tile menu. */
+export const HOLD_MS = 500;
+/** After a hold fires, the finger is still down: swallow the click its release makes, so it can't land on the confirm or pop-up that just opened under it. */
+export function swallowNextClick() {
+  const eat = (e: Event) => { e.preventDefault(); e.stopPropagation(); off(); };
+  const up = () => window.setTimeout(off, 100);
+  const off = () => { window.removeEventListener('click', eat, true); window.removeEventListener('pointerup', up, true); window.removeEventListener('pointerdown', off, true); };
+  window.addEventListener('click', eat, true); window.addEventListener('pointerup', up, true); window.addEventListener('pointerdown', off, true);
+  window.setTimeout(off, 5000);
+}
 
 /** Image URLs the card will load: https, data:image and same-origin relative paths. Plain http (mixed content on an
  *  https dashboard, and usually a LAN address) and protocol-relative URLs are dropped. */
@@ -176,9 +186,11 @@ export function playMessage(hass: HomeAssistant | undefined, config: JukeboxCard
 /* ---------------- long-press controller: tap = onTap, hold 500 ms = onLong ---------------- */
 export class PressController<T> implements ReactiveController {
   held = '';
+  /** key of the row/tile whose hold is still counting (shows the progress fill) */
+  pressing = '';
   private p?: { key: string; x: number; y: number; timer: number; fired: boolean; item: T; el: HTMLElement; sc: [HTMLElement, number, number][] };
   constructor(private host: ReactiveControllerHost, private onTap: (it: T, el: HTMLElement) => void,
-    private onLong: (it: T, el: HTMLElement) => void, private ms = 500) { host.addController(this); }
+    private onLong: (it: T, el: HTMLElement) => void, private ms = HOLD_MS) { host.addController(this); }
   hostDisconnected() { this.cancel(); }
   handlers(key: string, item: T) {
     return {
@@ -188,16 +200,16 @@ export class PressController<T> implements ReactiveController {
         e.preventDefault();
         const el = e.currentTarget as HTMLElement;
         this.cancel();
-        const timer = window.setTimeout(() => { if (!this.p) return; this.p.fired = true; this.onLong(item, el); }, this.ms);
+        const timer = window.setTimeout(() => { if (!this.p) return; this.p.fired = true; this.pressing = ''; swallowNextClick(); this.host.requestUpdate(); this.onLong(item, el); }, this.ms);
         const sc: [HTMLElement, number, number][] = [];
         for (let a = el.parentElement; a; a = a.parentElement) if (a.matches('.scroll, .hs')) sc.push([a, a.scrollTop, a.scrollLeft]);
         this.p = { key, x: e.clientX, y: e.clientY, timer, fired: false, item, el, sc };
-        this.held = key; this.host.requestUpdate();
+        this.held = key; this.pressing = key; this.host.requestUpdate();
       },
       move: (e: PointerEvent) => { const p = this.p; if (p && !p.fired && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) this.cancel(); },
       up: (e: PointerEvent) => {
         const p = this.p; if (!p) return;
-        window.clearTimeout(p.timer); this.p = undefined;
+        window.clearTimeout(p.timer); this.p = undefined; this.pressing = '';
         if (!p.fired) { this.held = ''; this.host.requestUpdate(); this.onTap(p.item, p.el); }
         e.preventDefault();
       },
@@ -209,10 +221,10 @@ export class PressController<T> implements ReactiveController {
     if (this.p && this.p.sc.some(([a, t, l]) => Math.abs(a.scrollTop - t) > 2 || Math.abs(a.scrollLeft - l) > 2)) this.cancel();
   }
   cancel() {
-    if (this.p) { window.clearTimeout(this.p.timer); if (!this.p.fired) { this.held = ''; this.host.requestUpdate(); } }
+    if (this.p) { window.clearTimeout(this.p.timer); this.pressing = ''; if (!this.p.fired) { this.held = ''; this.host.requestUpdate(); } }
     this.p = undefined;
   }
-  release() { this.held = ''; this.host.requestUpdate(); }
+  release() { this.held = ''; this.pressing = ''; this.host.requestUpdate(); }
 }
 
 /* ---------------- shared item menu (popover in landscape/tablet, bottom sheet on phones) ---------------- */
@@ -247,24 +259,17 @@ export function menuTpl(pos: MenuPos, head: { item: { name: string } & Partial<M
     </div>`;
 }
 
-/** Long-press / ⋮ menu: Play Now first; a tap never plays by itself.
- *  `seedRadio` = Start radio… from a track/artist/album. `radioStation` = an MA radio item: Play Now replaces, no next/add/remove. */
-export function mediaActions(play: (enq: Enqueue | 'remove') => void, open: (() => void) | undefined, ask: (kind: 'replace' | 'radio') => void, seedRadio: boolean, radioStation = false): MenuAction[] {
-  if (radioStation) {
-    return [
-      ...(open ? [{ id: 'open', icon: 'open', label: 'Open', run: open }] : []),
-      { id: 'play', icon: 'play', label: 'Play Now', run: () => play('replace') },
-    ];
-  }
+/** 0.7.10 menu 5 (tile press-and-hold) and the row-hold pop-up: Open, Add to queue, Play next, Play now (asks, then replaces), Start radio (asks; only where
+ *  offered today), then menuTpl's Cancel. `seedRadio` = Start radio from this item. `radioStation` = an MA radio item: Open and Play now only. */
+export function mediaActions(play: (enq: Enqueue) => void, open: (() => void) | undefined, ask: (kind: 'replace' | 'radio') => void, seedRadio: boolean, radioStation = false): MenuAction[] {
+  const o = open ? [{ id: 'open', icon: 'open', label: 'Open', run: open }] : [];
+  if (radioStation) return [...o, { id: 'replace', icon: 'play', label: 'Play now', run: () => play('replace') }];
   return [
-    ...(open ? [{ id: 'open', icon: 'open', label: 'Open', run: open }] : []),
-    { id: 'play', icon: 'play', label: 'Play Now', run: () => play('play') },
-    { id: 'next', icon: 'qnext', label: 'Play Next', run: () => play('next') },
-    { id: 'remove', icon: 'trash', label: 'Remove', run: () => play('remove') },
-    // these two replace what everyone is hearing: the caller shows a confirmation first
-    { id: 'replace', icon: 'play', label: 'Play Now', run: () => ask('replace') },
-    // Start radio only where MA can seed it (track / artist / album; never a station, podcast, audiobook or playlist)
-    ...(seedRadio ? [{ id: 'radio', icon: 'tower', label: 'Start radio…', run: () => ask('radio') }] : []),
+    ...o,
+    { id: 'add', icon: RA.add.icon, label: 'Add to queue', run: () => play('add') },
+    { id: 'next', icon: RA.next.icon, label: 'Play next', run: () => play('next') },
+    { id: 'replace', icon: RA.replace.icon, label: 'Play now', run: () => ask('replace') },
+    ...(seedRadio ? [{ id: 'radio', icon: RA.radio.icon, label: 'Start radio', run: () => ask('radio') }] : []),
   ];
 }
 /** Tap on a playable item (track, station, episode, audiobook): a small sheet, nothing plays until a choice is made. */
@@ -295,12 +300,37 @@ const RA: Record<RowAct, { icon: string; title: string; label: (n: string) => st
 /** Every queueing surface uses the same three visible labels, in this order.
  *  Radio stations: only Play Now (replace). No Play Next, add-to-queue, Remove, or Start radio. */
 /** 0.7.9 #35b: `mix` (search rows): Start radio is a fourth labeled button in More's slot, and there is no More. */
-export function rowActsTpl(it: MaItem, seedRadio: boolean, run: (a: RowAct | 'more', el: HTMLElement) => void, queueActs: readonly RowAct[] = QUEUE_ACTIONS, mix = false) {
+/* 0.7.10 hold-to-fire for row buttons: one pointer at a time. A quick tap does nothing; HOLD_MS of holding fires; moving > 10 px, leaving the
+ * button or scrolling cancels. While holding, the button shows a fill and its whole row is highlighted. Enter/Space (a click with detail 0) still fires. */
+let hb: { el: HTMLElement; row: HTMLElement | null; x: number; y: number; timer: number; off: () => void } | undefined;
+function holdEnd() { if (!hb) return; window.clearTimeout(hb.timer); hb.el.classList.remove('hp'); hb.row?.classList.remove('held', 'hp'); hb.off(); hb = undefined; }
+function holdStart(e: PointerEvent, fire: (el: HTMLElement) => void) {
+  e.preventDefault(); e.stopPropagation();
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  holdEnd();
+  const el = e.currentTarget as HTMLElement, row = el.closest('.row') as HTMLElement | null;
+  // cancel only when a scroller under the button really moved (a late, no-op scroll event is ignored)
+  const sc: [Element, number, number][] = [];
+  for (let a: Element | null = el.parentElement; a; a = a.parentElement || ((a.getRootNode() as ShadowRoot).host ?? null)) if (a.scrollHeight > a.clientHeight || a.scrollWidth > a.clientWidth) sc.push([a, a.scrollTop, a.scrollLeft]);
+  const onScroll = () => { if (sc.some(([a, t, l]) => Math.abs(a.scrollTop - t) > 2 || Math.abs(a.scrollLeft - l) > 2)) holdEnd(); };
+  window.addEventListener('scroll', onScroll, true);
+  const timer = window.setTimeout(() => { const t = hb; holdEnd(); if (t) { swallowNextClick(); fire(t.el); } }, HOLD_MS);
+  hb = { el, row, x: e.clientX, y: e.clientY, timer, off: () => window.removeEventListener('scroll', onScroll, true) };
+  el.classList.add('hp'); row?.classList.add('held', 'hp');
+}
+const holdMove = (e: PointerEvent) => { if (hb && Math.hypot(e.clientX - hb.x, e.clientY - hb.y) > 10) holdEnd(); };
+const holdStop = (e: PointerEvent) => { e.stopPropagation(); holdEnd(); };
+export function rowActsTpl(it: MaItem, seedRadio: boolean, run: (a: RowAct | 'more', el: HTMLElement) => void, queueActs: readonly RowAct[] = QUEUE_ACTIONS, mix = false, hold = false) {
   const station = isRadio(it);
   const acts: RowAct[] = station ? ['replace'] : [...queueActs, ...(seedRadio ? ['radio' as const] : [])];
   // 0.7.9 #35: a live station's only action reads "Play" (it replaces the queue, behind the #37 confirm)
   const title = (a: RowAct) => (station ? 'Play' : RA[a].title), aria = (a: RowAct) => (station ? `Play ${it.name}` : RA[a].label(it.name));
-  const b = (a: RowAct) => html`<button class="ra-b ${a === 'radio' && !mix ? 'x2' : ''}" data-act=${a} tabindex="-1" title=${title(a)}
+  const b = (a: RowAct) => hold
+    ? html`<button class="ra-b hold" data-act=${a} tabindex="-1" title=${title(a)} aria-label=${aria(a)}
+      @pointerdown=${(e: PointerEvent) => holdStart(e, (el) => run(a, el))} @pointermove=${holdMove} @pointerup=${holdStop} @pointercancel=${holdStop} @pointerleave=${holdStop}
+      @contextmenu=${(e: Event) => e.preventDefault()}
+      @click=${(e: MouseEvent) => { e.stopPropagation(); if (e.detail === 0) run(a, e.currentTarget as HTMLElement); }}>${icon(RA[a].icon)}<span>${title(a)}</span></button>`
+    : html`<button class="ra-b ${a === 'radio' && !mix ? 'x2' : ''}" data-act=${a} tabindex="-1" title=${title(a)}
     aria-label=${aria(a)} @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(a, e.currentTarget as HTMLElement); }}>${icon(RA[a].icon)}<span>${title(a)}</span></button>`;
   return html`<div class="ra" data-n=${acts.length}>${acts.map(b)}${!station && seedRadio && !mix ? html`<button class="ra-b ra-more" data-act="more" tabindex="-1" title="More"
     aria-label="More actions for ${it.name}" @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run('more', e.currentTarget as HTMLElement); }}>${icon('more')}<span>More</span></button>` : nothing}</div>`;
@@ -405,6 +435,14 @@ export const mediaStyles = css`
   .ra { display: flex; flex: none; }
   .ra-b { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; color: #fff; }
   .ra-b:active { background: #ffffff26; }
+  /* 0.7.10 hold progress: a fill that grows over HOLD_MS on the held button (and on a row / tile held for its pop-up) */
+  .ra-b.hold { touch-action: pan-y; -webkit-touch-callout: none; }
+  .ra-b.hold:active { background: none; }
+  .ra-b.hp { box-shadow: inset 0 0 0 2px #fff; background: radial-gradient(circle, #ffffff59 0 70%, transparent 71%) center / 0% 0% no-repeat;
+    animation: jb-hold-b ${HOLD_MS}ms linear forwards; }
+  .row.hp, .tile.hp { background-image: linear-gradient(#ffffff1f, #ffffff1f); background-repeat: no-repeat; background-size: 0% 100%; animation: jb-hold-r ${HOLD_MS}ms linear forwards; }
+  @keyframes jb-hold-b { to { background-size: 150% 150%; } }
+  @keyframes jb-hold-r { to { background-size: 100% 100%; } }
   .ra-b .i { width: 24px; height: 24px; }
   .ra-more { display: none; }
   /* hearts (0.6.2 radio, v0.7 every row): one more column */

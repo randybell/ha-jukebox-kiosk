@@ -525,7 +525,8 @@ export class JbBrowse extends LitElement {
   private openMenu(it: MaItem, type: string, el: HTMLElement) {
     const station = type === 'radio' || isRadio(it);
     const ask = (kind: 'replace' | 'radio') => { this._menu = null; this.press.release(); this._confirm = { kind, item: it, run: () => this.play(it, playType(it, type), 'replace', kind === 'radio') }; };
-    const actions = mediaActions((enq) => this.play(it, playType(it, type), enq), drillable(type, this.config) ? () => this.openDetail(it, type) : undefined, ask, canRadio(type, it), station);
+    const actions = mediaActions((enq) => this.play(it, playType(it, type), enq), drillable(type, this.config) ? () => this.openDetail(it, type)
+      : station ? () => { this._menu = null; this.press.release(); fire(this, 'jukebox-station', { item: it }); } : undefined, ask, canRadio(type, it), station);
     this._menu = { item: it, type, pos: menuPos(this.root(), el, actions.length), actions };
   }
 
@@ -672,7 +673,7 @@ export class JbBrowse extends LitElement {
     const p = this.press.handlers(it.uri, { it, type });
     const circ = type === 'artist';
     const rf = resume ? resumeFraction(it) : 0;
-    return html`<div class="tile ${circ ? 'artist' : ''} ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type=${type}
+    return html`<div class="tile ${circ ? 'artist' : ''} ${this.press.held === it.uri ? 'held' : ''} ${this.press.pressing === it.uri ? 'hp' : ''}" data-uri=${it.uri} data-type=${type}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       <div class="tw">${artTpl(it, circ ? 'big circ' : 'big')}${provTpl(it.uri, it.provider, it.media_type ?? type)}
