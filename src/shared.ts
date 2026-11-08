@@ -292,6 +292,8 @@ const RA: Record<RowAct, { icon: string; title: string; label: (n: string) => st
   replace: { icon: 'play', title: QUEUE_ACTION_LABELS.replace, label: (n) => `Play ${n} now` },
   radio: { icon: 'tower', title: 'Start radio', label: (n) => `Start radio from ${n}` },
 };
+/** The visible name of each row action (the 0.7.10 album column header reuses these). */
+export const RA_TITLE = Object.fromEntries(Object.entries(RA).map(([k, v]) => [k, v.title])) as Record<RowAct, string>;
 /** Every queueing surface uses the same three visible labels, in this order.
  *  Radio stations: only Play Now (replace). No Play Next, add-to-queue, Remove, or Start radio. */
 /** 0.7.9 #35b: `mix` (search rows): Start radio is a fourth labeled button in More's slot, and there is no More. */
@@ -310,6 +312,11 @@ export function queueActTpl(a: (typeof QUEUE_ACTIONS)[number], name: string, act
   return html`<button class="ra-b" data-act=${a} data-action=${action} tabindex="-1" title=${RA[a].title} aria-label=${RA[a].label(name)} ?disabled=${dis}
     @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(); }}>${icon(RA[a].icon)}<span>${RA[a].title}</span></button>`;
 }
+/** 0.7.9 #35: search results (0.7.10: also the artist page's Albums rows; each screen keeps its own Start radio rule): Add to queue, Play next, Play now (+ Start radio); no Remove. Stations: Play only. */
+export const SEARCH_ACTS = ['add', 'next', 'replace'] as const;
+/** Start radio (MA 2.10: a seed for its radio / endless mix): tracks, artists, albums and playlists. Not podcasts,
+ *  episodes or audiobooks (MA seeds radio from songs only), not stations. */
+export const searchRadio = (type: string, it: MaItem) => canRadio(type, it) || (type === 'playlist' && !isRadio(it));
 /** Very narrow rows keep Start radio in an overflow sheet, not the queue labels. */
 export function foldedActions(radio: boolean, ask: (a: RowAct) => void): MenuAction[] {
   return [...(radio ? [{ id: 'radio', icon: 'tower', label: 'Start radio…', run: () => ask('radio') }] : [])];
