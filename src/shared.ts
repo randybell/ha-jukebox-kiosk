@@ -228,7 +228,7 @@ export class PressController<T> implements ReactiveController {
 }
 
 /* ---------------- shared item menu (popover in landscape/tablet, bottom sheet on phones) ---------------- */
-export interface MenuAction { id: string; icon: string; label: string; run: () => void }
+export interface MenuAction { id: string; icon: string; label: string; run: () => void; /** 0.7.12: shown grayed out, does nothing (Queue hold pop-up) */ disabled?: boolean }
 export interface MenuPos { sheet: boolean; top: number; right: number }
 /** getBoundingClientRect in the element's own CSS px (undoes the card's large-screen `zoom`, see --jb-scale). */
 export function localRect(el: Element) {

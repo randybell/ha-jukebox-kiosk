@@ -50,7 +50,7 @@ export class JbQueue extends LitElement {
   private _undoTimer?: number;
   private _toastTimer?: number;
   private _unsub?: () => void;
-  private press = new PressController<QueueItem>(this, () => {}, (it) => this.holdSheet(it));
+  private press = new PressController<QueueItem>(this, () => {}, (it, el) => this.holdSheet(it, el));
 
   protected shouldUpdate(ch: PropertyValues) { return !(ch.size === 1 && ch.has('hass')); }
   protected willUpdate(ch: PropertyValues) {
@@ -194,8 +194,22 @@ export class JbQueue extends LitElement {
     this._menu = { item: it, pos: menuPos(root, el, 5) };
   }
   /** Press-and-hold on a row (0.7.11): the card's large centered pop-up (jb-hold-sheet) with the same choices as the row menu. */
-  private holdSheet(it: QueueItem) {
-    fire(this, 'jukebox-sheet', { item: asArt(it), sub: it.media_artist ?? '', actions: this.actions(it), close: () => this.press.release() });
+  private holdSheet(it: QueueItem, el?: HTMLElement) {
+    // 0.7.12: always the same five choices (+ Cancel) in the same order; ones this song can't use are grayed out and do nothing
+    const can = new Map(this.actions(it).map((a) => [a.id, a]));
+    const all: Array<[string, string, string]> = [['play', 'play', 'Play Now'], ['next', 'qnext', 'Play Next'], ['up', 'up', 'Move up'], ['down', 'down', 'Move down'], ['remove', 'trash', 'Remove']];
+    // The row's own buttons decide too: a choice whose row button is usable is usable here (it does what that button does, e.g. Remove
+    // on Up next song 1, which the old menu left off), and Move up / Move down are grayed when the row's arrow is (Move up on song 1).
+    const row = el?.closest('.qr'), rowBtn: Record<string, string> = { play: 'playnow', next: 'playnext', up: 'up', down: 'down', remove: 'remove' };
+    const btn = (id: string) => row?.querySelector(`[data-action="${rowBtn[id]}"]`) as HTMLButtonElement | null;
+    const actions: MenuAction[] = all.map(([id, ic, label]) => {
+      const a = can.get(id), b = btn(id);
+      if ((id === 'up' || id === 'down') && b?.disabled) return { id, icon: ic, label, run: () => {}, disabled: true };
+      if (a) return a;
+      if (b && !b.disabled) return { id, icon: ic, label, run: () => b.click() };
+      return { id, icon: ic, label, run: () => {}, disabled: true };
+    });
+    fire(this, 'jukebox-sheet', { item: asArt(it), sub: it.media_artist ?? '', actions, close: () => this.press.release() });
   }
   /** backend feature flags (undefined = 0.5.x behaviour: everything on) */
   private get caps() { return this.config?._backend?.caps; }

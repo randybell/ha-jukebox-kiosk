@@ -19,14 +19,14 @@ export class JbHoldSheet extends LitElement {
   open = false;
   protected willUpdate() { this.open = !!this.state; }
   close() { const s = this.state; if (!s) return; this.state = null; s.close(); }
-  private pick(a: MenuAction) { this.close(); a.run(); }
+  private pick(a: MenuAction) { if (a.disabled) return; this.close(); a.run(); }
   render() {
     const s = this.state;
     if (!s) return nothing;
     return html`<div class="bk" data-action="backdrop" @click=${() => this.close()}></div>
       <div class="sh" role="dialog" aria-modal="true" aria-label="${s.item.name} options">
         <div class="hd">${artTpl(s.item, 'big')}<span><b>${s.item.name}</b>${s.sub ? html`<small>${s.sub}</small>` : nothing}</span></div>
-        <div class="its" role="menu">${s.actions.map((a) => html`<button class="it" data-action=${a.id} role="menuitem" tabindex="-1" @pointerdown=${noFocus}
+        <div class="its" role="menu">${s.actions.map((a) => html`<button class="it ${a.disabled ? 'off' : ''}" data-action=${a.id} role="menuitem" tabindex="-1" aria-disabled=${a.disabled ? 'true' : 'false'} @pointerdown=${noFocus}
           @click=${() => this.pick(a)}>${icon(a.icon)}<span>${a.label}</span></button>`)}</div>
         <button class="it cancel" data-action="cancel" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.close()}>${icon('close')}<span>Cancel</span></button>
       </div>`;
@@ -48,6 +48,8 @@ export class JbHoldSheet extends LitElement {
       background: #ffffff14; color: #fff; font-size: 21px; font-weight: 700; text-align: left; }
     .it:active { background: #ffffff33; }
     .it .i { width: 30px; height: 30px; flex: none; }
+    .it.off { opacity: .35; cursor: default; }
+    .it.off:active { background: var(--jb-popup-item, #ffffff14); }
     .it.cancel { margin-top: 16px; background: transparent; border: 2px solid #ffffff55; color: var(--_muted); justify-content: center; }
   `];
 }
