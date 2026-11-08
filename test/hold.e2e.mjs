@@ -14,12 +14,30 @@ const J = JSON.stringify;
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 const SV = `__card.shadowRoot.querySelector('jb-search').shadowRoot`;
 const DET = `${SV}.querySelector('jb-detail').shadowRoot`;
+const HS = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`;
 const BR = `__card.shadowRoot.querySelector('jb-browse').shadowRoot`;
 const ev = (p, e) => p.evaluate((x) => eval(x), e);
 const center = (p, expr) => p.evaluate((e) => { const el = eval(e); if (!el) return null; el.scrollIntoView?.({ block: 'nearest' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, expr);
 const plays = (p) => ev(p, `(window.__calls || []).filter((c) => c.domain === 'music_assistant' && c.service === 'play_media').map((c) => c.data.enqueue)`);
 const clear = (p) => ev(p, `window.__calls = []`);
-const menuIds = (p, root) => ev(p, `[...${root}.querySelectorAll('.menu .mi')].map((b) => b.dataset.action + ':' + b.textContent.trim())`);
+// 0.7.10 d: the large centered sheet (jb-hold-sheet at card level) for row holds and Library tile holds
+const menuIds = (p) => ev(p, `[...${HS}.querySelectorAll('.it')].map((b) => b.dataset.action + ':' + b.textContent.trim())`);
+const sheetOpen = (p) => ev(p, `!!${HS}.querySelector('.sh')`);
+const sheetGeo = (p) => ev(p, `(() => { const c = __card.shadowRoot.querySelector('ha-card').getBoundingClientRect(), s = ${HS}.querySelector('.sh'), r = s.getBoundingClientRect(), bk = ${HS}.querySelector('.bk').getBoundingClientRect();
+  const its = [...${HS}.querySelectorAll('.it')].map((b) => b.getBoundingClientRect().height), fs = parseFloat(getComputedStyle(${HS}.querySelector('.it:not(.cancel) span')).fontSize);
+  return { dx: Math.abs((r.left + r.right) / 2 - (c.left + c.right) / 2), dy: Math.abs((r.top + r.bottom) / 2 - (c.top + c.bottom) / 2), inside: r.top >= c.top && r.bottom <= c.bottom && r.left >= c.left && r.right <= c.right,
+    noScroll: s.scrollHeight <= s.clientHeight + 1, minH: Math.min(...its), fs, bk: Math.abs(bk.left - c.left) < 1 && Math.abs(bk.top - c.top) < 1 && Math.abs(bk.width - c.width) < 1 && Math.abs(bk.height - c.height) < 1 }; })()`);
+async function sheetChecks(p, tag) {
+  const g = await sheetGeo(p);
+  check(`${tag}: the sheet is centered on the card, fits without scrolling, items ≥ 64px tall with ≥ 20px text, over a full-card backdrop`, g.dx <= 2 && g.dy <= 2 && g.inside && g.noScroll && g.minH >= 64 && g.fs >= 20 && g.bk, J(g));
+}
+async function closeWays(p, tag, reopen) {
+  for (const [how, act] of [['a backdrop tap', async () => { const c = await ev(p, `(() => { const r = __card.shadowRoot.querySelector('ha-card').getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; })()`); await p.mouse.click(c.x, c.y); }],
+    ['Cancel', async () => { const c = await center(p, `${HS}.querySelector('.it.cancel')`); await p.mouse.click(c.x, c.y); }], ['Escape', () => p.keyboard.press('Escape')]]) {
+    if (!(await sheetOpen(p))) await reopen(); const was = await sheetOpen(p); await clear(p); await act(); await sleep(250);
+    check(`${tag}: ${how} closes the sheet and plays nothing`, was && !(await sheetOpen(p)) && J(await plays(p)) === '[]', J({ was, plays: await plays(p) }));
+  }
+}
 async function press(p, expr, ms, dx = 0) {
   const c = await center(p, expr); if (!c) throw new Error('no element ' + expr);
   await p.mouse.move(c.x, c.y); await p.mouse.down();
@@ -60,13 +78,16 @@ async function suite(p, tag, root, rowExpr, acts) {
   await clear(p);
   const before = await ev(p, `location.href`);
   await press(p, `${rowExpr}.querySelector('.rt')`, 650);
-  const ids = await menuIds(p, root);
+  const ids = await menuIds(p);
+  check(`${tag}: the finger-lift after the hold fires nothing and leaves the sheet open`, (await sheetOpen(p)) && J(await plays(p)) === '[]');
+  if (ids.length) await sheetChecks(p, tag);
   check(`${tag}: holding the row opens the pop-up: ${acts}`, J(ids) === J(acts), J(ids));
   check(`${tag}: the row hold itself plays nothing`, J(await plays(p)) === '[]');
-  if (ids.length) { const c = await center(p, `${root}.querySelector('.menu .mi[data-action="next"]')`); await p.mouse.click(c.x, c.y); await sleep(250); }
-  check(`${tag}: a normal tap on the pop-up's Play next plays next and closes it`, J(await plays(p)) === '["next"]' && !(await ev(p, `!!${root}.querySelector('.menu')`)), J(await plays(p)));
+  if (ids.length) { const c = await center(p, `${HS}.querySelector('.it[data-action="next"]')`); await p.mouse.click(c.x, c.y); await sleep(250); }
+  check(`${tag}: a normal tap on the pop-up's Play next plays next and closes it`, J(await plays(p)) === '["next"]' && !(await sheetOpen(p)), J(await plays(p)));
+  await closeWays(p, tag, () => press(p, `${rowExpr}.querySelector('.rt')`, 650));
   await clear(p); await press(p, `${rowExpr}.querySelector('.rt')`, 300, 30);
-  check(`${tag}: moving off a row hold cancels it (no pop-up)`, !(await ev(p, `!!${root}.querySelector('.menu')`)) && before === (await ev(p, 'location.href')));
+  check(`${tag}: moving off a row hold cancels it (no pop-up)`, !(await sheetOpen(p)) && before === (await ev(p, 'location.href')));
 }
 
 for (const [name, vp, q] of [['1024x712', { width: 1080, height: 768 }, '&ha=toolbar&sidebar=narrow'], ['1024x600', { width: 1024, height: 600 }, '']]) {
@@ -84,8 +105,8 @@ for (const [name, vp, q] of [['1024x712', { width: 1080, height: 768 }, '&ha=too
   await p.waitForFunction((s) => [...eval(s).querySelectorAll('.row[data-type="artist"]')].some((r) => /Eagles/.test(r.textContent)), {}, SV);
   const arow = `[...${SV}.querySelectorAll('.row[data-type="artist"]')].find((r) => /Eagles/.test(r.textContent))`;
   await clear(p); await press(p, `${arow}.querySelector('.rt')`, 650);
-  check(`${name} search artist row: hold opens the pop-up with Open first`, J(await menuIds(p, SV)) === J(['open:Open', 'add:Add to queue', 'next:Play next', 'replace:Play now', 'radio:Start radio', 'cancel:Cancel']), J(await menuIds(p, SV)));
-  c = await center(p, `${SV}.querySelector('.menu .mi[data-action="cancel"]')`); await p.mouse.click(c.x, c.y); await sleep(200);
+  check(`${name} search artist row: hold opens the pop-up with Open first`, J(await menuIds(p)) === J(['open:Open', 'add:Add to queue', 'next:Play next', 'replace:Play now', 'radio:Start radio', 'cancel:Cancel']), J(await menuIds(p)));
+  c = await center(p, `${HS}.querySelector('.it.cancel')`); await p.mouse.click(c.x, c.y); await sleep(200);
   c = await center(p, `${arow}.querySelector('.rt')`); await p.mouse.click(c.x - 40, c.y, { delay: 40 });
   check(`${name} search artist row: a quick tap still opens the artist`, await p.waitForFunction((d) => { try { return eval(d).querySelectorAll('.list.albums .row').length > 0; } catch { return false; } }, {}, DET).then(() => true, () => false));
   const alrow = `${DET}.querySelector('.list.albums .row')`;
@@ -98,8 +119,9 @@ for (const [name, vp, q] of [['1024x712', { width: 1080, height: 768 }, '&ha=too
   c = await center(b, `${BR}.querySelector('.lt[data-tile="album"]')`); await b.mouse.click(c.x, c.y);
   await b.waitForFunction((s) => eval(s).querySelectorAll('.tile').length > 0, {}, BR);
   await press(b, `${BR}.querySelector('.tile')`, 650);
-  check(`${name} menu 5 album tile: Open, Add to queue, Play next, Play now, Start radio, Cancel`, J(await menuIds(b, BR)) === J(['open:Open', 'add:Add to queue', 'next:Play next', 'replace:Play now', 'radio:Start radio', 'cancel:Cancel']), J(await menuIds(b, BR)));
-  await clear(b); c = await center(b, `${BR}.querySelector('.menu .mi[data-action="replace"]')`); await b.mouse.click(c.x, c.y); await sleep(250);
+  await sheetChecks(b, `${name} album tile`);
+  check(`${name} menu 5 album tile: Open, Add to queue, Play next, Play now, Start radio, Cancel`, J(await menuIds(b)) === J(['open:Open', 'add:Add to queue', 'next:Play next', 'replace:Play now', 'radio:Start radio', 'cancel:Cancel']), J(await menuIds(b)));
+  await clear(b); c = await center(b, `${HS}.querySelector('.it[data-action="replace"]')`); await b.mouse.click(c.x, c.y); await sleep(250);
   check(`${name} menu 5: Play now asks first, then replaces`, (await ev(b, `!!${BR}.querySelector('.confirm')`)) && J(await plays(b)) === '[]');
   c = await center(b, `${BR}.querySelector('.confirm [data-action="confirm"]')`); await b.mouse.click(c.x, c.y); await sleep(250);
   check(`${name} menu 5: confirmed Play now → enqueue replace`, J(await plays(b)) === '["replace"]', J(await plays(b)));
@@ -109,7 +131,9 @@ for (const [name, vp, q] of [['1024x712', { width: 1080, height: 768 }, '&ha=too
   const st = await b.waitForFunction((s) => !!eval(s).querySelector('.tile[data-type="radio"]'), { timeout: 5000 }, BR).then(() => true, () => false);
   if (st) {
     await press(b, `${BR}.querySelector('.tile[data-type="radio"]')`, 650);
-    check(`${name} menu 5 station tile: Open and Play now only`, J(await menuIds(b, BR)) === J(['open:Open', 'replace:Play now', 'cancel:Cancel']), J(await menuIds(b, BR)));
+    await sheetChecks(b, `${name} station tile`);
+    check(`${name} menu 5 station tile: Open and Play now only`, J(await menuIds(b)) === J(['open:Open', 'replace:Play now', 'cancel:Cancel']), J(await menuIds(b)));
+    await closeWays(b, `${name} station tile`, () => press(b, `${BR}.querySelector('.tile[data-type="radio"]')`, 650));
   } else check(`${name} menu 5 station tile available`, false, 'no station tile');
   await b.close();
 }

@@ -578,7 +578,10 @@ export class JbSearch extends LitElement {
     const open = drillable(type, this.config) ? () => { this.closeMenu(); this.openDetail(it, type); }
       : type === 'radio' ? () => { this.closeMenu(); this.tap(it, g); } : undefined;
     const ask = (k: 'replace' | 'radio') => { this.closeMenu(); this._confirm = { kind: k, item: it, run: () => this.play(it, g, 'replace', k === 'radio') }; };
-    this.showMenu(it, g, el, mediaActions((enq) => { this.closeMenu(); this.play(it, g, enq); }, open, ask, searchRadio(type, it), station));
+    // 0.7.10: the large centered sheet at card level (jb-hold-sheet), not the small anchored menu
+    this.press.held = it.uri; this.requestUpdate();
+    fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, g) || providerLabel(it.uri), actions: mediaActions((enq) => { this.closeMenu(); this.play(it, g, enq); }, open, ask, searchRadio(type, it), station), close: () => this.press.release() });
+    void el;
   }
   private showMenu(it: MaItem, g: GroupKey, anchor: HTMLElement | null, actions: MenuAction[]) {
     this.press.held = it.uri;

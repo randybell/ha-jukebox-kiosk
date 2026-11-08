@@ -527,7 +527,9 @@ export class JbBrowse extends LitElement {
     const ask = (kind: 'replace' | 'radio') => { this._menu = null; this.press.release(); this._confirm = { kind, item: it, run: () => this.play(it, playType(it, type), 'replace', kind === 'radio') }; };
     const actions = mediaActions((enq) => this.play(it, playType(it, type), enq), drillable(type, this.config) ? () => this.openDetail(it, type)
       : station ? () => { this._menu = null; this.press.release(); fire(this, 'jukebox-station', { item: it }); } : undefined, ask, canRadio(type, it), station);
-    this._menu = { item: it, type, pos: menuPos(this.root(), el, actions.length), actions };
+    // 0.7.10: the large centered sheet at card level (jb-hold-sheet), not the small anchored menu
+    this.press.held = it.uri; this.requestUpdate(); void el;
+    fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, type) || providerLabel(it.uri), actions, close: () => this.press.release() });
   }
 
   // ---------- v0.7 Library filters ----------

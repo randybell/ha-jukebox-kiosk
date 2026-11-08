@@ -318,8 +318,9 @@ export class JbDetail extends LitElement {
     const ask = (k: 'replace' | 'radio') => { this.closeMenu(); this._confirm = { kind: k, item: it, run: () => this.play(it, 'album', 'replace', k === 'radio') }; };
     const open = () => { this.closeMenu(); this.tap(it, 'album', key); };
     const actions = mediaActions((enq) => { this.closeMenu(); this.play(it, 'album', enq); }, open, ask, canRadio('album', it));
-    this.press.held = key;
-    this._menu = { item: it, type: 'album', pos: menuPos(this.root(), el, actions.length), actions };
+    // 0.7.10: the large centered sheet at card level (jb-hold-sheet)
+    this.press.held = key; this.requestUpdate(); void el;
+    fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, 'album') || 'Album', actions, close: () => this.press.release() });
   }
   private sub(it: MaItem, type: string) {
     if (type === 'track' || type === 'album') return [artistNames(it), type === 'track' ? it.album?.name : ''].filter(Boolean).join(' · ');

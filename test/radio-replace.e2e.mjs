@@ -90,10 +90,10 @@ const clearPlays = (p) => ev(p, `window.__calls = window.__calls.filter((c) => !
   await sleep(150);
   const box = await ev(p, `(() => { const t = ${BR}.shadowRoot.querySelector('.grid.radio .tile'); const r = t.getBoundingClientRect(); return { x: r.left + r.width/2, y: r.top + r.height/2, uri: t.dataset.uri }; })()`);
   await p.mouse.move(box.x, box.y); await p.mouse.down(); await sleep(650); await p.mouse.up(); await sleep(200);
-  const menu = await ev(p, `[...${BR}.shadowRoot.querySelectorAll('.menu .mi')].map((m) => m.dataset.action)`);
+  const menu = await ev(p, `[...__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot.querySelectorAll('.it')].map((m) => m.dataset.action)`);
   check('RR5 browse radio long-press menu (0.7.10 menu 5): Open + Play now (+cancel), no next/remove', J(menu) === J(['open', 'replace', 'cancel']), J(menu));
   await clearPlays(p);
-  await tap(p, `${BR}.shadowRoot.querySelector('.menu .mi[data-action=replace]')`); await sleep(250);
+  await tap(p, `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot.querySelector('.it[data-action=replace]')`); await sleep(250);
   const asked = await replace(p);
   const pl = await plays(p);
   check('RR6 browse menu Play Now → asks, Replace → enqueue replace', asked && pl.length === 1 && pl[0].enqueue === 'replace' && pl[0].media_type === 'radio' && pl[0].media_id === box.uri, J(pl));

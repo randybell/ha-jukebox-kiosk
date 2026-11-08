@@ -24,6 +24,8 @@ import { defineElement } from './define';
 import { libraryTabLabel, combinedOn } from './library-home';
 import { FavStore } from './favorites';
 import { RepeatOneGuard } from './repeat';
+import './hold-sheet';
+import type { HoldSheet, JbHoldSheet } from './hold-sheet';
 
 export const VERSION = '0.7.9';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
@@ -79,7 +81,7 @@ export class JukeboxCard extends LitElement {
     _saver: { state: true },
     _bd: { state: true },
     _qart: { state: true },
-    _stage: { state: true }, _stAsk: { state: true }, _stageOut: { state: true },
+    _stage: { state: true }, _stAsk: { state: true }, _sheet: { state: true }, _stageOut: { state: true },
     _spk: { state: true },
     _station: { state: true },
     _spkEl: { state: true },
@@ -109,6 +111,9 @@ export class JukeboxCard extends LitElement {
   private _stage = false;
   /** 0.7.9 #37: the open station confirm */
   private _stAsk: { item: MaItem; resolve: (ok: boolean) => void } | null = null;
+  /** 0.7.10: the large press-and-hold sheet (rows and Library tiles), shown over the whole card */
+  private _sheet: HoldSheet | null = null;
+  private onSheet = (e: CustomEvent) => { const d = e.detail as HoldSheet; this._sheet = { ...d, close: () => { this._sheet = null; d.close(); } }; };
   private _lunsub?: () => void;
   private _lstatus = '';
   private _stageNative = false;
@@ -332,6 +337,7 @@ export class JukeboxCard extends LitElement {
     this.addEventListener('jukebox-target', this.onTarget as EventListener);
     this.addEventListener('jukebox-speakers', this.onSpeakers as EventListener);
     this.addEventListener('jukebox-station', this.onStation as EventListener);
+    this.addEventListener('jukebox-sheet', this.onSheet as EventListener);
     this.addEventListener('jukebox-station-close', this.onStationClose as EventListener);
     document.addEventListener('fullscreenchange', this.onFsChange);
     document.addEventListener('webkitfullscreenchange', this.onFsChange);
@@ -374,6 +380,7 @@ export class JukeboxCard extends LitElement {
     this.removeEventListener('jukebox-target', this.onTarget as EventListener);
     this.removeEventListener('jukebox-speakers', this.onSpeakers as EventListener);
     this.removeEventListener('jukebox-station', this.onStation as EventListener);
+    this.removeEventListener('jukebox-sheet', this.onSheet as EventListener);
     this.removeEventListener('jukebox-station-close', this.onStationClose as EventListener);
     this.speakers.stopPolling();
     this.repeatGuard.dispose();
@@ -581,6 +588,7 @@ export class JukeboxCard extends LitElement {
   /** #37: Esc on the station confirm wins over everything (capture, registered before the tabs' own key handlers) */
   private onKeyCap = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && this._stAsk) { e.preventDefault(); e.stopImmediatePropagation(); this.stAnswer(false); }
+    else if (e.key === 'Escape' && this._sheet) { e.preventDefault(); e.stopImmediatePropagation(); ((this.renderRoot as ShadowRoot).querySelector('jb-hold-sheet') as JbHoldSheet | null)?.close(); }
   };
   private onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && this._saver === 'on') this.ambClose(e, 'saver');
@@ -792,6 +800,7 @@ export class JukeboxCard extends LitElement {
               @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { if (t.id === 'browse' && this._tab === 'browse') { const lh = this.libHost(); if (lh) lh.home(); else (this.renderRoot.querySelector('jb-browse') as any)?.goHome?.(); } this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
                 ? html`<em class="badge">${this._qcount > 99 ? '99+' : this._qcount}</em>` : nothing}</button>`)}
         </nav>
+        <jb-hold-sheet .state=${this._sheet}></jb-hold-sheet>
         ${this._stage ? this.renderAmbient('stage') : nothing}
         ${this._saver ? this.renderAmbient('saver') : nothing}
       </ha-card>`;
