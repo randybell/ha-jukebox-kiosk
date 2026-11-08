@@ -6,7 +6,7 @@ import { defineElement } from './define';
 /**
  * 0.7.9 #37: the card-level "This will replace your queue" confirm for live radio stations. Every station play goes
  * through playMedia, which asks the card (config._stationGuard) first; the card shows this dialog when the queue has songs.
- * Replace plays the station; Cancel, Esc or a tap outside does nothing (the #51 close rules).
+ * Play (0.7.11, was Replace) plays the station; Cancel, Esc or a tap outside does nothing (the #51 close rules).
  */
 export class JbStationConfirm extends LitElement {
   static properties = { state: { attribute: false }, large: { type: Boolean, reflect: true }, open: { type: Boolean, reflect: true } };

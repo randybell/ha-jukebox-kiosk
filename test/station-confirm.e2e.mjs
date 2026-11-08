@@ -54,8 +54,8 @@ async function searchStation(q) {
   const { p, uri, play } = await searchStation('');
   await play();
   const d = await dlg(p);
-  check('SC1 queue has songs: station Play shows "This will replace your queue" with Cancel + Replace, nothing played yet',
-    d?.kind === 'station' && d.q === 'This will replace your queue' && J(d.btns) === J(['Cancel', 'Replace']) && (await plays(p)).length === 0, J(d));
+  check('SC1 queue has songs: station Play shows "This will replace your queue" with Cancel + Play (0.7.11: was Replace), nothing played yet',
+    d?.kind === 'station' && d.q === 'This will replace your queue' && J(d.btns) === J(['Cancel', 'Play']) && (await plays(p)).length === 0, J(d));
   await tap(p, `${SC}.querySelector('[data-action=cancel]')`); await sleep(300);
   check('SC2 Cancel closes it and plays nothing', !(await dlg(p)) && (await plays(p)).length === 0, J(await plays(p)));
   await play(); await p.keyboard.press('Escape'); await sleep(300);
