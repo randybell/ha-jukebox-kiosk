@@ -204,6 +204,9 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 - **Layout.** The previous track is dimmed. "Now playing" is the highlighted white row, then a numbered "Up next" list. "+ N more in Music Assistant" appears when the queue is longer than the list.
 - **Tapping a row** does nothing; use the row's icons.
 - **Row actions.** Every song row shows three buttons with an icon and a label, in this order: **Play Next**, **Play Now**, **Remove**. On a wide card they sit beside the title. Move up and Move down stay as the ↑ and ↓ arrows beside them (`move_queue_item_up` and `move_queue_item_down`). On a phone (the card is 520 px wide or less) Play Next, Play Now and Remove sit on their own row under the title, the arrows are hidden, and **⋯** opens an action sheet with Play Now, Play Next, Move up, Move down and Remove. Press and hold a song row to open the same large pop-up as everywhere else, with Play now, Play next, Move up, Move down, Remove and Cancel. Unavailable actions stay greyed out. The ⋯ button still opens its existing menu.
+
+![Queue press-and-hold options](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/live-queue-hold-popup-0711.png)
+
 - **Search queue.** **Search queue** in the header opens a box and an on-screen keyboard that stays open. The list shows songs whose title, artist or album contains what you type. **Done** closes the search and clears it.
 - **Header.** The Queue tab badge shows how many items are left, and the header says how many are up next.
 - **Play Now, Play Next and Remove** go through `jukebox_kiosk/ma` with the MA queue id. Someone who may not change the queue (see `grouping`, or `queue_play` off) still sees the three labels; they are greyed and do nothing.
