@@ -4,9 +4,11 @@ import { mediaStyles, artTpl, noFocus, type MenuAction } from './shared';
 import { icon } from './icons';
 import type { MaItem } from './types';
 import { defineElement } from './define';
+import type { InfoLine } from './song-info';
 
 /** What a view asks the card to show (event `jukebox-sheet`). `close` lets the view clear its own state (row highlight). */
-export interface HoldSheet { item: { name: string } & Partial<MaItem>; sub: string; actions: MenuAction[]; close: () => void }
+/** `info` (0.7.12, songs only): adds More just before Cancel; grayed when the list is empty. More shows the song info panel in this sheet. */
+export interface HoldSheet { item: { name: string } & Partial<MaItem>; sub: string; actions: MenuAction[]; close: () => void; info?: InfoLine[] }
 
 /**
  * 0.7.10: the large, centered press-and-hold sheet (search rows, artist Albums rows, Library tiles). A dimmed backdrop over the whole card;
@@ -14,19 +16,30 @@ export interface HoldSheet { item: { name: string } & Partial<MaItem>; sub: stri
  * (card-level, see onKeyCap) closes it. Choices are a normal tap; the finger-lift right after the hold is swallowed (swallowNextClick).
  */
 export class JbHoldSheet extends LitElement {
-  static properties = { state: { attribute: false }, open: { type: Boolean, reflect: true } };
+  static properties = { state: { attribute: false }, open: { type: Boolean, reflect: true }, _info: { state: true } };
   state: HoldSheet | null = null;
   open = false;
-  protected willUpdate() { this.open = !!this.state; }
+  private _info = false;
+  protected willUpdate(ch: Map<string, unknown>) { this.open = !!this.state; if (ch.has('state')) this._info = false; }
   close() { const s = this.state; if (!s) return; this.state = null; s.close(); }
-  private pick(a: MenuAction) { if (a.disabled) return; this.close(); a.run(); }
+  private pick(a: MenuAction) { if (a.disabled) return; if (a.id === 'more' && this.state?.info) { this._info = true; return; } this.close(); a.run(); }
   render() {
     const s = this.state;
     if (!s) return nothing;
+    const hd = html`<div class="hd">${artTpl(s.item, 'big')}<span><b>${s.item.name}</b>${s.sub ? html`<small>${s.sub}</small>` : nothing}</span></div>`;
+    if (this._info && s.info?.length) {
+      // 0.7.12: the song info panel (styled like the station sheet's details), only lines with data, one Close
+      return html`<div class="bk" data-action="backdrop" @click=${() => this.close()}></div>
+        <div class="sh info" role="dialog" aria-modal="true" aria-label="${s.item.name} details">${hd}
+          <dl class="meta">${s.info.map((l) => html`<div class="f" data-field=${l.k}><dt>${l.label}</dt><dd>${l.v}</dd></div>`)}</dl>
+          <button class="it cancel" data-action="close" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.close()}>${icon('close')}<span>Close</span></button>
+        </div>`;
+    }
+    const more: MenuAction[] = s.info ? [{ id: 'more', icon: 'more', label: 'More', disabled: !s.info.length, run: () => {} }] : [];
     return html`<div class="bk" data-action="backdrop" @click=${() => this.close()}></div>
       <div class="sh" role="dialog" aria-modal="true" aria-label="${s.item.name} options">
-        <div class="hd">${artTpl(s.item, 'big')}<span><b>${s.item.name}</b>${s.sub ? html`<small>${s.sub}</small>` : nothing}</span></div>
-        <div class="its" role="menu">${s.actions.map((a) => html`<button class="it ${a.disabled ? 'off' : ''}" data-action=${a.id} role="menuitem" tabindex="-1" aria-disabled=${a.disabled ? 'true' : 'false'} @pointerdown=${noFocus}
+        ${hd}
+        <div class="its" role="menu">${[...s.actions, ...more].map((a) => html`<button class="it ${a.disabled ? 'off' : ''}" data-action=${a.id} role="menuitem" tabindex="-1" aria-disabled=${a.disabled ? 'true' : 'false'} @pointerdown=${noFocus}
           @click=${() => this.pick(a)}>${icon(a.icon)}<span>${a.label}</span></button>`)}</div>
         <button class="it cancel" data-action="cancel" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.close()}>${icon('close')}<span>Cancel</span></button>
       </div>`;
@@ -50,6 +63,10 @@ export class JbHoldSheet extends LitElement {
     .it .i { width: 30px; height: 30px; flex: none; }
     .it.off { opacity: .35; cursor: default; }
     .it.off:active { background: var(--jb-popup-item, #ffffff14); }
+    .meta { margin: 4px 4px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; }
+    .f { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .f dt { font-size: 13px; color: var(--_inactive); }
+    .f dd { margin: 0; font-size: 19px; font-weight: 700; overflow-wrap: anywhere; }
     .it.cancel { margin-top: 16px; background: transparent; border: 2px solid #ffffff55; color: var(--_muted); justify-content: center; }
   `];
 }

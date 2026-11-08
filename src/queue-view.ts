@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
+import { songInfo } from './song-info';
 import { icon } from './icons';
 import { combinedOn, libraryTabLabel } from './library-home';
 import { mediaStyles, noFocus, fire, artTpl, provTpl, PressController, menuPos, menuTpl, confirmTpl, queueActTpl, isRadioUri, type ConfirmState, type MenuAction, type MenuPos } from './shared';
@@ -210,7 +211,9 @@ export class JbQueue extends LitElement {
       if (b && !b.disabled) return { id, icon: ic, label, run: () => b.click() };
       return { id, icon: ic, label, run: () => {}, disabled: true };
     });
-    fire(this, 'jukebox-sheet', { item: asArt(it), sub: it.media_artist ?? '', actions, close: () => this.press.release() });
+    // 0.7.12: More (song info) before Cancel, grayed when MA sent nothing beyond the title; not for radio stations in the queue
+    const info = isRadioUri(it.media_content_id) ? undefined : songInfo(it);
+    fire(this, 'jukebox-sheet', { item: asArt(it), sub: it.media_artist ?? '', actions, info, close: () => this.press.release() });
   }
   /** backend feature flags (undefined = 0.5.x behaviour: everything on) */
   private get caps() { return this.config?._backend?.caps; }

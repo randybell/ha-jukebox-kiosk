@@ -85,7 +85,7 @@ check('A5 mediaActions track+seed = add/next/replace/radio (0.7.10 menu 5: no Re
   J(ids(S.mediaActions(play, undefined, ask, true, false))) === J(['add', 'next', 'replace', 'radio']));
 check('A6 tapActions non-radio still play/next/remove', J(ids(S.tapActions(play, false))) === J(['play', 'next', 'remove']));
 check('A7 mediaActions non-station never drops next when seedRadio false',
-  J(ids(S.mediaActions(play, undefined, ask, false, false))) === J(['add', 'next', 'replace']));
+  J(ids(S.mediaActions(play, undefined, ask, false, false))) === J(['add', 'next', 'replace', 'radio']) && S.mediaActions(play, undefined, ask, false, false)[3].disabled === true); // 0.7.12: Start radio grayed, not hidden
 
 function actsFromTpl(it, seed) {
   const tpl = S.rowActsTpl(it, seed, () => {});

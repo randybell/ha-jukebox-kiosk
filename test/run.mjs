@@ -582,7 +582,7 @@ r = await rectOf(page, tile0);
 await page.mouse.move(r.x - r.w / 4, r.y - r.h / 4); await page.mouse.down(); await sleep(650); await page.mouse.up(); await sleep(100);
 s = await page.evaluate((h) => [...eval(h).querySelectorAll('.it')].map((e) => e.dataset.action), HSX);
 let b2 = await qcall(() => clickEl(page, `${HSX}.querySelector('.it[data-action="next"]')`));
-check('12e long-press a playlist → menu 5 (0.7.10: Open, Add to queue, Play next, Play now; no Remove, no Start radio); Play next → enqueue next', s.join() === 'open,add,next,replace,cancel' && b2.length === 1 && b2[0].data.enqueue === 'next' && tgt(b2[0]) === EV, `${s.join(',')} ${JSON.stringify(b2[0]?.data)}`);
+check('12e long-press a playlist → menu 5 (0.7.12: Open, Add to queue, Play next, Play now, Start radio grayed when not possible; no Remove); Play next → enqueue next', s.join() === 'open,add,next,replace,radio,cancel' && b2.length === 1 && b2[0].data.enqueue === 'next' && tgt(b2[0]) === EV, `${s.join(',')} ${JSON.stringify(b2[0]?.data)}`);
 {
   const lp = async () => { const rr = await rectOf(page, tile0); await page.mouse.move(rr.x - rr.w / 4, rr.y - rr.h / 4); await page.mouse.down(); await sleep(650); await page.mouse.up(); await sleep(100); };
   const bconf = () => page.evaluate((b) => eval(b).querySelector('.confirm')?.dataset.kind ?? null, BV);

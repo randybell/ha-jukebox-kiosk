@@ -269,7 +269,8 @@ export function mediaActions(play: (enq: Enqueue) => void, open: (() => void) | 
     { id: 'add', icon: RA.add.icon, label: 'Add to queue', run: () => play('add') },
     { id: 'next', icon: RA.next.icon, label: 'Play next', run: () => play('next') },
     { id: 'replace', icon: RA.replace.icon, label: 'Play now', run: () => ask('replace') },
-    ...(seedRadio ? [{ id: 'radio', icon: RA.radio.icon, label: 'Start radio', run: () => ask('radio') }] : []),
+    // 0.7.12: always listed; grayed out (does nothing) when this item can't start radio
+    { id: 'radio', icon: RA.radio.icon, label: 'Start radio', run: () => { if (seedRadio) ask('radio'); }, ...(seedRadio ? {} : { disabled: true }) },
   ];
 }
 /** Tap on a playable item (track, station, episode, audiobook): a small sheet, nothing plays until a choice is made. */

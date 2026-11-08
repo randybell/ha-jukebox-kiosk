@@ -100,7 +100,7 @@ for (const [name, vp, q] of [['1024x712', { width: 1080, height: 768 }, '&ha=too
   await p.waitForFunction((s) => !!eval(s).querySelector('.row[data-type="playlist"] .ra-b[data-act="add"]'), {}, SV);
   const trow = `${SV}.querySelector('.row[data-type="playlist"]')`;
   const tradio = await ev(p, `!!${trow}.querySelector('.ra-b[data-act="radio"]')`);
-  await suite(p, `${name} search playlist row`, SV, trow, ['open:Open', 'add:Add to queue', 'next:Play next', 'replace:Play now', ...(tradio ? ['radio:Start radio'] : []), 'cancel:Cancel']);
+  await suite(p, `${name} search playlist row`, SV, trow, ['open:Open', 'add:Add to queue', 'next:Play next', 'replace:Play now', 'radio:Start radio', 'cancel:Cancel'] /* 0.7.12: always listed, grayed when not possible */);
   let c = await center(p, `[...${SV}.querySelectorAll('button')].find((x) => /^\\s*artists\\s*$/i.test(x.textContent))`); await p.mouse.click(c.x, c.y);
   await p.waitForFunction((s) => [...eval(s).querySelectorAll('.row[data-type="artist"]')].some((r) => /Eagles/.test(r.textContent)), {}, SV);
   const arow = `[...${SV}.querySelectorAll('.row[data-type="artist"]')].find((r) => /Eagles/.test(r.textContent))`;

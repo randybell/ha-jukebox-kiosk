@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
+import { songInfo } from './song-info';
 import { icon } from './icons';
 import { providerLabel } from './providers';
 import {
@@ -529,7 +530,8 @@ export class JbBrowse extends LitElement {
       : station ? () => { this._menu = null; this.press.release(); fire(this, 'jukebox-station', { item: it }); } : undefined, ask, canRadio(type, it), station);
     // 0.7.10: the large centered sheet at card level (jb-hold-sheet), not the small anchored menu
     this.press.held = it.uri; this.requestUpdate(); void el;
-    fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, type) || providerLabel(it.uri), actions, close: () => this.press.release() });
+    const info = !station && (it.media_type ?? type) === 'track' ? songInfo(it) : undefined; // 0.7.12: More on songs
+    fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, type) || providerLabel(it.uri), actions, info, close: () => this.press.release() });
   }
 
   // ---------- v0.7 Library filters ----------
