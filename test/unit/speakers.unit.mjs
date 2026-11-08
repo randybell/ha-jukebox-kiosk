@@ -86,10 +86,12 @@ check('U17 dropBlock: leader (block) / last / allowed',
   const solo = M.parsePlayers([P('spk_garage', { playback_state: 'playing' }), P('syncgroup_all', { type: 'group', playback_state: 'playing', group_members: ['spk_garage'], supported_features: ['set_members'] })]);
   check('U17d the last speaker stays blocked even with allow', M.dropBlock(solo.get('syncgroup_all'), 'spk_garage', solo, true) === 'last');
   const E = (state, gm, title = 'Song') => ({ state, attributes: { group_members: gm, media_title: title } });
-  check('U17e liveCount: HA list wins; [] while playing → MA members, else biggest room on the same title, else 1; idle = 0',
+  check('U17e liveCount (0.7.12: MA members first, see U17f): HA list; [] while playing → MA members, else biggest room on the same title, else 1; idle = 0',
     M.liveCount(E('playing', ['a', 'b']), undefined, []) === 2 && M.liveCount(E('playing', []), ['x', 'y', 'z'], []) === 3
       && M.liveCount(E('playing', []), undefined, [E('playing', ['a', 'b', 'c']), E('playing', []), E('playing', ['q', 'r', 's', 't'], 'Other')]) === 3
       && M.liveCount(E('playing', []), undefined, []) === 1 && M.liveCount(E('idle', ['a']), ['x'], []) === 0 && M.liveCount(undefined, undefined, []) === 0);
+  check('U17f 0.7.12: MA members win over a shorter HA list (pill matches the Speakers panel: 4, not 1)',
+    M.liveCount(E('playing', ['a']), ['a', 'b', 'c', 'd'], []) === 4 && M.liveCount(E('playing', ['a', 'b']), undefined, []) === 2);
 }
 const tk = M.takeovers('syncgroup_static', ['spk_kitchen'], players);
 check('U18 takeovers: taking a member of a playing dynamic group', tk.length === 1 && tk[0].kind === 'dynamic' && tk[0].group === 'syncgroup_indoor' && !tk[0].last && !tk[0].leader, J(tk));

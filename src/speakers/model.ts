@@ -82,9 +82,11 @@ export function membersOf(g: MaPlayer | undefined, players: Players): string[] {
 export function liveCount(ent: { state?: string; attributes?: Record<string, any> } | undefined, store: string[] | undefined,
   rooms: Array<{ state?: string; attributes?: Record<string, any> } | undefined>): number {
   if (!ent || !['playing', 'paused', 'buffering'].includes(ent.state ?? '')) return 0;
+  // 0.7.12: Music Assistant's own member list first, the same one the Speakers panel counts and lists; Home Assistant's
+  // group_members can lag or list only the leader (live: "1 speaker" on the pill, "4 speakers" in the panel)
+  if (store?.length) return store.length;
   const gm = ent.attributes?.group_members;
   if (Array.isArray(gm) && gm.length) return gm.length;
-  if (store?.length) return store.length;
   const t = ent.attributes?.media_title;
   let n = 0;
   for (const r of rooms) {
