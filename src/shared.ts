@@ -292,8 +292,6 @@ const RA: Record<RowAct, { icon: string; title: string; label: (n: string) => st
   replace: { icon: 'play', title: QUEUE_ACTION_LABELS.replace, label: (n) => `Play ${n} now` },
   radio: { icon: 'tower', title: 'Start radio', label: (n) => `Start radio from ${n}` },
 };
-/** The visible name of each row action (the 0.7.10 album column header reuses these). */
-export const RA_TITLE = Object.fromEntries(Object.entries(RA).map(([k, v]) => [k, v.title])) as Record<RowAct, string>;
 /** Every queueing surface uses the same three visible labels, in this order.
  *  Radio stations: only Play Now (replace). No Play Next, add-to-queue, Remove, or Start radio. */
 /** 0.7.9 #35b: `mix` (search rows): Start radio is a fourth labeled button in More's slot, and there is no More. */

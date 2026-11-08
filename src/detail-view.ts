@@ -4,7 +4,7 @@ import { icon } from './icons';
 import { providerLabel } from './providers';
 import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl,
-  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, SEARCH_ACTS, RA_TITLE, confirmTpl, drillable,
+  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, SEARCH_ACTS, confirmTpl, drillable,
   type MenuAction, type MenuPos, type RowAct, type ConfirmState,
   maCall,
 } from './shared';
@@ -156,6 +156,9 @@ export async function loadDetail(hass: HomeAssistant, config: JukeboxCardConfig,
  * Detail page for an artist / album / playlist / podcast. Owns its scroller (scroll position is kept per stack entry),
  * its menus and its toast. Emits `jb-nav` {op:'push', item, type} | {op:'back'} for the host's back stack.
  */
+/** 0.7.10: the artist page's Albums column header names (only here; buttons elsewhere keep their own titles). */
+const ALBUM_HEAD = { add: 'Add to queue', next: 'Play next', replace: 'Play now', radio: 'Start radio' } as const;
+
 export class JbDetail extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, entry: { attribute: false }, trail: { attribute: false }, scopeLabel: { attribute: false },
@@ -323,9 +326,9 @@ export class JbDetail extends LitElement {
   }
   private heart(it: MaItem, type: string) { return heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type)); }
   /** Album row inside an artist: tap opens the album; the #35 search-row buttons (Add to queue, Play next, Play now, Start radio) act on the whole album. */
-  /** 0.7.10: one header naming the album rows' icon columns (the existing labels); Start radio only when some album offers it. */
+  /** 0.7.10: one header naming the album rows' icon columns (sentence case, header only); Start radio only when some album offers it. */
   private albumHead(albums: MaItem[]) {
-    const cols = [...SEARCH_ACTS.map((a) => RA_TITLE[a]), ...(albums.some((x) => canRadio('album', x)) ? [RA_TITLE.radio] : [])];
+    const cols = [...SEARCH_ACTS.map((a) => ALBUM_HEAD[a]), ...(albums.some((x) => canRadio('album', x)) ? [ALBUM_HEAD.radio] : [])];
     return html`<div class="ahd" aria-hidden="true">${cols.map((c) => html`<span>${c}</span>`)}</div>`;
   }
   private albumRow(it: MaItem, radioCol = false) {
@@ -466,8 +469,9 @@ export class JbDetail extends LitElement {
     .row.sr .ra-b span { display: none; }
     .row.sr .du { display: block; } /* no empty trailing grid column, so the buttons end at the list's right edge like the header */
     .row.sr.nor .ra { padding-right: var(--_abw, 48px); }
-    .ahd { position: sticky; top: -16px; z-index: 2; display: flex; justify-content: flex-end; margin: 0 0 2px; padding: 6px 0;
-      background: color-mix(in srgb, var(--_bg) 88%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+    /* sticky inside .list.albums only: it leaves with the Albums section; opaque and padded out to the panel edges so no album peeks above or beside it */
+    .ahd { position: sticky; top: -16px; z-index: 2; display: flex; justify-content: flex-end; margin: 0 -16px 2px; padding: 6px 16px;
+      background: var(--_bg); }
     .ahd span { width: var(--_abw, 48px); flex: none; text-align: center; font-size: 11px; font-weight: 700; line-height: 1.15; color: var(--_muted); }
     :host([large]) .ahd, :host([large]) .row.sr { --_abw: 52px; }
     .nav { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -502,7 +506,7 @@ export class JbDetail extends LitElement {
     .more-t { align-self: center; min-width: 220px; justify-content: center; }
     .empty { padding: 14px; }
     @container np (max-width: 520px) {
-      .scroll { padding: 10px; }
+      .scroll { padding: 10px; } .ahd { top: -10px; margin: 0 -10px 2px; padding: 6px 10px; }
       .dh { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; } .dart { width: 96px; height: 96px; }
       .dt h2 { font-size: 22px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       .da { grid-column: 1 / -1; }
