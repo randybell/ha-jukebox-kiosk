@@ -4,7 +4,7 @@ import { icon } from './icons';
 import { providerLabel } from './providers';
 import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl,
-  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, confirmTpl, drillable,
+  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, SEARCH_ACTS, RA_TITLE, confirmTpl, drillable,
   type MenuAction, type MenuPos, type RowAct, type ConfirmState,
   maCall,
 } from './shared';
@@ -322,12 +322,17 @@ export class JbDetail extends LitElement {
     await this.hearts.toggle(it, t); // the outcome shows in the card's top-right status chip
   }
   private heart(it: MaItem, type: string) { return heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type)); }
-  /** Album row inside an artist: tap opens the album; icons queue / replace / radio the whole album. */
-  private albumRow(it: MaItem) {
+  /** Album row inside an artist: tap opens the album; the #35 search-row buttons (Add to queue, Play next, Play now, Start radio) act on the whole album. */
+  /** 0.7.10: one header naming the album rows' icon columns (the existing labels); Start radio only when some album offers it. */
+  private albumHead(albums: MaItem[]) {
+    const cols = [...SEARCH_ACTS.map((a) => RA_TITLE[a]), ...(albums.some((x) => canRadio('album', x)) ? [RA_TITLE.radio] : [])];
+    return html`<div class="ahd" aria-hidden="true">${cols.map((c) => html`<span>${c}</span>`)}</div>`;
+  }
+  private albumRow(it: MaItem, radioCol = false) {
     const key = 'al|' + it.uri;
     const p = this.press.handlers(key, { it, type: 'album', key });
     const fav = !!heartType(this.config, 'album', it);
-    return html`<div class="row drill ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''}" data-uri=${it.uri} data-type="album" aria-label="Open ${it.name}"
+    return html`<div class="row drill sr ${radioCol && !canRadio('album', it) ? 'nor' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''}" data-uri=${it.uri} data-type="album" aria-label="Open ${it.name}"
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       ${artTpl(it, 'th')}
@@ -335,7 +340,7 @@ export class JbDetail extends LitElement {
         <small>${provTpl(it.uri, it.provider, 'album')}<span class="st">${['Album', (it as any).year].filter(Boolean).join(' · ')}</span></small></div>
       <span class="du"></span>
       ${fav ? this.heart(it, 'album') : nothing}
-      ${rowActsTpl(it, canRadio('album', it), (a, el) => this.rowAct(it, 'album', a, el))}
+      ${rowActsTpl(it, canRadio('album', it), (a, el) => this.rowAct(it, 'album', a, el), SEARCH_ACTS, true)}
     </div>`;
   }
   /** Genre section row: drillable types open on tap (chevron); stations / audiobooks are plain rows. Icons play the whole item. */
@@ -425,7 +430,7 @@ export class JbDetail extends LitElement {
             <button class="sbtn retry" data-action="retry" tabindex="-1" @pointerdown=${noFocus} @click=${() => { e.data = undefined; this.load(e); this.requestUpdate(); }}>Retry</button></div>` : nothing}
           ${d.note ? html`<div class="note src" data-src=${d.src}>${d.note}</div>` : nothing}
           ${type === 'artist' && !d.loading ? html`<h3 class="eyebrow">Albums</h3>${d.albums.length
-            ? html`<div class="list albums">${d.albums.map((a) => this.albumRow(a))}</div>`
+            ? html`<div class="list albums">${this.albumHead(d.albums)}${d.albums.map((a) => this.albumRow(a, d.albums.some((x) => canRadio('album', x))))}</div>`
             : html`<div class="empty noalbums"><span>No albums found.</span></div>`}` : nothing}
           ${d.sections.map((sec) => html`<h3 class="eyebrow">${sec.title}</h3>
             <div class="list sec" data-sec=${sec.type}>${sec.items.map((x) => this.sectionRow(x, sec.type))}</div>`)}
@@ -456,6 +461,15 @@ export class JbDetail extends LitElement {
     .row[data-type="radio"] .ra-b[data-act="replace"] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
       width: auto; min-width: 72px; height: auto; min-height: 56px; padding: 6px; font-size: 13px; line-height: 1.2; }
     .row[data-type="radio"] .ra-b[data-act="replace"] span { white-space: nowrap; }
+    /* 0.7.10: the artist page's Albums rows: icon-only Add to queue / Play next / Play now (/ Start radio) buttons (48px, #42),
+       named once by a sticky column header above the list (labels sit exactly over their button column) */
+    .row.sr .ra-b span { display: none; }
+    .row.sr .du { display: block; } /* no empty trailing grid column, so the buttons end at the list's right edge like the header */
+    .row.sr.nor .ra { padding-right: var(--_abw, 48px); }
+    .ahd { position: sticky; top: -16px; z-index: 2; display: flex; justify-content: flex-end; margin: 0 0 2px; padding: 6px 0;
+      background: color-mix(in srgb, var(--_bg) 88%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+    .ahd span { width: var(--_abw, 48px); flex: none; text-align: center; font-size: 11px; font-weight: 700; line-height: 1.15; color: var(--_muted); }
+    :host([large]) .ahd, :host([large]) .row.sr { --_abw: 52px; }
     .nav { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .back { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px 0 12px; border-radius: 999px; background: #ffffff14;
       border: 1px solid #ffffff33; color: #fff; font-weight: 700; font-size: 15px; }

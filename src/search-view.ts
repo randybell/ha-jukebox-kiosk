@@ -5,7 +5,7 @@ import { providerLabel } from './providers';
 import { SearchEngine } from './search-engine';
 import {
   imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, menuPos, menuTpl,
-  playMedia, playMessage, drillable, canRadio, isRadio, rowActsTpl, foldedActions, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  playMedia, playMessage, drillable, canRadio, isRadio, rowActsTpl, foldedActions, SEARCH_ACTS, searchRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
   maCall,
 } from './shared';
 import './detail-view';
@@ -65,11 +65,6 @@ export function normaliseResponse(r: any): SearchResults {
   return out;
 }
 
-/** 0.7.9 #35: search results: Add to queue, Play next, Play now (+ Start radio); no Remove. Stations: Play only. */
-const SEARCH_ACTS = ['add', 'next', 'replace'] as const;
-/** Start radio (MA 2.10: a seed for its radio / endless mix): tracks, artists, albums and playlists. Not podcasts,
- *  episodes or audiobooks (MA seeds radio from songs only), not stations. */
-const searchRadio = (type: string, it: MaItem) => canRadio(type, it) || (type === 'playlist' && !isRadio(it));
 
 export class JbSearch extends LitElement {
   static properties = {
