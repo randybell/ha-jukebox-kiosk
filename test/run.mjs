@@ -486,7 +486,7 @@ s = await page.evaluate((e) => eval(e).className, row('media_player.garage'));
 check('10e tapping room icon → volume_mute(true) on media_player.garage only, row shows muted', cs.length === 1 && cs[0].s === 'volume_mute' && cs[0].data.is_volume_muted === true && tgt(cs[0]) === 'media_player.garage' && / muted /.test(s + ' '), `${JSON.stringify(cs)} class=${s}`);
 n0 = await ncalls(page);
 r = await rectOf(page, `${row(EV)}.querySelector('.vs')`);
-await page.mouse.click(r.x - r.w / 2 + r.w * 0.8, r.y); await sleep(300);
+/* #63: a drag, a tap no longer sets it */ await page.mouse.move(r.x - r.w / 2 + r.w * 0.8 - 30, r.y); await page.mouse.down(); await page.mouse.move(r.x - r.w / 2 + r.w * 0.8, r.y, { steps: 4 }); await page.mouse.up(); await sleep(300);
 cs = actions(await calls(page, n0));
 check('10f Everywhere slider → volume_set on everywhere', cs.length >= 1 && cs.every((c) => c.s === 'volume_set' && tgt(c) === EV) && Math.abs(cs.at(-1).data.volume_level - 0.8) < 0.03, JSON.stringify(cs.map((c) => [tgt(c), c.data.volume_level])));
 check('10g no join/unjoin calls ever', !(await calls(page)).some((c) => /join/.test(c.s)));
