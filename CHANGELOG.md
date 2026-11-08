@@ -4,6 +4,8 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.7.10 — 2026-11-07
+
 - Artist page: the Albums rows have icon buttons for Add to queue, Play next, Play now and Start radio, under a column header that stays in place while you scroll. There's no Remove or More on these rows.
 - Search results and the artist page's Albums rows: the icon buttons now fire only on a press-and-hold of about half a second, so scrolling can't set them off. The row lights up while you hold it.
 - Press and hold a row (anywhere off its buttons) or a Library cover tile to open a large, easy-to-tap options panel showing the item's art and name: Open, Add to queue, Play next, Play now, Start radio where it's offered, and Cancel. Stations get Open, Play now and Cancel. Tap outside the panel or Cancel to close it.
