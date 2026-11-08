@@ -6,7 +6,6 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## 0.7.11 — 2026-11-07
 
-- **Genre pages: stations no longer start by accident.** A station's **Play** button on a genre page now works only when you press and hold it for about half a second, like every other row button, so a quick tap or a scroll never starts a station. Pressing and holding the station row itself (not the button) opens the options pop-up with **Open** (the station panel), **Play now** and **Cancel**.
 - Queue: press and hold a song to open the same large pop-up as everywhere else (Play now, Play next, Move up, Move down, Remove).
 - Volume sliders move only when you slide sideways, so a stray touch or scrolling the page no longer changes the volume. A tap no longer jumps the volume to that spot.
 - The "This will replace your queue" station confirm button now says Play instead of Replace.
