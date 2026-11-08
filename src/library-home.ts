@@ -19,7 +19,6 @@ export const TILES: TileDef[] = [
   { id: 'track', label: 'Tracks', icon: 'note', sub: 'Every song', optIn: true },
   { id: 'podcast', label: 'Podcasts', icon: 'podcast', sub: 'Shows', optIn: true },
   { id: 'audiobook', label: 'Audiobooks', icon: 'book', sub: 'Books', optIn: true },
-  { id: 'genre', label: 'Genres', icon: 'genre', sub: 'Your genres', optIn: true },
   { id: 'discover', label: 'Discover', icon: 'compass', sub: 'For you', optIn: true },
 ];
 export const TILE_IDS = TILES.map((t) => t.id);
@@ -88,7 +87,7 @@ export function visibleTiles(c: Partial<JukeboxCardConfig> | undefined, avail: R
   return configuredTiles(c).filter((t) => {
     switch (t.id) {
       case 'search': return true;
-      case 'genre': return !!ext?.genres;
+      case 'genre': return false; // 0.7.11: the genre page is gone
       case 'discover': return !!ext?.discover;
       case 'radio': return avail.radio !== false || radioBrowse;
       default: return avail[t.id] !== false;

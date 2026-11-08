@@ -1,4 +1,4 @@
-// v0.7 Discover & Search e2e: search categories (genres, podcasts, audiobooks), genre detail, radio "Stations by…" and the
+// v0.7 Discover & Search e2e: search categories (podcasts, audiobooks; 0.7.11: genres and the genre page removed), radio "Stations by…" and the
 // Discover rows, on the kiosk backend (dev/mock-kiosk.js + dev/mock-v07.js). Every flag is off by default; placeholder data only.
 // Usage: (starts its own dev server on a free port; JB_PORT / JB_URL override) node test/v070.e2e.mjs
 import puppeteer from 'puppeteer-core';
@@ -59,33 +59,10 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   await typeQ(p, 'r');
   await wait(p, `${SV}.querySelectorAll('.cats .fc').length > 0`);
   const chips = await ev(p, `[...${SV}.querySelectorAll('.cats .fc')].map((b) => b.dataset.cat)`);
-  check('S1 chips: All + the configured categories in order', J(chips) === J(['all', ...ALL.search_categories]), J(chips));
-  const g = await maOf(p, 'music/search');
-  check('S2 genres searched over MA (media_types [genre], library_only) from the first character', g.some((a) => J(a.media_types) === J(['genre']) && a.library_only === true && a.search_query.toLowerCase() === 'r'), J(g));
-  await typeQ(p, 'ock');
-  await wait(p, `${SV}.querySelector('.row[data-group="genres"]')`);
-  await tap(p, `${SV}.querySelector('.cats .fc[data-cat="genres"]')`);
-  const rows = await ev(p, `[...${SV}.querySelectorAll('.row[data-group="genres"]')].map((r) => r.querySelector('b').textContent.trim())`);
-  check('S3 Genres chip shows only genre rows ("Rock")', rows.includes('Rock') && (await ev(p, `${SV}.querySelectorAll('.row:not([data-group="genres"])').length`)) === 0, J(rows));
-  const n0 = await plays(p);
-  await tap(p, `${SV}.querySelector('.row[data-group="genres"]')`);
-  await wait(p, `${SD}?.querySelector('.list.sec')`);
-  const ov = await maOf(p, 'music/genres/overview');
-  check('G1 tapping a genre opens its detail (never plays), overview {item_id, library, limit 12}',
-    (await plays(p)) === n0 && ov.length === 1 && ov[0].item_id === '1' && ov[0].provider_instance_id_or_domain === 'library' && ov[0].limit === 12, J(ov));
-  const secs = await ev(p, `[...${SD}.querySelectorAll('.list.sec')].map((s) => s.dataset.sec)`);
-  check('G2 sections Artists / Albums / Playlists, tracks list, header with the genre icon and no Play/Shuffle',
-    J(secs) === J(['artist', 'album', 'playlist']) && (await ev(p, `${SD}.querySelectorAll('.row[data-uri]').length`)) > 0
-    && (await ev(p, `!!${SD}.querySelector('.dart.gen')`)) && (await ev(p, `${SD}.querySelectorAll('.da').length`)) === 0, J(secs));
-  const more = await ev(p, `[...${SD}.querySelectorAll('button')].find((b) => /See all tracks/.test(b.textContent))?.textContent.trim()`);
-  check('G3 "See all tracks" button; no music/genres/tracks before it is tapped', !!more && (await maOf(p, 'music/genres/tracks')).length === 0, more);
-  await tap(p, `[...${SD}.querySelectorAll('button')].find((b) => /See all tracks/.test(b.textContent))`);
-  await wait(p, `window.__ws.some((m) => m.command === 'music/genres/tracks')`);
-  const gt = await maOf(p, 'music/genres/tracks');
-  check('G4 See all tracks → music/genres/tracks {item_id, limit 100, offset 0}', gt[0]?.item_id === '1' && gt[0]?.limit === 100 && gt[0]?.offset === 0, J(gt));
-  await tap(p, `${SD}.querySelector('.list.sec[data-sec="artist"] .row')`);
-  await wait(p, `${SD}?.querySelector('h2')?.textContent && !/Rock/.test(${SD}.querySelector('h2').textContent)`);
-  check('G5 tapping an artist inside the genre drills further (no play)', (await plays(p)) === n0 && (await ev(p, `${SV}.querySelector('jb-detail').trail.length`)) === 2);
+  check('S1 chips: All + the configured categories in order (0.7.11: a configured genres is ignored, no Genres chip)', J(chips) === J(['all', ...ALL.search_categories.filter((k) => k !== 'genres')]), J(chips));
+  await typeQ(p, 'ock'); await sleep(600);
+  check('S2 0.7.11: no genre search and no genre rows even with genres configured and a backend that has them (the genre page is gone)',
+    (await maOf(p, 'music/search')).every((a) => J(a.media_types) !== J(['genre'])) && !(await ev(p, `!!${SV}.querySelector('.row[data-group="genres"]')`)));
   await p.close();
 }
 // ---------------- 3. podcasts & audiobooks categories; genres need the flag + backend ----------------
@@ -351,14 +328,11 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
     library_tiles: ['discover', { tile: 'playlist', label: 'Mixes' }, 'genre', 'podcast', 'search'] });
   await wait(r, `${BR}.querySelectorAll('.lt').length > 0`);
   const t2 = await ev(r, `[...${BR}.querySelectorAll('.lt')].map((b) => b.dataset.tile + ':' + b.querySelector('.ltl').textContent)`);
-  check('LH9 configured order, custom labels, custom tab name; Discover is a tile, not a takeover', J(t2) === J(['discover:Discover', 'playlist:Mixes', 'genre:Genres', 'podcast:Podcasts', 'search:Search'])
+  check('LH9 configured order, custom labels, custom tab name; Discover is a tile, not a takeover; no Genres tile (0.7.11)', J(t2) === J(['discover:Discover', 'playlist:Mixes', 'podcast:Podcasts', 'search:Search']) /* 0.7.11: a configured 'genre' tile is ignored */
     && (await ev(r, `__card.shadowRoot.querySelector('.tab[data-tab="browse"] span').textContent`)) === 'Music', J(t2));
   await tap(r, `${BR}.querySelector('.lt[data-tile="discover"]')`);
   check('LH10 Discover tile opens the Discover rows', await wait(r, `${BR}.querySelectorAll('.drow, [data-row]').length > 0`));
-  await tap(r, `${BR}.querySelector('[data-act="home"]')`);
-  await tap(r, `${BR}.querySelector('.lt[data-tile="genre"]')`);
-  check('LH11 Genres tile opens the library genre list (0.7.2)', await wait(r, `__card.shadowRoot.querySelector('.tab.active')?.dataset.tab === 'browse'`)
-    && (await wait(r, `${BR}.querySelectorAll('.row.gen').length > 0`)));
+  // 0.7.11: LH11 (the Genres tile) removed with the genre page
   await r.close();
   const g = await open('&tab=browse&nolib=1', { ...LH, library_tiles: ['playlist', 'artist', 'album', 'radio', 'track', 'search'] });
   await wait(g, `${BR}.querySelectorAll('.lt').length > 0 && [...${BR}.querySelectorAll('.lt')].length < 3`, 4000);

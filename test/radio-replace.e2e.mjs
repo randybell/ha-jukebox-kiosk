@@ -117,24 +117,7 @@ const clearPlays = (p) => ev(p, `window.__calls = window.__calls.filter((c) => !
   await p.close();
 }
 
-// Station detail rows must contain their visible Play Now label at all screenshot sizes.
-for (const [width, height] of [[1024, 600], [820, 1180], [1920, 1080]]) {
-  const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width, height, deviceScaleFactor: 1 });
-  await p.goto(`${BASE}?fresh=1&latency=20&kiosk=1&tab=browse`); await p.waitForFunction('window.__ready === true');
-  await p.waitForFunction(() => __card.shadowRoot.querySelector('jb-search')?.browse);
-  await p.evaluate(() => __card.shadowRoot.querySelector('jb-search').browse.openDetail({ uri: 'library://genre/1', name: 'Mock Jazz', media_type: 'genre', item_id: '1', provider: 'library' }, 'genre'));
-  await p.waitForFunction(() => __card.shadowRoot.querySelector('jb-search').browse.detail?.entry?.data?.loading === false);
-  // patch the entry jb-browse itself holds (in place), so a later re-render of the Library can't swap the un-patched entry back in
-  await p.evaluate(() => { const d = __card.shadowRoot.querySelector('jb-search').browse.detail; d.entry.data = { ...d.entry.data, tracks: [], sections: [{ type: 'radio', name: 'Radio', items: [{ uri: 'library://radio/7', name: 'Mockingbird Jazz FM', media_type: 'radio', provider: 'library', item_id: '7' }] }] }; d.requestUpdate(); });
-  await p.waitForFunction(() => __card.shadowRoot.querySelector('jb-search').browse.detail.shadowRoot.querySelector('.row[data-type=radio]'));
-  const g = await p.evaluate(() => {
-    const row = __card.shadowRoot.querySelector('jb-search').browse.detail.shadowRoot.querySelector('.row[data-type=radio]'), b = row.querySelector('[data-act=replace]'), t = b.querySelector('span');
-    const r = row.getBoundingClientRect(), br = b.getBoundingClientRect(), tr = t.getBoundingClientRect(), range = document.createRange(); range.selectNodeContents(t);
-    return { lines: [...range.getClientRects()].filter(x => x.width > 0).length, touch: b.offsetWidth >= 44 && b.offsetHeight >= 44,
-      contained: tr.left >= br.left - 1 && tr.right <= br.right + 1 && tr.top >= br.top - 1 && tr.bottom <= br.bottom + 1 && br.top >= r.top - 1 && br.bottom <= r.bottom + 1 };
-  });
-  check(`RR9 ${width}x${height} detail station action single-line, touch-sized and contained`, g.lines === 1 && g.touch && g.contained, J(g)); await p.close();
-}
+// 0.7.11: RR9 (station rows on the genre page) removed with the genre page.
 
 await browser.close();
 console.log(`\nradio-replace.e2e: ${total - failures}/${total} passed`);

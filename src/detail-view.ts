@@ -13,12 +13,11 @@ import type { MaBackend, TrackListType } from './backend/types';
 import { defineElement } from './define';
 import { removeFromQueue } from './queue-row-remove';
 import { FavController, heartTpl, heartType } from './heart';
-import { genreId, parseGenreOverview, genreMeta, GENRE_ROW_LIMIT, GENRE_TRACK_PAGE, type GenreSection } from './genres';
 
 /** Track-list `page` is 0..1000. A first page shorter than this is taken as the whole list (no "load more" call). */
 export const QUEUE_PAGE_MIN = 25;
 export const QUEUE_PAGE_MAX = 1000;
-const ONE: Record<string, string> = { artist: 'artist', album: 'album', playlist: 'playlist', podcast: 'podcast', genre: 'genre' };
+const ONE: Record<string, string> = { artist: 'artist', album: 'album', playlist: 'playlist', podcast: 'podcast' };
 
 /**
  * Track-list row (jukebox_kiosk/item_tracks) -> MA-like item. Shape: {media_title, media_content_id, duration (s, 0 = unknown), media_image ("" or https URL),
@@ -72,27 +71,9 @@ export interface DetailData {
   tracks: MaItem[]; albums: MaItem[]; loading: boolean; error: string; src: TrackSrc; note: string;
   /** playlist paging (item_tracks `page`) */
   page: number; more: boolean; loadingMore: boolean; firstLen: number;
-  /** genre detail: artists / albums / playlists / ... folders from music/genres/overview (tracks go in `tracks`) */
-  sections: GenreSection[];
 }
 export interface DetailEntry { item: MaItem; type: string; scroll?: number; data?: DetailData }
-export const emptyDetail = (): DetailData => ({ tracks: [], albums: [], loading: true, error: '', src: 'none', note: '', page: 0, more: false, loadingMore: false, firstLen: 0, sections: [] });
-
-async function loadGenre(be: MaBackend | undefined, it: MaItem, d: DetailData): Promise<DetailData> {
-  d.loading = false;
-  const id = genreId(it);
-  if (!be?.ext?.genres) { d.note = 'Genres need the Jukebox Kiosk integration.'; return d; }
-  if (!id) { d.error = "This genre can't be opened (no id)."; return d; }
-  try {
-    const o = parseGenreOverview(await be.send('music/genres/overview', { item_id: id, provider_instance_id_or_domain: 'library', limit: GENRE_ROW_LIMIT }));
-    d.sections = o.sections; d.tracks = o.tracks; d.src = 'kiosk';
-    d.firstLen = o.tracks.length; d.more = o.tracks.length >= GENRE_ROW_LIMIT;
-  } catch (e) {
-    console.warn('[jukebox-card] genre overview failed', e);
-    d.error = "Couldn't load this genre. Check Music Assistant.";
-  }
-  return d;
-}
+export const emptyDetail = (): DetailData => ({ tracks: [], albums: [], loading: true, error: '', src: 'none', note: '', page: 0, more: false, loadingMore: false, firstLen: 0 });
 
 /**
  * Load a detail view. Nothing here plays anything.
@@ -101,7 +82,6 @@ async function loadGenre(be: MaBackend | undefined, it: MaItem, d: DetailData): 
  *  album    -> the backend's album track list; fallback search {name: album, artist, media_type:[track]} filtered by album name.
  *  playlist -> the backend's playlist track list page 0 (more pages on scroll). No search can list a playlist: labelled note.
  *  podcast  -> the backend's episode list.
- *  genre    -> music/genres/overview (library only) through the backend; more tracks from music/genres/tracks.
  */
 export async function loadDetail(hass: HomeAssistant, config: JukeboxCardConfig, it: MaItem, type: string): Promise<DetailData> {
   // the card's backend lists tracks (kiosk: jukebox_kiosk/item_tracks; native has no track lists)
@@ -109,7 +89,6 @@ export async function loadDetail(hass: HomeAssistant, config: JukeboxCardConfig,
   const lists = !!be?.caps.trackLists && (type !== 'podcast' || be.caps.podcastEpisodes);
   const src: TrackSrc = 'kiosk';
   const d = emptyDetail();
-  if (type === 'genre') return loadGenre(be, it, d);
   let firstMore: boolean | undefined;
   const search = async (data: Record<string, any>) =>
     unwrap(await maCall(hass, config, 'search', data)) ?? {};
@@ -177,7 +156,7 @@ export class JbDetail extends LitElement {
   private _confirm: ConfirmState | null = null;
   private _sel = '';
   private hearts = new FavController(this);
-  private press = new PressController<{ it: MaItem; type: string; key: string }>(this, (p) => this.tap(p.it, p.type, p.key), (p, el) => (p.key.startsWith('al|') ? this.albumMenu(p.it, p.key, el) : this.station(p.it, p.type) ? this.stationMenu(p.it, p.key, el) : this.tap(p.it, p.type, p.key)));
+  private press = new PressController<{ it: MaItem; type: string; key: string }>(this, (p) => this.tap(p.it, p.type, p.key), (p, el) => (p.key.startsWith('al|') ? this.albumMenu(p.it, p.key, el) : this.tap(p.it, p.type, p.key)));
 
   get data(): DetailData | undefined { return this.entry?.data; }
   private get scroller() { return this.renderRoot?.querySelector('.scroll') as HTMLElement | null; }
@@ -211,12 +190,11 @@ export class JbDetail extends LitElement {
     const el = this.scroller;
     if (el && this.data?.more && el.scrollHeight <= el.clientHeight + 400) this.loadMoreTracks();
   }
-  /** `auto` = scroll / fill-screen; a genre's first "See all tracks" only loads on the button. */
+  /** `auto` = scroll / fill-screen. */
   async loadMoreTracks(auto = true) {
     const e = this.entry, d = e?.data;
     const be = this.config._backend;
     if (!e || !d || !d.more || d.loadingMore || !be || !this.hass) return;
-    if (e.type === 'genre') { if (!(auto && d.page === 0)) this.loadMoreGenre(e, d, be); return; }
     if (e.type !== 'playlist' && be.kind !== 'kiosk') return;
     const page = d.page + 1;
     if (page > QUEUE_PAGE_MAX) { this.set(e, { more: false }); return; }
@@ -229,21 +207,6 @@ export class JbDetail extends LitElement {
       this.set(e, { tracks: m.tracks, more: m.more, page, loadingMore: false });
     } catch (err) {
       console.warn('[jukebox-card] playlist page failed', err);
-      this.set(e, { more: false, loadingMore: false, error: "Couldn't load more tracks." });
-    }
-  }
-  /** Genre: the overview has the first GENRE_ROW_LIMIT tracks; "more" swaps in music/genres/tracks pages from 0. */
-  private async loadMoreGenre(e: DetailEntry, d: DetailData, be: MaBackend) {
-    const offset = d.page === 0 ? 0 : d.tracks.length;
-    this.set(e, { loadingMore: true });
-    try {
-      const r = await be.send('music/genres/tracks', { item_id: genreId(e.item), limit: GENRE_TRACK_PAGE, offset });
-      const raw: any[] = Array.isArray(r) ? r : Array.isArray(r?.items) ? r.items : [];
-      const got = raw.filter((x) => x?.uri && x?.name).map((x) => normItem({ ...x, media_type: x.media_type || 'track' }));
-      const base = d.page === 0 ? [] : e.data!.tracks;
-      this.set(e, { tracks: dedupeUri([...base, ...got]), more: got.length >= GENRE_TRACK_PAGE, page: d.page + 1, loadingMore: false });
-    } catch (err) {
-      console.warn('[jukebox-card] genre tracks failed', err);
       this.set(e, { more: false, loadingMore: false, error: "Couldn't load more tracks." });
     }
   }
@@ -322,14 +285,6 @@ export class JbDetail extends LitElement {
     this.press.held = key; this.requestUpdate(); void el;
     fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, 'album') || 'Album', actions, close: () => this.press.release() });
   }
-  private station(it: MaItem, type: string) { return type === 'radio' || isRadio(it); }
-  /** 0.7.11: press-and-hold on a genre page station row (not its button) opens the same large sheet as a station tile: Open (the station panel), Play now. */
-  private stationMenu(it: MaItem, key: string, el: HTMLElement) {
-    const open = () => { this.closeMenu(); fire(this, 'jukebox-station', { item: it }); };
-    const actions = mediaActions((enq) => { this.closeMenu(); this.play(it, 'radio', enq); }, open, () => {}, false, true);
-    this.press.held = key; this.requestUpdate(); void el;
-    fire(this, 'jukebox-sheet', { item: it, sub: 'Radio station', actions, close: () => this.press.release() });
-  }
   private sub(it: MaItem, type: string) {
     if (type === 'track' || type === 'album') return [artistNames(it), type === 'track' ? it.album?.name : ''].filter(Boolean).join(' · ');
     if (type === 'playlist') return it.owner ?? '';
@@ -361,26 +316,6 @@ export class JbDetail extends LitElement {
       <span class="du"></span>
       ${fav ? this.heart(it, 'album') : nothing}
       ${rowActsTpl(it, canRadio('album', it), (a, el) => this.rowAct(it, 'album', a, el), SEARCH_ACTS, true, true)}
-    </div>`;
-  }
-  /** Genre section row: drillable types open on tap (chevron); stations / audiobooks are plain rows. Icons play the whole item. */
-  private sectionRow(it: MaItem, type: string) {
-    const key = `gs|${type}|${it.uri}`;
-    const drill = drillable(type, this.config);
-    const p = this.press.handlers(key, { it, type, key });
-    const sub = type === 'radio' ? 'Radio station' : type === 'album' ? ['Album', artistNames(it)].filter(Boolean).join(' · ')
-      : type === 'playlist' ? ['Playlist', it.owner].filter(Boolean).join(' · ') : type === 'artist' ? 'Artist' : artistNames(it) || ONE[type] || type;
-    const fav = !!heartType(this.config, type, it);
-    const st = this.station(it, type);
-    return html`<div class="row ${drill ? 'drill' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''} ${st && this.press.pressing === key ? 'hp' : ''} ${this._sel === key ? 'sel' : ''}" data-uri=${it.uri} data-type=${type}
-        aria-label=${drill ? `Open ${it.name}` : it.name}
-        @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
-        @contextmenu=${(e: Event) => e.preventDefault()}>
-      ${artTpl(it, type === 'artist' ? 'th circ' : 'th')}
-      <div class="rt"><b>${it.name}</b><small>${provTpl(it.uri, it.provider, type)}<span class="st">${sub}</span></small></div>
-      <span class="du"></span>
-      ${fav ? this.heart(it, type) : nothing}
-      ${rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, type, a, el), undefined, false, st)}
     </div>`;
   }
   private row(it: MaItem, n?: number, i = 0) {
@@ -433,18 +368,16 @@ export class JbDetail extends LitElement {
             ${this.trail.length ? html`<span class="trail">${this.trail.join(' › ')}</span>` : nothing}
           </div>
           <div class="dh">
-            ${type === 'genre' ? html`<span class="ar dart gen" aria-hidden="true">${icon('genre')}</span>` : artTpl(it, type === 'artist' ? 'dart circ' : 'dart')}
+            ${artTpl(it, type === 'artist' ? 'dart circ' : 'dart')}
             <div class="dt"><span class="eyebrow">${ONE[type] ?? type}${prov ? ` · ${prov}` : ''}</span><h2>${it.name}</h2>
               ${this.sub(it, type) ? html`<small>${this.sub(it, type)}</small>` : nothing}
-              ${type === 'genre' ? (!d.loading && (d.sections.length || d.tracks.length)
-                ? html`<small class="meta" data-tracks=${d.tracks.length}>${genreMeta({ sections: d.sections, tracks: d.tracks }, d.more)}</small>` : nothing)
-                : !d.loading && d.tracks.length ? html`<small class="meta" data-tracks=${d.tracks.length}>${this.meta(d, type)}</small>` : nothing}
-              ${type === 'genre' ? nothing : html`<div class="da">
+              ${!d.loading && d.tracks.length ? html`<small class="meta" data-tracks=${d.tracks.length}>${this.meta(d, type)}</small>` : nothing}
+              <div class="da">
                 ${btn('play', 'play', 'Play', 'pbtn')}${btn('shuffle', 'shuffle', 'Shuffle')}${btn('add', 'qadd', 'Add to queue')}
                 ${canRadio(type, it) ? btn('radio', 'tower', 'Start radio') : nothing}
                 ${heartType(this.config, type, it) ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type), 'sbtn hfav') : nothing}
                 ${this.scopeTpl(it, type, d)}
-              </div>`}</div>
+              </div></div>
           </div>
           ${d.loading ? html`<div class="empty"><span>Loading…</span></div>` : nothing}
           ${d.error ? html`<div class="note err" role="alert">${d.error}
@@ -453,15 +386,11 @@ export class JbDetail extends LitElement {
           ${type === 'artist' && !d.loading ? html`<h3 class="eyebrow">Albums</h3>${d.albums.length
             ? html`<div class="list albums">${this.albumHead(d.albums)}${d.albums.map((a) => this.albumRow(a, d.albums.some((x) => canRadio('album', x))))}</div>`
             : html`<div class="empty noalbums"><span>No albums found.</span></div>`}` : nothing}
-          ${d.sections.map((sec) => html`<h3 class="eyebrow">${sec.title}</h3>
-            <div class="list sec" data-sec=${sec.type}>${sec.items.map((x) => this.sectionRow(x, sec.type))}</div>`)}
-          ${type === 'genre' && !d.loading && !d.error && !d.note && !d.sections.length && !d.tracks.length
-            ? html`<div class="empty nogenre"><span>Nothing in this genre yet.</span></div>` : nothing}
           ${d.tracks.length ? html`<h3 class="eyebrow">${tracksTitle}${d.src === 'search' ? html` <em>matched by search</em>` : nothing}</h3>
             <div class="list tracks">${d.tracks.map((t, i) => this.row(t, type === 'album' && d.src === 'kiosk' ? i + 1 : undefined, i))}</div>
             ${d.more || d.loadingMore ? html`<button class="sbtn more-t" data-action="more" tabindex="-1" ?disabled=${d.loadingMore} @pointerdown=${noFocus}
-              @click=${() => this.loadMoreTracks(false)}>${d.loadingMore ? 'Loading more tracks…' : type === 'genre' && d.page === 0 ? 'See all tracks' : 'Load more tracks'}</button>` : nothing}`
-            : !d.loading && !d.error && !d.note && type !== 'genre' ? html`<div class="empty notracks"><span>No ${type === 'podcast' ? 'episodes' : 'tracks'} found.</span></div>` : nothing}
+              @click=${() => this.loadMoreTracks(false)}>${d.loadingMore ? 'Loading more tracks…' : 'Load more tracks'}</button>` : nothing}`
+            : !d.loading && !d.error && !d.note ? html`<div class="empty notracks"><span>No ${type === 'podcast' ? 'episodes' : 'tracks'} found.</span></div>` : nothing}
         </div>
       </div>
       ${m ? menuTpl(m.pos, { item: m.item, sub: this.sub(m.item, 'track') || providerLabel(m.item.uri) }, m.actions, () => this.closeMenu()) : nothing}
@@ -500,8 +429,6 @@ export class JbDetail extends LitElement {
     .dh { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; }
     .dart { width: 150px; height: 150px; border-radius: 12px; }
     .dart.circ { border-radius: 50%; }
-    .dart.gen { display: grid; place-items: center; background: var(--_surface, #ffffff0f); border: 1px solid var(--_surface-border, #ffffff26); color: var(--_muted); }
-    .dart.gen .i { width: 44%; height: 44%; }
     .th.circ { border-radius: 50%; }
     .dt { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
     .dt .eyebrow { font-size: 11px; color: var(--_inactive); }

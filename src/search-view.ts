@@ -41,8 +41,6 @@ const GROUPS: Array<{ key: GroupKey; label: string; type: string }> = [
   { key: 'radio', label: 'Radio', type: 'radio' },
   { key: 'podcasts', label: 'Podcasts', type: 'podcast' },
   { key: 'audiobooks', label: 'Audiobooks', type: 'audiobook' },
-  // v0.7: only with search_categories containing 'genres' and a backend that can search them
-  { key: 'genres', label: 'Genres', type: 'genre' },
 ];
 const SEARCH_TYPES = ['artist', 'album', 'track', 'playlist', 'radio', 'audiobook', 'podcast'];
 /** 0.7.9 #57: Recent searches were removed; this old key is cleared once so no history stays on the device. */
@@ -333,12 +331,12 @@ export class JbSearch extends LitElement {
   private searchTypes(): { types: string[]; genres: boolean } {
     if (this.combined) {
       const g = CAT_GROUP[this._lcat];
-      if (g === 'genres') return { types: [], genres: !!this.config._backend?.ext.genres };
+      if (g === 'genres') return { types: [], genres: false }; // 0.7.11: genres are not searched (the genre page is gone)
       if (g) return { types: [GROUPS.find((x) => x.key === g)!.type], genres: false };
       return { types: SEARCH_TYPES, genres: false };
     }
     const cats = this._cats;
-    return { types: cats ? serviceTypes(cats) : SEARCH_TYPES, genres: !!cats?.includes('genres') };
+    return { types: cats ? serviceTypes(cats) : SEARCH_TYPES, genres: false };
   }
   /** The selected sources: MA's music/search with `providers` (the HA service can't limit providers). Library alone =
    *  providers ['library']; providers = all of them in one call; Library + providers = both, library first. */

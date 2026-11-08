@@ -1,4 +1,4 @@
-// v0.7 unit checks: search categories, kiosk ext caps, genre overview parsing, Radio Browser listing + cache, Discover rows.
+// v0.7 unit checks: search categories, kiosk ext caps, Radio Browser listing + cache, Discover rows.
 // Bundled on the fly; no browser, no network, placeholder data only. Usage: node test/unit/v070.unit.mjs
 import { rollup } from 'rollup';
 import typescript from '@rollup/plugin-typescript';
@@ -9,7 +9,7 @@ const OUT = new URL('../tmp/unit-v070/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const bundle = await rollup({
   onwarn: (w, def) => { if (w.code !== 'THIS_IS_UNDEFINED') def(w); },
-  input: ['src/search-categories.ts', 'src/genres.ts', 'src/radio-browse.ts', 'src/discover.ts', 'src/backend/index.ts', 'src/editor.ts', 'src/library-home.ts', 'src/radio-fav.ts', 'src/heart.ts'],
+  input: ['src/search-categories.ts', 'src/radio-browse.ts', 'src/discover.ts', 'src/backend/index.ts', 'src/editor.ts', 'src/library-home.ts', 'src/radio-fav.ts', 'src/heart.ts'],
   plugins: [resolve({ exportConditions: ['node'] }), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })],
 });
 await bundle.write({ dir: OUT, format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name]-[hash].mjs' });
@@ -21,7 +21,6 @@ globalThis.localStorage = {
   clear: () => LS.clear(), key: (i) => [...LS.keys()][i] ?? null, get length() { return LS.size; },
 };
 const C = await import(OUT + 'search-categories.mjs');
-const G = await import(OUT + 'genres.mjs');
 const R = await import(OUT + 'radio-browse.mjs');
 const D = await import(OUT + 'discover.mjs');
 const B = await import(OUT + 'index.mjs');
@@ -38,13 +37,14 @@ const J = JSON.stringify;
 
 // ---------------- search categories ----------------
 check('C1 off by default (search behaves like 0.6)', !C.categoriesOn({}) && C.categoriesOn({ search_categories: [] }));
-check('C2 defaults: the five music categories, podcasts / audiobooks / genres opt-in',
+check('C2 defaults: the five music categories, podcasts / audiobooks opt-in',
   J(C.resolveCategories({})) === J(['tracks', 'artists', 'albums', 'playlists', 'radio']));
 check('C3 configured order kept; unknown + duplicate keys dropped',
   J(C.resolveCategories({ search_categories: ['radio', 'podcasts', 'bogus', 'radio', 'tracks'] })) === J(['radio', 'podcasts', 'tracks']));
-check('C4 genres only when the backend can search them',
+check('C4 0.7.11: an old config listing genres is ignored safely (the genre page is gone), even when the backend has genres',
   J(C.resolveCategories({ search_categories: ['genres', 'tracks'] }, { genres: false })) === J(['tracks'])
-  && J(C.resolveCategories({ search_categories: ['genres', 'tracks'] }, { genres: true })) === J(['genres', 'tracks']));
+  && J(C.resolveCategories({ search_categories: ['genres', 'tracks'] }, { genres: true })) === J(['tracks'])
+  && !C.CATEGORIES.some((c) => c.key === 'genres'));
 check('C5 empty / all-invalid list falls back to the defaults',
   J(C.resolveCategories({ search_categories: [] })) === J(C.DEFAULT_CATEGORIES) && J(C.resolveCategories({ search_categories: ['genres'] })) === J(C.DEFAULT_CATEGORIES));
 check('C6 service media types exclude genres', J(C.serviceTypes(['tracks', 'genres', 'podcasts', 'audiobooks'])) === J(['track', 'podcast', 'audiobook']));
@@ -58,24 +58,6 @@ check('E1 extFromServer: missing features → all off', J(B.extFromServer(undefi
 check('E2 extFromServer reads genres / radio_browse / discover / resume (booleans only)',
   J(B.extFromServer({ genres: true, radio_browse: true, discover: 'yes', resume: false })) === J({ genres: true, radioBrowse: true, discover: false, resume: false, autoplay: false, autoplayMode: false, searchProviders: false }));
 check('E3 genres falls back to genre_overview', B.extFromServer({ genre_overview: true }).genres === true && B.extFromServer({ genre_overview: true, genres: false }).genres === false);
-
-// ---------------- genres ----------------
-check('G1 genreId: item_id, else library://genre/<id>, else ""',
-  G.genreId({ item_id: 7 }) === '7' && G.genreId({ uri: 'library://genre/12' }) === '12' && G.genreId({ uri: 'spotify://genre/x' }) === '');
-{
-  const ov = G.parseGenreOverview([
-    { media_type: 'folder', item_id: 'genre_artists', name: 'Artists', items: [{ media_type: 'artist', uri: 'library://artist/1', name: 'Placeholder Band' }, { uri: '', name: 'no uri' }] },
-    { media_type: 'folder', item_id: 'genre_tracks', name: 'Tracks', items: [{ uri: 'library://track/1', name: '  Placeholder Song ' }] },
-    { media_type: 'folder', item_id: 'genre_albums', name: 'Albums', items: [] },
-    { media_type: 'folder', item_id: 'something_else', name: 'Weird', items: [{ uri: 'x://1', name: 'x' }] },
-    { media_type: 'folder', item_id: '', name: 'Playlists', items: [{ uri: 'library://playlist/2', name: 'Placeholder Mix' }] },
-  ]);
-  check('G2 overview → sections in fixed order, empty + unknown folders dropped, items without uri dropped',
-    J(ov.sections.map((s) => [s.type, s.items.length])) === J([['artist', 1], ['playlist', 1]]), J(ov.sections.map((s) => s.type)));
-  check('G3 tracks separate; missing media_type filled from the folder', ov.tracks.length === 1 && ov.tracks[0].media_type === 'track' && ov.sections[1].items[0].media_type === 'playlist');
-  check('G4 genreMeta counts ("+" when more tracks)', G.genreMeta(ov, true) === '1 artist · 1 playlist · 1+ tracks', G.genreMeta(ov, true));
-  check('G5 garbage in → empty overview', J(G.parseGenreOverview(null)) === J({ sections: [], tracks: [] }) && G.parseGenreOverview({ items: [] }).sections.length === 0);
-}
 
 // ---------------- radio browse ----------------
 check('R1 radioModes: true = all four; list filtered + deduped in order; anything else off',
@@ -213,13 +195,13 @@ check('D1 discoverWanted: true = defaults, list trimmed + deduped, anything else
   check('LH4 migration: a 0.7 discover list adds the Discover tile', J(ids({ discover: true })) === J(['playlist', 'artist', 'album', 'radio', 'search', 'discover'])
     && J(ids({ discover: [] })) === J(ids({})));
   const t5 = L.configuredTiles({ library_tiles: ['radio', { tile: 'playlist', label: 'Mixes' }, 'bogus', 'radio', { tile: 'nope' }, 'genre'] });
-  check('LH5 configured order + labels kept; unknown and repeated tiles dropped', J(t5) === J([{ id: 'radio', label: 'Radio' }, { id: 'playlist', label: 'Mixes' }, { id: 'genre', label: 'Genres' }]), J(t5));
+  check('LH5 configured order + labels kept; unknown and repeated tiles dropped', J(t5) === J([{ id: 'radio', label: 'Radio' }, { id: 'playlist', label: 'Mixes' }]) /* 0.7.11: 'genre' is no longer a tile */, J(t5));
   const all = { library_tiles: L.TILE_IDS };
   const guest = L.visibleTiles(all, { playlist: false, artist: false, album: false, track: false, radio: false, podcast: false, audiobook: false }, { genres: false, discover: false }).map((t) => t.id);
   check('LH6 guest without library reads: only Search is left', J(guest) === J(['search']), J(guest));
   const v7 = L.visibleTiles(all, { playlist: true, artist: null, album: true, track: true, radio: false, podcast: false, audiobook: true }, { genres: true, discover: true }, true).map((t) => t.id);
   check('LH7 still-probing shown; empty types hidden; Radio kept by Stations by…; Genres/Discover follow the backend',
-    J(v7) === J(['playlist', 'artist', 'album', 'radio', 'search', 'track', 'audiobook', 'genre', 'discover']), J(v7));
+    J(v7) === J(['playlist', 'artist', 'album', 'radio', 'search', 'track', 'audiobook', 'discover']) /* 0.7.11: no Genres tile */, J(v7));
   check('LH8 every tile has an icon that exists', L.TILES.every((t) => typeof t.icon === 'string' && t.icon.length));
   const names = Ed.editorSchema({}).flatMap((x) => x.schema ?? [x]).map((x) => x.name);
   check('LH9 editor: library_home / library_tiles / library_label / radio_favorites_only listed and labelled',

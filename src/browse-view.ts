@@ -635,6 +635,7 @@ export class JbBrowse extends LitElement {
   // ---------- drill-down (back stack) ----------
   /** Open a detail view on top of the current one (from the grid it starts the stack). Never plays. */
   openDetail(it: MaItem, type: string) {
+    if (type === 'genre') return; // 0.7.11: the genre page is gone (an old separate-layout Genres list row opens nothing)
     this._menu = null; this.press.release();
     if (!this._stack.length) this._gridScroll = (this.renderRoot.querySelector('.scroll') as HTMLElement | null)?.scrollTop ?? 0;
     this._stack = [...this._stack, { item: it, type }];
@@ -721,7 +722,7 @@ export class JbBrowse extends LitElement {
     </div>`;
   }
 
-  /** A genre: tap opens its page (artists, albums, playlists, songs: music/genres/overview). */
+  /** A genre row (separate layout's Genres list). 0.7.11: the genre page is gone, so a tap opens nothing. */
   private genreRow(it: MaItem) {
     return html`<div class="row gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Open ${it.name}`}
         @click=${() => this.openDetail(it, 'genre')}>

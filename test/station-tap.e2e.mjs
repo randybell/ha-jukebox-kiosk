@@ -1,6 +1,5 @@
 // 0.7.11: a quick tap never plays a station. At 1024x600, with the queue empty and with songs, quick-tap every station spot and
-// check that no play_media goes out and the hold pop-up never opens from a tap. The genre page station row's Play button is now
-// hold-to-fire (progress fill, row lit, scroll cancels) and holding the row opens the same large sheet as a station tile (Open, Play now).
+// check that no play_media goes out and the hold pop-up never opens from a tap. (The genre page and its station rows were removed in 0.7.11.)
 // Usage: node test/station-tap.e2e.mjs (starts its own dev server)
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -84,43 +83,7 @@ for (const [tag, idle] of [['[queue has songs]', ''], ['[queue empty]', '&idle=1
     await quick(p, tag, 'Search station row Play button', `${row}.querySelector('[data-act="replace"]')`, false);
     await p.close();
   }
-  // ---- Genre page: a Stations section (injected) ----
-  {
-    const p = await open(`&kiosk=1&tab=browse&radio=1${idle}`);
-    const SV = `__card.shadowRoot.querySelector('jb-search')`;
-    await p.evaluate(() => __card.shadowRoot.querySelector('jb-search').browse.openDetail({ uri: 'library://genre/1', name: 'Mock Jazz', media_type: 'genre', item_id: '1', provider: 'library' }, 'genre'));
-    const DE = `${SV}.browse.shadowRoot.querySelector('jb-detail')`, DD = `${DE}.shadowRoot`;
-    await p.waitForFunction((d) => { try { return !eval(d).entry.data.loading; } catch { return false; } }, { timeout: 6000 }, DE);
-    // the mock genre has no stations: add a Stations section with the mock's stations
-    const st = ['Lakeside Jazz 101', 'Mock FM', 'Night Owl Radio'].map((name, i) => ({ media_type: 'radio', uri: `radiobrowser://radio/mock-${i}`, name, provider: 'radiobrowser', item_id: `mock-${i}` }));
-    await p.evaluate((st, d) => { const det = eval(d); const data = det.entry.data; det.entry.data = { ...data, sections: [...data.sections, { type: 'radio', title: 'Stations', items: st.slice(0, 3) }] }; det.requestUpdate(); }, st, DE);
-    await sleep(400);
-    const has = await ev(p, `!!${DD}.querySelector('.list.sec[data-sec="radio"] .row')`);
-    check(`${tag} genre page shows a Stations section`, has);
-    if (has) {
-      await clear(p);
-      const row = `${DD}.querySelector('.list.sec[data-sec="radio"] .row')`, btn = `${row}.querySelector('.ra-b[data-act="replace"]')`;
-      const sz = await ev(p, `(() => { const b = ${btn}; const r = b.getBoundingClientRect(); return { hold: b.classList.contains('hold'), w: r.width, h: r.height, label: b.textContent.trim() }; })()`);
-      check(`${tag} genre station Play button is a hold button, same size as before (≥ 72x56, "Play")`, sz.hold && sz.w >= 72 && sz.h >= 56 && sz.label === 'Play', J(sz));
-      const r = await quick(p, tag, 'genre station row', `${row}.querySelector('.rt')`, false);
-      check(`${tag} genre station row tap only highlights it`, await ev(p, `${row}.classList.contains('sel')`));
-      await quick(p, tag, 'genre station row Play button', btn, false);
-      await clear(p); await press(p, btn, 300);
-      check(`${tag} genre station Play: a 300 ms hold does nothing`, J(await plays(p)) === '[]' && !(await confirmOpen(p)));
-      await press(p, btn, 650, { scroll: `${DD}.querySelector('.scroll')` });
-      check(`${tag} genre station Play: scrolling during the hold cancels it`, J(await plays(p)) === '[]' && !(await confirmOpen(p)), J(await plays(p)));
-      const mid = await press(p, btn, 650, { mid: `(() => { const r = ${row}, b = ${btn}; return r.classList.contains('held') && r.classList.contains('hp') && b.classList.contains('hp') && getComputedStyle(b).animationName === 'jb-hold-b'; })()` });
-      const asked = await confirmOpen(p), pl = await plays(p);
-      check(`${tag} genre station Play: while held the row lights and the button fills; 500 ms fires it (${idle ? 'plays: queue empty' : 'asks first: queue has songs'})`,
-        mid && (idle ? !asked && J(pl) === '["radio:replace"]' : asked && J(pl) === '[]'), J({ mid, asked, pl }));
-      if (asked) { await tap(p, `${SC}.querySelector('[data-action="confirm"]')`); check(`${tag} genre station Play: Replace plays it`, J(await plays(p)) === '["radio:replace"]', J(await plays(p))); }
-      await clear(p); await press(p, `${row}.querySelector('.rt')`, 650);
-      const ids = await ev(p, `[...${HS}.querySelectorAll('.it')].map((b) => b.dataset.action)`);
-      check(`${tag} holding the genre station row opens the large sheet: Open, Play now, Cancel; the finger-lift plays nothing`, (await sheetOpen(p)) && J(ids) === J(['open', 'replace', 'cancel']) && J(await plays(p)) === '[]', J(ids));
-      if (ids.length) { await tap(p, `${HS}.querySelector('.it[data-action="open"]')`); check(`${tag} the sheet's Open shows the station panel, nothing plays`, (await panelOpen(p)) && J(await plays(p)) === '[]'); await closePanel(p); }
-    }
-    await p.close();
-  }
+  // 0.7.11: the genre page (and its station rows) was removed; its checks went with it
 }
 await browser.close();
 console.log(`\n${total - failures}/${total} station-tap checks passed`);

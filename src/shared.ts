@@ -380,9 +380,7 @@ export function confirmTpl(c: ConfirmState | null, close: () => void) {
 /** Types that open a detail view on tap (podcasts only when the backend lists episodes). */
 export const drillable = (type: string, config: JukeboxCardConfig) =>
   type === 'artist' || type === 'album' || type === 'playlist'
-  || (type === 'podcast' && !!config._backend?.caps.podcastEpisodes)
-  // v0.7: a genre opens its overview (artists / albums / playlists / tracks) when the backend can read it
-  || (type === 'genre' && !!config._backend?.ext?.genres);
+  || (type === 'podcast' && !!config._backend?.caps.podcastEpisodes);
 
 /* ---------------- shared CSS for art, tiles, rows, badges, menus, toasts ---------------- */
 export const mediaStyles = css`

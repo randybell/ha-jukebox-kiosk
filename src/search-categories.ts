@@ -15,7 +15,6 @@ export const CATEGORIES: CategoryDef[] = [
   { key: 'radio', label: 'Radio', type: 'radio', optIn: false },
   { key: 'podcasts', label: 'Podcasts', type: 'podcast', optIn: true },
   { key: 'audiobooks', label: 'Audiobooks', type: 'audiobook', optIn: true },
-  { key: 'genres', label: 'Genres', type: 'genre', optIn: true },
 ];
 export const DEFAULT_CATEGORIES: SearchCategory[] = CATEGORIES.filter((c) => !c.optIn).map((c) => c.key);
 const KNOWN = new Set(CATEGORIES.map((c) => c.key));
@@ -33,7 +32,8 @@ export function resolveCategories(c: Partial<JukeboxCardConfig> | undefined, ext
   const raw = Array.isArray(c?.search_categories) ? c!.search_categories! : DEFAULT_CATEGORIES;
   const seen = new Set<string>();
   const out = raw.filter((k): k is SearchCategory => typeof k === 'string' && KNOWN.has(k as SearchCategory) && !seen.has(k) && !!seen.add(k))
-    .filter((k) => k !== 'genres' || !!ext?.genres);
+    .filter((k) => k !== 'genres'); // 0.7.11: the genre page is gone; an old config's 'genres' is ignored
+  void ext;
   return out.length ? out : DEFAULT_CATEGORIES;
 }
 /** media_type list for music_assistant.search (genres excluded: they go through music/search) */
