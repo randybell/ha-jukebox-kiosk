@@ -177,7 +177,7 @@ export class JbDetail extends LitElement {
   private _confirm: ConfirmState | null = null;
   private _sel = '';
   private hearts = new FavController(this);
-  private press = new PressController<{ it: MaItem; type: string; key: string }>(this, (p) => this.tap(p.it, p.type, p.key), (p, el) => (p.key.startsWith('al|') ? this.albumMenu(p.it, p.key, el) : this.tap(p.it, p.type, p.key)));
+  private press = new PressController<{ it: MaItem; type: string; key: string }>(this, (p) => this.tap(p.it, p.type, p.key), (p, el) => (p.key.startsWith('al|') ? this.albumMenu(p.it, p.key, el) : this.station(p.it, p.type) ? this.stationMenu(p.it, p.key, el) : this.tap(p.it, p.type, p.key)));
 
   get data(): DetailData | undefined { return this.entry?.data; }
   private get scroller() { return this.renderRoot?.querySelector('.scroll') as HTMLElement | null; }
@@ -322,6 +322,14 @@ export class JbDetail extends LitElement {
     this.press.held = key; this.requestUpdate(); void el;
     fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, 'album') || 'Album', actions, close: () => this.press.release() });
   }
+  private station(it: MaItem, type: string) { return type === 'radio' || isRadio(it); }
+  /** 0.7.11: press-and-hold on a genre page station row (not its button) opens the same large sheet as a station tile: Open (the station panel), Play now. */
+  private stationMenu(it: MaItem, key: string, el: HTMLElement) {
+    const open = () => { this.closeMenu(); fire(this, 'jukebox-station', { item: it }); };
+    const actions = mediaActions((enq) => { this.closeMenu(); this.play(it, 'radio', enq); }, open, () => {}, false, true);
+    this.press.held = key; this.requestUpdate(); void el;
+    fire(this, 'jukebox-sheet', { item: it, sub: 'Radio station', actions, close: () => this.press.release() });
+  }
   private sub(it: MaItem, type: string) {
     if (type === 'track' || type === 'album') return [artistNames(it), type === 'track' ? it.album?.name : ''].filter(Boolean).join(' · ');
     if (type === 'playlist') return it.owner ?? '';
@@ -363,7 +371,8 @@ export class JbDetail extends LitElement {
     const sub = type === 'radio' ? 'Radio station' : type === 'album' ? ['Album', artistNames(it)].filter(Boolean).join(' · ')
       : type === 'playlist' ? ['Playlist', it.owner].filter(Boolean).join(' · ') : type === 'artist' ? 'Artist' : artistNames(it) || ONE[type] || type;
     const fav = !!heartType(this.config, type, it);
-    return html`<div class="row ${drill ? 'drill' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''} ${this._sel === key ? 'sel' : ''}" data-uri=${it.uri} data-type=${type}
+    const st = this.station(it, type);
+    return html`<div class="row ${drill ? 'drill' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''} ${st && this.press.pressing === key ? 'hp' : ''} ${this._sel === key ? 'sel' : ''}" data-uri=${it.uri} data-type=${type}
         aria-label=${drill ? `Open ${it.name}` : it.name}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
@@ -371,7 +380,7 @@ export class JbDetail extends LitElement {
       <div class="rt"><b>${it.name}</b><small>${provTpl(it.uri, it.provider, type)}<span class="st">${sub}</span></small></div>
       <span class="du"></span>
       ${fav ? this.heart(it, type) : nothing}
-      ${rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, type, a, el))}
+      ${rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, type, a, el), undefined, false, st)}
     </div>`;
   }
   private row(it: MaItem, n?: number, i = 0) {
