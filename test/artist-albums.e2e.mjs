@@ -41,19 +41,28 @@ for (const [name, vp, q] of [['1024x712 (HA toolbar + sidebar)', { width: 1080, 
           labelsShown: bs.some((b) => { const s = b.querySelector('span'); return s && getComputedStyle(s).display !== 'none'; }),
           aria: bs.every((b) => b.getAttribute('aria-label') && b.title), boxes: bs.map(R) };
       });
-      return { head: h ? [...h.querySelectorAll('span')].map((s) => ({ text: s.textContent, ...R(s) })) : null, hb: h && R(h), sc: R(sc), st: sc.scrollTop, maxSt: sc.scrollHeight - sc.clientHeight, rows };
+      const tt = [...d.querySelectorAll('.list.tracks .row')].map(R);
+      return { tt, head: h ? [...h.querySelectorAll('span')].map((s) => ({ text: s.textContent, ...R(s) })) : null, hb: h && R(h), sc: R(sc), st: sc.scrollTop, maxSt: sc.scrollHeight - sc.clientHeight, rows };
     }, DET);
     let g = await geo();
     const r0 = g.rows[0];
     check(`${tag}: every Albums row shows Add to queue, Play next, Play now, Start radio (no Remove, no More)`, g.rows.length >= 8 && g.rows.every((r) => r.acts === 'add,next,replace,radio' && !r.more), JSON.stringify(g.rows.map((r) => r.acts)));
     check(`${tag}: the row buttons are icon-only, each ≥ 48px with an aria-label and title`, g.rows.every((r) => !r.labelsShown && r.aria && r.boxes.every((b) => b.w >= 47.5 && b.h >= 47.5)), JSON.stringify(r0));
-    check(`${tag}: one column header names the buttons with the existing wording`, !!g.head && g.head.map((x) => x.text).join() === 'Add to queue,Play Next,Play Now,Start radio', JSON.stringify(g.head));
+    check(`${tag}: one column header names the buttons, in sentence case: Add to queue, Play next, Play now, Start radio`, !!g.head && g.head.map((x) => x.text).join() === 'Add to queue,Play next,Play now,Start radio', JSON.stringify(g.head));
     check(`${tag}: each header name sits exactly over its button column, in every row`, !!g.head && g.rows.every((r) => r.boxes.every((b, i) => Math.abs(b.l - g.head[i].l) <= 1 && Math.abs(b.r - g.head[i].r) <= 1)), JSON.stringify({ head: g.head, row0: r0.boxes }));
     // scroll the albums list well past its start: the header stays at the top of the panel
     await p.evaluate((D) => { const d = eval(D), sc = d.querySelector('.scroll'), l = d.querySelector('.list.albums'); sc.scrollTop += l.getBoundingClientRect().top - sc.getBoundingClientRect().top + 200; }, DET);
     await sleep(250); g = await geo();
     const covered = g.rows.some((r) => r.boxes[0].t < g.hb.t);
     check(`${tag}: after scrolling the list, the header is still showing at the top of the panel`, covered && g.hb.t >= g.sc.t - 1 && g.hb.t <= g.sc.t + 2 && g.hb.b <= g.sc.b, JSON.stringify({ hb: g.hb, sc: g.sc, st: g.st }));
+    check(`${tag}: the stuck header is opaque and reaches the panel's top edge (no album peeks above it)`,
+      g.hb.t <= g.sc.t + 1 && (await p.evaluate((D) => { const c = getComputedStyle(eval(D).querySelector('.ahd')).backgroundColor; const m = c.match(/rgba?\(([^)]+)\)/); const a = m ? m[1].split(',').map(Number) : []; return a.length === 3 || a[3] === 1; }, DET)), JSON.stringify({ hb: g.hb, sc: g.sc }));
+    // scroll past the last album into Top Tracks: the header leaves with the Albums section and never covers a Top Tracks row
+    await p.evaluate((D) => { const d = eval(D), sc = d.querySelector('.scroll'), t = d.querySelector('.list.tracks'); sc.scrollTop += t.getBoundingClientRect().top - sc.getBoundingClientRect().top - 10; }, DET);
+    await sleep(250); g = await geo();
+    const ttVis = g.tt.filter((x) => x.b > g.sc.t && x.t < g.sc.b);
+    check(`${tag}: scrolled into Top Tracks, the Albums header is gone and covers no Top Tracks row`,
+      ttVis.length > 0 && (g.hb.b <= g.sc.t + 0.5 || ttVis.every((x) => x.t >= g.hb.b - 0.5)) && g.hb.b <= ttVis[0].t + 0.5, JSON.stringify({ hb: g.hb, sc: g.sc, tt0: ttVis[0] }));
     await p.close();
   }
 }
