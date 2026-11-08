@@ -21,7 +21,7 @@ The card's element is still `custom:jukebox-card`, so existing dashboards keep w
 | **All sources open, two services on** | **Typing, Spotify only (820x1180)** |
 | ![All sources open](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-sources-1280x800.png) | ![Library search, Spotify only](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-provider-820x1180.png) |
 
-![Now Playing at 1920x1080](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-1920x1080.png)
+![Now Playing at 1024x600](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-1920x1080.png)
 
 | Queue | Screensaver |
 |---|---|
@@ -222,6 +222,8 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 - **Permissions are a UI lock, not security.** `grouping` / `grouping_users` / `guest_access` only hide or disable controls in this card. Anyone with dashboard access can still call the same services from elsewhere in Home Assistant. Use HA users and dashboards to restrict access.
 - **Editor:** a Speakers section. **Speakers panel** offers "Volume only: always play on the chosen player" or "Choose speakers: pick, group and drop speakers from the card". Only Choose speakers shows the rest: targets, who may change speakers, extra people, everyone else, **Removing the main speaker from a group** ("Allow: the music keeps playing on the other speakers after a short pause" / "Don't allow: use Move to hand the music to another speaker first") and the ask-before-dropping switch. Presets come from Music Assistant's group defaults; there is nothing to set.
 
+![Speakers panel with targets, presets and room volumes](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/live-speakers-volume-0711.png)
+
 ### Library (search and browse in one tab)
 
 - **One tab.** Since 0.7.2 the **Library** tab (`library_label`) is where you browse and search; there is no Search tab and no tile home by default (`library_layout: combined`).
@@ -235,6 +237,10 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 - **Provider with an empty box:** one provider shows its folders (`music/browse <provider>://`, admins) or an inline hint "Type to search <provider>"; several providers show the inline hint ("Type to search Apple Music + TuneIn") — never a popup.
 - **Filters.** "Search in <artist / album>" adds the artist/album chip and **Clear filters** next to the box. Clear filters also empties the box and puts the source back to All. If the All sources row is open, it stays open. The screensaver, with `idle_clear_filters` on (the default), clears the same things and also closes that row.
 - **Old configs.** `default_tab: search`, a saved Search tab or any "search" shortcut opens the Library tab with the keyboard up. `library_home: true` from 0.7.1 is ignored (no tiles). `library_layout: separate` brings back the 0.7.1 Library + Search tabs (tile home with `library_home: true`, the 0.7.1 chip row). On that Search tab the source buttons stay in a row under the box.
+
+| Library artists | Library songs |
+|---|---|
+| ![Library artists grid](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/live-library-artists-0711.png) | ![Library song rows](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/live-library-songs-0711.png) |
 
 #### Library list details (all layouts)
 - **Categories.** On the combined tab the buttons are the ones above. On the separate Library tab the chips are Playlists, Albums, Artists, Tracks, Radio, Podcasts and Audiobooks.
@@ -253,6 +259,8 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 - **Search's Open action** jumps to the same detail page.
 - **Target.** Every `play_media` goes to the configured player (example: `media_player.everywhere`). Room players are volume targets.
 
+![Library radio stations](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/live-library-radio-0711.png)
+
 ### Favourites (hearts)
 
 *(0.7)* With the Jukebox Kiosk backend, a heart sits on Search and Library rows and tiles (tracks, albums, artists, playlists, radio), on playlist rows and in the header of album, artist and playlist pages, on Now Playing and on the radio station sheet. A filled heart means the item is a Music Assistant favourite; tapping it adds or removes it through the integration (`music/favorites/add_item` / `remove_item`). Every heart for the same item updates at once.
@@ -260,6 +268,8 @@ The layout is designed around a 1280x800 tablet. On larger screens the whole car
 - Needs the `library` permission class. Without it (for example a guest you removed it from) the hearts are hidden, including the one on Now Playing.
 - No confirmation when you remove a heart. The heart flips immediately; if Music Assistant refuses or the call fails it flips back and the top-right status chip shows the error (with ✕). Successful changes show a short "Added … to favorites" in the same chip. There are no popups in the middle of the screen.
 - `hearts: false` hides the 0.7 row, tile and page hearts.
+
+![Library Radio with the favorites heart filter enabled](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/live-library-favorites-0711.png)
 
 ### Screensaver
 
