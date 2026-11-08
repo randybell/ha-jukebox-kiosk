@@ -6,6 +6,10 @@ import { fmtDur } from './shared';
 import { stationInfo } from './radio-fav';
 
 export interface InfoLine { k: string; label: string; v: string }
+/** Item kinds whose hold pop-up gets More (0.7.12: songs, podcast episodes, audiobooks). */
+export const INFO_TYPES = ['track', 'podcast_episode', 'audiobook'];
+/** More is usable only with Album, Year, Length or Quality; Source alone still shows as a line but doesn't count. */
+export const hasMoreInfo = (l: InfoLine[] | undefined) => !!l?.some((x) => x.k !== 'source');
 
 export function songInfo(src: any): InfoLine[] {
   const m: any = src?.media_item ?? src ?? {};

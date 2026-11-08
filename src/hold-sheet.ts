@@ -4,7 +4,7 @@ import { mediaStyles, artTpl, noFocus, type MenuAction } from './shared';
 import { icon } from './icons';
 import type { MaItem } from './types';
 import { defineElement } from './define';
-import type { InfoLine } from './song-info';
+import { hasMoreInfo, type InfoLine } from './song-info';
 
 /** What a view asks the card to show (event `jukebox-sheet`). `close` lets the view clear its own state (row highlight). */
 /** `info` (0.7.12, songs only): adds More just before Cancel; grayed when the list is empty. More shows the song info panel in this sheet. */
@@ -27,15 +27,15 @@ export class JbHoldSheet extends LitElement {
     const s = this.state;
     if (!s) return nothing;
     const hd = html`<div class="hd">${artTpl(s.item, 'big')}<span><b>${s.item.name}</b>${s.sub ? html`<small>${s.sub}</small>` : nothing}</span></div>`;
-    if (this._info && s.info?.length) {
-      // 0.7.12: the song info panel (styled like the station sheet's details), only lines with data, one Close
+    if (this._info && s.info && hasMoreInfo(s.info)) {
+      // 0.7.12: the info panel (styled like the station sheet's details), only lines with data; Back returns to the choices
       return html`<div class="bk" data-action="backdrop" @click=${() => this.close()}></div>
         <div class="sh info" role="dialog" aria-modal="true" aria-label="${s.item.name} details">${hd}
           <dl class="meta">${s.info.map((l) => html`<div class="f" data-field=${l.k}><dt>${l.label}</dt><dd>${l.v}</dd></div>`)}</dl>
-          <button class="it cancel" data-action="close" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.close()}>${icon('close')}<span>Close</span></button>
+          <button class="it cancel" data-action="back" tabindex="-1" @pointerdown=${noFocus} @click=${() => { this._info = false; }}>${icon('back')}<span>Back</span></button>
         </div>`;
     }
-    const more: MenuAction[] = s.info ? [{ id: 'more', icon: 'more', label: 'More', disabled: !s.info.length, run: () => {} }] : [];
+    const more: MenuAction[] = s.info ? [{ id: 'more', icon: 'more', label: 'More', disabled: !hasMoreInfo(s.info), run: () => {} }] : [];
     return html`<div class="bk" data-action="backdrop" @click=${() => this.close()}></div>
       <div class="sh" role="dialog" aria-modal="true" aria-label="${s.item.name} options">
         ${hd}
