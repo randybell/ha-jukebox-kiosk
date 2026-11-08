@@ -4,7 +4,7 @@ import { icon } from './icons';
 import { providerLabel } from './providers';
 import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl,
-  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, SEARCH_ACTS, confirmTpl, drillable,
+  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, mediaActions, SEARCH_ACTS, confirmTpl, drillable,
   type MenuAction, type MenuPos, type RowAct, type ConfirmState,
   maCall,
 } from './shared';
@@ -177,7 +177,7 @@ export class JbDetail extends LitElement {
   private _confirm: ConfirmState | null = null;
   private _sel = '';
   private hearts = new FavController(this);
-  private press = new PressController<{ it: MaItem; type: string; key: string }>(this, (p) => this.tap(p.it, p.type, p.key), (p) => this.tap(p.it, p.type, p.key));
+  private press = new PressController<{ it: MaItem; type: string; key: string }>(this, (p) => this.tap(p.it, p.type, p.key), (p, el) => (p.key.startsWith('al|') ? this.albumMenu(p.it, p.key, el) : this.tap(p.it, p.type, p.key)));
 
   get data(): DetailData | undefined { return this.entry?.data; }
   private get scroller() { return this.renderRoot?.querySelector('.scroll') as HTMLElement | null; }
@@ -313,6 +313,14 @@ export class JbDetail extends LitElement {
     this._menu = { item: it, type, pos: menuPos(this.root(), el.closest('.row') as HTMLElement, actions.length), actions };
   }
 
+  /** 0.7.10: press-and-hold on an artist page Albums row (not its buttons) opens the menu 5 pop-up. */
+  private albumMenu(it: MaItem, key: string, el: HTMLElement) {
+    const ask = (k: 'replace' | 'radio') => { this.closeMenu(); this._confirm = { kind: k, item: it, run: () => this.play(it, 'album', 'replace', k === 'radio') }; };
+    const open = () => { this.closeMenu(); this.tap(it, 'album', key); };
+    const actions = mediaActions((enq) => { this.closeMenu(); this.play(it, 'album', enq); }, open, ask, canRadio('album', it));
+    this.press.held = key;
+    this._menu = { item: it, type: 'album', pos: menuPos(this.root(), el, actions.length), actions };
+  }
   private sub(it: MaItem, type: string) {
     if (type === 'track' || type === 'album') return [artistNames(it), type === 'track' ? it.album?.name : ''].filter(Boolean).join(' · ');
     if (type === 'playlist') return it.owner ?? '';
@@ -335,7 +343,7 @@ export class JbDetail extends LitElement {
     const key = 'al|' + it.uri;
     const p = this.press.handlers(key, { it, type: 'album', key });
     const fav = !!heartType(this.config, 'album', it);
-    return html`<div class="row drill sr ${radioCol && !canRadio('album', it) ? 'nor' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''}" data-uri=${it.uri} data-type="album" aria-label="Open ${it.name}"
+    return html`<div class="row drill sr ${radioCol && !canRadio('album', it) ? 'nor' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''} ${this.press.pressing === key ? 'hp' : ''}" data-uri=${it.uri} data-type="album" aria-label="Open ${it.name}"
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       ${artTpl(it, 'th')}
@@ -343,7 +351,7 @@ export class JbDetail extends LitElement {
         <small>${provTpl(it.uri, it.provider, 'album')}<span class="st">${['Album', (it as any).year].filter(Boolean).join(' · ')}</span></small></div>
       <span class="du"></span>
       ${fav ? this.heart(it, 'album') : nothing}
-      ${rowActsTpl(it, canRadio('album', it), (a, el) => this.rowAct(it, 'album', a, el), SEARCH_ACTS, true)}
+      ${rowActsTpl(it, canRadio('album', it), (a, el) => this.rowAct(it, 'album', a, el), SEARCH_ACTS, true, true)}
     </div>`;
   }
   /** Genre section row: drillable types open on tap (chevron); stations / audiobooks are plain rows. Icons play the whole item. */

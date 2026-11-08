@@ -26,8 +26,10 @@ async function open(query = '', vp = { width: 1280, height: 800 }) {
 const wait = (page, fn, timeout = 5000) => page.waitForFunction(fn, { timeout, polling: 40 }).then(() => true, () => false);
 const ev = (page, expr) => page.evaluate((e) => eval(e), expr);
 async function tap(page, expr) {
-  const r = await page.evaluate((expr) => { const el = eval(expr); if (!el) return null; const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: b.width }; }, expr);
+  const r = await page.evaluate((expr) => { const el = eval(expr); if (!el) return null; const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: b.width, hold: el.matches('.ra-b.hold') }; }, expr);
   if (!r || !r.w) throw new Error('no element: ' + expr);
+  // 0.7.10: search / artist Albums row buttons fire on a 500 ms press-and-hold
+  if (r.hold) { await page.mouse.move(r.x, r.y); await page.mouse.down(); await sleep(650); await page.mouse.up(); await sleep(60); return; }
   await page.mouse.click(r.x, r.y); await sleep(60);
 }
 const plays = (p) => ev(p, `window.__calls.filter((c) => c.domain === 'music_assistant' && c.service === 'play_media').map((c) => c.data)`);

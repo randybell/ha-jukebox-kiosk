@@ -73,7 +73,7 @@ const played = [];
 const play = (e) => { played.push(e); };
 const ask = (k) => { played.push('ask:' + k); };
 
-check('A1 mediaActions radioStation → only Play Now', J(ids(S.mediaActions(play, undefined, ask, false, true))) === J(['play']));
+check('A1 mediaActions radioStation → only Play now (0.7.10 menu 5)', J(ids(S.mediaActions(play, undefined, ask, false, true))) === J(['replace']));
 played.length = 0;
 S.mediaActions(play, undefined, ask, false, true)[0].run();
 check('A2 radioStation Play Now → play(replace)', J(played) === J(['replace']));
@@ -81,12 +81,11 @@ check('A3 tapActions radioStation → only Play Now', J(ids(S.tapActions(play, t
 played.length = 0;
 S.tapActions(play, true)[0].run();
 check('A4 tapActions radio Play Now → replace', J(played) === J(['replace']));
-check('A5 mediaActions track+seed still has next/remove/replace/radio',
-  ['play', 'next', 'remove', 'replace', 'radio'].every((x) => ids(S.mediaActions(play, undefined, ask, true, false)).includes(x)));
+check('A5 mediaActions track+seed = add/next/replace/radio (0.7.10 menu 5: no Remove, no second Play now)',
+  J(ids(S.mediaActions(play, undefined, ask, true, false))) === J(['add', 'next', 'replace', 'radio']));
 check('A6 tapActions non-radio still play/next/remove', J(ids(S.tapActions(play, false))) === J(['play', 'next', 'remove']));
 check('A7 mediaActions non-station never drops next when seedRadio false',
-  ids(S.mediaActions(play, undefined, ask, false, false)).includes('next')
-  && ids(S.mediaActions(play, undefined, ask, false, false)).includes('remove'));
+  J(ids(S.mediaActions(play, undefined, ask, false, false))) === J(['add', 'next', 'replace']));
 
 function actsFromTpl(it, seed) {
   const tpl = S.rowActsTpl(it, seed, () => {});

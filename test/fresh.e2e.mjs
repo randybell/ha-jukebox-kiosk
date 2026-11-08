@@ -31,8 +31,10 @@ async function open(q = '', page = 'index.html') {
   return p;
 }
 async function tap(p, expr) {
-  const r = await p.evaluate((e) => { const el = eval(e); if (!el) return null; el.scrollIntoView({ block: 'nearest' }); const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: b.width }; }, expr);
+  const r = await p.evaluate((e) => { const el = eval(e); if (!el) return null; el.scrollIntoView({ block: 'nearest' }); const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: b.width, hold: el.matches('.ra-b.hold') }; }, expr);
   if (!r || !r.w) throw new Error('no element to tap: ' + expr);
+  // 0.7.10: search / artist Albums row buttons fire on a 500 ms press-and-hold
+  if (r.hold) { await p.mouse.move(r.x, r.y); await p.mouse.down(); await sleep(650); await p.mouse.up(); await sleep(80); return; }
   await p.mouse.click(r.x, r.y); await sleep(80);
 }
 

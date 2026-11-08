@@ -5,7 +5,7 @@ import { providerLabel } from './providers';
 import { SearchEngine } from './search-engine';
 import {
   imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, menuPos, menuTpl,
-  playMedia, playMessage, drillable, canRadio, isRadio, rowActsTpl, foldedActions, SEARCH_ACTS, searchRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  playMedia, playMessage, drillable, canRadio, isRadio, rowActsTpl, foldedActions, mediaActions, SEARCH_ACTS, searchRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
   maCall,
 } from './shared';
 import './detail-view';
@@ -125,7 +125,7 @@ export class JbSearch extends LitElement {
   private _kbBefore = false;
   /** A row tap never plays: artists / albums / playlists (podcasts with the Jukebox Kiosk integration) open a detail, anything else is highlighted. */
   private hearts = new FavController(this);
-  private press = new PressController<{ it: MaItem; g: GroupKey }>(this, (p) => this.tap(p.it, p.g), (p) => this.tap(p.it, p.g));
+  private press = new PressController<{ it: MaItem; g: GroupKey }>(this, (p) => this.tap(p.it, p.g), (p, el) => this.rowMenu(p.it, p.g, el));
   private _seqShown = 0;
   /** v0.7: configured search categories (null = 0.6 behaviour) */
   private _cats: SearchCategory[] | null = null;
@@ -571,6 +571,15 @@ export class JbSearch extends LitElement {
     if (a === 'more') this.showMenu(it, g, el.closest('.row') as HTMLElement, foldedActions(searchRadio(type, it), ask));
     else ask(a);
   }
+  /** 0.7.10: press-and-hold on a result row (not its buttons) opens the menu 5 pop-up: Open, Add to queue, Play next, Play now, Start radio. */
+  private rowMenu(it: MaItem, g: GroupKey, el: HTMLElement) {
+    if (g === 'genres') { this.tap(it, g); return; }
+    const type = this.mediaType(it, g), station = type === 'radio' || isRadio(it);
+    const open = drillable(type, this.config) ? () => { this.closeMenu(); this.openDetail(it, type); }
+      : type === 'radio' ? () => { this.closeMenu(); this.tap(it, g); } : undefined;
+    const ask = (k: 'replace' | 'radio') => { this.closeMenu(); this._confirm = { kind: k, item: it, run: () => this.play(it, g, 'replace', k === 'radio') }; };
+    this.showMenu(it, g, el, mediaActions((enq) => { this.closeMenu(); this.play(it, g, enq); }, open, ask, searchRadio(type, it), station));
+  }
   private showMenu(it: MaItem, g: GroupKey, anchor: HTMLElement | null, actions: MenuAction[]) {
     this.press.held = it.uri;
     this._menu = { item: it, group: g, pos: menuPos(this.root(), anchor, actions.length), actions };
@@ -656,7 +665,7 @@ export class JbSearch extends LitElement {
     const drill = drillable(type, this.config);
     const p = this.press.handlers(it.uri, { it, g });
     const fav = this.canFav(it, g);
-    return html`<div class="row ${drill ? 'drill' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''} ${this._sel === it.uri ? 'sel' : ''}"
+    return html`<div class="row ${drill ? 'drill' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''} ${this.press.pressing === it.uri && g !== 'genres' ? 'hp' : ''} ${this._sel === it.uri ? 'sel' : ''}"
         data-uri=${it.uri} data-group=${g} data-type=${type} aria-label=${drill ? `Open ${it.name}` : it.name}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
@@ -665,7 +674,7 @@ export class JbSearch extends LitElement {
         <small>${provTpl(it.uri, it.provider, it.media_type)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, g)}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
       ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, g)) : nothing}
-      ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : rowActsTpl(it, searchRadio(type, it), (a, el) => this.rowAct(it, g, a, el), SEARCH_ACTS, true)}
+      ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : rowActsTpl(it, searchRadio(type, it), (a, el) => this.rowAct(it, g, a, el), SEARCH_ACTS, true, true)}
     </div>`;
   }
 
