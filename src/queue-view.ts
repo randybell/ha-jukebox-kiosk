@@ -2,7 +2,7 @@ import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
 import { combinedOn, libraryTabLabel } from './library-home';
-import { mediaStyles, noFocus, artTpl, provTpl, PressController, menuPos, menuTpl, confirmTpl, queueActTpl, isRadioUri, type ConfirmState, type MenuAction, type MenuPos } from './shared';
+import { mediaStyles, noFocus, fire, artTpl, provTpl, PressController, menuPos, menuTpl, confirmTpl, queueActTpl, isRadioUri, type ConfirmState, type MenuAction, type MenuPos } from './shared';
 import './keyboard';
 import type { KeyDetail } from './keyboard';
 import { canJumpQueue } from './speakers/model';
@@ -50,7 +50,7 @@ export class JbQueue extends LitElement {
   private _undoTimer?: number;
   private _toastTimer?: number;
   private _unsub?: () => void;
-  private press = new PressController<QueueItem>(this, () => {}, (it, el) => this.openMenu(it, el));
+  private press = new PressController<QueueItem>(this, () => {}, (it) => this.holdSheet(it));
 
   protected shouldUpdate(ch: PropertyValues) { return !(ch.size === 1 && ch.has('hass')); }
   protected willUpdate(ch: PropertyValues) {
@@ -192,6 +192,10 @@ export class JbQueue extends LitElement {
   private openMenu(it: QueueItem, el: HTMLElement) {
     const root = this.renderRoot.querySelector('.qx') as HTMLElement;
     this._menu = { item: it, pos: menuPos(root, el, 5) };
+  }
+  /** Press-and-hold on a row (0.7.11): the card's large centered pop-up (jb-hold-sheet) with the same choices as the row menu. */
+  private holdSheet(it: QueueItem) {
+    fire(this, 'jukebox-sheet', { item: asArt(it), sub: it.media_artist ?? '', actions: this.actions(it), close: () => this.press.release() });
   }
   /** backend feature flags (undefined = 0.5.x behaviour: everything on) */
   private get caps() { return this.config?._backend?.caps; }

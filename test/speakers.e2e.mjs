@@ -683,13 +683,13 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
     await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   }, t);
   await p.close();
-  // 3. guest 0.4 long-press menu → Play Now (no confirm, 0.4) → jumps in place
+  // 3. guest 0.4 long-press (0.7.11: the big pop-up) → Play Now (no confirm, 0.4) → jumps in place
   p = await openQ('');
   t = (await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`))[3];
   await playNowPath('0.4 long-press menu entry (guest)', p, async () => {
     const r = await rectOf(p, `${QV}.querySelector('.qr[data-id="${t}"] .rt')`);
     await p.mouse.move(r.x, r.y); await p.mouse.down(); await sleep(700); await p.mouse.up(); await sleep(150);
-    await tap(p, `${QV}.querySelector('.menu .mi[data-action="play"]')`);
+    await tap(p, `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot.querySelector('.it[data-action="play"]')`); // 0.7.11: the hold opens the big pop-up
   }, t);
   // 4. #40 (0.7.8): tapping a row body does nothing (no play); only the row icons act
   const rowTapIdle = async (name, p, t) => {
