@@ -204,7 +204,8 @@ export class JbQueue extends LitElement {
     const btn = (id: string) => row?.querySelector(`[data-action="${rowBtn[id]}"]`) as HTMLButtonElement | null;
     const actions: MenuAction[] = all.map(([id, ic, label]) => {
       const a = can.get(id), b = btn(id);
-      if ((id === 'up' || id === 'down') && b?.disabled) return { id, icon: ic, label, run: () => {}, disabled: true };
+      // 0.7.12: Play Next too: a guest's menu offers it on Up next song 1, where it would send a do-nothing move (pos_shift 0)
+      if ((id === 'up' || id === 'down' || id === 'next') && b?.disabled) return { id, icon: ic, label, run: () => {}, disabled: true };
       if (a) return a;
       if (b && !b.disabled) return { id, icon: ic, label, run: () => b.click() };
       return { id, icon: ic, label, run: () => {}, disabled: true };
