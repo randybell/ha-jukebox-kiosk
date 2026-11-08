@@ -4,6 +4,10 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.7.11 — 2026-11-07
+
+- **Genre pages: stations no longer start by accident.** A station's **Play** button on a genre page now works only when you press and hold it for about half a second, like every other row button, so a quick tap or a scroll never starts a station. Pressing and holding the station row itself (not the button) opens the options pop-up with **Open** (the station panel), **Play now** and **Cancel**.
+
 ## 0.7.10 — 2026-11-07
 
 - Artist page: the Albums rows have icon buttons for Add to queue, Play next, Play now and Start radio, under a column header that stays in place while you scroll. There's no Remove or More on these rows.
