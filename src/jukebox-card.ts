@@ -25,6 +25,7 @@ import { libraryTabLabel, combinedOn } from './library-home';
 import { FavStore } from './favorites';
 import { RepeatOneGuard } from './repeat';
 import './hold-sheet';
+import { volDown, volFlush, setVolDown, onVolState, connected } from './vol-send';
 import type { HoldSheet, JbHoldSheet } from './hold-sheet';
 
 export const VERSION = '0.7.9';
@@ -136,6 +137,18 @@ export class JukeboxCard extends LitElement {
   /** one-time notice: the saved speaker target is gone from HA */
   private _lost = '';
   private _lostTimer?: number;
+  /** 0.7.10 volume while HA is disconnected: status + flush on reconnect (see vol-send.ts) */
+  private _vunsub?: () => void;
+  private _conn?: HomeAssistant['connection'];
+  private onConnReady = () => { volFlush(this.hass); this.requestUpdate(); };
+  private onConnDown = () => setVolDown(true);
+  private watchConn() {
+    const c = this.hass?.connection;
+    if (c === this._conn) return;
+    this._conn?.removeEventListener?.('ready', this.onConnReady); this._conn?.removeEventListener?.('disconnected', this.onConnDown);
+    this._conn = c;
+    c?.addEventListener?.('ready', this.onConnReady); c?.addEventListener?.('disconnected', this.onConnDown);
+  }
   private _sunsub?: () => void;
   private _pn = -1;
   /** Music Assistant players (dynamic mode only; fixed mode never calls it) */
@@ -338,6 +351,7 @@ export class JukeboxCard extends LitElement {
     this.addEventListener('jukebox-speakers', this.onSpeakers as EventListener);
     this.addEventListener('jukebox-station', this.onStation as EventListener);
     this.addEventListener('jukebox-sheet', this.onSheet as EventListener);
+    this._vunsub ??= onVolState(() => this.requestUpdate());
     this.addEventListener('jukebox-station-close', this.onStationClose as EventListener);
     document.addEventListener('fullscreenchange', this.onFsChange);
     document.addEventListener('webkitfullscreenchange', this.onFsChange);
@@ -363,6 +377,8 @@ export class JukeboxCard extends LitElement {
     this.scheduleFit();
   }
   disconnectedCallback() {
+    this._vunsub?.(); this._vunsub = undefined;
+    this._conn?.removeEventListener?.('ready', this.onConnReady); this._conn?.removeEventListener?.('disconnected', this.onConnDown); this._conn = undefined;
     super.disconnectedCallback();
     window.clearInterval(this._clock); window.clearTimeout(this._idleTimer);
     this._qunsub?.();
@@ -618,6 +634,8 @@ export class JukeboxCard extends LitElement {
     if (changed.has('hass') && this.hass && (!old || old.config !== this.hass.config || old.connection !== this.hass.connection)) this.syncBackend();
     if ((changed.has('hass') || changed.has('_config')) && this.hass && this._config) this.lyrics.follow(this.hass, this.hass.states[this._config.entity!]);
     if (changed.has('hass') && this.hass) {
+      this.watchConn();
+      if (!connected(this.hass)) setVolDown(true); else if (volDown()) volFlush(this.hass);
       if (!this._push) this.startPush();
       this.dropLostTarget();
       this.queue.hass = this.hass;
@@ -689,6 +707,8 @@ export class JukeboxCard extends LitElement {
       // Re-render the shell only when our player changed; the search view gets hass directly.
       for (const tag of CHILDREN) { const el = this.renderRoot?.querySelector(tag) as any; if (el) el.hass = this.hass; }
       if (!old || old.states[id] !== this.hass?.states[id]) return true;
+      // 0.7.10: HA went offline / came back (volume status + flush happen in willUpdate)
+      if (connected(this.hass) === volDown() || this.hass?.connection !== this._conn) return true;
       // the pill count can come from the rooms (HA leaves the group's group_members empty)
       const n = this.pillCount();
       if (n !== this._pn) { this._pn = n; return true; }
@@ -776,7 +796,8 @@ export class JukeboxCard extends LitElement {
             @click=${() => (this._spk = !this._spk)}>${icon('group', 'i xs')}<span class="pl">${pre}</span><span class="pn">${name}</span>${dyn
               ? html`<b>· ${!ent && this.hass ? 'not found' : ent?.state === 'buffering' ? 'regrouping…' : live ? `${live} speaker${live === 1 ? '' : 's'}` : 'idle'}</b>`
               : rooms ? html`<b>· ${rooms} room${rooms === 1 ? '' : 's'} synced</b>` : nothing}${icon('chev', 'i xs pc')}</button>
-          ${this._lost ? html`<span class="lost" role="status">${this._lost}</span>` : nothing}
+          ${volDown() ? html`<span class="lost" role="status" data-status="reconnecting">Reconnecting to Home Assistant…</span>`
+            : this._lost ? html`<span class="lost" role="status">${this._lost}</span>` : nothing}
           <div class="spacer"></div>
           <div class="clock">${this.timeStr()}</div>
         </header>

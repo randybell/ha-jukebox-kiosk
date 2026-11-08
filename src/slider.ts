@@ -71,15 +71,16 @@ defineElement('jb-slider', JbSlider);
 
 /** Leading + trailing throttle. `flush` sends the pending value now (used on release). */
 export function throttle<A extends any[]>(fn: (...a: A) => void, ms: number) {
-  let last = 0, timer: number | undefined, pending: A | undefined;
-  const run = () => { last = Date.now(); timer = undefined; const a = pending!; pending = undefined; fn(...a); };
+  let last = 0, timer: number | undefined, pending: A | undefined, sent: A | undefined;
+  const run = () => { last = Date.now(); timer = undefined; const a = pending!; pending = undefined; sent = a; fn(...a); };
   const t = (...a: A) => {
     pending = a;
     const wait = ms - (Date.now() - last);
     if (wait <= 0) { window.clearTimeout(timer); run(); }
     else if (!timer) timer = window.setTimeout(run, wait);
   };
-  t.flush = (...a: A) => { window.clearTimeout(timer); timer = undefined; pending = a; run(); };
+  // 0.7.10: a release with nothing pending and the value just sent (a plain tap) sends nothing more
+  t.flush = (...a: A) => { window.clearTimeout(timer); timer = undefined; if (!pending && sent && a.length === sent.length && a.every((x, i) => x === sent![i])) return; pending = a; run(); };
   t.cancel = () => { window.clearTimeout(timer); timer = undefined; pending = undefined; };
   return t;
 }
