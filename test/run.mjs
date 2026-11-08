@@ -167,6 +167,7 @@ await waitShown(page, 'MOCK');
 await sleep(150);
 const firstRow = `${H.sv}.shadowRoot.querySelector('.grp.tracks .row')`;
 const trackUri = await page.evaluate((e) => eval(e).dataset.uri, firstRow);
+const HSX = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`; // 0.7.10: the large press-and-hold sheet (card level)
 const SVR = `${H.sv}.shadowRoot`;
 const confirmOf = () => page.evaluate((r) => { const c = eval(r).querySelector('.confirm'); return c ? { kind: c.dataset.kind, text: c.textContent.replace(/\s+/g, ' ').trim(), role: c.getAttribute('role') } : null; }, SVR);
 // bring a result into view (the results list scrolls under the black footer) before a real pointer tap
@@ -205,7 +206,8 @@ check('4c tapping a track row only highlights it (no play_media, no sheet)', sel
 r = await rectOf(page, `${firstRow}.querySelector('.rt')`);
 await page.mouse.move(r.x, r.y); await page.mouse.down(); await sleep(650); await page.mouse.up(); await sleep(80);
 s = await state(page);
-check('4d long-press on a row does not play; (0.7.10) it opens the row pop-up', s.playCalls.length === 0 && !!s.menu, `menu=${s.menu}`);
+const sh4 = await page.evaluate((h) => !!eval(h).querySelector('.sh'), HSX);
+check('4d long-press on a row does not play; (0.7.10) it opens the large row sheet', s.playCalls.length === 0 && sh4, `sheet=${sh4}`);
 await page.keyboard.press('Escape'); await sleep(120);
 await clickEl0(rowIcon(firstRow, 'add'));
 s = await state(page);
@@ -578,19 +580,19 @@ await clickEl(page, `${BD}.querySelector('[data-action="back"]')`);
 check('12j Browse: Back returns to the grid', !(await page.evaluate((b) => !!eval(b).querySelector('jb-detail'), BV)) && (await page.evaluate((b) => eval(b).querySelectorAll('.tile').length, BV)) > 0);
 r = await rectOf(page, tile0);
 await page.mouse.move(r.x - r.w / 4, r.y - r.h / 4); await page.mouse.down(); await sleep(650); await page.mouse.up(); await sleep(100);
-s = await page.evaluate((b) => [...eval(b).querySelectorAll('.menu .mi')].map((e) => e.dataset.action), BV);
-let b2 = await qcall(() => clickEl(page, `${BV}.querySelector('.menu .mi[data-action="next"]')`));
+s = await page.evaluate((h) => [...eval(h).querySelectorAll('.it')].map((e) => e.dataset.action), HSX);
+let b2 = await qcall(() => clickEl(page, `${HSX}.querySelector('.it[data-action="next"]')`));
 check('12e long-press a playlist → menu 5 (0.7.10: Open, Add to queue, Play next, Play now; no Remove, no Start radio); Play next → enqueue next', s.join() === 'open,add,next,replace,cancel' && b2.length === 1 && b2[0].data.enqueue === 'next' && tgt(b2[0]) === EV, `${s.join(',')} ${JSON.stringify(b2[0]?.data)}`);
 {
   const lp = async () => { const rr = await rectOf(page, tile0); await page.mouse.move(rr.x - rr.w / 4, rr.y - rr.h / 4); await page.mouse.down(); await sleep(650); await page.mouse.up(); await sleep(100); };
   const bconf = () => page.evaluate((b) => eval(b).querySelector('.confirm')?.dataset.kind ?? null, BV);
   await lp();
-  let b3 = await qcall(() => clickEl(page, `${BV}.querySelector('.menu .mi[data-action="replace"]')`));
+  let b3 = await qcall(() => clickEl(page, `${HSX}.querySelector('.it[data-action="replace"]')`));
   const k3 = await bconf();
   let b4 = await qcall(() => clickEl(page, `${BV}.querySelector('.confirm [data-action="cancel"]')`));
   check('12e2 Browse menu Replace queue… → confirmation, nothing sent; Cancel sends nothing', k3 === 'replace' && b3.length === 0 && b4.length === 0 && !(await bconf()), `${k3} ${b3.length} ${b4.length}`);
   await lp();
-  await clickEl(page, `${BV}.querySelector('.menu .mi[data-action="replace"]')`);
+  await clickEl(page, `${HSX}.querySelector('.it[data-action="replace"]')`);
   let b5 = await qcall(() => clickEl(page, `${BV}.querySelector('.confirm [data-action="confirm"]')`));
   check('12e3 …confirm → play_media playlist enqueue replace (no radio_mode)', b5.length === 1 && b5[0].data.enqueue === 'replace' && b5[0].data.media_id === t0uri && !('radio_mode' in b5[0].data), JSON.stringify(b5[0]?.data));
 }
@@ -793,7 +795,7 @@ await page.keyboard.press('Escape');
   await pg.evaluate(() => { __card.shadowRoot.querySelector('[data-tab="browse"]').click(); }); await sleep(300);
   let r0 = await rectOf(pg, `${BR}.shadowRoot.querySelector('.tile')`);
   await pg.mouse.move(r0.x - r0.w / 4, r0.y - r0.h / 4); await pg.mouse.down(); await sleep(650); await pg.mouse.up(); await sleep(150);
-  let mi = await pg.evaluate((b) => [...eval(b).shadowRoot.querySelectorAll('.menu .mi')].map((e) => e.dataset.action), BR);
+  let mi = await pg.evaluate((h) => [...eval(h).querySelectorAll('.it')].map((e) => e.dataset.action), HSX);
   check('16w station menu (0.7.10 menu 5): Open + Play now only, no next/remove/Start radio', mi.join() === 'open,replace,cancel', mi.join(','));
   await pg.keyboard.press('Escape');
   await open(pg, '&latency=20&tab=browse&lhome=0&radio=lib');
