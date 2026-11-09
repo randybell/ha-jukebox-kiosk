@@ -271,7 +271,10 @@ export class JbQueue extends LitElement {
       @pointerdown=${noFocus} @click=${(e: Event) => { e.stopPropagation(); this.removeRow(it); }}>${icon('trash')}<span>Remove</span></button>`;
     const qa = (ic: string, label: string, fn: () => Promise<any>, dis = false, act = '') => html`<button class="qa" tabindex="-1" data-action=${act} aria-label=${label} ?disabled=${dis}
       @pointerdown=${noFocus} @click=${(e: Event) => { e.stopPropagation(); this.run(fn(), ''); }}>${icon(ic)}</button>`;
-    if (search) return html`<div class="qr sr ${kind} ${buf ? 'buf' : ''}" data-id=${it.queue_item_id}>
+    // #72 (0.7.12): search-result rows get the same press-and-hold handlers as normal Queue rows (Approved by Randy via PM, Nov 9 2026)
+    if (search) return html`<div class="qr sr ${kind} ${buf ? 'buf' : ''} ${this.press.held === it.queue_item_id ? 'held' : ''}" data-id=${it.queue_item_id}
+        @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
+        @contextmenu=${(e: Event) => e.preventDefault()}>
       <span class="n">${kind === 'now' ? icon('eq', 'i eqi') : kind === 'past' ? '' : n}</span>
       ${artTpl(asArt(it), 'th')}
       <div class="rt"><b>${it.media_title}</b><small>${[it.media_artist, it.media_album_name].filter(Boolean).join(' · ')}</small></div>
