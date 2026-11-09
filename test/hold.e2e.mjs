@@ -25,11 +25,15 @@ const menuIds = (p) => ev(p, `[...${HS}.querySelectorAll('.it')].map((b) => b.da
 const sheetOpen = (p) => ev(p, `!!${HS}.querySelector('.sh')`);
 const sheetGeo = (p) => ev(p, `(() => { const c = __card.shadowRoot.querySelector('ha-card').getBoundingClientRect(), s = ${HS}.querySelector('.sh'), r = s.getBoundingClientRect(), bk = ${HS}.querySelector('.bk').getBoundingClientRect();
   const its = [...${HS}.querySelectorAll('.it')].map((b) => b.getBoundingClientRect().height), fs = parseFloat(getComputedStyle(${HS}.querySelector('.it:not(.cancel) span')).fontSize);
+  const scale = parseFloat(getComputedStyle(s).getPropertyValue('--jb-hs-s')) || parseFloat(s.style.getPropertyValue('--jb-hs-s')) || 1;
   return { dx: Math.abs((r.left + r.right) / 2 - (c.left + c.right) / 2), dy: Math.abs((r.top + r.bottom) / 2 - (c.top + c.bottom) / 2), inside: r.top >= c.top && r.bottom <= c.bottom && r.left >= c.left && r.right <= c.right,
-    noScroll: s.scrollHeight <= s.clientHeight + 1, minH: Math.min(...its), fs, bk: Math.abs(bk.left - c.left) < 1 && Math.abs(bk.top - c.top) < 1 && Math.abs(bk.width - c.width) < 1 && Math.abs(bk.height - c.height) < 1 }; })()`);
+    noScroll: s.scrollHeight <= s.clientHeight + 1, minH: Math.min(...its), fs, scale, h: r.height,
+    bk: Math.abs(bk.left - c.left) < 1 && Math.abs(bk.top - c.top) < 1 && Math.abs(bk.width - c.width) < 1 && Math.abs(bk.height - c.height) < 1 }; })()`);
 async function sheetChecks(p, tag) {
   const g = await sheetGeo(p);
-  check(`${tag}: the sheet is centered on the card, fits without scrolling, items ≥ 64px tall with ≥ 20px text, over a full-card backdrop`, g.dx <= 2 && g.dy <= 2 && g.inside && g.noScroll && g.minH >= 64 && g.fs >= 20 && g.bk, J(g));
+  // 0.7.12: one shared scale from the 7-choice Queue fit — button/text floors follow 64×scale and 21×scale (not the old unscaled 64/20).
+  const minBtn = 64 * g.scale - 1, minFs = 21 * g.scale - 0.5;
+  check(`${tag}: the sheet is centered on the card, fits without scrolling, items ≥ ${minBtn.toFixed(1)}px tall with ≥ ${minFs.toFixed(1)}px text (shared scale ${g.scale}), over a full-card backdrop`, g.dx <= 2 && g.dy <= 2 && g.inside && g.noScroll && g.minH >= minBtn && g.fs >= minFs && g.bk, J(g));
 }
 async function closeWays(p, tag, reopen) {
   for (const [how, act] of [['a backdrop tap', async () => { const c = await ev(p, `(() => { const r = __card.shadowRoot.querySelector('ha-card').getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; })()`); await p.mouse.click(c.x, c.y); }],
