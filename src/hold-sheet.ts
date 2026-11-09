@@ -15,9 +15,9 @@ export interface HoldSheet { item: { name: string } & Partial<MaItem>; sub: stri
  * the item's art and name on top; one big full-width button per choice (≥ 64 px); Cancel set apart. A tap on the backdrop, Cancel or Esc
  * (card-level, see onKeyCap) closes it. Choices are a normal tap; the finger-lift right after the hold is swallowed (swallowNextClick).
  *
- * 0.7.12 (Approved by Randy via Kiosk PM, Nov 9 2026): every hold pop-up uses one shared height and one shared scale — the size that
- * fits the 7-choice Queue pop-up inside the card (host fills the card; max-height uses container query units). Choices stay at the
- * top; Cancel stays at the bottom; spare space sits between them. Buttons are not stretched.
+ * 0.7.12 (Approved by Randy via Kiosk PM, Nov 9 2026): one shared scale for buttons, text and pictures (the scale that fits the
+ * 7-choice Queue inside the card). Each pop-up is as tall as its content, capped at a shared maximum from the card height
+ * (max-height uses container query units; host fills the card). Cancel follows the last choice; buttons are not stretched.
  */
 export class JbHoldSheet extends LitElement {
   static properties = { state: { attribute: false }, open: { type: Boolean, reflect: true }, _info: { state: true } };
@@ -26,7 +26,7 @@ export class JbHoldSheet extends LitElement {
   private _info = false;
   private _ro?: ResizeObserver;
   private _fitRaf = 0;
-  /** Queue hold lists 6 actions before Cancel (7 buttons total). Shared scale/height always use this count. */
+  /** Queue hold lists 6 actions before Cancel (7 buttons total). Shared scale always uses this count. */
   private static readonly MAX_ACTIONS = 6;
   /** Packed height of a 7-choice sheet at scale 1, once measured from a real Queue open (or extrapolated until then). */
   private static queueRefH: number | null = null;
@@ -52,7 +52,7 @@ export class JbHoldSheet extends LitElement {
     this._fitRaf = requestAnimationFrame(() => { this._fitRaf = 0; this.fit(); });
   }
   /**
-   * One shared height + scale from the 7-choice Queue layout (6 actions + Cancel).
+   * Shared scale from the 7-choice Queue layout (6 actions + Cancel). Height stays content-sized; CSS max-height caps it.
    * Host fills the card; available height is the card minus the same 8 px top/bottom margin as max-height: calc(100cqh - 16px).
    */
   private fit() {
@@ -62,13 +62,11 @@ export class JbHoldSheet extends LitElement {
     const its = sh.querySelector('.its') as HTMLElement | null;
     const hd = sh.querySelector('.hd') as HTMLElement | null;
 
-    // Measure at scale 1 with height auto; keep Cancel in normal flow with the scale-1 gap (auto margin would collapse).
+    // Measure the 7-choice reference at scale 1 (height auto, Cancel in normal flow).
     sh.style.setProperty('--jb-hs-s', '1');
     sh.style.height = 'auto';
     sh.style.maxHeight = 'none';
     if (cancel) cancel.style.marginTop = '16px';
-    // .its margin-bottom is the Cancel gap in CSS; while measuring with forced cancel margin, zero it so we don't double-count.
-    if (its) its.style.marginBottom = '0';
 
     const cs = getComputedStyle(sh);
     const padT = parseFloat(cs.paddingTop) || 0;
@@ -86,20 +84,17 @@ export class JbHoldSheet extends LitElement {
     const max = JbHoldSheet.MAX_ACTIONS;
     const n = its ? its.querySelectorAll('.it').length : 0;
     const packed = sh.getBoundingClientRect().height;
-    // Build the 7-choice height from this sheet's header/pads + 6 action slots (same header chrome on every hold pop-up).
     const fromParts = borderY + padT + padB + hdBlock + max * btnH + (max - 1) * gap + cancelMt + cancelH;
-    // When this open sheet IS the 7-choice Queue list, trust its packed measure and remember it.
     if (n >= max) JbHoldSheet.queueRefH = packed;
     const refH = JbHoldSheet.queueRefH ?? fromParts;
 
     const avail = Math.max(0, this.clientHeight - 16);
     const s = refH > avail && avail > 0 ? avail / refH : 1;
-    const sharedH = refH * s;
 
     if (cancel) cancel.style.marginTop = '';
-    if (its) its.style.marginBottom = '';
     sh.style.setProperty('--jb-hs-s', String(s));
-    sh.style.height = `${sharedH}px`;
+    // Content height (More-info and short lists too); shared maximum is CSS max-height: calc(100cqh - 16px).
+    sh.style.height = 'auto';
     sh.style.maxHeight = '';
   }
   close() { const s = this.state; if (!s) return; this.state = null; s.close(); }
@@ -139,19 +134,18 @@ export class JbHoldSheet extends LitElement {
     .hd span { display: flex; flex-direction: column; gap: calc(4px * var(--jb-hs-s, 1)); min-width: 0; }
     .hd b { font-size: calc(24px * var(--jb-hs-s, 1)); font-weight: 800; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .hd small { font-size: calc(16px * var(--jb-hs-s, 1)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .its { display: flex; flex-direction: column; gap: calc(6px * var(--jb-hs-s, 1)); flex: none; margin-bottom: calc(16px * var(--jb-hs-s, 1)); }
+    .its { display: flex; flex-direction: column; gap: calc(6px * var(--jb-hs-s, 1)); flex: none; }
     .it { display: flex; align-items: center; gap: calc(16px * var(--jb-hs-s, 1)); width: 100%; min-height: calc(64px * var(--jb-hs-s, 1)); padding: 0 calc(20px * var(--jb-hs-s, 1)); box-sizing: border-box; border-radius: calc(14px * var(--jb-hs-s, 1));
       background: #ffffff14; color: #fff; font-size: calc(21px * var(--jb-hs-s, 1)); font-weight: 700; text-align: left; flex: none; }
     .it:active { background: #ffffff33; }
     .it .i { width: calc(30px * var(--jb-hs-s, 1)); height: calc(30px * var(--jb-hs-s, 1)); flex: none; }
     .it.off { opacity: .35; cursor: default; }
     .it.off:active { background: var(--jb-popup-item, #ffffff14); }
-    .meta { margin: calc(4px * var(--jb-hs-s, 1)) calc(4px * var(--jb-hs-s, 1)) 0; display: grid; grid-template-columns: 1fr 1fr; gap: calc(14px * var(--jb-hs-s, 1)) calc(24px * var(--jb-hs-s, 1)); flex: none; margin-bottom: calc(16px * var(--jb-hs-s, 1)); }
+    .meta { margin: calc(4px * var(--jb-hs-s, 1)) calc(4px * var(--jb-hs-s, 1)) 0; display: grid; grid-template-columns: 1fr 1fr; gap: calc(14px * var(--jb-hs-s, 1)) calc(24px * var(--jb-hs-s, 1)); flex: none; }
     .f { display: flex; flex-direction: column; gap: calc(2px * var(--jb-hs-s, 1)); min-width: 0; }
     .f dt { font-size: calc(13px * var(--jb-hs-s, 1)); color: var(--_inactive); }
     .f dd { margin: 0; font-size: calc(19px * var(--jb-hs-s, 1)); font-weight: 700; overflow-wrap: anywhere; }
-    /* margin-top:auto pins Cancel at the bottom; .its/.meta margin-bottom keeps the Cancel gap; spare space sits between. */
-    .it.cancel { margin-top: auto; background: transparent; border: calc(2px * var(--jb-hs-s, 1)) solid #ffffff55; color: var(--_muted); justify-content: center; }
+    .it.cancel { margin-top: calc(16px * var(--jb-hs-s, 1)); background: transparent; border: calc(2px * var(--jb-hs-s, 1)) solid #ffffff55; color: var(--_muted); justify-content: center; }
   `];
 }
 defineElement('jb-hold-sheet', JbHoldSheet);
