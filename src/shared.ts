@@ -404,7 +404,7 @@ export const mediaStyles = css`
     background: var(--_active); color: var(--_on-accent); font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 10px 30px #000a; z-index: 8; pointer-events: none; }
   .scrim { position: absolute; inset: -200px; z-index: 6; }
   .scrim.dim { background: #000000a0; }
-  .menu { position: absolute; z-index: 7; width: 220px; padding: 6px; border-radius: 14px; background: #0a0a0af5; border: 1px solid #ffffff33; box-shadow: 0 20px 50px #000c; }
+  .menu { position: absolute; z-index: 7; width: min(220px, 90cqi); padding: 6px; border-radius: 14px; background: #0a0a0af5; border: 1px solid #ffffff33; box-shadow: 0 20px 50px #000c; }
   .mh { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--_inactive); padding: 6px 10px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mi { display: flex; align-items: center; gap: 12px; width: 100%; height: 46px; padding: 0 10px; border-radius: 9px; font-size: 15px; font-weight: 600; color: #fff; text-align: left; }
   .mi:active { background: #ffffff1f; }

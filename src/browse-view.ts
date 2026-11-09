@@ -880,12 +880,13 @@ export class JbBrowse extends LitElement {
     .lkcol { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
     .lkcol .kbd { margin-top: auto; }
     .lsplit > .scroll { min-height: 0; }
-    @media (max-width: 999px) {
+    /* 0.7.12 fluid: Library split/compact filters follow the card middle (np) width via host, not the window. */
+    @container np (max-width: 999px) {
       .lsplit { display: flex; flex-direction: column; gap: 12px; }
       .lkcol { display: contents; }
       .lkcol .lfq { order: 1; } .lkcol .scope { order: 2; } .lsplit > .scroll { order: 3; flex: 1; } .lkcol .kbd { order: 4; margin-top: 0; }
     }
-    @media (max-width: 600px) {
+    @container np (max-width: 600px) {
       .sc { height: 40px; font-size: 14px; padding-left: 13px; }
       .fc.clr { height: 40px; padding: 0 13px; font-size: 13px; }
       .fc.flt { padding: 0 12px; }

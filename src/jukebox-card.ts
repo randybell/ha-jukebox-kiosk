@@ -926,14 +926,15 @@ export class JukeboxCard extends LitElement {
     .tab .badge { top: 4px; left: calc(50% + 6px); }
     .tab.active .badge { background: var(--_on-accent); color: var(--_active); }
     .lg .tab { min-height: 80px; font-size: 17px; } .lg .tab .i { width: 34px; height: 34px; }
-    /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole */
-    @media (min-width: 641px) {
+    /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole.
+       0.7.12 fluid: gate and breakpoints follow the card's jbapp width, not the window. */
+    @container jbapp (min-width: 641px) {
       @container jbapp (max-width: 600px) { .pill b, .brand span { display: none; } .top { gap: 10px; } }
       @container jbapp (max-width: 430px) { .lg .pill { padding: 0 12px; font-size: 15px; } .lg .tab { font-size: 15px; } .lg .clock { font-size: 18px; } }
     }
-    @media (max-width: 960px) { .pill b { display: none; } }
-    @media (max-width: 800px) { .pill .pl { display: none; } }
-    @media (max-width: 640px) {
+    @container jbapp (max-width: 960px) { .pill b { display: none; } }
+    @container jbapp (max-width: 800px) { .pill .pl { display: none; } }
+    @container jbapp (max-width: 640px) {
       .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .lg .pill { width: 56px; min-height: 56px; } .clock { font-size: 18px; } .top { min-height: 52px; padding-top: 10px; padding-bottom: 10px; }
       .tabs { gap: 2px; padding-left: calc(var(--_pad) + 3px); padding-right: calc(var(--_pad) + 3px); }
       .tab { font-size: 12px; letter-spacing: 0; } .tab .i { width: 26px; height: 26px; }
@@ -957,7 +958,7 @@ export class JukeboxCard extends LitElement {
     :host([data-fit=tiny]) .tab .i { width: 22px; height: 22px; }
     :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 5px; font-size: 10px; flex: none; }
     :host([data-fit=tiny]) .lg .tab { min-height: 52px; font-size: 14px; } :host([data-fit=tiny]) .lg .tab .i { width: 26px; height: 26px; }
-    @media (max-width: 640px) { :host([data-fit=tiny]) .tab span { display: none; } }
+    @container jbapp (max-width: 640px) { :host([data-fit=tiny]) .tab span { display: none; } }
   `];
 }
 defineElement('jukebox-card', JukeboxCard);
