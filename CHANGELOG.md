@@ -4,6 +4,18 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.7.12 — 2026-11-09
+
+- The page for a single genre is gone, along with the Genres filter and genre results in Search and the Genres tile on the optional Library home screen. Old settings that ask for them are ignored. In the older separate-tabs Library, the Genres button is still there, but tapping a genre in its list now opens nothing.
+- Queue: press and hold any song and the pop-up always lists Play Now, Play Next, Move up, Move down and Remove, in that order, then Cancel. Choices that can't be used for that song stay in place but are grayed out and do nothing.
+- The speaker count in the top bar now matches the Speakers panel. A four-speaker group shows "4 speakers" instead of "1 speaker".
+- Queue: Play Next in the pop-up is grayed out on the song that's already next, for guests as well as admins.
+- Songs, podcast episodes and audiobooks now have a More Info choice in their pop-ups, just above Cancel. It opens a details screen in the same pop-up that shows album, year, length, source and quality, leaving out anything that's unknown, and Back returns you to the choices. When there's no album, year, length or quality to show, More Info is grayed out.
+- Start radio is grayed out in song, album, artist and playlist pop-ups when it can't be used, instead of disappearing. It's been taken off podcast, episode and audiobook pop-ups.
+- Queue: pressing and holding a song in the Queue search results now opens the same pop-up, with the same choices and grayed-out rules.
+- The top bar, the tab bar and the Library layout now follow the card's own size instead of the browser window's.
+- Every pop-up is only as tall as its buttons need and stays between the top bar and the bottom tab bar, with one shared button and text size. Cancel comes right after the last choice.
+
 ## 0.7.11 — 2026-11-07
 
 - Queue: press and hold a song to open the same large pop-up as everywhere else (Play now, Play next, Move up, Move down, Remove).
