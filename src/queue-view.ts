@@ -216,7 +216,7 @@ export class JbQueue extends LitElement {
       if (b && !b.disabled) return { id, icon: ic, label, run: () => b.click() };
       return { id, icon: ic, label, run: () => {}, disabled: true };
     });
-    // 0.7.12: More (song info) before Cancel, grayed when MA sent nothing beyond the title; not for radio stations in the queue
+    // 0.7.12: More Info (song info) before Cancel, grayed when MA sent nothing beyond the title; not for radio stations in the queue
     const info = isRadioUri(it.media_content_id) ? undefined : songInfo(it);
     fire(this, 'jukebox-sheet', { item: asArt(it), sub: it.media_artist ?? '', actions, info, close: () => this.press.release() });
   }

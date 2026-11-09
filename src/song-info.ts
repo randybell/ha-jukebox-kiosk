@@ -1,14 +1,14 @@
 /**
- * 0.7.12: the song info panel's lines (press-and-hold More on a song). Only fields Music Assistant already sends with the item the
+ * 0.7.12: the song info panel's lines (press-and-hold More Info on a song). Only fields Music Assistant already sends with the item the
  * card has (search / library track, or a queue item with its media_item and streamdetails); nothing is fetched. Empty lines are left out.
  */
 import { fmtDur } from './shared';
 import { stationInfo } from './radio-fav';
 
 export interface InfoLine { k: string; label: string; v: string }
-/** Item kinds whose hold pop-up gets More (0.7.12: songs, podcast episodes, audiobooks). */
+/** Item kinds whose hold pop-up gets More Info (0.7.12: songs, podcast episodes, audiobooks). */
 export const INFO_TYPES = ['track', 'podcast_episode', 'audiobook'];
-/** More is usable only with Album, Year, Length or Quality; Source alone still shows as a line but doesn't count. */
+/** More Info is usable only with Album, Year, Length or Quality; Source alone still shows as a line but doesn't count. */
 export const hasMoreInfo = (l: InfoLine[] | undefined) => !!l?.some((x) => x.k !== 'source');
 
 export function songInfo(src: any): InfoLine[] {

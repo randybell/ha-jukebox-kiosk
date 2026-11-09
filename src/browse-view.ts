@@ -530,7 +530,7 @@ export class JbBrowse extends LitElement {
       : station ? () => { this._menu = null; this.press.release(); fire(this, 'jukebox-station', { item: it }); } : undefined, ask, canRadio(type, it), station, hideStartRadio(type, it));
     // 0.7.10: the large centered sheet at card level (jb-hold-sheet), not the small anchored menu
     this.press.held = it.uri; this.requestUpdate(); void el;
-    const info = !station && INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it) : undefined; // 0.7.12: More on songs, episodes, audiobooks
+    const info = !station && INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it) : undefined; // 0.7.12: More Info on songs, episodes, audiobooks
     fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, type) || providerLabel(it.uri), actions, info, close: () => this.press.release() });
   }
 

@@ -30,8 +30,8 @@ let o = await order();
 await clearWs(p); await press(p, rowOf(o[2]), 120);
 check('a quick tap on a Queue row opens nothing and sends nothing', !(await sheetOpen(p)) && !(await smallMenu(p)) && J(await ws(p)) === '[]');
 await press(p, rowOf(o[2]), 700);
-const want = ['play:Play Now', 'next:Play Next', 'up:Move up', 'down:Move down', 'remove:Remove', 'more:More', 'cancel:Cancel']; // 0.7.12: More (song info) before Cancel
-check('holding a Queue row opens the big pop-up (not the small menu): Play Now, Play Next, Move up, Move down, Remove, More, Cancel; the lift sends nothing',
+const want = ['play:Play Now', 'next:Play Next', 'up:Move up', 'down:Move down', 'remove:Remove', 'more:More Info', 'cancel:Cancel']; // 0.7.12: More Info (song info) before Cancel
+check('holding a Queue row opens the big pop-up (not the small menu): Play Now, Play Next, Move up, Move down, Remove, More Info, Cancel; the lift sends nothing',
   (await sheetOpen(p)) && !(await smallMenu(p)) && J(await ids(p)) === J(want) && J(await ws(p)) === '[]', J(await ids(p)));
 const geo = await ev(p, `(() => { const c = __card.shadowRoot.querySelector('ha-card').getBoundingClientRect(), r = ${HS}.querySelector('.sh').getBoundingClientRect(), s = ${HS}.querySelector('.sh');
   return { inside: r.top >= c.top && r.bottom <= c.bottom, noScroll: s.scrollHeight <= s.clientHeight + 1 }; })()`);

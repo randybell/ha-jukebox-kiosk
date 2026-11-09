@@ -7,7 +7,7 @@ import { defineElement } from './define';
 import { hasMoreInfo, type InfoLine } from './song-info';
 
 /** What a view asks the card to show (event `jukebox-sheet`). `close` lets the view clear its own state (row highlight). */
-/** `info` (0.7.12, songs only): adds More just before Cancel; grayed when the list is empty. More shows the song info panel in this sheet. */
+/** `info` (0.7.12, songs only): adds More Info just before Cancel; grayed when the list is empty. More Info shows the song info panel in this sheet. */
 export interface HoldSheet { item: { name: string } & Partial<MaItem>; sub: string; actions: MenuAction[]; close: () => void; info?: InfoLine[] }
 
 /**
@@ -16,8 +16,8 @@ export interface HoldSheet { item: { name: string } & Partial<MaItem>; sub: stri
  * (card-level, see onKeyCap) closes it. Choices are a normal tap; the finger-lift right after the hold is swallowed (swallowNextClick).
  *
  * 0.7.12 (Approved by Randy via Kiosk PM, Nov 9 2026): one shared scale for buttons, text and pictures (the scale that fits the
- * 7-choice Queue inside the card). Each pop-up is as tall as its content, capped at a shared maximum from the card height
- * (max-height uses container query units; host fills the card). Cancel follows the last choice; buttons are not stretched.
+ * tallest hold pop-up). Each pop-up is as tall as its content, capped at a shared maximum that fits between the top bar and the
+ * bottom tab bar (measured from the card layout). Cancel follows the last choice; buttons are not stretched.
  */
 export class JbHoldSheet extends LitElement {
   static properties = { state: { attribute: false }, open: { type: Boolean, reflect: true }, _info: { state: true } };
@@ -52,8 +52,9 @@ export class JbHoldSheet extends LitElement {
     this._fitRaf = requestAnimationFrame(() => { this._fitRaf = 0; this.fit(); });
   }
   /**
-   * Shared scale from the 7-choice Queue layout (6 actions + Cancel). Height stays content-sized; CSS max-height caps it.
-   * Host fills the card; available height is the card minus the same 8 px top/bottom margin as max-height: calc(100cqh - 16px).
+   * Shared scale from the 7-choice Queue layout (6 actions + Cancel). Height stays content-sized.
+   * Available height is the band between the card's top bar and bottom tab bar (same 8 px margin top and bottom).
+   * The sheet stays centered on the card; if it would cover a bar, it is shifted into the band.
    */
   private fit() {
     const sh = this.renderRoot.querySelector('.sh') as HTMLElement | null;
@@ -62,10 +63,25 @@ export class JbHoldSheet extends LitElement {
     const its = sh.querySelector('.its') as HTMLElement | null;
     const hd = sh.querySelector('.hd') as HTMLElement | null;
 
+    // Band between .top and .tabs on the card (backdrop still covers the whole card).
+    const card = this.parentElement as HTMLElement | null;
+    const topEl = card?.querySelector('.top') as HTMLElement | null;
+    const tabsEl = card?.querySelector('.tabs') as HTMLElement | null;
+    let bandTop = 8, bandBot = Math.max(0, this.clientHeight - 8), avail = Math.max(0, this.clientHeight - 16);
+    if (card && topEl && tabsEl) {
+      const cr = card.getBoundingClientRect();
+      bandTop = topEl.getBoundingClientRect().bottom - cr.top + 8;
+      bandBot = tabsEl.getBoundingClientRect().top - cr.top - 8;
+      avail = Math.max(0, bandBot - bandTop);
+    }
+    this.style.paddingTop = '';
+    this.style.paddingBottom = '';
+
     // Measure the 7-choice reference at scale 1 (height auto, Cancel in normal flow).
     sh.style.setProperty('--jb-hs-s', '1');
     sh.style.height = 'auto';
     sh.style.maxHeight = 'none';
+    sh.style.transform = '';
     if (cancel) cancel.style.marginTop = '16px';
 
     const cs = getComputedStyle(sh);
@@ -88,14 +104,25 @@ export class JbHoldSheet extends LitElement {
     if (n >= max) JbHoldSheet.queueRefH = packed;
     const refH = JbHoldSheet.queueRefH ?? fromParts;
 
-    const avail = Math.max(0, this.clientHeight - 16);
     const s = refH > avail && avail > 0 ? avail / refH : 1;
 
     if (cancel) cancel.style.marginTop = '';
     sh.style.setProperty('--jb-hs-s', String(s));
-    // Content height (More-info and short lists too); shared maximum is CSS max-height: calc(100cqh - 16px).
+    // Content height; shared maximum is the measured band between the bars.
     sh.style.height = 'auto';
-    sh.style.maxHeight = '';
+    sh.style.maxHeight = `${avail}px`;
+
+    // Keep card-centered layout; only shift if the sheet would cover .top or .tabs.
+    const cr = card?.getBoundingClientRect();
+    if (cr) {
+      const r = sh.getBoundingClientRect();
+      const topLim = cr.top + bandTop;
+      const botLim = cr.top + bandBot;
+      let dy = 0;
+      if (r.top < topLim) dy = topLim - r.top;
+      else if (r.bottom > botLim) dy = botLim - r.bottom;
+      sh.style.transform = dy ? `translateY(${dy}px)` : '';
+    }
   }
   close() { const s = this.state; if (!s) return; this.state = null; s.close(); }
   private pick(a: MenuAction) { if (a.disabled) return; if (a.id === 'more' && this.state?.info) { this._info = true; return; } this.close(); a.run(); }
@@ -111,7 +138,7 @@ export class JbHoldSheet extends LitElement {
           <button class="it cancel" data-action="back" tabindex="-1" @pointerdown=${noFocus} @click=${() => { this._info = false; }}>${icon('back')}<span>Back</span></button>
         </div>`;
     }
-    const more: MenuAction[] = s.info ? [{ id: 'more', icon: 'more', label: 'More', disabled: !hasMoreInfo(s.info), run: () => {} }] : [];
+    const more: MenuAction[] = s.info ? [{ id: 'more', icon: 'more', label: 'More Info', disabled: !hasMoreInfo(s.info), run: () => {} }] : [];
     return html`<div class="bk" data-action="backdrop" @click=${() => this.close()}></div>
       <div class="sh" role="dialog" aria-modal="true" aria-label="${s.item.name} options">
         ${hd}
@@ -121,11 +148,11 @@ export class JbHoldSheet extends LitElement {
       </div>`;
   }
   static styles = [tokens, base, mediaStyles, css`
-    /* Host fills the card; size container so max-height can use cqh (percentage max-height does not resolve in this grid). */
-    :host { position: absolute; inset: 0; z-index: 45; display: none; font-family: var(--_font-body); color: var(--_fg); container-type: size; }
+    /* Host fills the card; fit() caps height to the band between .top and .tabs and clamps if needed. */
+    :host { position: absolute; inset: 0; z-index: 45; display: none; box-sizing: border-box; font-family: var(--_font-body); color: var(--_fg); container-type: size; }
     :host([open]) { display: grid; place-items: center; }
     .bk { position: absolute; inset: 0; background: #000000b8; }
-    .sh { position: relative; width: min(520px, calc(100% - 32px)); max-height: calc(100cqh - 16px); box-sizing: border-box;
+    .sh { position: relative; width: min(520px, calc(100% - 32px)); max-height: 100%; box-sizing: border-box;
       padding: calc(16px * var(--jb-hs-s, 1)) calc(18px * var(--jb-hs-s, 1)) calc(18px * var(--jb-hs-s, 1));
       display: flex; flex-direction: column; border-radius: calc(22px * var(--jb-hs-s, 1)); background: #141414; border: 1px solid #ffffff33; box-shadow: 0 24px 60px #000d; }
     .hd { display: flex; align-items: center; gap: calc(16px * var(--jb-hs-s, 1)); padding: 0 calc(4px * var(--jb-hs-s, 1)) calc(12px * var(--jb-hs-s, 1)); border-bottom: 1px solid var(--_divider); margin-bottom: calc(10px * var(--jb-hs-s, 1)); min-width: 0; flex: none; }
