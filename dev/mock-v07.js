@@ -76,8 +76,13 @@ export function createV07({ params, catalog, sleep }) {
     switch (id) {
       case 'in_progress': return [
         ...(c.audiobooks ?? []).map((a) => ({ ...pub(a), duration: 36000, resume_position_ms: 12_600_000, fully_played: false })),
-        { media_type: 'podcast_episode', provider: 'library', item_id: '901', uri: 'library://podcast_episode/901', name: 'Placeholder Pod #3', image: null, duration: 1800, resume_position_ms: 1_200_000, fully_played: false },
-        { media_type: 'podcast_episode', provider: 'library', item_id: '902', uri: 'library://podcast_episode/902', name: 'Placeholder Pod #2', image: null, duration: 2400, resume_position_ms: 300_000, fully_played: false },
+        { media_type: 'podcast_episode', provider: 'podcastfeed', item_id: '901', uri: 'library://podcast_episode/901', name: 'Placeholder Pod #3', image: null, duration: 1800, resume_position_ms: 1_200_000, fully_played: false,
+          position: 3, podcast: { media_type: 'podcast', uri: 'library://podcast/31', name: 'The Mockcast' },
+          metadata: { release_date: '2026-11-01' },
+          provider_mappings: [{ provider_domain: 'podcastfeed', audio_format: { content_type: 'mp3', bit_rate: 128 } }] },
+        { media_type: 'podcast_episode', provider: 'library', item_id: '902', uri: 'library://podcast_episode/902', name: 'Placeholder Pod #2', image: null, duration: 2400, resume_position_ms: 300_000, fully_played: false,
+          position: 2, podcast: { media_type: 'podcast', uri: 'library://podcast/31', name: 'The Mockcast' },
+          metadata: { release_date: '2026-10-15' } },
       ];
       case 'recently_played': return c.tracks.slice(0, 14).map(pub);
       case 'recently_added_tracks': return c.tracks.slice(-12).map(pub);

@@ -163,7 +163,9 @@ const CATALOG = {
   podcasts: PODS ? [{ media_type: 'podcast', uri: 'library://podcast/31', name: 'The Mockcast', version: '', image: art('The Mockcast'), favorite: false, explicit: null, _added: 5 },
     { media_type: 'podcast', uri: 'library://podcast/32', name: 'Chicago Stories', version: '', image: null, favorite: false, explicit: null, _added: 6 }] : [],
   audiobooks: PODS ? [{ media_type: 'audiobook', uri: 'library://audiobook/7', name: 'The Mock Chronicles', version: '', image: art('Mock Chronicles'), favorite: false, explicit: null,
-    authors: ['A. N. Author'], _added: 4 }] : [],
+    authors: ['A. N. Author'], narrators: ['R. Reader'], publisher: 'Mock Press',
+    metadata: { release_date: '2024-03-15' },
+    provider_mappings: [{ provider_domain: 'audible', audio_format: { content_type: 'mp3', bit_rate: 64 } }], _added: 4 }] : [],
 };
 // names=fake: every artist / album / track / playlist name that is not already a placeholder becomes an invented one
 // (deterministic, for screenshots). Ids and uris are kept so drill-downs and fixtures still line up.
