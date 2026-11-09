@@ -203,10 +203,15 @@ export class JbQueue extends LitElement {
     // on Up next song 1, which the old menu left off), and Move up / Move down are grayed when the row's arrow is (Move up on song 1).
     const row = el?.closest('.qr'), rowBtn: Record<string, string> = { play: 'playnow', next: 'playnext', up: 'up', down: 'down', remove: 'remove' };
     const btn = (id: string) => row?.querySelector(`[data-action="${rowBtn[id]}"]`) as HTMLButtonElement | null;
+    // Up Next song 1 = index locked+1 (already next). Guests keep working Play Next on song 2+ (v0.7.11); only song 1 is grayed.
+    const idx = this._snap?.items.findIndex((x) => x.queue_item_id === it.queue_item_id) ?? -1;
+    const lk = this.queue?.locked ?? -1;
     const actions: MenuAction[] = all.map(([id, ic, label]) => {
       const a = can.get(id), b = btn(id);
-      // 0.7.12: Play Next too: a guest's menu offers it on Up next song 1, where it would send a do-nothing move (pos_shift 0)
-      if ((id === 'up' || id === 'down' || id === 'next') && b?.disabled) return { id, icon: ic, label, run: () => {}, disabled: true };
+      // Move up / Move down follow the row's arrows
+      if ((id === 'up' || id === 'down') && b?.disabled) return { id, icon: ic, label, run: () => {}, disabled: true };
+      // Play Next: gray only on Up Next song 1 (and locked/buffer), not by copying the guest row button (always gray for guests)
+      if (id === 'next' && idx <= lk + 1) return { id, icon: ic, label, run: () => {}, disabled: true };
       if (a) return a;
       if (b && !b.disabled) return { id, icon: ic, label, run: () => b.click() };
       return { id, icon: ic, label, run: () => {}, disabled: true };
