@@ -5,7 +5,7 @@ import { icon } from './icons';
 import { providerLabel } from './providers';
 import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl, foldedActions,
-  playMedia, playMessage, normItem, drillable, canRadio, isRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  playMedia, playMessage, normItem, drillable, canRadio, isRadio, hideStartRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
   maCall,
 } from './shared';
 import './detail-view';
@@ -527,7 +527,7 @@ export class JbBrowse extends LitElement {
     const station = type === 'radio' || isRadio(it);
     const ask = (kind: 'replace' | 'radio') => { this._menu = null; this.press.release(); this._confirm = { kind, item: it, run: () => this.play(it, playType(it, type), 'replace', kind === 'radio') }; };
     const actions = mediaActions((enq) => this.play(it, playType(it, type), enq), drillable(type, this.config) ? () => this.openDetail(it, type)
-      : station ? () => { this._menu = null; this.press.release(); fire(this, 'jukebox-station', { item: it }); } : undefined, ask, canRadio(type, it), station);
+      : station ? () => { this._menu = null; this.press.release(); fire(this, 'jukebox-station', { item: it }); } : undefined, ask, canRadio(type, it), station, hideStartRadio(type, it));
     // 0.7.10: the large centered sheet at card level (jb-hold-sheet), not the small anchored menu
     this.press.held = it.uri; this.requestUpdate(); void el;
     const info = !station && INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it) : undefined; // 0.7.12: More on songs, episodes, audiobooks

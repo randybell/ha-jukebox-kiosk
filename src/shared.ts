@@ -261,7 +261,7 @@ export function menuTpl(pos: MenuPos, head: { item: { name: string } & Partial<M
 
 /** 0.7.10 menu 5 (tile press-and-hold) and the row-hold pop-up: Open, Add to queue, Play next, Play now (asks, then replaces), Start radio (asks; only where
  *  offered today), then menuTpl's Cancel. `seedRadio` = Start radio from this item. `radioStation` = an MA radio item: Open and Play now only. */
-export function mediaActions(play: (enq: Enqueue) => void, open: (() => void) | undefined, ask: (kind: 'replace' | 'radio') => void, seedRadio: boolean, radioStation = false): MenuAction[] {
+export function mediaActions(play: (enq: Enqueue) => void, open: (() => void) | undefined, ask: (kind: 'replace' | 'radio') => void, seedRadio: boolean, radioStation = false, hideRadio = false): MenuAction[] {
   const o = open ? [{ id: 'open', icon: 'open', label: 'Open', run: open }] : [];
   if (radioStation) return [...o, { id: 'replace', icon: 'play', label: 'Play now', run: () => play('replace') }];
   return [
@@ -269,10 +269,13 @@ export function mediaActions(play: (enq: Enqueue) => void, open: (() => void) | 
     { id: 'add', icon: RA.add.icon, label: 'Add to queue', run: () => play('add') },
     { id: 'next', icon: RA.next.icon, label: 'Play next', run: () => play('next') },
     { id: 'replace', icon: RA.replace.icon, label: 'Play now', run: () => ask('replace') },
-    // 0.7.12: always listed; grayed out (does nothing) when this item can't start radio
-    { id: 'radio', icon: RA.radio.icon, label: 'Start radio', run: () => { if (seedRadio) ask('radio'); }, ...(seedRadio ? {} : { disabled: true }) },
+    // 0.7.12: listed and grayed when this item can't start radio; omitted entirely for podcasts / episodes / audiobooks (hideRadio)
+    ...(!hideRadio ? [{ id: 'radio', icon: RA.radio.icon, label: 'Start radio', run: () => { if (seedRadio) ask('radio'); }, ...(seedRadio ? {} : { disabled: true as const }) }] : []),
   ];
 }
+/** Press-and-hold: no Start radio at all for podcasts, podcast episodes or audiobooks (Approved by Randy via PM, Nov 9 2026). */
+export const hideStartRadio = (type: string, it?: Partial<MaItem>) =>
+  /^(podcast|audiobook)/.test(type) || /^(podcast|audiobook)/.test(String(it?.media_type ?? ''));
 /** Tap on a playable item (track, station, episode, audiobook): a small sheet, nothing plays until a choice is made. */
 export function tapActions(play: (enq: Enqueue | 'remove') => void, radioStation = false): MenuAction[] {
   if (radioStation) {

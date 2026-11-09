@@ -6,7 +6,7 @@ import { providerLabel } from './providers';
 import { SearchEngine } from './search-engine';
 import {
   imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, menuPos, menuTpl,
-  playMedia, playMessage, drillable, canRadio, isRadio, rowActsTpl, foldedActions, mediaActions, SEARCH_ACTS, searchRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  playMedia, playMessage, drillable, canRadio, isRadio, hideStartRadio, rowActsTpl, foldedActions, mediaActions, SEARCH_ACTS, searchRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
   maCall,
 } from './shared';
 import './detail-view';
@@ -579,7 +579,7 @@ export class JbSearch extends LitElement {
     const ask = (k: 'replace' | 'radio') => { this.closeMenu(); this._confirm = { kind: k, item: it, run: () => this.play(it, g, 'replace', k === 'radio') }; };
     // 0.7.10: the large centered sheet at card level (jb-hold-sheet), not the small anchored menu
     this.press.held = it.uri; this.requestUpdate();
-    fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, g) || providerLabel(it.uri), actions: mediaActions((enq) => { this.closeMenu(); this.play(it, g, enq); }, open, ask, searchRadio(type, it), station), info: INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it) : undefined, close: () => this.press.release() });
+    fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, g) || providerLabel(it.uri), actions: mediaActions((enq) => { this.closeMenu(); this.play(it, g, enq); }, open, ask, searchRadio(type, it), station, hideStartRadio(type, it)), info: INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it) : undefined, close: () => this.press.release() });
     void el;
   }
   private showMenu(it: MaItem, g: GroupKey, anchor: HTMLElement | null, actions: MenuAction[]) {
