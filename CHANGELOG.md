@@ -4,6 +4,11 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.7.14 — 2026-11-10
+
+- New setting, Show Action Icons (`show_action_icons`), in the card setup under Display, right after Large buttons. It is on by default, so nothing changes until you turn it off. Turned off, the row buttons are hidden in the Library lists and Search results (a radio station's Play button too), in the Queue and Queue search (Play Next, Play Now, Remove, Move up, Move down and the ⋯ button), and on the artist page's Albums rows (the column names above them go too). The heart and the LIBRARY tag stay. Tapping a track, or pressing and holding a row, still opens the pop-up. The track and episode rows on artist, album and playlist pages keep their buttons, because a tap there only highlights the row.
+- The card now says "tracks" instead of "songs", to match Music Assistant. The Library button is Tracks, the tile on the optional Library home screen says "Every track", the search hints say tracks, the Queue says "No matching tracks", Play Now asks "The current track will stop.", the station question says "the tracks in the queue are cleared", the "already loading" messages say "That track", and the Light background choice in the card setup says "once per track".
+
 ## 0.7.13 — 2026-11-10
 
 - Search results: the Add to queue, Play Next, Play Now and Start radio buttons on a result now work with a normal tap, not only a press-and-hold. Play Now and Start radio still ask first. A radio station's Play button still needs a press-and-hold.
