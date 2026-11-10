@@ -1,5 +1,5 @@
 // 0.7.11: press-and-hold on a Queue row opens the card's large centered pop-up (jb-hold-sheet), not the small menu, with the same
-// choices as before (Play Now, Play Next, Move up, Move down, Remove, Cancel) and the same rules. A quick tap still does nothing.
+// choices as before (Play Now, Play Next, Move up, Move down, Remove, Cancel) and the same rules. 0.7.13 (issue 78): a quick tap on a Queue row opens that same pop-up too (it used to do nothing).
 // Usage: node test/queue-hold.e2e.mjs (starts its own dev server)
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -28,7 +28,9 @@ const rowOf = (id) => `${QV}.querySelector('.qr[data-id="${id}"] .rt')`;
 const order = () => ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`);
 let o = await order();
 await clearWs(p); await press(p, rowOf(o[2]), 120);
-check('a quick tap on a Queue row opens nothing and sends nothing', !(await sheetOpen(p)) && !(await smallMenu(p)) && J(await ws(p)) === '[]');
+const wantTap = ['play:Play Now', 'next:Play Next', 'up:Move up', 'down:Move down', 'remove:Remove', 'more:More Info', 'cancel:Cancel'];
+check('a quick tap on a Queue row opens the same big pop-up as a hold (0.7.13), not the small menu, and sends nothing', (await sheetOpen(p)) && !(await smallMenu(p)) && J(await ids(p)) === J(wantTap) && J(await ws(p)) === '[]', J(await ids(p)));
+await tap(p, `${HS}.querySelector('.it.cancel')`);
 await press(p, rowOf(o[2]), 700);
 const want = ['play:Play Now', 'next:Play Next', 'up:Move up', 'down:Move down', 'remove:Remove', 'more:More Info', 'cancel:Cancel']; // 0.7.12: More Info (song info) before Cancel
 check('holding a Queue row opens the big pop-up (not the small menu): Play Now, Play Next, Move up, Move down, Remove, More Info, Cancel; the lift sends nothing',

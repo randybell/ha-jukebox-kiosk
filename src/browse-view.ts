@@ -4,7 +4,7 @@ import { songInfo, INFO_TYPES } from './song-info';
 import { icon } from './icons';
 import { providerLabel } from './providers';
 import {
-  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, swallowNextClick, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl, foldedActions,
+  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, swallowNextClick, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl,
   playMedia, playMessage, normItem, drillable, canRadio, isRadio, hideStartRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
   maCall,
 } from './shared';
@@ -522,7 +522,7 @@ export class JbBrowse extends LitElement {
     if (type === 'radio') { this.press.release(); fire(this, 'jukebox-station', { item: it }); return; }
     // 0.7.13 (issue #78): a tap on a Library Songs row opens the same pop-up (jb-hold-sheet) as a hold on it, not the old small menu
     // swallowNextClick: the pop-up opens under the finger, so the tap's own click must not land on one of its choices (a hold does the same)
-    if (type === 'track') { swallowNextClick(); this.openMenu(it, type, el); return; }
+    if (type === 'track' && !isRadio(it)) { swallowNextClick(); this.openMenu(it, type, el); return; }
     const actions = tapActions((enq) => this.play(it, playType(it, type), enq), type === 'radio');
     this._menu = { item: it, type, pos: menuPos(this.root(), el, actions.length), actions };
   }
@@ -713,8 +713,8 @@ export class JbBrowse extends LitElement {
         this._confirm = { kind: k, item: it, run: () => this.play(it, 'track', 'replace', k === 'radio') };
       };
       if (a !== 'more') { ask(a); return; }
-      const actions = foldedActions(canRadio('track', it), ask);
-      this._menu = { item: it, type: 'track', pos: menuPos(this.root(), el.closest('.row') as HTMLElement, actions.length), actions };
+      // 0.7.13 (issue #78): More opens the same pop-up as a hold on this row, not the old small menu
+      this.openMenu(it, 'track', el.closest('.row') as HTMLElement);
     };
     return html`<div class="row ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type="track"
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}

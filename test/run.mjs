@@ -195,13 +195,14 @@ check('4b2 visible queue action wording is identical, not icon-only', await page
   const labels = [...eval(r).querySelectorAll('.grp.tracks .row')].map((row) => [...row.querySelectorAll('.ra-b[data-act]')].filter((b) => b.getBoundingClientRect().width).map((b) => b.querySelector('span')?.textContent));
   return labels.length > 0 && labels.every((x) => x.slice(0, 3).join() === 'Add to queue,Play Next,Play Now');
 }, SVR));
-// row tap on a track: highlight only, no play, no sheet
+// row tap on a track: 0.7.13 (issue 78) it opens the same pop-up as a hold (it used to only highlight the row); nothing plays, no old menu
 await see(firstRow);
 let r = await rectOf(page, `${firstRow}.querySelector('.rt')`);
-await page.mouse.click(r.x, r.y, { delay: 40 }); await sleep(120);
+await page.mouse.click(r.x, r.y, { delay: 40 }); await sleep(250);
 s = await state(page);
-const selected = await page.evaluate((e) => eval(e).classList.contains('sel'), firstRow);
-check('4c tapping a track row only highlights it (no play_media, no sheet)', selected && s.playCalls.length === 0 && !s.menu, `sel=${selected} plays=${s.playCalls.length} menu=${s.menu}`);
+const sh4c = await page.evaluate((h) => !!eval(h).querySelector('.sh'), HSX);
+check('4c tapping a track row opens the row pop-up (0.7.13, same as a hold): no play_media, no old menu', sh4c && s.playCalls.length === 0 && !s.menu, `sheet=${sh4c} plays=${s.playCalls.length} menu=${s.menu}`);
+await page.keyboard.press('Escape'); await sleep(150);
 // long-press does not play either
 r = await rectOf(page, `${firstRow}.querySelector('.rt')`);
 await page.mouse.move(r.x, r.y); await page.mouse.down(); await sleep(650); await page.mouse.up(); await sleep(80);

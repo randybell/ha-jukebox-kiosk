@@ -693,12 +693,15 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
     await p.mouse.move(r.x, r.y); await p.mouse.down(); await sleep(700); await p.mouse.up(); await sleep(150);
     await tap(p, `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot.querySelector('.it[data-action="play"]')`); // 0.7.11: the hold opens the big pop-up
   }, t);
-  // 4. #40 (0.7.8): tapping a row body does nothing (no play); only the row icons act
+  // 4. #40 (0.7.8): tapping a row body plays nothing (0.7.13: it opens the row pop-up); only the row icons / pop-up choices act
   const rowTapIdle = async (name, p, t) => {
     const n0 = await ev(p, `window.__calls.length`), cur0 = await ev(p, `${QV}.querySelector('.qr.now')?.dataset.id`);
     await tap(p, `${QV}.querySelector('.qr[data-id="${t}"] .rt')`); await sleep(600);
     const sent = await ev(p, `window.__calls.slice(${n0}).filter((c) => /play|jump|replace|clear|move|delete/i.test(c.service + ' ' + (c.data?.command ?? ''))).map((c) => c.domain + '.' + c.service + ':' + (c.data?.command ?? ''))`);
-    check(`P ${name}: row tap sends no play / jump and opens nothing`, sent.length === 0 && !(await ev(p, `!!${QV}.querySelector('.confirm, .menu')`)) && (await ev(p, `${QV}.querySelector('.qr.now')?.dataset.id`)) === cur0, J(sent));
+    // 0.7.13 (issue 78): a row tap opens the same pop-up as a hold (it opened nothing before); it still sends no play / jump, and no old menu or confirm shows
+    const HSQ = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`, popup = await ev(p, `!!${HSQ}.querySelector('.sh')`);
+    check(`P ${name}: row tap sends no play / jump, shows no old menu or confirm, and opens the row pop-up`, popup && sent.length === 0 && !(await ev(p, `!!${QV}.querySelector('.confirm, .menu')`)) && (await ev(p, `${QV}.querySelector('.qr.now')?.dataset.id`)) === cur0, J({ sent, popup }));
+    await tap(p, `${HSQ}.querySelector('.it.cancel')`);
     check(`P ${name}: row body does not look tappable (no pointer cursor)`, (await ev(p, `getComputedStyle(${QV}.querySelector('.qr[data-id="${t}"]')).cursor`)) !== 'pointer');
   };
   t = (await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`))[2];

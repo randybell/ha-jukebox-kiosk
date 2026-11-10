@@ -5,7 +5,7 @@ import { icon } from './icons';
 import { providerLabel } from './providers';
 import { SearchEngine } from './search-engine';
 import {
-  imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, menuPos, menuTpl,
+  imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, swallowNextClick, menuPos, menuTpl,
   playMedia, playMessage, drillable, canRadio, isRadio, hideStartRadio, rowActsTpl, foldedActions, mediaActions, SEARCH_ACTS, searchRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
   maCall,
 } from './shared';
@@ -124,7 +124,7 @@ export class JbSearch extends LitElement {
   private _kbBefore = false;
   /** A row tap never plays: artists / albums / playlists (podcasts with the Jukebox Kiosk integration) open a detail, anything else is highlighted. */
   private hearts = new FavController(this);
-  private press = new PressController<{ it: MaItem; g: GroupKey }>(this, (p) => this.tap(p.it, p.g), (p, el) => this.rowMenu(p.it, p.g, el));
+  private press = new PressController<{ it: MaItem; g: GroupKey }>(this, (p, el) => this.tap(p.it, p.g, el), (p, el) => this.rowMenu(p.it, p.g, el));
   private _seqShown = 0;
   /** v0.7: configured search categories (null = 0.6 behaviour) */
   private _cats: SearchCategory[] | null = null;
@@ -549,11 +549,13 @@ export class JbSearch extends LitElement {
 
   // ---------- taps, menus, detail stack ----------
   private root() { return this.renderRoot.querySelector('.sx') as HTMLElement; }
-  private tap(it: MaItem, g: GroupKey) {
+  private tap(it: MaItem, g: GroupKey, el?: HTMLElement) {
     const type = this.mediaType(it, g);
     if (drillable(type, this.config)) { this.openDetail(it, type); return; }
     // a station opens the station sheet (details, heart, Play); a tap never plays (0.6.3)
     if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.hearts.isFav(it) } }); return; }
+    // 0.7.13 (issue #78): a tap on a song row opens the same pop-up as a hold on it (swallowNextClick: it opens under the finger)
+    if (type === 'track' && el && !isRadio(it)) { swallowNextClick(); this.rowMenu(it, g, el); return; }
     this._sel = this._sel === it.uri ? '' : it.uri;
   }
   /** 0.7.9 #35: Add to queue and Play Next act at once; Play Now and Start radio ask first. Radio Play Now replaces immediately. */

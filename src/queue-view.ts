@@ -3,7 +3,7 @@ import { tokens, base } from './styles';
 import { songInfo } from './song-info';
 import { icon } from './icons';
 import { combinedOn, libraryTabLabel } from './library-home';
-import { mediaStyles, noFocus, fire, artTpl, provTpl, PressController, menuPos, menuTpl, confirmTpl, queueActTpl, isRadioUri, type ConfirmState, type MenuAction, type MenuPos } from './shared';
+import { mediaStyles, noFocus, fire, artTpl, provTpl, PressController, swallowNextClick, menuPos, menuTpl, confirmTpl, queueActTpl, isRadioUri, type ConfirmState, type MenuAction, type MenuPos } from './shared';
 import './keyboard';
 import type { KeyDetail } from './keyboard';
 import { canJumpQueue } from './speakers/model';
@@ -51,7 +51,10 @@ export class JbQueue extends LitElement {
   private _undoTimer?: number;
   private _toastTimer?: number;
   private _unsub?: () => void;
-  private press = new PressController<QueueItem>(this, () => {}, (it, el) => this.holdSheet(it, el));
+  private press = new PressController<QueueItem>(this, (it, el) => this.tapSheet(it, el), (it, el) => this.holdSheet(it, el));
+  /** 0.7.13 (issue #78): a tap on a song row opens the same pop-up as a hold on it (a tap did nothing before). The tap's own click is swallowed
+   *  so it cannot land on a choice that opened under the finger. */
+  private tapSheet(it: QueueItem, el: HTMLElement) { if (isRadioUri(it.media_content_id)) return; /* a station in the queue: tap stays as it was (nothing) */ swallowNextClick(); this.press.held = it.queue_item_id; this.holdSheet(it, el); }
 
   protected shouldUpdate(ch: PropertyValues) { return !(ch.size === 1 && ch.has('hass')); }
   protected willUpdate(ch: PropertyValues) {
