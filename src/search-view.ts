@@ -676,7 +676,7 @@ export class JbSearch extends LitElement {
         <small>${provTpl(it.uri, it.provider, it.media_type)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, g)}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
       ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, g)) : nothing}
-      ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : rowActsTpl(it, searchRadio(type, it), (a, el) => this.rowAct(it, g, a, el), SEARCH_ACTS, true, true)}
+      ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : rowActsTpl(it, searchRadio(type, it), (a, el) => this.rowAct(it, g, a, el), SEARCH_ACTS, true, isRadio(it))}
     </div>`;
   }
 

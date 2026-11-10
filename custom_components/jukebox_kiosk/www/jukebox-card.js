@@ -620,7 +620,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
         <small>${Ct(t.uri,t.provider,t.media_type)}${t.duration?I`<span class="du2">${jt(t.duration)}</span>`:B}<span class="st">${this.sub(t,e)}</span></small></div>
       <span class="du">${jt(t.duration)}</span>
       ${r?Re(t,this.hearts.isFav(t),()=>this.toggleFav(t,e)):B}
-      ${"genres"===e?I`<span class="ra go" aria-hidden="true">${dt("open")}</span>`:te(t,se(i,t),(i,s)=>this.rowAct(t,e,i,s),ie,!0,!0)}
+      ${"genres"===e?I`<span class="ra go" aria-hidden="true">${dt("open")}</span>`:te(t,se(i,t),(i,s)=>this.rowAct(t,e,i,s),ie,!0,wt(t))}
     </div>`}group(t,e,i){return I`<div class="grp ${t.key}">
       <h3>${t.label}<em>${e.length}</em>${i?B:I`<button class="sa" tabindex="-1"
         @pointerdown=${t=>t.preventDefault()} @click=${()=>this._filter=t.key}>See all</button>`}</h3>

@@ -1,5 +1,5 @@
-// 0.7.10 hold-to-fire: search result rows and artist page Albums rows. A row button fires only after HOLD_MS (500 ms) of holding; a quick tap
-// does nothing; moving > 10 px cancels; the whole row highlights (with a progress fill) while held. Holding the row itself opens the menu 5
+// 0.7.10 hold-to-fire: artist page Albums rows (0.7.13: Library search row buttons are no longer hold-to-fire, they fire on a normal tap or click; see
+// test/search-tap.e2e.mjs). On an Albums row a button fires only after HOLD_MS (500 ms) of holding; a quick tap does nothing; moving > 10 px cancels; the whole row highlights (with a progress fill) while held. Holding the row itself opens the menu 5
 // pop-up (Open, Add to queue, Play next, Play now, Start radio, Cancel). Menu 5 on Library tiles: same list; stations Open + Play now.
 // Usage: node test/hold.e2e.mjs (starts its own dev server)
 import puppeteer from 'puppeteer-core';
@@ -56,28 +56,42 @@ async function midHold(p, rowExpr, btnExpr) {
   return s;
 }
 
-async function suite(p, tag, root, rowExpr, acts) {
+async function suite(p, tag, root, rowExpr, acts, tapButtons = false) {
   const btn = (a) => `${rowExpr}.querySelector('.ra-b[data-act="${a}"]')`;
   const sz = await ev(p, `(() => { const b = ${btn('add')}.getBoundingClientRect(); return [b.width, b.height]; })()`);
   check(`${tag}: row buttons are still ≥ 48px`, sz[0] >= 47.5 && sz[1] >= 47.5, J(sz));
-  await clear(p); await press(p, btn('add'), 60);
-  check(`${tag}: a quick tap on Add to queue does nothing`, J(await plays(p)) === '[]', J(await plays(p)));
-  await press(p, btn('add'), 300);
-  check(`${tag}: a 300 ms hold does nothing`, J(await plays(p)) === '[]');
-  await press(p, btn('add'), 650, 25);
-  check(`${tag}: moving the finger more than 10 px cancels the hold`, J(await plays(p)) === '[]');
-  await press(p, btn('add'), 650);
-  check(`${tag}: holding Add to queue for 500 ms fires it (enqueue add)`, J(await plays(p)) === '["add"]', J(await plays(p)));
-  await clear(p); await press(p, btn('next'), 650);
-  check(`${tag}: holding Play next fires it (enqueue next)`, J(await plays(p)) === '["next"]', J(await plays(p)));
-  await clear(p); await press(p, btn('replace'), 650);
-  const asked = await ev(p, `!!${root}.querySelector('.confirm')`);
-  check(`${tag}: holding Play now still asks first (nothing played yet)`, asked && J(await plays(p)) === '[]');
-  if (asked) { const c = await center(p, `${root}.querySelector('.confirm [data-action="confirm"]')`); await p.mouse.click(c.x, c.y); await sleep(250); }
-  check(`${tag}: confirming Play now replaces the queue`, J(await plays(p)) === '["replace"]', J(await plays(p)));
-  const s = await midHold(p, rowExpr, btn('next'));
-  check(`${tag}: while a button is held, the whole row highlights and the button shows its progress fill`, s.row && s.btn, J(s));
-  check(`${tag}: after letting go, the row highlight clears`, !(await ev(p, `${rowExpr}.classList.contains('hp')`)));
+  if (tapButtons) {
+    // 0.7.13: Library search row buttons fire on a normal tap/click (no hold); Play now still asks first
+    await clear(p); await press(p, btn('add'), 60);
+    check(`${tag}: a quick click on Add to queue fires it (enqueue add)`, J(await plays(p)) === '["add"]', J(await plays(p)));
+    await clear(p); await press(p, btn('next'), 60);
+    check(`${tag}: a quick click on Play next fires it (enqueue next)`, J(await plays(p)) === '["next"]', J(await plays(p)));
+    await clear(p); await press(p, btn('replace'), 60);
+    const askedTap = await ev(p, `!!${root}.querySelector('.confirm')`);
+    check(`${tag}: a quick click on Play now still asks first (nothing played yet)`, askedTap && J(await plays(p)) === '[]');
+    if (askedTap) { const c = await center(p, `${root}.querySelector('.confirm [data-action="confirm"]')`); await p.mouse.click(c.x, c.y); await sleep(250); }
+    check(`${tag}: confirming Play now replaces the queue`, J(await plays(p)) === '["replace"]', J(await plays(p)));
+    check(`${tag}: pressing a button shows no hold highlight on the row`, !(await ev(p, `${rowExpr}.classList.contains('held') || ${rowExpr}.classList.contains('hp')`)));
+  } else {
+    await clear(p); await press(p, btn('add'), 60);
+    check(`${tag}: a quick tap on Add to queue does nothing`, J(await plays(p)) === '[]', J(await plays(p)));
+    await press(p, btn('add'), 300);
+    check(`${tag}: a 300 ms hold does nothing`, J(await plays(p)) === '[]');
+    await press(p, btn('add'), 650, 25);
+    check(`${tag}: moving the finger more than 10 px cancels the hold`, J(await plays(p)) === '[]');
+    await press(p, btn('add'), 650);
+    check(`${tag}: holding Add to queue for 500 ms fires it (enqueue add)`, J(await plays(p)) === '["add"]', J(await plays(p)));
+    await clear(p); await press(p, btn('next'), 650);
+    check(`${tag}: holding Play next fires it (enqueue next)`, J(await plays(p)) === '["next"]', J(await plays(p)));
+    await clear(p); await press(p, btn('replace'), 650);
+    const asked = await ev(p, `!!${root}.querySelector('.confirm')`);
+    check(`${tag}: holding Play now still asks first (nothing played yet)`, asked && J(await plays(p)) === '[]');
+    if (asked) { const c = await center(p, `${root}.querySelector('.confirm [data-action="confirm"]')`); await p.mouse.click(c.x, c.y); await sleep(250); }
+    check(`${tag}: confirming Play now replaces the queue`, J(await plays(p)) === '["replace"]', J(await plays(p)));
+    const s = await midHold(p, rowExpr, btn('next'));
+    check(`${tag}: while a button is held, the whole row highlights and the button shows its progress fill`, s.row && s.btn, J(s));
+    check(`${tag}: after letting go, the row highlight clears`, !(await ev(p, `${rowExpr}.classList.contains('hp')`)));
+  }
   // row hold → menu 5 pop-up
   await clear(p);
   const before = await ev(p, `location.href`);
@@ -104,7 +118,7 @@ for (const [name, vp, q] of [['1024x712', { width: 1080, height: 768 }, '&ha=too
   await p.waitForFunction((s) => !!eval(s).querySelector('.row[data-type="playlist"] .ra-b[data-act="add"]'), {}, SV);
   const trow = `${SV}.querySelector('.row[data-type="playlist"]')`;
   const tradio = await ev(p, `!!${trow}.querySelector('.ra-b[data-act="radio"]')`);
-  await suite(p, `${name} search playlist row`, SV, trow, ['open:Open', 'add:Add to queue', 'next:Play next', 'replace:Play now', 'radio:Start radio', 'cancel:Cancel'] /* 0.7.12: always listed, grayed when not possible */);
+  await suite(p, `${name} search playlist row`, SV, trow, ['open:Open', 'add:Add to queue', 'next:Play next', 'replace:Play now', 'radio:Start radio', 'cancel:Cancel'] /* 0.7.12: always listed, grayed when not possible */, true /* 0.7.13: search buttons fire on a tap */);
   let c = await center(p, `[...${SV}.querySelectorAll('button')].find((x) => /^\\s*artists\\s*$/i.test(x.textContent))`); await p.mouse.click(c.x, c.y);
   await p.waitForFunction((s) => [...eval(s).querySelectorAll('.row[data-type="artist"]')].some((r) => /Eagles/.test(r.textContent)), {}, SV);
   const arow = `[...${SV}.querySelectorAll('.row[data-type="artist"]')].find((r) => /Eagles/.test(r.textContent))`;
