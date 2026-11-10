@@ -1,7 +1,8 @@
 // 0.7.20: card options library_view (rows | tiles, default rows) and library_columns (2..6, default 3, tiles only) for the TOP level of every Library section
 // (Playlists, Artists, Tracks, Genres, Radio, Albums, Podcasts, Audiobooks), no circles at the top tier, track tiles with no action buttons, and
-// show_action_icons now off by default (YAML true still shows the buttons). Pages you open (artist / album / playlist), Library search results,
-// the Queue and the Library home tiles are not changed. Genres only exist in the separate-tabs layout (the combined tab has no Genres button).
+// show_action_icons now off by default (YAML true still shows the buttons). Pages you open (artist / album / playlist) stay rows (their own
+// layout, not library_view); their track-row buttons now follow show_action_icons (hidden by default). Library search results, the Queue and
+// the Library home tiles are not changed. Genres only exist in the separate-tabs layout (the combined tab has no Genres button).
 // 1024x600, touch tap / hold / swipe, mouse click / press-and-hold, physical Esc. Usage: node test/library-view.e2e.mjs (own dev server). SHOTS=<dir> also writes screenshots.
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -182,15 +183,15 @@ for (const view of ['rows', 'tiles']) {
   await s.p.close();
 }
 
-// ============ 7. drill-down pages, Library search, library_home: NOT changed ============
+// ============ 7. drill-down pages, Library search, library_home: layout unchanged; track-row buttons follow show_action_icons (default off) ============
 for (const view of ['rows', 'tiles']) {
-  // artist page: same header (circle art there is the page's own, unchanged), track rows keep their buttons (kept on purpose)
+  // artist page: same header (circle art there is the page's own, unchanged); track-row buttons hidden by default
   const s = await open({ library_view: view }); await section(s, 'artist');
   const c = await center(s.p, targetOf(s, 'artist', view)); await tapAt(s.p, 'mouse', c); await wait(s.p, `${s.BR}.querySelector('jb-detail')?.shadowRoot?.querySelector('.dart')`); await sleep(600);
   const d = await ev(s.p, `(() => { const r = ${s.BR}.querySelector('jb-detail').shadowRoot; const a = r.querySelector('.dart');
     return { dartCirc: a?.classList.contains('circ'), rows: r.querySelectorAll('.row').length, tiles: r.querySelectorAll('.tile').length, libs: r.querySelectorAll('.lib').length,
       trackBtns: [...r.querySelectorAll('.row[data-type="track"] .ra-b')].filter((b) => b.getBoundingClientRect().width > 0).length }; })()`);
-  check(`${view}: artist page unchanged (its own circle art kept, rows, no Library layout classes, track-row buttons kept: ${d.trackBtns})`, d.dartCirc === true && d.rows > 0 && d.libs === 0 && d.trackBtns > 0, J(d));
+  check(`${view}: artist page unchanged (its own circle art kept, rows, no Library layout classes, track-row buttons hidden by default: ${d.trackBtns})`, d.dartCirc === true && d.rows > 0 && d.libs === 0 && d.trackBtns === 0, J(d));
   await shot(s.p, `artist-page-from-${view}`);
   await s.p.close();
   // album page
@@ -198,14 +199,14 @@ for (const view of ['rows', 'tiles']) {
   const c2 = await center(a.p, targetOf(a, 'album', view)); await tapAt(a.p, 'mouse', c2); await wait(a.p, `${a.BR}.querySelector('jb-detail')?.shadowRoot?.querySelector('.row[data-type="track"]')`); await sleep(500);
   const d2 = await ev(a.p, `(() => { const r = ${a.BR}.querySelector('jb-detail').shadowRoot; return { rows: r.querySelectorAll('.row[data-type="track"]').length, libs: r.querySelectorAll('.lib').length,
     btns: [...r.querySelectorAll('.row[data-type="track"] .ra-b')].filter((b) => b.getBoundingClientRect().width > 0).length }; })()`);
-  check(`${view}: album page unchanged (track rows with their buttons: ${d2.btns})`, d2.rows > 0 && d2.libs === 0 && d2.btns > 0, J(d2));
+  check(`${view}: album page unchanged (track rows, no Library layout classes, buttons hidden by default: ${d2.btns})`, d2.rows > 0 && d2.libs === 0 && d2.btns === 0, J(d2));
   await a.p.close();
   // playlist page
   const l = await open({ library_view: view }); await section(l, 'playlist');
   const c3 = await center(l.p, targetOf(l, 'playlist', view)); await tapAt(l.p, 'mouse', c3); await wait(l.p, `${l.BR}.querySelector('jb-detail')?.shadowRoot?.querySelector('.row[data-type="track"]')`); await sleep(500);
   const d3 = await ev(l.p, `(() => { const r = ${l.BR}.querySelector('jb-detail').shadowRoot; return { rows: r.querySelectorAll('.row[data-type="track"]').length, libs: r.querySelectorAll('.lib').length,
     btns: [...r.querySelectorAll('.row[data-type="track"] .ra-b')].filter((b) => b.getBoundingClientRect().width > 0).length }; })()`);
-  check(`${view}: playlist page unchanged (track rows with their buttons: ${d3.btns})`, d3.rows > 0 && d3.libs === 0 && d3.btns > 0, J(d3));
+  check(`${view}: playlist page unchanged (track rows, no Library layout classes, buttons hidden by default: ${d3.btns})`, d3.rows > 0 && d3.libs === 0 && d3.btns === 0, J(d3));
   await l.p.close();
   // Library search results: rows, artists keep their circle, no Library layout classes
   const q = await open({ library_view: view });

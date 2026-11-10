@@ -4,8 +4,8 @@
 // (Add/Play Next/Play Now/Remove, Move up/down and More), the artist page's Albums rows (and their column header). The heart and the LIBRARY tag stay.
 // The freed room goes to the title and subtitle (no gap), and a tap or hold on a row still opens the same pop-up as today.
 // true: buttons shown (the 0.7.14 default look); missing behaves exactly like false.
-// EXCEPTION (kept on purpose, see detail-view.ts): track and episode rows on artist / album / playlist pages keep their buttons, because a tap
-// or hold there only highlights the row; hiding the buttons would leave no way to act on those rows.
+// 0.7.20: track and episode rows on artist / album / playlist pages hide their buttons too when the option is off or missing
+// (a tap or hold there opens the same pop-up as Library Tracks). YAML true still shows the buttons.
 // Known, not caused by this option and unchanged here: on the artist page a TOUCH tap on an Albums row opens the album and the finger's own click then
 // lands on the album page's Add button (0.7.13 does the same with the option missing), so that one touch check skips the 'plays nothing' part.
 // 1024x600, touch tap, mouse click, hold. Usage: node test/action-icons.e2e.mjs (starts its own dev server). SHOTS=<dir> also writes screenshots.
@@ -88,7 +88,7 @@ const TYPES = {
     await wait(p, `${SV}.querySelector('.row[data-type="artist"]')`); const c = await center(p, `${SV}.querySelector('.row[data-type="artist"] .rt')`); await p.mouse.click(c.x, c.y);
     await wait(p, `${SD}?.querySelector('.row.sr')`); await sleep(500); return { p, row: `${SD}.querySelector('.row.sr')` }; } },
 };
-// kept on purpose: track rows on artist / album / playlist pages keep their buttons
+// 0.7.20: track rows on artist / album / playlist pages hide their buttons like every other list when the option is off
 const DETAIL = { 'Artist page track rows': 'artist', 'Playlist page track rows': 'playlist' };
 
 const scrollTop = (p, row) => ev(p, `(${row}).scrollIntoView({ block: 'center' })`);
@@ -132,17 +132,19 @@ for (const [name, T] of Object.entries(TYPES)) {
   }
 }
 
-// ---- track rows on artist / playlist pages: buttons stay (kept on purpose) ----
-for (const [name, kindOf] of Object.entries(DETAIL)) for (const [ctag, ccfg] of [['option off', { show_action_icons: false }], ['option missing (default)', undefined]]) {
-  const p = await newPage('&tab=browse', ccfg);
-  await libSearch(p, 'EAGLES', kindOf === 'playlist' ? undefined : 'artist');
-  await wait(p, `${SV}.querySelector('.row[data-type="${kindOf}"]')`);
-  const c = await center(p, `${SV}.querySelector('.row[data-type="${kindOf}"] .rt')`); await p.mouse.click(c.x, c.y);
-  await wait(p, `${SD}?.querySelector('.row[data-type="track"]')`); await sleep(500);
-  const l = await look(p, `${SD}.querySelector('.row[data-type="track"]')`);
-  check(`${name}, ${ctag}: buttons stay (a tap or hold there only highlights the row, so they are the only way to act)`, !!l && l.buttons > 0, J(l));
-  await shot(p, `0714-noicons-${kindOf}-page-tracks`);
-  await p.close();
+// ---- track rows on artist / playlist pages: hidden with the option off/default, shown with show_action_icons: true ----
+for (const [name, kindOf] of Object.entries(DETAIL)) {
+  for (const [ctag, ccfg, want] of [['option off', { show_action_icons: false }, false], ['option missing (default)', undefined, false], ['option on', { show_action_icons: true }, true]]) {
+    const p = await newPage('&tab=browse', ccfg);
+    await libSearch(p, 'EAGLES', kindOf === 'playlist' ? undefined : 'artist');
+    await wait(p, `${SV}.querySelector('.row[data-type="${kindOf}"]')`);
+    const c = await center(p, `${SV}.querySelector('.row[data-type="${kindOf}"] .rt')`); await p.mouse.click(c.x, c.y);
+    await wait(p, `${SD}?.querySelector('.row[data-type="track"]')`); await sleep(500);
+    const l = await look(p, `${SD}.querySelector('.row[data-type="track"]')`);
+    check(`${name}, ${ctag}: ${want ? 'action buttons shown' : 'no action button on the row (hidden like every other list)'}`, !!l && (want ? l.buttons > 0 : l.buttons === 0), J(l));
+    if (!want) await shot(p, `0720-noicons-${kindOf}-page-tracks`);
+    await p.close();
+  }
 }
 
 await browser.close();

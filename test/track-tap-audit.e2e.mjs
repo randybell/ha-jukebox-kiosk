@@ -3,7 +3,8 @@
 // 1024x600, touch tap and mouse click (+ the physical Esc key closing the pop-up):
 //   ARTIST-FILTER  Library > artist page > "Filter by <artist>" > Tracks (the artist-scoped Songs list)
 //   DISCOVER       a track tile in a Library Discover row (Most played tracks)
-//   ARTIST / ALBUM / PLAYLIST pages  a tap on a track row only highlights it (no menu of either kind); its buttons stay the way to act
+//   ARTIST / ALBUM / PLAYLIST pages  a tap or hold on a track row opens the same pop-up as Library Tracks (0.7.20); Esc closes it and
+//                                    clears the row highlight; nothing plays by itself and the old small menu never shows
 // Together with library-song-tap (Library list, Favorites), song-tap-pages (Queue, Queue search, Library search) and search-tap this covers every
 // track-row tap path. In every case: the old menu (.menu) never shows, and the tap plays and changes nothing by itself.
 // Usage: node test/track-tap-audit.e2e.mjs (starts its own dev server). SHOTS=<dir> also writes the screenshots.
@@ -37,6 +38,12 @@ const oldMenu = (p) => ev(p, `(() => { const q = (r) => { try { return !!r?.quer
   return roots.some(q); })()`);
 const shot = async (p, name) => { if (SHOTS) await p.screenshot({ path: `${SHOTS}/${name}.png` }); };
 async function tapAt(p, kind, c) { if (kind === 'touch') await p.touchscreen.tap(c.x, c.y); else await p.mouse.click(c.x, c.y); }
+async function holdAt(p, kind, c, ms = 700) {
+  if (kind === 'touch') { await p.touchscreen.touchStart(c.x, c.y); await sleep(ms); await p.touchscreen.touchEnd(); }
+  else { await p.mouse.move(c.x, c.y); await p.mouse.down(); await sleep(ms); await p.mouse.up(); }
+  await sleep(350);
+}
+const rowHeld = (p, row) => ev(p, `!!(${row})?.classList.contains('held')`);
 const newPage = async (url) => {
   const p = await browser.newPage(); await hermetic(p);
   await p.setViewport({ width: 1024, height: 600, deviceScaleFactor: 1, hasTouch: true });
@@ -88,7 +95,7 @@ for (const [name, sel] of [['ARTIST-PAGE', 'artist'], ['ALBUM-PAGE', 'album'], [
     await clickAt(p, `${SV}.querySelector('.row[data-type="${sel}"] .rt')`);
     await wait(p, `${SD}?.querySelectorAll('.row[data-type="track"]').length > 0`);
     const row = `${SD}.querySelectorAll('.row[data-type="track"]')[0]`;
-    return { p, row, at: `${row}.querySelector('.rt')`, opens: false };
+    return { p, row, at: `${row}.querySelector('.rt')`, opens: true, hold: true };
   };
 }
 
@@ -96,7 +103,7 @@ for (const name of Object.keys(SETUPS)) for (const kind of ['touch', 'mouse']) {
   const tag = `1024x600 ${name}, ${kind === 'touch' ? 'tap' : 'click'}`;
   let setup;
   try { setup = await SETUPS[name](); } catch (e) { check(`${tag}: screen set up`, false, e.message); continue; }
-  const { p, row, at, opens } = setup;
+  const { p, row, at, opens, hold } = setup;
   await ev(p, `(${row}).scrollIntoView({ block: 'center' })`); await sleep(250);
   check(`${tag}: a track row is on screen, no pop-up and no old menu yet`, !!(await center(p, row)) && !(await sheetOpen(p)) && !(await oldMenu(p)));
   await clear(p);
@@ -109,10 +116,22 @@ for (const name of Object.keys(SETUPS)) for (const kind of ['touch', 'mouse']) {
   check(`${tag}: the tap plays and changes nothing by itself`, J(await effects(p)) === '[]', J(await effects(p)));
   if (opens) {
     check(`${tag}: the tap opens the big pop-up (jb-hold-sheet) and it stays open`, !!s && (await sheetOpen(p)), J(s));
-    await shot(p, `0714-tap-${name.toLowerCase()}-${kind}`);
-    // physical keyboard: Esc closes the pop-up, nothing played
+    if (hold) check(`${tag}: the tapped row stays highlighted while the pop-up is open`, await rowHeld(p, row));
+    await shot(p, `0720-tap-${name.toLowerCase()}-${kind}`);
+    // physical keyboard: Esc closes the pop-up, nothing played, highlight clears
     await p.keyboard.press('Escape'); await sleep(400);
     check(`${tag} + physical Esc: the pop-up closes, nothing played`, !(await sheetOpen(p)) && J(await effects(p)) === '[]', J(await effects(p)));
+    if (hold) check(`${tag} + physical Esc: the row highlight clears`, !(await rowHeld(p, row)));
+    if (hold) {
+      const htag = tag.replace(/, (tap|click)$/, kind === 'touch' ? ', hold' : ', press-and-hold');
+      const c2 = await center(p, at);
+      await holdAt(p, kind, c2); await sleep(150);
+      const sHold = await sheetOf(p);
+      check(`${htag}: a hold opens the same pop-up, plays nothing, no old menu`, !!sHold && (await sheetOpen(p)) && !(await oldMenu(p)) && J(await effects(p)) === '[]', J(sHold));
+      check(`${htag}: the held row is highlighted`, await rowHeld(p, row));
+      await p.keyboard.press('Escape'); await sleep(400);
+      check(`${htag} + physical Esc: the pop-up closes and the highlight clears, nothing played`, !(await sheetOpen(p)) && !(await rowHeld(p, row)) && J(await effects(p)) === '[]', J(await effects(p)));
+    }
   } else {
     check(`${tag}: the tap only highlights the row (no pop-up, no menu of either kind)`, !(await sheetOpen(p)) && !(await oldMenu(p)));
     await shot(p, `0714-tap-${name.toLowerCase()}-${kind}`);

@@ -2,9 +2,10 @@ import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
 import { providerLabel } from './providers';
+import { songInfo, INFO_TYPES } from './song-info';
 import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl,
-  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, mediaActions, SEARCH_ACTS, confirmTpl, drillable,
+  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, mediaActions, hideStartRadio, swallowNextClick, SEARCH_ACTS, confirmTpl, drillable,
   type MenuAction, type MenuPos, type RowAct, type ConfirmState,
   maCall,
 } from './shared';
@@ -156,7 +157,9 @@ export class JbDetail extends LitElement {
   private _confirm: ConfirmState | null = null;
   private _sel = '';
   private hearts = new FavController(this);
-  private press = new PressController<{ it: MaItem; type: string; key: string }>(this, (p) => this.tap(p.it, p.type, p.key), (p, el) => (p.key.startsWith('al|') ? this.albumMenu(p.it, p.key, el) : this.tap(p.it, p.type, p.key)));
+  private press = new PressController<{ it: MaItem; type: string; key: string }>(this,
+    (p) => (this.isSong(p.it, p.type) ? (swallowNextClick(), this.songMenu(p.it, p.type, p.key)) : this.tap(p.it, p.type, p.key)),
+    (p, el) => (p.key.startsWith('al|') ? this.albumMenu(p.it, p.key, el) : this.isSong(p.it, p.type) ? this.songMenu(p.it, p.type, p.key) : this.tap(p.it, p.type, p.key)));
 
   get data(): DetailData | undefined { return this.entry?.data; }
   private get scroller() { return this.renderRoot?.querySelector('.scroll') as HTMLElement | null; }
@@ -257,7 +260,7 @@ export class JbDetail extends LitElement {
     } catch (err) { this.toast(`Couldn't play ${e.item.name}`); console.warn('[jukebox-card] play failed', err); }
   }
   private root() { return this.renderRoot.querySelector('.dx') as HTMLElement; }
-  /** Row tap: an album / artist / playlist / podcast row opens its detail; a track / episode / station row is only highlighted. */
+  /** Row tap: an album / artist / playlist / podcast row opens its detail; a station row is only highlighted. Track / episode rows go through songMenu. */
   private tap(it: MaItem, type: string, key: string) {
     if (type !== 'track' && type !== 'podcast_episode' && drillable(type, this.config)) { this.press.release(); fire(this, 'jb-nav', { op: 'push', item: it, type }); return; }
     this._sel = this._sel === key ? '' : key;
@@ -276,6 +279,17 @@ export class JbDetail extends LitElement {
     this._menu = { item: it, type, pos: menuPos(this.root(), el.closest('.row') as HTMLElement, actions.length), actions };
   }
 
+  /** 0.7.20: a track / episode row here opens the same pop-up (jb-hold-sheet) as Library Tracks, on a tap or a hold (Randy, Nov 10: action buttons are off
+   *  everywhere, so the pop-up is how to act on one track). Stations and every other row type keep their old tap. */
+  private isSong(it: MaItem, type: string) { return (type === 'track' || type === 'podcast_episode') && !isRadio(it); }
+  private songMenu(it: MaItem, type: string, key: string) {
+    const pt = it.media_type === 'podcast_episode' ? '' : type;
+    const ask = (k: 'replace' | 'radio') => { this.closeMenu(); this.press.release(); this._confirm = { kind: k, item: it, run: () => this.play(it, pt, 'replace', k === 'radio') }; };
+    const actions = mediaActions((enq) => this.play(it, pt, enq), undefined, ask, canRadio(type, it), false, hideStartRadio(type, it));
+    this.press.held = key; this.requestUpdate();
+    const info = INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it) : undefined;
+    fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, type) || providerLabel(it.uri), actions, info, close: () => this.press.release() });
+  }
   /** 0.7.10: press-and-hold on an artist page Albums row (not its buttons) opens the menu 5 pop-up. */
   private albumMenu(it: MaItem, key: string, el: HTMLElement) {
     const ask = (k: 'replace' | 'radio') => { this.closeMenu(); this._confirm = { kind: k, item: it, run: () => this.play(it, 'album', 'replace', k === 'radio') }; };
@@ -416,9 +430,6 @@ export class JbDetail extends LitElement {
     .row.sr .ra-b span { display: none; }
     .row.sr .du { display: block; } /* no empty trailing grid column, so the buttons end at the list's right edge like the header */
     .row.sr.nor .ra { padding-right: var(--_abw, 48px); }
-    /* 0.7.14 (#80), kept on purpose (Randy, Nov 10): a tap or hold on a track / episode row here only highlights it (no pop-up), so its buttons are the only way to
-       act on it. They stay even with show_action_icons: false. Albums rows (.sr: a hold opens the pop-up) do hide. */
-    .row[data-type="track"] .ra, .row[data-type="podcast_episode"] .ra { --jb-ra-display: flex; }
     /* sticky inside .list.albums only: it leaves with the Albums section; opaque and padded out to the panel edges so no album peeks above or beside it */
     .ahd { position: sticky; top: -16px; z-index: 2; display: var(--jb-ra-display, flex); justify-content: flex-end; margin: 0 -16px 2px; padding: 6px 16px;
       background: var(--_bg); }
