@@ -59,7 +59,7 @@ const scrollerOf = (row) => `(() => { for (let a = ${row}; a; a = a.parentElemen
 const SETUPS = {
   'LIB-MORE': async () => {
     const p = await newPage('&tab=browse');
-    await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Songs').click()`); await sleep(600);
+    await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Tracks').click()`); await sleep(600);
     await p.waitForFunction((b) => eval(b).querySelectorAll('.list .row[data-type="track"] .ra-b[data-act="more"]').length > 0, {}, BRC);
     const row = `${BRC}.querySelectorAll('.list .row[data-type="track"]')[1]`;
     return { p, row, at: `${row}.querySelector('.ra-b[data-act="more"]')`, holdAt: `${row}.querySelector('.rt')`, mustScroll: true };
@@ -76,7 +76,7 @@ const SETUPS = {
     const qb = await center(p, `${SV}.querySelector('.qbar')`); await p.touchscreen.tap(qb.x, qb.y); await sleep(300);
     await typeOnScreen(p, kb, 'EAGLES');
     await p.waitForFunction((s) => !!eval(s).querySelector('.row .ra-b[data-act="add"]'), {}, SV);
-    await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => /^\\s*songs\\s*$/i.test(x.textContent))?.click()`); await sleep(600);
+    await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => /^\\s*tracks\\s*$/i.test(x.textContent))?.click()`); await sleep(600);
     await p.waitForFunction((s) => !!eval(s).querySelector('.row[data-type="track"] .ra-b[data-act="radio"]'), {}, SV);
     const row = `${SV}.querySelector('.row[data-type="track"]')`;
     return { p, row, at: `${row}.querySelector('.rt')`, holdAt: `${row}.querySelector('.rt')`, mustScroll: true };

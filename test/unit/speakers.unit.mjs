@@ -221,15 +221,15 @@ check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.is
   const c = calls.find((x) => x.s === 'send_command' && x.data.command === 'player_queues/move_item');
   check('U39 playNext with a buffered next track: pos_shift lands right after the buffered row ((2 + 1) - 5 = -2)', c?.data.data.pos_shift === -2 && qm.snap.items[3].queue_item_id === 'q5', J(c?.data));
   await qm.refresh(); calls.length = 0;
-  let busy = false; try { await qm.removeRow('q2'); } catch (e) { busy = e instanceof Q.QueueBusy && e.message === 'That song is already loading, so it can\'t be removed right now.'; }
-  check('U40 removeRow on the buffered row: refused before any call (QueueBusy, "That song is already loading, so it can\'t be removed right now.")', busy && !calls.some((x) => x.data?.command === 'player_queues/delete_item'));
+  let busy = false; try { await qm.removeRow('q2'); } catch (e) { busy = e instanceof Q.QueueBusy && e.message === 'That track is already loading, so it can\'t be removed right now.'; }
+  check('U40 removeRow on the buffered row: refused before any call (QueueBusy, "That track is already loading, so it can\'t be removed right now.")', busy && !calls.some((x) => x.data?.command === 'player_queues/delete_item'));
 }
 {
   const { hass } = fakeHass(true, { ignoreDelete: true });
   const qm = await model(hass);
   await qm.refresh();
-  let busy = false; try { await qm.removeRow('q4'); } catch (e) { busy = e instanceof Q.QueueBusy && e.kind === 'remove' && e.message === 'That song is already loading, so it can\'t be removed right now.'; }
-  check('U41 delete answered 200 but ignored (row still there after a re-read) → QueueBusy "That song is already loading, so it can\'t be removed right now." and the row is back', busy && qm.snap.items.some((x) => x.queue_item_id === 'q4'));
+  let busy = false; try { await qm.removeRow('q4'); } catch (e) { busy = e instanceof Q.QueueBusy && e.kind === 'remove' && e.message === 'That track is already loading, so it can\'t be removed right now.'; }
+  check('U41 delete answered 200 but ignored (row still there after a re-read) → QueueBusy "That track is already loading, so it can\'t be removed right now." and the row is back', busy && qm.snap.items.some((x) => x.queue_item_id === 'q4'));
 }
 {
   // MA refuses a delete outright (500 "already played/buffered"): the remove wording, not the move one
@@ -238,14 +238,14 @@ check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.is
   const base = hass.callWS;
   hass.callWS = async (msg) => { if (msg.command === 'player_queues/delete_item') throw new Error('4 is already played/buffered'); return base(msg); };
   let msg = ''; try { await qm.removeRow('q4'); } catch (e) { msg = e instanceof Q.QueueBusy ? e.message : 'other'; }
-  check('U41b delete refused by MA (500 "already played/buffered") → "That song is already loading, so it can\'t be removed right now."', msg === 'That song is already loading, so it can\'t be removed right now.', msg);
+  check('U41b delete refused by MA (500 "already played/buffered") → "That track is already loading, so it can\'t be removed right now."', msg === 'That track is already loading, so it can\'t be removed right now.', msg);
 }
 {
   const { hass } = fakeHass(true, { moveErr: '4 is already played/buffered' });
   const qm = await model(hass);
   await qm.refresh();
-  let busy = false; try { await qm.playNext('q4'); } catch (e) { busy = e instanceof Q.QueueBusy && e.kind === 'move' && e.message === 'That song is already loading, so it can\'t move right now.'; }
-  check('U42 move_item 500 "already played/buffered" → QueueBusy (the view says "That song is already loading, so it can\'t move right now.")', busy);
+  let busy = false; try { await qm.playNext('q4'); } catch (e) { busy = e instanceof Q.QueueBusy && e.kind === 'move' && e.message === 'That track is already loading, so it can\'t move right now.'; }
+  check('U42 move_item 500 "already played/buffered" → QueueBusy (the view says "That track is already loading, so it can\'t move right now.")', busy);
 }
 {
   // live 2.10.9 entity shapes: mass_player_id null everywhere, idle groups point active_queue at another group's queue

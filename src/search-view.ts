@@ -803,7 +803,7 @@ export class JbSearch extends LitElement {
           <div class="qbar" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this._kbHidden = false; }}>
             ${icon('search', 'i qi')}
             <div class="q" role="searchbox" aria-label="Search music" aria-readonly="true" aria-live="polite" data-query=${this._query}>
-              ${this._query ? html`<span class="qt">${this._query}</span>` : html`<span class="ph">${sc ? `Search in ${name}…` : this.srcOn() ? `Search ${this.srcLabel()}…` : this.combined ? `Search ${libraryCatLabel(this._lcat).toLowerCase()}…` : 'Search artists, songs, radio…'}</span>`}<i class="caret" aria-hidden="true"></i>
+              ${this._query ? html`<span class="qt">${this._query}</span>` : html`<span class="ph">${sc ? `Search in ${name}…` : this.srcOn() ? `Search ${this.srcLabel()}…` : this.combined ? `Search ${libraryCatLabel(this._lcat).toLowerCase()}…` : 'Search artists, tracks, radio…'}</span>`}<i class="caret" aria-hidden="true"></i>
             </div>
             ${this._query ? html`<button class="qx" tabindex="-1" aria-label="Clear search"
               @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => this.setQuery('')}>${icon('close')}</button>` : nothing}

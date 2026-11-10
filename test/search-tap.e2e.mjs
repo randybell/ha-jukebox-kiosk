@@ -46,7 +46,7 @@ async function openLibrary() {
   const qb = await center(p, `${SV}.querySelector('.qbar')`); await p.touchscreen.tap(qb.x, qb.y); await sleep(300);
   await typeOnScreen(p, kb, 'EAGLES');
   await p.waitForFunction((s) => !!eval(s).querySelector('.row .ra-b[data-act="add"]'), {}, SV);
-  await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => /^\\s*songs\\s*$/i.test(x.textContent))?.click()`); await sleep(600);
+  await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => /^\\s*tracks\\s*$/i.test(x.textContent))?.click()`); await sleep(600);
   await p.waitForFunction((s) => !!eval(s).querySelector('.row[data-type="track"] .ra-b[data-act="radio"]'), {}, SV);
   return { p, kb };
 }
@@ -111,7 +111,7 @@ for (const kind of ['touch', 'mouse']) {
   const { p } = await openLibrary();
   const sc = `(() => { for (let a = ${row}; a; a = a.parentElement || a.getRootNode().host) if (a.scrollHeight > a.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(a).overflowY)) return a; })()`;
   const long = await ev(p, `(() => { const s = ${sc}; return s ? s.scrollHeight - s.clientHeight : 0; })()`);
-  check('1024x600 Library search: the Songs list is long enough to scroll with the keyboard open', long > 40, String(long));
+  check('1024x600 Library search: the Tracks list is long enough to scroll with the keyboard open', long > 40, String(long));
   for (const a of ['add', 'next', 'replace', 'radio']) {
     await ev(p, `{ const s = ${sc}; s.scrollTop = 0; }`); await sleep(200); await clear(p);
     const b = await center(p, btn(a));

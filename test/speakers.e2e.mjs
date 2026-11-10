@@ -547,8 +547,8 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   const target = nx[2].id;
   await tap(p, qbtn(target, 'playnow'));
   const d = await dlg(p);
-  check('J2 Play Now asks first: "Play this now? The current song will stop." with Cancel / Play Now; nothing sent yet',
-    d && d.kind === 'jump' && d.q === 'Play this now?' && d.b === 'The current song will stop.' && d.btn[0] === 'Cancel' && d.btn[1] === 'Play Now' && (await sends(p)).length === 0, J(d));
+  check('J2 Play Now asks first: "Play this now? The current track will stop." with Cancel / Play Now; nothing sent yet',
+    d && d.kind === 'jump' && d.q === 'Play this now?' && d.b === 'The current track will stop.' && d.btn[0] === 'Cancel' && d.btn[1] === 'Play Now' && (await sends(p)).length === 0, J(d));
   await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="cancel"]')`); await sleep(300);
   check('J3 Cancel closes the dialog and sends nothing', !(await dlg(p)) && (await sends(p)).length === 0 && (await mass(p, 'play_queue_item')) === 0);
   await tap(p, qbtn(target, 'playnow'));
@@ -795,15 +795,15 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   check('D7 buffered row: labeled Remove / Play Next stay visible but disabled; Move up + down disabled',
     !!(g5.buf && g5.remove?.disabled && g5.next?.disabled && g5.up && g5.down && g5.nUp && g5.nNext === true && g5.nRemove?.disabled === false && g5.bufs === 1), J(g5));
   await p.close();
-  const BUSY36 = "That song is already loading, so it can't move right now."; // 0.7.9 #36c wording (moves)
-  const BUSY_RM = "That song is already loading, so it can't be removed right now."; // 0.7.9 #58 wording (removes)
+  const BUSY36 = "That track is already loading, so it can't move right now."; // 0.7.9 #36c wording (moves)
+  const BUSY_RM = "That track is already loading, so it can't be removed right now."; // 0.7.9 #58 wording (removes)
   // MA moved its buffer on after our read: a delete it ignores → toast + the row is back; a move it refuses → toast + reload
   p = await openQ('&admin=1');
   const v7 = (await ids(p))[0], v8 = (await ids(p))[3];
   await ev(p, `(() => { const Q = window.__queues['media_player.everywhere']; Q.buf = Q.index + 1; })()`);
   await tap(p, `${QV}.querySelector('.qr[data-id="${v7}"] .ra-b[data-action="remove"]')`);
   await wait(p, `${QV}.querySelector('.toast')?.textContent === ${J(BUSY_RM)}`, 3000);
-  check('D7b delete ignored by MA (200, row still there): toast exactly "That song is already loading, so it can\'t be removed right now.", the row is back, no Undo bar',
+  check('D7b delete ignored by MA (200, row still there): toast exactly "That track is already loading, so it can\'t be removed right now.", the row is back, no Undo bar',
     (await toastT(p)) === BUSY_RM && (await ids(p))[0] === v7 && !(await bar(p)), J({ t: await toastT(p), ids: (await ids(p)).slice(0, 2) }));
   await sleep(2300); // let the toast clear
   // MA buffers further on between the card's read and the tap (set right before it, so the card still offers Up)
@@ -811,7 +811,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await tap(p, `${QV}.querySelector('.qr[data-id="${v8}"] .qa[data-action="up"]')`);
   await wait(p, `${QV}.querySelector('.toast')?.textContent === ${J(BUSY36)}`, 3000);
   await wait(p, `${QV}.querySelectorAll('.qr.buf').length === 4`, 3000);
-  check('D7c move refused by MA (500 "<n> is already played/buffered"): toast "That song is already loading, so it can\'t move right now." and the queue reloads (4 rows now locked)',
+  check('D7c move refused by MA (500 "<n> is already played/buffered"): toast "That track is already loading, so it can\'t move right now." and the queue reloads (4 rows now locked)',
     (await toastT(p)) === BUSY36 && (await ev(p, `${QV}.querySelectorAll('.qr.buf').length`)) === 4, J({ t: await toastT(p) }));
   await p.close();
 

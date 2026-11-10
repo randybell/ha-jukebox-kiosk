@@ -16,7 +16,7 @@ export const TILES: TileDef[] = [
   { id: 'album', label: 'Albums', icon: 'disc', sub: 'Browse by album', optIn: false },
   { id: 'radio', label: 'Radio', icon: 'radio', sub: 'Your stations', optIn: false },
   { id: 'search', label: 'Search', icon: 'search', sub: 'Find anything', optIn: false },
-  { id: 'track', label: 'Tracks', icon: 'note', sub: 'Every song', optIn: true },
+  { id: 'track', label: 'Tracks', icon: 'note', sub: 'Every track', optIn: true },
   { id: 'podcast', label: 'Podcasts', icon: 'podcast', sub: 'Shows', optIn: true },
   { id: 'audiobook', label: 'Audiobooks', icon: 'book', sub: 'Books', optIn: true },
   { id: 'discover', label: 'Discover', icon: 'compass', sub: 'For you', optIn: true },
@@ -39,7 +39,7 @@ export interface LibraryCatDef { id: LibraryCategory; label: string; icon: strin
 export const LIBRARY_CATS: LibraryCatDef[] = [
   { id: 'playlist', label: 'Playlists', icon: 'queue' },
   { id: 'artist', label: 'Artists', icon: 'artist' },
-  { id: 'track', label: 'Songs', icon: 'note' },
+  { id: 'track', label: 'Tracks', icon: 'note' },
   { id: 'genre', label: 'Genres', icon: 'genre' },
   { id: 'radio', label: 'Radio', icon: 'radio' },
   { id: 'album', label: 'Albums', icon: 'disc' },

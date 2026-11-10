@@ -63,7 +63,7 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
         { name: 'backdrop', selector: sel([
           { value: 'auto', label: 'Automatic: Full on fast screens, Light on slow ones' },
           { value: 'full', label: 'Full: live blurred album art behind everything' },
-          { value: 'light', label: 'Light: blurred album art, drawn once per song (easier on slow tablets)' },
+          { value: 'light', label: 'Light: blurred album art, drawn once per track (easier on slow tablets)' },
           { value: 'static', label: 'Dark: a dark gradient, no album art' },
           { value: 'off', label: 'Off: plain black' }]) },
         { name: 'large_buttons', selector: { boolean: {} } },

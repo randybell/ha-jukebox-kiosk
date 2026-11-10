@@ -82,7 +82,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   check(`T3b [${vpName}] the button row sits directly under the search box, touch-sized (>= 44px), all on screen`, geo.gap >= 0 && geo.gap <= 16 && geo.left <= 1 && geo.minH >= 44 && geo.inside, J(geo));
   check(`T3c [${vpName}] no dropdown / popover / select for sources`, !(await ev(p, `!!${SV}.querySelector('.srcb, .srcm, .srcveil, select, [aria-haspopup]')`)));
   const b = await btns(p);
-  check(`T4 [${vpName}] buttons in order: Playlists, Artists, Songs, Radio (0.7.9 #34: no Genres; Playlists on)`, J(b) === J(['playlist:Playlists', 'artist:Artists', 'track:Songs', 'radio:Radio']) && (await onBtn(p)) === 'playlist', J(b));
+  check(`T4 [${vpName}] buttons in order: Playlists, Artists, Tracks, Radio (0.7.9 #34: no Genres; Playlists on)`, J(b) === J(['playlist:Playlists', 'artist:Artists', 'track:Tracks', 'radio:Radio']) && (await onBtn(p)) === 'playlist', J(b));
   check(`T5 [${vpName}] all five buttons on screen`, (await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].every((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.right <= innerWidth && r.bottom <= innerHeight; })`)));
   check(`T6 [${vpName}] empty box shows the library playlists`, (await libShown(p)) && (await wait(p, `${BR}.querySelectorAll('.tile[data-type=playlist]').length > 0`)));
   await p.close();
@@ -129,7 +129,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   check('S3 library list hidden while typing', !(await libShown(p)));
   await tap(p, `${SV}.querySelector('.lcats .lc[data-lcat=track]')`);
   const okT = await wait(p, `[...${SV}.querySelectorAll('.scroll .row')].length > 0 && [...${SV}.querySelectorAll('.scroll .row')].every((x) => x.dataset.type === 'track' || /Song|Track/i.test(x.textContent))`);
-  check('S4 switching to Songs keeps the words and the source, shows songs', okT && (await ev(p, `${SV}.querySelector('.q').dataset.query`)) === 'MO' && (await onBtn(p)) === 'track');
+  check('S4 switching to Tracks keeps the words and the source, shows songs', okT && (await ev(p, `${SV}.querySelector('.q').dataset.query`)) === 'MO' && (await onBtn(p)) === 'track');
   // ---- multi-select: add a second provider, unselect, back to All ----
   await ev(p, `window.__provSearchLog.length = 0`);
   await pickSrc(p, 'tunein--demo0003');

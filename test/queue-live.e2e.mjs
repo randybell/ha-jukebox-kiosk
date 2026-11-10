@@ -72,7 +72,7 @@ check('QL buffer advances (31,31) → (31,33) with the Queue open: songs 1–2 l
 // 0.7.9 #36c: MA refuses a move (its buffer moved on and the push hasn't reached the card yet) → the card re-reads the queue at
 // once, greys the arrows out from the new numbers, and says exactly why
 {
-  const MSG = "That song is already loading, so it can't move right now.";
+  const MSG = "That track is already loading, so it can't move right now.";
   await setState(31, 31); await sleep(2500); // let any earlier toast clear
   const r0 = await rows(); const song2 = r0[1].id;
   await p.evaluate(() => { window.__queues['media_player.everywhere'].buf = 33; }); // no push: the card still shows the old numbers

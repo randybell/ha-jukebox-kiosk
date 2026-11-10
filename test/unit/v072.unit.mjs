@@ -33,7 +33,7 @@ check('L4 tile home only with library_home: true', !L.libraryHomeOn({}) && L.lib
 check('L5 tab label is "Library" (or library_label)', L.libraryTabLabel({}) === 'Library' && L.libraryTabLabel({ library_label: ' Music ' }) === 'Music');
 
 // ---------------- category buttons ----------------
-check('C1 default buttons: Playlists, Artists, Songs, Genres, Radio', J(L.libraryCategories({}).map(L.libraryCatLabel)) === J(['Playlists', 'Artists', 'Songs', 'Genres', 'Radio']));
+check('C1 default buttons: Playlists, Artists, Tracks, Genres, Radio', J(L.libraryCategories({}).map(L.libraryCatLabel)) === J(['Playlists', 'Artists', 'Tracks', 'Genres', 'Radio']));
 check('C2 Genres is in the default row', L.libraryCategories({}).includes('genre') && L.DEFAULT_LIBRARY_CATEGORIES[3] === 'genre');
 check('C3 Albums / Podcasts / Audiobooks only through config', ['album', 'podcast', 'audiobook'].every((x) => !L.libraryCategories({}).includes(x))
   && J(L.libraryCategories({ library_categories: ['album', 'podcast', 'audiobook'] })) === J(['album', 'podcast', 'audiobook']));

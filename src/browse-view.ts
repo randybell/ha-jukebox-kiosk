@@ -32,7 +32,7 @@ export interface Cat { type: string; label: string; one: string }
 export const CATS: Cat[] = [
   { type: 'playlist', label: 'Playlists', one: 'playlist' },
   { type: 'artist', label: 'Artists', one: 'artist' },
-  { type: 'track', label: 'Songs', one: 'song' },
+  { type: 'track', label: 'Tracks', one: 'track' },
   { type: 'genre', label: 'Genres', one: 'genre' },
   { type: 'radio', label: 'Radio', one: 'station' },
   { type: 'album', label: 'Albums', one: 'album' },

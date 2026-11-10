@@ -54,8 +54,8 @@ export function lockedRow(current: number, currentIndex?: number, bufferIndex?: 
   return current + Math.max(0, bufferIndex - currentIndex);
 }
 /** MA refused or ignored a change because the track is already played or loading in the player's buffer */
-export const BUSY_MOVE = "That song is already loading, so it can't move right now.";
-export const BUSY_REMOVE = "That song is already loading, so it can't be removed right now.";
+export const BUSY_MOVE = "That track is already loading, so it can't move right now.";
+export const BUSY_REMOVE = "That track is already loading, so it can't be removed right now.";
 /** MA refused or ignored a move or a delete; the message is the one the Queue shows */
 export class QueueBusy extends Error {
   constructor(readonly kind: 'move' | 'remove' = 'move') { super(kind === 'remove' ? BUSY_REMOVE : BUSY_MOVE); }

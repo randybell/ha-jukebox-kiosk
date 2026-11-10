@@ -344,7 +344,7 @@ export class JbQueue extends LitElement {
         <jb-keyboard class="qkbd" .collapsible=${false} @jb-key=${this.onSearchKey}></jb-keyboard>
         <div class="scroll panel qres" aria-label="Queue search results">
           ${found.length ? found.map(({ it, i }) => this.row(it, i === cur ? 'now' : i < cur ? 'past' : 'next', i > cur ? i - cur : 0, i === cur + 1 + nb, i === items.length - 1, jumps, i > cur && i <= cur + nb, true))
-            : html`<div class="empty"><b>No matching songs</b><span>Try fewer letters.</span></div>`}
+            : html`<div class="empty"><b>No matching tracks</b><span>Try fewer letters.</span></div>`}
         </div></div>` : html`<div class="scroll panel" @scroll=${() => this.press.scrolled()}>
         ${s?.error ? html`<div class="empty"><b>Queue unavailable</b><span>${s.error}</span></div>`
           : !items.length ? html`<div class="empty"><b>${s?.loading || !s?.at ? 'Loading queue…' : 'The queue is empty'}</b><span>${combinedOn(this.config) ? `Add music from ${libraryTabLabel(this.config)}.` : `Add music from Search or ${libraryTabLabel(this.config)}.`}</span></div>`

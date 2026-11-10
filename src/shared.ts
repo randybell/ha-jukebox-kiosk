@@ -363,9 +363,9 @@ const CONFIRM: Record<ConfirmKind, { q: (n: string) => string; body: string; ok:
   play: { q: (n) => `Play “${n}” now?`, body: 'This replaces the current queue for everyone.', ok: 'Play', icon: 'play' },
   shuffle: { q: (n) => `Shuffle “${n}” now?`, body: 'This replaces the current queue for everyone.', ok: 'Shuffle', icon: 'shuffle' },
   // Queue-row Play Now jumps the shared queue, so it asks first
-  jump: { q: () => 'Play this now?', body: 'The current song will stop.', ok: 'Play Now', icon: 'play' },
+  jump: { q: () => 'Play this now?', body: 'The current track will stop.', ok: 'Play Now', icon: 'play' },
   // 0.7.9 #37: a live radio station replaces a queue that has songs
-  station: { q: () => 'This will replace your queue', body: 'The station plays for everyone and the songs in the queue are cleared.', ok: 'Play', icon: 'replace' },
+  station: { q: () => 'This will replace your queue', body: 'The station plays for everyone and the tracks in the queue are cleared.', ok: 'Play', icon: 'replace' },
 };
 export function confirmTpl(c: ConfirmState | null, close: () => void) {
   if (!c) return nothing;
