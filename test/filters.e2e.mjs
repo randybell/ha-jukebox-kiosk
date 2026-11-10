@@ -152,7 +152,8 @@ for (const kiosk of [false, true]) {
 // ---------------- 3. Library tab ----------------
 for (const kiosk of [false, true]) {
   const be = kiosk ? 'kiosk' : 'HA';
-  const p = await open(`&tab=browse&lhome=0${kiosk ? '&kiosk=1' : ''}`);
+  // 0.7.20: this block filters Library Tracks as a ROW list (.list .row), so it asks for rows (the harness's legacy default is tiles)
+  const p = await open(`&tab=browse&lhome=0${kiosk ? '&kiosk=1' : ''}`, { library_view: 'rows' });
   await wait(p, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
   await tap(p, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
   await wait(p, `${BR}.querySelectorAll('.list .row').length > 0`);
@@ -177,7 +178,8 @@ for (const kiosk of [false, true]) {
   await tap(p, `${BR}.querySelector('.empty.scoped [data-action="clear-filters"]')`);
   await wait(p, `!${BR}.querySelector('.scope') && !${BR}.querySelector('jb-keyboard') && ${BR}.querySelectorAll('.list .row').length > 5`);
   check(`LB7 [${be}] Clear filters: full list back, keyboard closed`, (await ev(p, `${BR}.querySelectorAll('.list .row').length`)) > 5 && !(await ev(p, `!!${BR}.querySelector('jb-keyboard')`)));
-  // artist filter
+  // artist filter: the rest of this block taps artist TILES, so the page goes back to tiles (same card, new config)
+  await ev(p, `__card.setConfig({ ...__card._config, library_view: 'tiles' })`); await sleep(400);
   await tap(p, `${BR}.querySelector('.cats .fc[data-cat="artist"]')`);
   await wait(p, `${BR}.querySelector('.tile[data-type="artist"]')`);
   await ev(p, `(() => { const t = [...${BR}.querySelectorAll('.tile[data-type="artist"]')].find((x) => x.querySelector('b').textContent === 'JJ Grey'); t.scrollIntoView(); })()`);
@@ -258,7 +260,7 @@ for (const kiosk of [false, true]) {
   check('Q60-4 idle_clear_filters: false → the scope chip stays across the screensaver', idle2 && (await ev(k, `!!${SV}.querySelector('.sc[data-scope="artist"]')`)));
   await k.close();
   // Library: text filter, then idle
-  const b = await open('&tab=browse&lhome=0&saver=0.1');
+  const b = await open('&tab=browse&lhome=0&saver=0.1', { library_view: 'rows' });
   await wait(b, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
   await tap(b, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
   await tap(b, `${BR}.querySelector('[data-act="filter"]')`);
@@ -270,6 +272,7 @@ for (const kiosk of [false, true]) {
   check('Q60-5 Library text filter + keyboard cleared by the idle reset; full list back', idle3 && !(await ev(b, `!!${BR}.querySelector('.scope')`))
     && !(await ev(b, `!!${BR}.querySelector('jb-keyboard')`)) && (await ev(b, `${BR}.querySelectorAll('.list .row').length`)) > 5);
   // no filter set: an open page stays put (the reset only touches filters)
+  await ev(b, `__card.setConfig({ ...__card._config, library_view: 'tiles' })`); await sleep(400); // the album step taps a TILE
   await tap(b, `${BR}.querySelector('.cats .fc[data-cat="album"]')`);
   await wait(b, `${BR}.querySelector('.tile[data-type="album"]')`);
   await tap(b, `${BR}.querySelector('.tile[data-type="album"]')`);

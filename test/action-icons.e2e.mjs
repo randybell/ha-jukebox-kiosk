@@ -1,8 +1,9 @@
-// 0.7.14 (issue #80, Randy: "a global setting for action icons"): card option show_action_icons (default true; editor label "Show Action Icons").
-// false hides the row action buttons on every list row: Library Tracks, Library search (tracks, playlists, artists, stations), Queue and Queue search
+// 0.7.14 (issue #80, Randy: "a global setting for action icons"): card option show_action_icons.
+// 0.7.20: the default is now OFF (missing = false) and the switch is gone from the card setup screen (YAML only); this test runs the card's own defaults (legacy=0).
+// false (or missing) hides the row action buttons on every list row: Library Tracks, Library search (tracks, playlists, artists, stations), Queue and Queue search
 // (Add/Play Next/Play Now/Remove, Move up/down and More), the artist page's Albums rows (and their column header). The heart and the LIBRARY tag stay.
 // The freed room goes to the title and subtitle (no gap), and a tap or hold on a row still opens the same pop-up as today.
-// Missing or true: nothing changes (buttons shown, same widths).
+// true: buttons shown (the 0.7.14 default look); missing behaves exactly like false.
 // EXCEPTION (kept on purpose, see detail-view.ts): track and episode rows on artist / album / playlist pages keep their buttons, because a tap
 // or hold there only highlights the row; hiding the buttons would leave no way to act on those rows.
 // Known, not caused by this option and unchanged here: on the artist page a TOUCH tap on an Albums row opens the album and the finger's own click then
@@ -46,7 +47,7 @@ const typeOnScreen = async (p, kbExpr, text) => {
 const newPage = async (url, cfg) => {
   const p = await browser.newPage(); await hermetic(p);
   await p.setViewport({ width: 1024, height: 600, deviceScaleFactor: 1, hasTouch: true });
-  await p.goto(`${BASE}?fresh=1&latency=20&kiosk=1${url}${cfg ? '&cfg=' + encodeURIComponent(J(cfg)) : ''}`); await p.waitForFunction('window.__ready === true'); await sleep(700);
+  await p.goto(`${BASE}?fresh=1&latency=20&kiosk=1&legacy=0${url}${cfg ? '&cfg=' + encodeURIComponent(J(cfg)) : ''}`); await p.waitForFunction('window.__ready === true'); await sleep(700);
   return p;
 };
 const libSearch = async (p, text, lcat) => {
@@ -103,13 +104,13 @@ for (const [name, T] of Object.entries(TYPES)) {
     await p.close();
   }
   const s = seen;
-  check(`${name}: option missing → action buttons shown (${s.missing?.buttons})`, !!s.missing && s.missing.buttons > 0, J(s.missing));
-  check(`${name}: show_action_icons: true → identical to missing (buttons, title width, gap)`, J(s.true) === J(s.missing), J({ t: s.true, m: s.missing }));
+  check(`${name}: show_action_icons: true → action buttons shown (${s.true?.buttons})`, !!s.true && s.true.buttons > 0, J(s.true));
+  check(`${name}: option missing → no action buttons, identical to false (the 0.7.20 default is off)`, !!s.missing && s.missing.buttons === 0 && J(s.missing) === J(s.false), J({ m: s.missing, f: s.false }));
   check(`${name}: show_action_icons: false → no action button on the row`, !!s.false && s.false.buttons === 0, J(s.false));
-  check(`${name}: false → the title and subtitle got the room (${s.missing?.rt}px → ${s.false?.rt}px) and no empty gap is left (${s.false?.gap}px at the right edge)`,
-    !!s.false && s.false.rt >= s.missing.rt + 70 && s.false.gap <= 30, J({ f: s.false, m: s.missing }));
-  check(`${name}: false → the heart and the LIBRARY tag are untouched`, s.false.heart === s.missing.heart && s.false.tag === s.missing.tag && s.false.heartInDom === s.missing.heartInDom && s.false.tagInDom === s.missing.tagInDom, J({ f: s.false, m: s.missing }));
-  if (T.albumHead) check(`${name}: false → the column header over the buttons is gone too; shown when missing`, s.missingHead === true && s.falseHead === false, J({ m: s.missingHead, f: s.falseHead }));
+  check(`${name}: off → the title and subtitle got the room (${s.true?.rt}px with buttons → ${s.false?.rt}px) and no empty gap is left (${s.false?.gap}px at the right edge)`,
+    !!s.false && s.false.rt >= s.true.rt + 70 && s.false.gap <= 30, J({ f: s.false, t: s.true }));
+  check(`${name}: off → the heart and the LIBRARY tag are untouched`, s.false.heart === s.true.heart && s.false.tag === s.true.tag && s.false.heartInDom === s.true.heartInDom && s.false.tagInDom === s.true.tagInDom, J({ f: s.false, t: s.true }));
+  if (T.albumHead) check(`${name}: off → the column header over the buttons is gone too; shown when true`, s.trueHead === true && s.falseHead === false && s.missingHead === false, J({ t: s.trueHead, f: s.falseHead, m: s.missingHead }));
 
   // ---- with the buttons off, a tap and a hold still open what they opened before ----
   for (const kind of ['touch', 'mouse']) {
@@ -132,14 +133,14 @@ for (const [name, T] of Object.entries(TYPES)) {
 }
 
 // ---- track rows on artist / playlist pages: buttons stay (kept on purpose) ----
-for (const [name, kindOf] of Object.entries(DETAIL)) {
-  const p = await newPage('&tab=browse', { show_action_icons: false });
+for (const [name, kindOf] of Object.entries(DETAIL)) for (const [ctag, ccfg] of [['option off', { show_action_icons: false }], ['option missing (default)', undefined]]) {
+  const p = await newPage('&tab=browse', ccfg);
   await libSearch(p, 'EAGLES', kindOf === 'playlist' ? undefined : 'artist');
   await wait(p, `${SV}.querySelector('.row[data-type="${kindOf}"]')`);
   const c = await center(p, `${SV}.querySelector('.row[data-type="${kindOf}"] .rt')`); await p.mouse.click(c.x, c.y);
   await wait(p, `${SD}?.querySelector('.row[data-type="track"]')`); await sleep(500);
   const l = await look(p, `${SD}.querySelector('.row[data-type="track"]')`);
-  check(`${name}, option off: buttons stay (a tap or hold there only highlights the row, so they are the only way to act)`, !!l && l.buttons > 0, J(l));
+  check(`${name}, ${ctag}: buttons stay (a tap or hold there only highlights the row, so they are the only way to act)`, !!l && l.buttons > 0, J(l));
   await shot(p, `0714-noicons-${kindOf}-page-tracks`);
   await p.close();
 }

@@ -93,6 +93,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   const p = await open();
   await wait(p, `${SV}.querySelectorAll('.lcats .lc').length >= 5`);
   for (const [cat, sel] of [['artist', `.tile[data-type=artist], .row[data-type=artist]`], ['track', `.row[data-type=track]`], ['radio', `.tile[data-type=radio], [data-empty=stations]`], ['playlist', `.tile[data-type=playlist]`]]) {
+    await ev(p, `__card.setConfig({ ...__card._config, library_view: '${cat === 'track' ? 'rows' : 'tiles'}' })`); // 0.7.20: Tracks as rows, the rest as tiles (harness legacy default is tiles)
     await tap(p, `${SV}.querySelector('.lcats .lc[data-lcat=${cat}]')`);
     const ok = await wait(p, `${BR}.querySelectorAll('${sel}').length > 0`);
     check(`B1 ${cat}: button on, library list shown`, ok && (await onBtn(p)) === cat && (await libShown(p)) && (await ev(p, `${SH}.browse.cat`)) === cat, J({ on: await onBtn(p) }));

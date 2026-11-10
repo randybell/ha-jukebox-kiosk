@@ -35,6 +35,9 @@
     if (params.has('overlay')) localStorage.setItem('jukebox-card:lyrics-overlay:v1', params.get('overlay') === '1' ? '1' : '0');
     // cfg=<json>: extra card options (e.g. {"lyrics_tab":false}), merged last
     const extra = params.get('cfg') ? JSON.parse(params.get('cfg')) : {};
+    // legacy=0: nothing added, the card's own 0.7.20 defaults (Library rows, row action buttons off). Without it the harness keeps the 0.7.14 look
+    // (Library tiles, action buttons on) so the older tests that were written against it still test what they were written for.
+    const legacy = params.get('legacy') === '0' ? {} : { library_view: 'tiles', show_action_icons: true };
     // spk=dyn: 0.5 dynamic speakers (targets Everywhere / Indoor / Outdoor; presets come from MA's dynamic-group defaults); target=<entity> presets the remembered group
     if (params.get('fresh') === '1') localStorage.removeItem('jukebox-card:target:v1');
     if (params.get('target')) localStorage.setItem('jukebox-card:target:v1', params.get('target'));
@@ -47,7 +50,7 @@
       localStorage.setItem('jukebox-card:recents:v1', JSON.stringify(['Miles Davis', 'Abbey Road', 'Jazz FM', 'Eagles', 'Fleetwood']));
     const card = document.createElement('jukebox-card');
     // stub=1: a brand-new card exactly as Home Assistant adds it (its stub config, nothing typed; cfg=<json> still merged)
-    if (params.get('stub') === '1') card.setConfig({ type: 'custom:jukebox-card', ...customElements.get('jukebox-card').getStubConfig(hass), ...extra });
+    if (params.get('stub') === '1') card.setConfig({ type: 'custom:jukebox-card', ...customElements.get('jukebox-card').getStubConfig(hass), ...legacy, ...extra });
     else card.setConfig({
       type: 'custom:jukebox-card',
       entity: 'media_player.everywhere',
@@ -66,6 +69,7 @@
       ...(params.get('lhome') === '0' ? { library_home: false } : {}),
       // layout=separate|combined: 0.7.2 library_layout (default: combined, one Library tab with the search box)
       ...(params.get('layout') ? { library_layout: params.get('layout') } : {}),
+      ...legacy,
       ...extra,
     });
     card.hass = hass;

@@ -30,8 +30,10 @@ async function labelsFit(p, root, selector, queue = false, search = false) {
 }
 for (const vp of [{ width: 1024, height: 600 }, { width: 390, height: 844 }, { width: 820, height: 1180 }]) {
  const tag = `${vp.width}x${vp.height}`; const p = await open(vp);
+ await p.evaluate(() => __card.setConfig({ ...__card._config, library_view: 'rows' })); // 0.7.20: Tracks as rows, playlist / artist as tiles (harness legacy default is tiles)
  await tap(p, `${SV}.querySelector('[data-lcat="track"]')`); await p.waitForFunction(`${BR}.querySelectorAll('.list .row[data-type="track"]').length > 0`);
  const lib = await labelsFit(p, BR, '.list .row[data-type="track"]'); check(`${tag} Library labels fit`, lib.ok, JSON.stringify(lib));
+ await p.evaluate(() => __card.setConfig({ ...__card._config, library_view: 'tiles' }));
  await tap(p, `${SV}.querySelector('[data-lcat="playlist"]')`); await tap(p, `${BR}.querySelector('.grid.playlist .tile .open')`); await p.waitForFunction(`${BR}.querySelector('jb-detail')?.shadowRoot.querySelectorAll('.list.tracks .row').length > 0`);
  const pl = await labelsFit(p, `${BR}.querySelector('jb-detail').shadowRoot`, '.list.tracks .row'); check(`${tag} Playlist labels fit`, pl.ok, JSON.stringify(pl));
  await tap(p, `${C}.querySelector('[data-tab="browse"]')`); await tap(p, `${SV}.querySelector('[data-lcat="artist"]')`); await tap(p, `${BR}.querySelector('.grid.artist .tile .open')`); await p.waitForFunction(`${BR}.querySelector('jb-detail')?.shadowRoot.querySelectorAll('.list.tracks .row').length > 0`);

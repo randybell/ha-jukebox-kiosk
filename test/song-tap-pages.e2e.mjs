@@ -58,7 +58,7 @@ const scrollerOf = (row) => `(() => { for (let a = ${row}; a; a = a.parentElemen
 // ---- the four setups: each returns { p, row (expr of the row to use), at (expr of the spot to tap/hold), shotName, mustScroll } ----
 const SETUPS = {
   'LIB-MORE': async () => {
-    const p = await newPage('&tab=browse');
+    const p = await newPage(`&tab=browse&cfg=${encodeURIComponent(JSON.stringify({ library_view: 'rows' }))}`); // 0.7.20: Tracks as rows (harness legacy default is tiles)
     await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Tracks').click()`); await sleep(600);
     await p.waitForFunction((b) => eval(b).querySelectorAll('.list .row[data-type="track"] .ra-b[data-act="more"]').length > 0, {}, BRC);
     const row = `${BRC}.querySelectorAll('.list .row[data-type="track"]')[1]`;

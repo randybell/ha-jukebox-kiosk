@@ -35,7 +35,8 @@ async function openSongs(layout, fav, touch) {
   const { q, BR } = LAYOUTS[layout];
   const p = await browser.newPage(); await hermetic(p);
   await p.setViewport({ width: 1024, height: 600, deviceScaleFactor: 1, hasTouch: touch });
-  await p.goto(`${BASE}?fresh=1&latency=20${q}`); await p.waitForFunction('window.__ready === true'); await sleep(700);
+  await p.goto(`${BASE}?fresh=1&latency=20${q}&cfg=${encodeURIComponent(JSON.stringify({ library_view: 'rows' }))}`); // 0.7.20: Tracks as rows (harness legacy default is tiles)
+  await p.waitForFunction('window.__ready === true'); await sleep(700);
   if (layout === 'combined') {
     await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Tracks').click()`);
     await sleep(500);

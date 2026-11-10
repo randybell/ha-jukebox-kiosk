@@ -559,12 +559,16 @@ const gl = cs.filter((c) => c.s === 'get_library');
 check('12a get_library calls: return_response + config_entry_id + media_type', gl.length > 0 && gl.every((c) => c.rr && c.data.config_entry_id === '01MUSICASSISTANT0000000000' && c.data.media_type && c.data.limit <= 500), JSON.stringify(gl[0]?.data));
 check('12b empty Radio/Podcasts/Audiobooks hidden (default mock = no radio provider)', !s.cats.includes('radio') && !s.cats.includes('podcast') && !s.cats.includes('audiobook') && s.cats.includes('playlist'), s.cats.join(','));
 check('12c provider badge from the URI scheme (library://)', s.badges.join(',') === 'Library', s.badges.join(','));
+// 0.7.20: Library Tracks are checked as ROWS here; the harness's legacy default is tiles, so this page switches to rows for the Tracks steps and back for the playlist / album tiles
+const setView = (v) => page.evaluate((x) => __card.setConfig({ ...__card._config, library_view: x }), v);
+await setView('rows');
 await clickEl(page, `${BV}.querySelector('[data-cat="track"]')`);
 await page.waitForFunction((b) => eval(b).querySelectorAll('.list .row[data-type="track"]').length > 0, {}, BV);
 check('12h1 Library songs: visible Play Next / Play Now / Remove labels (no icon-only row actions)', await page.evaluate((b) => {
   const rows = [...eval(b).querySelectorAll('.list .row[data-type="track"]')];
   return rows.length > 0 && rows.every((r) => [...r.querySelectorAll('.ra-b[data-act]')].filter((x) => x.getBoundingClientRect().width).filter((x) => ['next', 'replace', 'remove'].includes(x.dataset.act)).map((x) => x.querySelector('span')?.textContent).join() === 'Play Next,Play Now,Remove');
 }, BV));
+await setView('tiles');
 await clickEl(page, `${BV}.querySelector('[data-cat="playlist"]')`);
 const tile0 = `${BV}.querySelector('.tile')`;
 const t0uri = await page.evaluate((e) => eval(e).dataset.uri, tile0);

@@ -475,6 +475,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
     c.length >= 1 && c[c.length - 1][0] === 'favorites/remove_item' && c[c.length - 1][1].media_type === 'playlist' && `library://playlist/${c[c.length - 1][1].library_item_id}` === pl.uri
     && (await pressedOf(p, tfav)) === 'false' && !(await ev(p, `${BRs}.querySelector('.confirm')`)) && /^Removed .+ from favorites$/.test(await ev(p, `__card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st .ct')?.textContent?.trim() ?? ''`)), J(c));
   // Library › Tracks: a row heart; the same track then shows hearted in Search (shared store)
+  await ev(p, `__card.setConfig({ ...__card._config, library_view: 'rows' })`); await sleep(300); // 0.7.20: Tracks as rows (the harness's legacy default is tiles)
   await ev(p, `${BRs}.querySelector('[data-cat=track]').click()`);
   await wait(p, `${BRs}.querySelectorAll('.row [data-act=fav]').length > 3`);
   const tr = await ev(p, `[...${BRs}.querySelectorAll('.row')].map((r) => ({ uri: r.dataset.uri, name: r.querySelector('.rt b')?.textContent, fav: r.querySelector('[data-act=fav]')?.getAttribute('aria-pressed') ?? null })).find((x) => x.fav === 'false')`);

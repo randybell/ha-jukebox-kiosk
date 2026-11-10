@@ -1,6 +1,7 @@
-// 0.7.14 (#80): the card editor's "Show Action Icons" toggle. Same control (an on/off switch) and the same place as the other Display toggles
-// (right after "Large buttons"), no help text (no other toggle has any). Shown ON when the option is missing (the default), unchecked when the
-// config says false; switching it writes only that key; the card itself rejects a non-boolean value.
+// 0.7.14 (#80) added the card editor's "Show Action Icons" switch. 0.7.20 (Randy: "disable action buttons ... hide the option in the config"):
+// the option stays in YAML (show_action_icons, default OFF, true shows the row buttons) but the SWITCH IS GONE from the card setup screen.
+// Checks: no field/label for it anywhere in the editor; the other Display toggles are untouched and still in order; a YAML show_action_icons: true
+// (or false) survives any edit made in the editor; the card still refuses a non-boolean value.
 // Usage: node test/editor-action-icons.e2e.mjs (starts its own dev server). SHOTS=<dir> also writes a screenshot.
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -22,36 +23,26 @@ const open = async (cfg) => {
 const F = `__editor.shadowRoot.querySelector('ha-form')`;
 const ev = (p, e) => p.evaluate((x) => eval(x), e);
 
-{
-  const p = await open(base);
+for (const [tag, cfg] of [['missing', base], ['true in YAML', { ...base, show_action_icons: true }], ['false in YAML', { ...base, show_action_icons: false }]]) {
+  const p = await open(cfg);
+  const all = await ev(p, `[...${F}.querySelectorAll('[data-name]')].map((e) => e.dataset.name)`);
+  const labels = await ev(p, `[...${F}.querySelectorAll('[data-name]')].map((e) => e.textContent)`);
+  check(`show_action_icons ${tag}: the editor has no field for it`, !all.includes('show_action_icons'), J(all));
+  check(`show_action_icons ${tag}: no "Show Action Icons" (or "action icon") text anywhere in the editor`, !labels.some((t) => /action icon/i.test(t)), J(labels.filter((t) => /action/i.test(t))));
   const disp = await ev(p, `[...${F}.querySelectorAll('details[data-section=display] [data-name]')].map((e) => e.dataset.name)`);
-  const i = disp.indexOf('show_action_icons');
-  check('Display section lists show_action_icons right after large_buttons', i > 0 && disp[i - 1] === 'large_buttons', J(disp));
-  const f = await ev(p, `(() => { const r = ${F}.querySelector('[data-name=show_action_icons]'); const c = r?.querySelector('input'); return r ? { label: r.querySelector('span')?.textContent, type: c?.type, checked: c?.checked, text: r.textContent.trim(), same: r.className === ${F}.querySelector('[data-name=large_buttons]').className } : null; })()`);
-  check('label is "Show Action Icons", a checkbox/switch like the other toggles, no extra help text', f?.label === 'Show Action Icons' && f.type === 'checkbox' && f.text === 'Show Action Icons' && f.same, J(f));
-  check('option missing → shown ON (the default)', f?.checked === true, J(f));
-  const others = await ev(p, `[...${F}.querySelectorAll('[data-name].bool')].every((r) => r.textContent.trim() === r.querySelector('span').textContent.trim())`);
-  check('no other toggle has help text either (same style)', others === true);
+  check(`show_action_icons ${tag}: Display section is just its other settings, in order`, J(disp) === J(['default_tab', 'screensaver_minutes', 'screensaver_lyrics', 'backdrop', 'large_buttons', 'coerce_repeat_one']), J(disp));
+  // an edit made in the editor keeps whatever YAML had
   await ev(p, `__changes.length = 0`);
-  const c1 = await ev(p, `(() => { const i = ${F}.querySelector('[data-name=show_action_icons] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(200);
-  const ch = await ev(p, `__changes`);
-  const last = ch[ch.length - 1] ?? {};
-  check('switching it off writes show_action_icons: false and changes nothing else', last.show_action_icons === false && last.entity === base.entity && Object.keys(last).filter((k) => !(k in base)).join() === 'show_action_icons', J(last));
-  await sleep(300);
-  check('after switching off it shows OFF', (await ev(p, `${F}.querySelector('[data-name=show_action_icons] input').checked`)) === false);
-  if (process.env.SHOTS) await p.screenshot({ path: `${process.env.SHOTS}/0714-editor-show-action-icons.png` });
-  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=show_action_icons] input'); i.checked = true; i.dispatchEvent(new Event('change')); })()`); await sleep(200);
-  const ch2 = await ev(p, `__changes`); const l2 = ch2[ch2.length - 1] ?? {};
-  check('switching it back on writes true (or drops the key): the card treats both as on', l2.show_action_icons === true || !('show_action_icons' in l2), J(l2));
+  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=large_buttons] input'); i.checked = true; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
+  const last = (await ev(p, `__changes`)).at(-1) ?? {};
+  const had = 'show_action_icons' in cfg;
+  check(`show_action_icons ${tag}: an editor edit keeps it as YAML had it (${had ? cfg.show_action_icons : 'absent'}) and adds nothing else`,
+    (had ? last.show_action_icons === cfg.show_action_icons : !('show_action_icons' in last)) && last.large_buttons === true, J(last));
+  if (tag === 'missing' && process.env.SHOTS) await p.screenshot({ path: `${process.env.SHOTS}/0720-editor-display.png` });
   await p.close();
 }
 {
-  const p = await open({ ...base, show_action_icons: false });
-  check('config show_action_icons: false → loads OFF', (await ev(p, `${F}.querySelector('[data-name=show_action_icons] input').checked`)) === false);
-  await p.close();
-}
-{
-  // the card itself: a non-boolean value is refused like the other on/off options
+  // the card itself: a non-boolean value is still refused like the other on/off options
   const p = await browser.newPage(); await hermetic(p); await p.goto(`${ROOT}index.html?fresh=1`); await p.waitForFunction('window.__ready === true'); await sleep(500);
   const r = await ev(p, `(() => { const out = {}; for (const v of [false, true, undefined, 'no', 0]) { try { const el = document.createElement('jukebox-card'); el.setConfig({ type: 'custom:jukebox-card', entity: 'media_player.everywhere', ...(v === undefined ? {} : { show_action_icons: v }) }); out[String(v)] = 'ok'; } catch (e) { out[String(v)] = e.message; } } return out; })()`);
   check('card accepts true, false and missing; refuses "no" and 0', r.true === 'ok' && r.false === 'ok' && r.undefined === 'ok' && /show_action_icons must be true or false/.test(r.no) && /show_action_icons must be true or false/.test(r['0']), J(r));
