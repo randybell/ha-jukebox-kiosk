@@ -16,7 +16,7 @@ from .conftest import MA_ENTRY_ID, mark_frontend_loaded
 
 
 async def test_setup_adds_card(hass: HomeAssistant, kiosk: Any) -> None:
-    kiosk.js_urls.add.assert_called_once_with("/jukebox_kiosk_static/jukebox-card.js?v=0.7.12")
+    kiosk.js_urls.add.assert_called_once_with("/jukebox_kiosk_static/jukebox-card.js?v=0.7.13")
     assert kiosk.state is config_entries.ConfigEntryState.LOADED
 
 
@@ -66,4 +66,4 @@ async def test_unload(hass: HomeAssistant, kiosk: Any) -> None:
     from unittest.mock import patch
 
     assert await hass.config_entries.async_unload(kiosk.entry_id)
-    kiosk.js_urls.remove.assert_called_once_with("/jukebox_kiosk_static/jukebox-card.js?v=0.7.12")
+    kiosk.js_urls.remove.assert_called_once_with("/jukebox_kiosk_static/jukebox-card.js?v=0.7.13")

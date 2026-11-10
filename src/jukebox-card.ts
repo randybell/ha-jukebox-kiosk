@@ -28,7 +28,7 @@ import './hold-sheet';
 import { volDown, volFlush, setVolDown, onVolState, connected } from './vol-send';
 import type { HoldSheet, JbHoldSheet } from './hold-sheet';
 
-export const VERSION = '0.7.12';
+export const VERSION = '0.7.13';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'now', label: 'Now Playing', icon: 'disc' },
   { id: 'browse', label: 'Browse', icon: 'browse' },
