@@ -203,7 +203,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
         <small>${Ct(t.uri,t.provider,"album")}<span class="st">${["Album",t.year].filter(Boolean).join(" · ")}</span></small></div>
       <span class="du"></span>
       ${a?this.heart(t,"album"):B}
-      ${te(t,Wt("album",t),(e,i)=>this.rowAct(t,"album",e,i),ie,!0,!0)}
+      ${te(t,Wt("album",t),(e,i)=>this.rowAct(t,"album",e,i),ie,!0,!1)}
     </div>`}row(t,e,i=0){const s="podcast_episode"===t.media_type?"podcast_episode":"track",a=`${i}|${t.uri}`,r=this.press.handlers(a,{it:t,type:s,key:a}),o=!!Ee(this.config,s,t);return I`<div class="row ${o?"hasfav":""} ${this.press.held===a?"held":""} ${this._sel===a?"sel":""}" data-uri=${t.uri} data-type=${s}
         @pointerdown=${r.down} @pointermove=${r.move} @pointerup=${r.up} @pointercancel=${r.cancel} @pointerleave=${r.cancel}
         @contextmenu=${t=>t.preventDefault()}>

@@ -315,7 +315,7 @@ export class JbDetail extends LitElement {
         <small>${provTpl(it.uri, it.provider, 'album')}<span class="st">${['Album', (it as any).year].filter(Boolean).join(' · ')}</span></small></div>
       <span class="du"></span>
       ${fav ? this.heart(it, 'album') : nothing}
-      ${rowActsTpl(it, canRadio('album', it), (a, el) => this.rowAct(it, 'album', a, el), SEARCH_ACTS, true, true)}
+      ${rowActsTpl(it, canRadio('album', it), (a, el) => this.rowAct(it, 'album', a, el), SEARCH_ACTS, true, false)}
     </div>`;
   }
   private row(it: MaItem, n?: number, i = 0) {

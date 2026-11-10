@@ -1,5 +1,5 @@
-// 0.7.10 hold-to-fire: artist page Albums rows (0.7.13: Library search row buttons are no longer hold-to-fire, they fire on a normal tap or click; see
-// test/search-tap.e2e.mjs). On an Albums row a button fires only after HOLD_MS (500 ms) of holding; a quick tap does nothing; moving > 10 px cancels; the whole row highlights (with a progress fill) while held. Holding the row itself opens the menu 5
+// 0.7.10 hold-to-fire was removed for row buttons in 0.7.13: Library search row buttons (see test/search-tap.e2e.mjs) and artist page Albums row buttons
+// (see test/artist-albums-tap.e2e.mjs) now fire on a normal tap or click, with Play now and Start radio still asking first. Holding the row itself opens the menu 5
 // pop-up (Open, Add to queue, Play next, Play now, Start radio, Cancel). Menu 5 on Library tiles: same list; stations Open + Play now.
 // Usage: node test/hold.e2e.mjs (starts its own dev server)
 import puppeteer from 'puppeteer-core';
@@ -128,7 +128,7 @@ for (const [name, vp, q] of [['1024x712', { width: 1080, height: 768 }, '&ha=too
   c = await center(p, `${arow}.querySelector('.rt')`); await p.mouse.click(c.x - 40, c.y, { delay: 40 });
   check(`${name} search artist row: a quick tap still opens the artist`, await p.waitForFunction((d) => { try { return eval(d).querySelectorAll('.list.albums .row').length > 0; } catch { return false; } }, {}, DET).then(() => true, () => false));
   const alrow = `${DET}.querySelector('.list.albums .row')`;
-  await suite(p, `${name} artist Albums row`, DET, alrow, ['open:Open', 'add:Add to queue', 'next:Play next', 'replace:Play now', 'radio:Start radio', 'cancel:Cancel']);
+  await suite(p, `${name} artist Albums row`, DET, alrow, ['open:Open', 'add:Add to queue', 'next:Play next', 'replace:Play now', 'radio:Start radio', 'cancel:Cancel'], true /* 0.7.13: artist Albums row buttons fire on a tap */);
   await p.close();
 
   // ---- menu 5: Library tiles (album, station) ----
