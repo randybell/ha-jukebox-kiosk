@@ -4,6 +4,14 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.7.13 — 2026-11-10
+
+- Search results: the Add to queue, Play Next, Play Now and Start radio buttons on a result now work with a normal tap, not only a press-and-hold. Play Now and Start radio still ask first. A radio station's Play button still needs a press-and-hold.
+- Artist page: the buttons on the Albums rows (Add to queue, Play Next, Play Now and Start radio) now work with a normal tap too. Play Now and Start radio still ask first.
+- Queue: typing on a physical keyboard in Queue search now types into the search. Before, keys such as e, c, d, a and m went to Home Assistant's own shortcuts instead, such as its search bar.
+- Tapping a song now opens the same pop-up as pressing and holding it: in the Library Songs list, in Search results, in the Queue and in Queue search results (and on song tiles in Discover rows). Radio stations are unchanged. Before, a tap in the Queue did nothing, a tap in the Library Songs list opened a small menu, and a tap in Search results only lit up the row.
+- Library: the More button on a song row opens that same pop-up instead of the small menu.
+
 ## 0.7.12 — 2026-11-09
 
 - The page for a single genre is gone, along with the Genres filter and genre results in Search and the Genres tile on the optional Library home screen. Old settings that ask for them are ignored. In the older separate-tabs Library, the Genres button is still there, but tapping a genre in its list now opens nothing.
