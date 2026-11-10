@@ -144,6 +144,11 @@ export interface JukeboxCardConfig {
   library_tiles?: Array<LibraryTileId | { tile: LibraryTileId; label?: string }>;
   /** The Library tab's name (default "Library"). */
   library_label?: string;
+  /** 0.7.20: how the top level of every Library section (Playlists, Artists, Tracks, Genres, Radio, Albums, Podcasts, Audiobooks) is drawn:
+   *  'rows' (default) or 'tiles'. Pages you open (artist, album, playlist), Library search results and the Queue are not affected. */
+  library_view?: 'rows' | 'tiles';
+  /** 0.7.20: columns of tiles when `library_view: tiles`. 2 to 6, default 3 (anything else is clamped; not a number = 3). Ignored for rows. */
+  library_columns?: number;
   /** Clock and title */
   title?: string;
   /** fixed (default): always play on `entity`, the Speakers panel is a volume mixer. dynamic: pick the target, group and move. */

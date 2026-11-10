@@ -19,7 +19,7 @@ import {
   discoverWanted, DEFAULT_ROWS, parseRows, pickRows, parseItems, resumeFraction, memGet, memPut, memClear, ROWS_TTL_MS, ITEMS_TTL_MS, DISCOVER_CONCURRENCY,
   type DiscoverRow,
 } from './discover';
-import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, libraryCategories, type TileId } from './library-home';
+import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, libraryCategories, libraryView, libraryColumns, type TileId } from './library-home';
 import { loadDetail } from './detail-view';
 import { FavController, heartTpl, heartType } from './heart';
 import { PoolCache, libraryFiltered, normText, type ScopePool } from './search-scope';
@@ -413,7 +413,7 @@ export class JbBrowse extends LitElement {
         : html`<div class="list folders">${d!.folders.map((f) => html`<div class="row fold" role="button" data-path=${f.path}
             @click=${() => this.openFolder(f)}>${f.image ? artTpl({ name: f.name, image: f.image, uri: f.path }, 'th') : html`<span class="ar th gl">${icon('globe')}</span>`}
             <div class="rt"><b>${f.name}</b></div><span class="du"></span><span class="mo">${icon('open')}</span></div>`)}</div>`) : nothing}
-      ${d!.stations.length ? html`<div class="grid radio" data-src="radiobrowser">${d!.stations.map((it) => this.tile(it, 'radio'))}</div>` : nothing}
+      ${d!.stations.length ? this.libItems(d!.stations, 'radio', 'radiobrowser') : nothing}
       ${!d!.folders.length && !d!.stations.length ? html`<div class="empty"><b>No stations here</b><span>Try another ${this._rmode === 'popular' ? 'list' : this._rmode}.</span></div>` : nothing}`;
   }
 
@@ -677,9 +677,41 @@ export class JbBrowse extends LitElement {
     if (type === 'playlist') return it.owner ?? '';
     return artistNames(it);
   }
-  private tile(it: MaItem, type: string, resume = false) {
+  /** 0.7.20: the top level of a Library section, as `library_view` says: rows (a list) or tiles (a grid of `library_columns` columns). */
+  private libItems(items: MaItem[], type: string, src: string) {
+    if (libraryView(this.config) === 'tiles') {
+      return html`<div class="grid lib ${type}" data-layout="tiles" data-src=${src} style="--jb-cols:${libraryColumns(this.config)}">${items.map((it) => this.tile(it, type, false, true))}</div>`;
+    }
+    return html`<div class="list lib ${type === 'genre' ? 'genres' : type}" data-layout="rows" data-src=${src}>${items.map((it) => (type === 'track' ? this.row(it)
+      : type === 'genre' ? this.genreRow(it) : this.itemRow(it, type)))}</div>`;
+  }
+  /** 0.7.20: a Library row for playlists, artists, albums, stations, podcasts and audiobooks: the same small cover as the track rows (no circle),
+   *  title, sub line, source badge and heart, and an arrow when a tap opens a page. No action buttons (the tiles had none). Tap and hold are the tile's. */
+  private itemRow(it: MaItem, type: string) {
     const p = this.press.handlers(it.uri, { it, type });
-    const circ = type === 'artist';
+    const fav = !!heartType(this.config, type, it);
+    const sub = this.sub(it, type);
+    return html`<div class="row ir ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type=${type}
+        @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
+        @contextmenu=${(e: Event) => e.preventDefault()}>
+      ${artTpl(it, 'th')}
+      <div class="rt"><b>${it.name}</b>${sub ? html`<small>${sub}</small>` : nothing}</div>
+      ${provTpl(it.uri, it.provider, it.media_type ?? type)}
+      ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type), 'mo fav') : nothing}
+      ${drillable(type, this.config) ? html`<span class="mo go" aria-hidden="true">${icon('open')}</span>` : nothing}
+    </div>`;
+  }
+  /** A genre tile (0.7.20, tiles layout): the glyph cover like the genre row's; a tap opens nothing, as on the row. */
+  private genreTile(it: MaItem) {
+    return html`<div class="tile gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Open ${it.name}`} @click=${() => this.openDetail(it, 'genre')}>
+      <div class="tw"><span class="ar big gl" aria-hidden="true">${icon('genre')}</span></div>
+      <b>${it.name}</b><small>Genre</small>
+    </div>`;
+  }
+  private tile(it: MaItem, type: string, resume = false, lib = false) {
+    if (type === 'genre') return this.genreTile(it);
+    const p = this.press.handlers(it.uri, { it, type });
+    const circ = type === 'artist' && !lib; // 0.7.20: no circles in the Library's top level; Discover rows keep theirs
     const rf = resume ? resumeFraction(it) : 0;
     return html`<div class="tile ${circ ? 'artist' : ''} ${this.press.held === it.uri ? 'held' : ''} ${this.press.pressing === it.uri ? 'hp' : ''}" data-uri=${it.uri} data-type=${type}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
@@ -749,9 +781,9 @@ export class JbBrowse extends LitElement {
       <button class="fc" data-act="search-stations" tabindex="-1" @pointerdown=${noFocus}
         @click=${() => this.dispatchEvent(new CustomEvent('jukebox-nav', { detail: { tab: 'search', focus: true, category: 'radio' }, bubbles: true, composed: true }))}>${icon('search', 'i xs')}Search stations</button></div>`;
     return html`${favs.length ? html`<h3 class="sec" data-sec="favorites">${icon('heart', 'i xs')}Favorites</h3>
-        <div class="grid radio" data-src="favorites">${favs.map((it) => this.tile(it, 'radio'))}</div>` : nothing}
+        ${this.libItems(favs, 'radio', 'favorites')}` : nothing}
       ${rest.length ? html`<h3 class="sec" data-sec="more">${favs.length ? 'More stations' : 'Stations'}</h3>
-        <div class="grid radio" data-src="library">${rest.map((it) => this.tile(it, 'radio'))}</div>` : nothing}
+        ${this.libItems(rest, 'radio', 'library')}` : nothing}
       ${pg.loading ? html`<div class="empty"><span>Loading more…</span></div>` : nothing}`;
   }
 
@@ -779,10 +811,7 @@ export class JbBrowse extends LitElement {
     return this.gridOf(pg.items, pg.loading && this._cat !== 'track' ? html`<div class="empty"><span>Loading more…</span></div>` : nothing, pg.src);
   }
   private gridOf(items: MaItem[], tail: unknown, src: Src = 'library') {
-    if (this._cat === 'genre') return html`<div class="list genres" data-src=${src}>${items.map((it) => this.genreRow(it))}</div>${tail}`;
-    return this._cat === 'track'
-      ? html`<div class="list">${items.map((it) => this.row(it))}</div>${tail}`
-      : html`<div class="grid ${this._cat}" data-src=${src}>${items.map((it) => this.tile(it, this._cat))}</div>${tail}`;
+    return html`${this.libItems(items, this._cat, src)}${tail}`;
   }
 
   /** v0.7 Library home: big touch tiles, no backdrop-filter (light blur draws behind). */
@@ -933,6 +962,9 @@ export class JbBrowse extends LitElement {
     .row .ra { flex: none; } .row .ra-b { flex-shrink: 0; }
     .tile b { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
     .tile.artist b { text-align: center; }
+    /* 0.7.20 Library tiles: library_columns fixed columns (2 to 6) instead of as many 150px ones as fit */
+    .grid.lib { grid-template-columns: repeat(var(--jb-cols, 3), minmax(0, 1fr)); }
+    .row.ir { grid-template-columns: 44px minmax(0, 1fr); grid-auto-flow: column; grid-auto-columns: auto; }
     .tile small { font-size: 12px; color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .list { display: flex; flex-direction: column; }
     .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; min-height: 58px; padding: 0 4px; border-radius: 10px; cursor: pointer; }

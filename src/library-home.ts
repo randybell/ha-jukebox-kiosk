@@ -34,6 +34,21 @@ export const combinedOn = (c: Partial<JukeboxCardConfig> | undefined) => c?.libr
 /** Tab label: always "Library" (or `library_label`), with or without the tile home. */
 export const libraryTabLabel = (c: Partial<JukeboxCardConfig> | undefined) => String(c?.library_label ?? '').trim() || 'Library';
 
+/** 0.7.20: the top level of every Library section is drawn as rows or tiles (`library_view`). The default is in this one place. */
+export type LibraryView = 'rows' | 'tiles';
+export const DEFAULT_LIBRARY_VIEW: LibraryView = 'rows';
+export const LIBRARY_COLUMNS_MIN = 2, LIBRARY_COLUMNS_MAX = 6, DEFAULT_LIBRARY_COLUMNS = 3;
+/** `library_view`: 'rows' or 'tiles'; anything else (or unset) = the default. */
+export const libraryView = (c: Partial<JukeboxCardConfig> | undefined): LibraryView =>
+  c?.library_view === 'rows' || c?.library_view === 'tiles' ? c.library_view : DEFAULT_LIBRARY_VIEW;
+/** `library_columns` clamped to 2..6 (whole numbers); not a number = 3. */
+export function libraryColumns(c: Partial<JukeboxCardConfig> | undefined): number {
+  const raw: unknown = c?.library_columns;
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
+  if (!Number.isFinite(n)) return DEFAULT_LIBRARY_COLUMNS;
+  return Math.max(LIBRARY_COLUMNS_MIN, Math.min(LIBRARY_COLUMNS_MAX, Math.round(n)));
+}
+
 /** 0.7.2 Library category buttons, in the editor's order. */
 export interface LibraryCatDef { id: LibraryCategory; label: string; icon: string }
 export const LIBRARY_CATS: LibraryCatDef[] = [
