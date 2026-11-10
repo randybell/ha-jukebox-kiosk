@@ -58,7 +58,8 @@ export class JbQueue extends LitElement {
     if (ch.has('queue')) { this._unsub?.(); this._unsub = this.queue?.subscribe((s) => (this._snap = s)) as any; }
     if (ch.has('active') && this.active) this.queue?.refreshSoon(0);
   }
-  disconnectedCallback() { super.disconnectedCallback(); this._unsub?.(); this._unsub = undefined; }
+  connectedCallback() { super.connectedCallback(); window.addEventListener('keydown', this.onHwKey, true); }
+  disconnectedCallback() { super.disconnectedCallback(); window.removeEventListener('keydown', this.onHwKey, true); this._unsub?.(); this._unsub = undefined; }
 
   private toast(t: string) { this._toast = t; window.clearTimeout(this._toastTimer); this._toastTimer = window.setTimeout(() => (this._toast = ''), 2200); }
   private async run(p: Promise<any> | undefined, ok: string) {
@@ -183,6 +184,17 @@ export class JbQueue extends LitElement {
     else return false;
     return true;
   }
+  /** Hardware keyboard while Queue search is open (same rule as Library search): letters go into the search and are stopped here, so Home
+   *  Assistant's own shortcuts (e, c, d, a, m, ? open its search bar / Assist / My link) never see them. Esc is left to the card (escape()). */
+  private onHwKey = (e: KeyboardEvent) => {
+    if (!this._search || !this.active || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    const path = e.composedPath() as HTMLElement[];
+    if (path.some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)))) return;
+    if (e.key === 'Backspace') this._q = this._q.slice(0, -1);
+    else if (e.key.length === 1 && /[\p{L}\p{N}\p{P}\p{S} ]/u.test(e.key)) this._q = (this._q + e.key.toUpperCase()).slice(0, 60).replace(/^\s+/, '');
+    else return;
+    e.preventDefault(); e.stopPropagation();
+  };
   private onSearchKey = (e: CustomEvent<KeyDetail>) => {
     const d = e.detail;
     if (d.type === 'char') this._q = (this._q + d.value).slice(0, 60).replace(/^\s+/, '');
