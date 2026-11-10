@@ -416,8 +416,11 @@ export class JbDetail extends LitElement {
     .row.sr .ra-b span { display: none; }
     .row.sr .du { display: block; } /* no empty trailing grid column, so the buttons end at the list's right edge like the header */
     .row.sr.nor .ra { padding-right: var(--_abw, 48px); }
+    /* 0.7.14 (#80), OPEN QUESTION for Randy: a tap or hold on a track / episode row here only highlights it (no pop-up), so its buttons are the only way to
+       act on it. They stay even with show_action_icons: false until he decides. Albums rows (.sr: a hold opens the pop-up) do hide. */
+    .row[data-type="track"] .ra, .row[data-type="podcast_episode"] .ra { --jb-ra-display: flex; }
     /* sticky inside .list.albums only: it leaves with the Albums section; opaque and padded out to the panel edges so no album peeks above or beside it */
-    .ahd { position: sticky; top: -16px; z-index: 2; display: flex; justify-content: flex-end; margin: 0 -16px 2px; padding: 6px 16px;
+    .ahd { position: sticky; top: -16px; z-index: 2; display: var(--jb-ra-display, flex); justify-content: flex-end; margin: 0 -16px 2px; padding: 6px 16px;
       background: var(--_bg); }
     .ahd span { width: var(--_abw, 48px); flex: none; text-align: center; font-size: 11px; font-weight: 700; line-height: 1.15; color: var(--_muted); }
     :host([large]) .ahd, :host([large]) .row.sr { --_abw: 52px; }

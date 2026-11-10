@@ -164,6 +164,8 @@ export interface JukeboxCardConfig {
   coerce_repeat_one?: boolean;
   /** Bigger touch targets and text. Default false. */
   large_buttons?: boolean;
+  /** 0.7.14 (#80): false hides the row action buttons (Add to queue, Play Next, Play Now, Remove, Start radio, More, the Queue row buttons) on every list row. Default true. Taps and holds still open the pop-ups. */
+  show_action_icons?: boolean;
   /** @internal the Music Assistant config entry the card uses (what the integration reports, else an admin lookup) */
   _maEntry?: string;
   /** @internal the card's Music Assistant backend (set by the card, shared with every view) */

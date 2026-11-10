@@ -435,6 +435,8 @@ export const mediaStyles = css`
   .du:empty { display: none; }
   .rt small .du2 { display: none; flex: none; font-variant-numeric: tabular-nums; }
   .ra { display: flex; flex: none; }
+  /* 0.7.14 (#80): show_action_icons: false sets --jb-ra-display: none on the card; the row buttons (not the genre arrow .ra.go) go and free the space */
+  .row .ra:not(.go), .qr .ra { display: var(--jb-ra-display, flex); }
   .ra-b { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; color: #fff; }
   .ra-b:active { background: #ffffff26; }
   /* 0.7.10 hold progress: a fill that grows over HOLD_MS on the held button (and on a row / tile held for its pop-up) */

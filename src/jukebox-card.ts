@@ -59,6 +59,7 @@ function validateSpeakers(c: JukeboxCardConfig) {
   if (!bool(c.confirm_drop)) throw new Error('jukebox-card: confirm_drop must be true or false.');
   if (!bool(c.coerce_repeat_one)) throw new Error('jukebox-card: coerce_repeat_one must be true or false.');
   if (!bool(c.large_buttons)) throw new Error('jukebox-card: large_buttons must be true or false.');
+  if (!bool(c.show_action_icons)) throw new Error('jukebox-card: show_action_icons must be true or false.');
   if (c.grouping_users !== undefined && (!Array.isArray(c.grouping_users) || !c.grouping_users.every((u) => typeof u === 'string')))
     throw new Error('jukebox-card: grouping_users must be a list of user names or ids.');
   if (c.targets !== undefined) {
@@ -788,7 +789,7 @@ export class JukeboxCard extends LitElement {
     const view = (id: TabId, child: unknown) => html`<div class="view" data-view=${id} ?hidden=${this._tab !== id}>${child}</div>`;
     const c = this._config, h = this.hass, q = this.queue, tabs = this.tabs();
     return html`
-      <ha-card class="app bd-${bd} ${bd === 'full' ? '' : 'solid'} ${prefersReducedMotion() ? 'rm' : ''} ${c.large_buttons ? 'lg' : ''}" style="${c.height ? `--jb-height:${c.height}` : ''}">
+      <ha-card class="app bd-${bd} ${bd === 'full' ? '' : 'solid'} ${prefersReducedMotion() ? 'rm' : ''} ${c.large_buttons ? 'lg' : ''}" style="${c.height ? `--jb-height:${c.height};` : ''}${c.show_action_icons === false ? '--jb-ra-display:none;' : ''}">
         <header class="top">
           <div class="brand">${icon('disc', 'i brand-i')}<span>${c.title ?? 'Jukebox'}</span></div>
           <button class="pill" title=${c.entity!} tabindex="-1" aria-label="${pre} ${name}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk ? 'true' : 'false'}
