@@ -4,7 +4,7 @@ import { songInfo, INFO_TYPES } from './song-info';
 import { icon } from './icons';
 import { providerLabel } from './providers';
 import {
-  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl, foldedActions,
+  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, swallowNextClick, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl, foldedActions,
   playMedia, playMessage, normItem, drillable, canRadio, isRadio, hideStartRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
   maCall,
 } from './shared';
@@ -520,6 +520,9 @@ export class JbBrowse extends LitElement {
     if (drillable(type, this.config)) { this.press.release(); this.openDetail(it, type); return; }
     // a station (My stations, Favorites, the Favorites chip) opens the station sheet: details, heart, Play. A tap never plays (0.6.3)
     if (type === 'radio') { this.press.release(); fire(this, 'jukebox-station', { item: it }); return; }
+    // 0.7.13 (issue #78): a tap on a Library Songs row opens the same pop-up (jb-hold-sheet) as a hold on it, not the old small menu
+    // swallowNextClick: the pop-up opens under the finger, so the tap's own click must not land on one of its choices (a hold does the same)
+    if (type === 'track') { swallowNextClick(); this.openMenu(it, type, el); return; }
     const actions = tapActions((enq) => this.play(it, playType(it, type), enq), type === 'radio');
     this._menu = { item: it, type, pos: menuPos(this.root(), el, actions.length), actions };
   }
