@@ -911,32 +911,38 @@ export class JukeboxCard extends LitElement {
     .bdl { display: none; position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: 0; transition: opacity 600ms ease; pointer-events: none; }
     .np.on-now .bdl { display: block; }
     .bdl.ready { opacity: 1; }
-    /* static: HA media-control no-image fill (flat --primary-color), no art, no filters. */
-    .bd-static .np.on-now::before {
-      background: var(--primary-color, #03a9f4); filter: none; inset: 0;
-    }
-    /* off: HA media-control .off.background — --primary-color fill with grayscale; art hidden. */
-    .bd-off .np.on-now::before {
+    /* static ("Dark: a flat theme colour") and off: a flat --primary-color fill, no art, no filters (off is the same fill in grey, as HA media-control .off).
+       Each ::before needs its own content/position or the fill is never drawn (0.8.1 fix). */
+    .bd-static .np.on-now::before, .bd-off .np.on-now::before {
       content: ""; display: block; position: absolute; inset: 0; z-index: 0;
-      background: var(--primary-color, #03a9f4); filter: grayscale(1);
+      background: var(--primary-color, #03a9f4); filter: none;
     }
+    .bd-off .np.on-now::before { filter: grayscale(1); }
     .bd-off .np.on-now { background: var(--primary-color, #03a9f4); }
-    /* Now Playing on the primary fill: same as media-control .player { color: var(--text-primary-color) }. */
+    /* Now Playing on a primary-colour fill (static, off, and full/light with no art). Text is --text-primary-color, as HA media-control
+       .player does; where the browser supports relative colours it is switched to white or black from the fill's own lightness, so it stays
+       readable on any --primary-color (white on HA's default light blue is only 2.8:1). Everything derives from the theme variable. */
     .bd-full .np:not(.has-art) .view[data-view=now],
     .bd-light .np:not(.has-art) .view[data-view=now],
     .bd-static .view[data-view=now],
     .bd-off .view[data-view=now] {
       --_art-fg: var(--text-primary-color, #fff);
-      --_art-muted: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.7);
-      --_art-inactive: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.55);
-      --_art-track: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.3);
-      --_art-hairline: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.22);
-      --_art-divider: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.22);
-      --_art-chip-bg: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.12);
-      --_art-chip-bg-strong: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.2);
-      --_art-surface-border: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.28);
-      --_canvas-active: var(--text-primary-color, #fff);
-      --_canvas-on: var(--primary-color);
+      --_art-muted: color-mix(in srgb, var(--_art-fg) 70%, transparent);
+      --_art-inactive: color-mix(in srgb, var(--_art-fg) 55%, transparent);
+      --_art-track: color-mix(in srgb, var(--_art-fg) 30%, transparent);
+      --_art-hairline: color-mix(in srgb, var(--_art-fg) 22%, transparent);
+      --_art-divider: color-mix(in srgb, var(--_art-fg) 22%, transparent);
+      --_art-chip-bg: color-mix(in srgb, var(--_art-fg) 12%, transparent);
+      --_art-chip-bg-strong: color-mix(in srgb, var(--_art-fg) 20%, transparent);
+      --_art-surface-border: color-mix(in srgb, var(--_art-fg) 28%, transparent);
+      --_canvas-active: var(--_art-fg);
+      --_canvas-on: var(--primary-color, #03a9f4);
+    }
+    @supports (color: oklch(from red l c h)) {
+      .bd-full .np:not(.has-art) .view[data-view=now],
+      .bd-light .np:not(.has-art) .view[data-view=now],
+      .bd-static .view[data-view=now],
+      .bd-off .view[data-view=now] { --_art-fg: oklch(from var(--primary-color, #03a9f4) clamp(0, (0.57 - l) * 1000, 1) 0 0); }
     }
     .view { position: absolute; inset: 0; z-index: 1; }
     .view[hidden] { display: none; }
@@ -996,7 +1002,7 @@ export class JukeboxCard extends LitElement {
     @media (hover: hover) { .tab:hover { background: var(--_chip-sel); color: var(--_fg); } }
     .tab:active { transform: scale(.97); background: var(--_chip-sel); color: var(--_fg); }
     /* selected tab: HA sidebar pattern: --sidebar-selected-icon-color text/icon on a tint of that colour at --dark-divider-opacity */
-    .tab.active, .tab.active:hover, .tab.active:active { background: rgba(var(--rgb-primary-color, 3, 169, 244), var(--dark-divider-opacity, 0.12)); color: var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)); }
+    .tab.active, .tab.active:hover, .tab.active:active { background: color-mix(in srgb, var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)) calc(var(--dark-divider-opacity, 0.12) * 100%), transparent); color: var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)); }
     .tab:focus-visible { outline: 2px solid var(--_active); outline-offset: 3px; }
     .tab .badge { top: 4px; left: calc(50% + 6px); }
     .lg .tab { min-height: 80px; font-size: var(--ha-font-size-l, 16px); } .lg .tab .i { width: 34px; height: 34px; }
