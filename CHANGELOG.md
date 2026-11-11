@@ -4,6 +4,24 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.8.1 — 2026-11-11
+
+- Now Playing no longer has the blurred album-art background by default. It is now a plain card in your Home Assistant theme colors, like Library and Queue, and the cover still shows in its own square. To get the album-art background back, set Background to "Automatic", "Full" or "Light" in the card editor, or set `backdrop: auto`, `backdrop: full` or `backdrop: light` in YAML. The new default is `backdrop: plain`. The other choices (`auto`, `full`, `light`, `static` and `off`) still work when you pick them.
+- When you pick a background that shows album art, the art, its dark shade and the color behind it appear on Now Playing only. Library, Search and Queue use your theme colors alone, also on themes with see-through cards.
+- The "Dark" background (`backdrop: static`) now really shows its flat fill in your theme's main color. It matches Home Assistant's own media control card: the fill is the theme's main color, and the text and icons use the theme's "text on primary" color, with no switching between black and white. "Off" is the same fill in gray, the way Home Assistant draws its media card when it is off. Now Playing looks the same with the Full or Light background when there is no art.
+- The on-screen keyboard now uses Home Assistant's input and button colors. It no longer has a dark grey panel.
+- The Library category buttons, the search boxes, the source buttons and the small tags and chips use Home Assistant's chip and input colors. A selected one has Home Assistant's soft highlight instead of a solid color.
+- The selected tab at the bottom (Now Playing, Library, Queue) has a soft tinted background and a colored label, the way Home Assistant marks the selected item in its own sidebar. It uses the theme's "sidebar selected" color, which is the main color by default. It used to be a solid block.
+- The cover buttons and the corner buttons on tiles are plain round buttons in your theme colors, with no dark fill and no blur.
+- The speakers panel and "Up next" on Now Playing are solid theme cards with theme text.
+- The card no longer draws its own black shadows (on the cover, the Play button, the slider knob and the selected Library category). It uses Home Assistant's card shadow only if your theme sets one.
+- Pop-ups dim the screen behind them once, the way Home Assistant's own dialogs do. If your theme does not say how much, the card uses Home Assistant's own default (68% brightness). A theme that sets it, even to none, wins.
+- Messages (toasts) look like Home Assistant's own.
+- A cover with no picture shows a plain square in your theme's main color. A radio station with no logo shows the same square, and the colored radio-tower picture is gone.
+- In the Queue, the artist line on the playing row is a lighter shade of the row's text color.
+- The screensaver is unchanged.
+- In the card editor, the Background choices now read: "Plain (default)", "Automatic", "Full", "Light", "Dark" and "Off". Dark and Off show no album art.
+
 ## 0.8.0 — 2026-11-11
 
 - The card now follows your Home Assistant theme, the way Home Assistant's own cards do. Colors come from the theme, in light and in dark, on every screen. The card's corners, shadow and border come from the theme's card settings, and every pop-up uses the theme's dialog corners, shadow, maximum height and dimmed background. Text sizes, weights and line spacing come from the theme too. Buttons that are selected, such as the tab you are on, the Library category, the picked sources, the Play button and the playing row in the Queue, now use the theme's main color instead of white.

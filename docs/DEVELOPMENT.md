@@ -88,7 +88,7 @@ URL parameters:
 | `kiosk=1` (default; `kiosk=0` = core Music Assistant only, `config_entries/get` for admins) | loads the Jukebox Kiosk integration mock (`dev/mock-kiosk.js`): `jukebox_kiosk` in `hass.config.components` and its WebSocket API on `callWS` / `connection.subscribeMessage`, so `backend: auto` picks `kiosk`. Every message is logged in `window.__ws`; `window.__kioskPush(entity)` sends a queue push, `window.__kioskSubs()` lists subscriptions |
 | `kcaps=<json>` | with `kiosk=1`, overrides the `features` returned by `jukebox_kiosk/capabilities` |
 | `kfail=<type>` | with `kiosk=1`, that `jukebox_kiosk/<type>` message fails |
-| `backdrop=auto\|full\|light\|static\|off` | sets the `backdrop` option |
+| `backdrop=plain\|auto\|full\|light\|static\|off` | sets the `backdrop` option (without it the card uses its default, `plain`, since 0.8.1) |
 | `ha=toolbar\|kiosk\|masonry` | emulates a Home Assistant view around the card: fixed 56 px toolbar (`--header-height`), toolbar hidden (kiosk mode), or a masonry view with padding and a card above |
 | `sidebar=open\|narrow\|closed\|none` | with `ha=`, the HA sidebar width (256 px, 56 px, or none; default `narrow`) |
 
