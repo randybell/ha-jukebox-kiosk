@@ -547,7 +547,7 @@ export class JbSpeakers extends LitElement {
     :host(:not([open])) .scrim, :host(:not([open])) .confirm, :host(:not([open])) .st { pointer-events: auto; }
     .scrim { position: absolute; inset: 0; }
     .sp-scrim { z-index: 1; background: var(--_scrim); -webkit-backdrop-filter: var(--_scrim-filter); backdrop-filter: var(--_scrim-filter); }
-    .sheet { position: absolute; z-index: 2; display: flex; flex-direction: column; background: var(--ha-dialog-surface-background, var(--_bg)); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow);
+    .sheet { position: absolute; z-index: 2; display: flex; flex-direction: column; background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow);
       left: 0; right: 0; bottom: 0; max-height: min(100%, var(--_popup-max-h)); border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; padding-bottom: env(safe-area-inset-bottom); overflow: hidden; }
     .sh { display: flex; align-items: center; gap: 12px; padding: 16px 16px 12px 20px; border-bottom: 1px solid var(--_divider); }
     .ht { display: flex; flex-direction: column; min-width: 0; flex: 1; }
@@ -557,7 +557,7 @@ export class JbSpeakers extends LitElement {
     /* 0.7.8 #50: a labeled Close button (was a small X), high contrast, sized like the card's other buttons */
     .x { height: 48px; min-width: 88px; padding: 0 20px; display: grid; place-items: center; border-radius: 999px; flex: none;
       background: var(--_active); color: var(--_on-accent); font: inherit; font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; }
-    .x:active { transform: scale(.96); background: var(--_chip-bg-strong); }
+    .x:active { transform: scale(.96); background: var(--_chip-sel); }
     .body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 20px 20px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
     .banner { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: 10px 14px; border-radius: 12px; border: 1px solid var(--_divider); background: var(--_chip-bg); }
     .blk { display: flex; flex-direction: column; gap: 8px; }
@@ -566,7 +566,7 @@ export class JbSpeakers extends LitElement {
     .chip { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--_surface-border);
       font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); }
     .chip .i { width: 18px; height: 18px; }
-    .chip.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
+    .chip.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .chip.busy { opacity: .6; }
     .chip:active { transform: scale(.97); }
     .chip .live { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -596,8 +596,10 @@ export class JbSpeakers extends LitElement {
     /* 0.6.4 status chip: top-right of the middle area, right under the header clock (never over it); it replaces the
        0.6.3 centred toast and the bottom Undo bar. With the panel open it moves left of the panel's close button. */
     .st { position: absolute; z-index: 12; top: 10px; right: var(--_pad); max-width: min(400px, calc(100% - 2 * var(--_pad))); min-height: 40px;
-      display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 14px; border-radius: 20px; pointer-events: auto;
-      background: var(--ha-dialog-surface-background, var(--_bg)); color: var(--_fg); border: 1px solid var(--_surface-border); box-shadow: var(--ha-card-box-shadow, 0 8px 24px rgba(0,0,0,.3)); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2);
+      display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 14px; border-radius: var(--ha-border-radius-sm, 4px); pointer-events: auto;
+      /* ha-toast styling: neutral loud fill, on-neutral text */
+      --_fg: var(--ha-color-on-neutral-loud); --_muted: var(--ha-color-on-neutral-loud);
+      background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); border: 0; box-shadow: var(--ha-box-shadow-l, none); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2);
       animation: stin 160ms ease both; }
     .st.info, .st.busy { padding-right: 14px; } .st.info:has(.ca), .st.busy:has(.ca) { padding-right: 4px; }
     .st .ct { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 0; }

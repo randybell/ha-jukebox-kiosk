@@ -371,8 +371,8 @@ export class JbQueue extends LitElement {
     h2 { font-family: var(--_font-display); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); }
     .cnt { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); }
     .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
-      border: 1px solid var(--_divider); background: transparent; color: var(--_muted); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
-    .ap.on { background: var(--_active); color: var(--_on-accent); border-color: transparent; }
+      border: 1px solid var(--_surface-border); background: var(--_chip-bg); color: var(--_muted); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
+    .ap.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .ap:disabled { opacity: .45; cursor: default; }
     .apg { margin-left: auto; align-self: center; display: inline-flex; }
     .apg .ap { margin-left: 0; }
@@ -380,14 +380,14 @@ export class JbQueue extends LitElement {
     .apg.split .apc { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding: 0 10px; box-shadow: inset 1px 0 0 var(--_divider); }
     .apg.split .apc.on { box-shadow: inset 1px 0 0 var(--_hairline); }
     .aps { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100% - 24px)); max-height: min(100%, var(--_popup-max-h));
-      padding: 14px 14px 16px; border-radius: var(--_dialog-radius); background: var(--ha-dialog-surface-background, var(--_bg)); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+      padding: 14px 14px 16px; border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); display: flex; flex-direction: column; gap: 10px; overflow: auto; }
     .aps-h { display: flex; align-items: center; gap: 6px; min-height: 44px; }
     .aps-h b { flex: 1; font-family: var(--_font-display); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); padding-left: 6px; }
     .aps-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; scrollbar-width: none; }
     .apo { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 8px 12px; border-radius: 12px; text-align: left; color: var(--_fg); font: inherit; }
-    .apo:active { background: var(--_chip-bg-strong); }
+    .apo:active { background: var(--_chip-sel); }
     .apo:disabled { opacity: .6; }
-    .apo[aria-checked="true"] { background: var(--_chip-bg); }
+    .apo[aria-checked="true"] { background: var(--_chip-sel); }
     .apo span:not(.rb):not(.dot):not(.spin) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .apo b { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .apo small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -396,7 +396,7 @@ export class JbQueue extends LitElement {
     .rb { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--_inactive); display: grid; place-items: center; }
     .rb.sel { border-color: var(--_active); }
     .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--_active); }
-    .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--_chip-bg-strong); border-top-color: var(--_fg); animation: spin 700ms linear infinite; }
+    .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--_chip-sel); border-top-color: var(--_fg); animation: spin 700ms linear infinite; }
     @keyframes spin { to { transform: rotate(360deg) } }
     .aps-note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: 0 8px; }
     .aps-msg { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); padding: 18px 8px; text-align: center; }
@@ -405,6 +405,8 @@ export class JbQueue extends LitElement {
     @keyframes pulse { from { opacity: 1 } to { opacity: .35 } }
     .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 10px 12px 20px; display: flex; flex-direction: column; touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
+    /* the list sits directly on the HA card surface: no second fill */
+    .scroll.panel { background: transparent; }
     h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); margin: 12px 6px 6px; }
     h3.eyebrow:first-child { margin-top: 2px; }
     .qr { display: grid; grid-template-columns: 28px 48px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 72px; padding: 6px 8px; border-radius: 12px; }
@@ -417,36 +419,36 @@ export class JbQueue extends LitElement {
     .rt small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .qr.now { background: var(--_active); color: var(--_on-accent); border-top-color: transparent; }
     .qr.now + .qr, h3 + .qr { border-top-color: transparent; }
-    .qr.now .rt small { color: var(--_muted); }
+    .qr.now .rt small { color: rgba(var(--rgb-text-primary-color, 255,255,255), .7); } /* a tint of the on-primary text colour */
     .qr.now .pv { color: var(--_on-accent); border-color: rgba(var(--rgb-text-primary-color, 255,255,255), .4); background: rgba(var(--rgb-text-primary-color, 255,255,255), .12); }
     .qr.past { opacity: .45; }
-    .qr.held { background: var(--_chip-bg-strong); box-shadow: inset 0 0 0 1.5px var(--_active); }
+    .qr.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 1.5px var(--_active); }
     .acts { display: flex; gap: 2px; align-items: center; }
     .qr .ra-b { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; flex: none;
       width: auto; min-width: 76px; min-height: 60px; height: auto; padding: 6px; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); }
     .qr .ra-b span { white-space: nowrap; }
     .qr .ra-b .i { flex: none; }
     .qsearch { align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
-      border: 1px solid var(--_divider); color: var(--_fg); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
-    .qsearch.on { background: var(--_active); color: var(--_on-accent); }
+      border: 1px solid var(--_surface-border); color: var(--_fg); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
+    .qsearch.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .qsx { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(360px, 38%) minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 10px 16px;
       grid-template-areas: "q res" "kb res"; }
     .qsbar { grid-area: q; display: flex; flex-direction: column; gap: 5px; }
-    .qsq { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; border-radius: 14px; background: var(--_chip-bg); border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); }
-    .qsq .ph { color: var(--_muted); font-weight: var(--ha-font-weight-medium, 500); }
+    .qsq { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; border-radius: 14px; background: var(--_input-bg); color: var(--_input-ink); border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); }
+    .qsq .ph { color: var(--_input-label); font-weight: var(--ha-font-weight-medium, 500); }
     .qsbar small { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); padding-left: 4px; }
     .qkbd { grid-area: kb; align-self: end; --kh: 42px; --kgap: 6px; --kfs: var(--ha-font-size-xl, 20px); }
     .qres { grid-area: res; }
     .qr.sr { grid-template-columns: 22px 44px minmax(0, 1fr) auto; cursor: default; }
     .qr .ra-b { color: var(--_fg); } .qr.now .ra-b { color: var(--_on-accent); }
     .qa { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--_inactive); }
-    .qa:active { background: var(--_chip-bg-strong); color: var(--_fg); }
+    .qa:active { background: var(--_chip-sel); color: var(--_fg); }
     .qa:disabled { opacity: .25; }
     .qr .qa[data-action="up"], .qr .qa[data-action="down"], .qr .qa.mo { color: var(--_fg); } /* #41: same color as the other row action icons */
     .qa .i { width: 22px; height: 22px; }
     .qr.jx .qa.mo { display: none; }
     .undo { position: absolute; left: 50%; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); bottom: 14px; z-index: 5; display: flex; align-items: center; gap: 12px;
-      padding: 8px 8px 8px 18px; border-radius: 999px; background: var(--_surface); border: 1px solid var(--_surface-border); box-shadow: var(--ha-card-box-shadow, 0 10px 30px rgba(0,0,0,.3)); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
+      padding: 8px 8px 8px 18px; border-radius: var(--ha-border-radius-sm, 4px); background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); box-shadow: var(--ha-box-shadow-l, none); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); } /* ha-toast */
     .undo span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ub { height: 44px; padding: 0 20px; border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
     .undo ~ .toast { bottom: 76px; }

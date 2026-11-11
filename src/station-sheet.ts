@@ -126,7 +126,7 @@ export class JbStation extends LitElement {
     .st-scrim { z-index: 1; background: var(--_scrim); -webkit-backdrop-filter: var(--_scrim-filter); backdrop-filter: var(--_scrim-filter); }
     .sheet { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; max-height: min(100%, var(--_popup-max-h)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
       display: flex; flex-direction: column; gap: 16px; padding: 22px 20px calc(18px + env(safe-area-inset-bottom));
-      background: var(--ha-dialog-surface-background, var(--_bg)); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; box-shadow: var(--_dialog-shadow); }
+      background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; box-shadow: var(--_dialog-shadow); }
     .x { position: absolute; top: 12px; right: 12px; z-index: 1; } /* #51: the labeled Close pill (was an X) */
     .top { display: flex; gap: 16px; align-items: flex-start; padding-right: 104px; }
     :host([large]) .top { padding-right: 120px; }
