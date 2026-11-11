@@ -4,6 +4,16 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.8.0 — 2026-11-11
+
+- The card now follows your Home Assistant theme, the way Home Assistant's own cards do. Colors come from the theme, in light and in dark, on every screen. The card's corners, shadow and border come from the theme's card settings, and every pop-up uses the theme's dialog corners, shadow, maximum height and dimmed background. Text sizes, weights and line spacing come from the theme too. Buttons that are selected, such as the tab you are on, the Library category, the picked sources, the Play button and the playing row in the Queue, now use the theme's main color instead of white.
+- The look changes after you update. The Inter and Plus Jakarta Sans fonts are gone, so the card uses your theme's font (Roboto with Home Assistant's default theme), and titles and the clock look plainer than before. The `fonts/` folder is no longer part of the card, and the card no longer downloads fonts.
+- Now Playing: when nothing is playing or there is no art, the screen fills with the theme's main color with light text, the way Home Assistant's media player card looks when it is off or has no picture. The Static and Off backdrop choices look the same (Off in gray) instead of a dark gradient and plain black. With art, the dark shade and white text stay so the text is easy to read on any cover. The Library, Search and Queue screens now sit on the theme's card background instead of the blurred art, and the panels on them use the theme's secondary background color.
+- The Now Playing title is now no larger than the biggest size in Home Assistant's text scale (40 px with the default theme). Before, it could reach 44 px.
+- The screensaver is unchanged, except that it uses the theme's font, and its lyric lines use the theme's text weight and line spacing.
+- `font_base` is still accepted, so old setups keep loading, but it no longer does anything. If you set it, you can remove it from your setup.
+- The `--jb-…` style overrides, such as `--jb-panel-filter`, `--jb-surface` and `--jb-panel-solid`, whether set in a theme or with card-mod, are gone and no longer do anything. Change the colors in your Home Assistant theme instead.
+
 ## 0.7.20 — 2026-11-10
 
 - New setting, Library lists (`library_view`), in the card setup under Library. It chooses how the top of every Library button is drawn: Rows (the default) or Tiles. A row is a list line with a small cover, the title and the line under it, the source badge, the heart, and an arrow where a tap opens a page. Tiles are a grid of big covers. Because Rows is now the default, Playlists, Artists, Albums and Radio show as lists instead of tiles until you pick Tiles. Artists are no longer round in the Library lists. It covers Playlists, Artists, Tracks and Radio (Favorites, More stations and the online station lists too), Albums, Podcasts and Audiobooks when you have added those buttons, and Genres in the older separate-tabs Library. With Tiles, Tracks and Genres become tiles too; they were always rows before. Any other value counts as Rows.
