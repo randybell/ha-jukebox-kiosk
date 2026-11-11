@@ -1,39 +1,55 @@
 import { css } from 'lit';
 
 /**
- * Black Frame Mono design tokens. Every token can be overridden from an HA theme or card-mod by
- * setting the public `--jb-*` property; the card reads them through private `--_*` aliases.
+ * Private `--_*` aliases point at Home Assistant theme variables (no public `--jb-*` color knobs).
+ * Album-art shade/vignette stay as dark overlays over art (intentional; not theme chrome).
+ * Art-contrast (`--_art-*` from .np.has-art) is applied only where text sits on the art shade
+ * (see now-view); theme surfaces keep these theme defaults.
  */
 export const tokens = css`
   :host {
-    --_active: var(--jb-active, #ffffff);
-    --_inactive: var(--jb-inactive, rgba(255, 255, 255, 0.45));
-    --_track: var(--jb-track, rgba(255, 255, 255, 0.2));
-    --_accent: var(--jb-accent, var(--_active));
-    --_on-accent: var(--jb-on-accent, #000000);
-    --_fg: var(--jb-fg, #ffffff);
-    --_muted: var(--jb-muted, #ffffffb8);
-    --_bg: var(--jb-bg, #000000);
-    --_hairline: var(--jb-hairline, #ffffff1f);
-    --_surface: var(--jb-surface, #0000006b);
-    --_surface-border: var(--jb-surface-border, #ffffff1f);
-    --_divider: var(--jb-divider, #ffffff1f);
-    --_prov-fg: var(--jb-prov-fg, #ffffff);
-    --_prov-bg: var(--jb-prov-bg, #000000a6);
-    --_prov-border: var(--jb-prov-border, rgba(255, 255, 255, 0.35));
-    --_thumb-ring: var(--jb-thumb-ring, 0 0 0 4px rgba(255, 255, 255, 0.18));
-    --_backdrop-blur: var(--jb-backdrop-blur, 38px);
-    --_backdrop-saturate: var(--jb-backdrop-saturate, 1.15);
-    --_shade: var(
-      --jb-shade,
-      linear-gradient(180deg, #000000b8 0%, #00000085 35%, #0000009e 70%, #000000e0 100%)
-    );
-    --_vignette: var(--jb-vignette, radial-gradient(120% 90% at 50% 50%, transparent 30%, #0000008c 100%));
-    --_font-body: var(--jb-font-body, 'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
-    --_font-display: var(--jb-font-display, 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
-    --_pad: var(--jb-pad, clamp(14px, 3vw, 36px));
-    --_radius: var(--jb-radius, 18px);
-    --_radius-s: var(--jb-radius-s, 12px);
+    /* selected / on: HA primary + label on primary (built-in media-control / sidebar pattern).
+       --_canvas-active/--_canvas-on are set on the Now Playing primary-color fill (no art / static / off)
+       so transport controls stay readable, like media-control's --text-primary-color on --primary-color. */
+    --_active: var(--_canvas-active, var(--primary-color, #03a9f4));
+    --_inactive: var(--secondary-text-color, var(--state-inactive-color, var(--disabled-text-color)));
+    --_track: var(--divider-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.28));
+    --_accent: var(--accent-color, var(--_active));
+    --_on-accent: var(--_canvas-on, var(--text-primary-color, #fff)); /* label on --_active */
+    --_fg: var(--primary-text-color, #212121);
+    --_muted: var(--secondary-text-color, #727272);
+    --_bg: var(--ha-card-background, var(--card-background-color, #fff));
+    --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
+    --_surface: var(--_mode-surface, var(--secondary-background-color, var(--_bg)));
+    --_surface-border: var(--divider-color, rgba(0, 0, 0, 0.12));
+    --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
+    --_prov-fg: var(--primary-text-color, #212121);
+    --_prov-bg: var(--secondary-background-color, var(--_bg));
+    --_prov-border: var(--divider-color, rgba(0, 0, 0, 0.12));
+    --_thumb-ring: 0 0 0 4px rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.18);
+    --_chip-bg: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08);
+    --_chip-bg-strong: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.14);
+    --_scrim: var(--mdc-dialog-scrim-color, rgba(0, 0, 0, 0.32));
+    --_scrim-filter: var(--ha-dialog-scrim-backdrop-filter, var(--dialog-backdrop-filter, none));
+    --_panel-filter: var(--_mode-panel-filter, blur(14px));
+    --_panel-solid: var(--_mode-panel-solid, var(--ha-card-background, var(--card-background-color, #fff)));
+    /* same ceiling as ha-dialog (no phone-size fullscreen override) */
+    --_popup-max-h: var(--ha-dialog-max-height, calc(var(--safe-height, 100dvh) - var(--ha-space-20, 80px)));
+    --_dialog-radius: var(--ha-dialog-border-radius, var(--ha-border-radius-3xl, 24px));
+    --_dialog-shadow: var(--dialog-box-shadow, var(--wa-shadow-l, 0 24px 60px rgba(0, 0, 0, 0.35)));
+    --_card-shadow: var(--ha-card-box-shadow, none);
+    --_card-border-width: var(--ha-card-border-width, 1px);
+    --_card-border-color: var(--ha-card-border-color, var(--divider-color, var(--_surface-border)));
+    --_backdrop-blur: 38px;
+    --_backdrop-saturate: 1.15;
+    /* Album-art readability overlays — kept (not theme chrome) */
+    --_shade: linear-gradient(180deg, #000000b8 0%, #00000085 35%, #0000009e 70%, #000000e0 100%);
+    --_vignette: radial-gradient(120% 90% at 50% 50%, transparent 30%, #0000008c 100%);
+    --_font-body: var(--ha-font-family-body, Roboto, Noto, sans-serif);
+    --_font-display: var(--ha-font-family-heading, var(--ha-card-header-font-family, var(--ha-font-family-body, Roboto, Noto, sans-serif)));
+    --_pad: clamp(14px, 3vw, 36px);
+    --_radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
+    --_radius-s: var(--ha-border-radius-md, 8px);
   }
 `;
 

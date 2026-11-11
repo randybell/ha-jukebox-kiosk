@@ -18,6 +18,7 @@ import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
 import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
 import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type BackdropMode } from './backdrop';
+import { ART_FG_OVER_DARK_SHADE } from './art-contrast';
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { pickBackend, createBackend, type MaBackend } from './backend';
 import { defineElement } from './define';
@@ -88,6 +89,7 @@ export class JukeboxCard extends LitElement {
     _station: { state: true },
     _spkEl: { state: true },
     _lost: { state: true },
+    _artFg: { state: true },
   };
   hass?: HomeAssistant;
   private _config!: JukeboxCardConfig;
@@ -137,6 +139,9 @@ export class JukeboxCard extends LitElement {
   private _spkEl?: HTMLElement;
   /** one-time notice: the saved speaker target is gone from HA */
   private _lost = '';
+  /** contrast fg over album-art backdrop (#fff/#000), like HA media-control */
+  private _artFg = '';
+  private _artFgKey = '';
   private _lostTimer?: number;
   /** 0.7.10 volume while HA is disconnected: status + flush on reconnect (see vol-send.ts) */
   private _vunsub?: () => void;
@@ -473,12 +478,23 @@ export class JukeboxCard extends LitElement {
   }
   protected updated() {
     this.updateLight();
+    this.updateArtFg(this.art());
     if (!this._spkEl) { const el = this.renderRoot.querySelector('jb-speakers') as HTMLElement | null; if (el) this._spkEl = el; }
   }
   /** Now-playing art for the backdrop and screensaver (see playerArt: never an absolute entity_picture). */
   private art() {
     const ent = this.hass?.states[this._config?.entity ?? 'media_player.everywhere'];
     return playerArt(ent?.attributes, this.queue.currentItem);
+  }
+  /** Contrast fg over album-art backdrop (HA media-control extractColors / YIQ).
+   *  has-art always applies dark --_shade/--_vignette over blurred art, so the effective
+   *  surface is dark — same case as HA getYiq() < 200 → #ffffff (see art-contrast.ts).
+   *  Sampling the raw cover alone would pick black on light art and fail over that shade. */
+  private updateArtFg(pic: string | undefined) {
+    const key = pic || '';
+    if (key === this._artFgKey) return;
+    this._artFgKey = key;
+    this._artFg = pic ? ART_FG_OVER_DARK_SHADE : '';
   }
   /** Large-screen scale: the layout is designed around ~1280x800; on bigger panels zoom it so art/text grow instead of spreading thin. */
   private _scale = 1;
@@ -727,7 +743,7 @@ export class JukeboxCard extends LitElement {
   /** 0.7.8: ONE shared full-screen view for both the screensaver and Stage (identical look and behaviour; only how it
    *  opens differs). Album art fills the background (a soft blurred colour when the song has no art), the clock and date,
    *  the song info and a few sliding lyric lines drift over it (burn-in), "Tap to close" at the bottom. Nothing playing:
-   *  clock and date on black. A tap (or Esc) closes it; the follow-up click is swallowed so it can't hit what is underneath. */
+   *  clock and date on the theme background. A tap (or Esc) closes it; the follow-up click is swallowed so it can't hit what is underneath. */
   private renderAmbient(use: 'saver' | 'stage') {
     const c = this._config, ent = this.hass?.states[c.entity!];
     const at = ent?.attributes ?? {};
@@ -785,11 +801,17 @@ export class JukeboxCard extends LitElement {
     const pre = pillPrefix(ent?.state);
     const inlineSpk = dyn && canGroup(this._config, this.hass?.user);
     const bd = this._bd;
-    const artStyle = pic && bd === 'full' ? `--_art:url("${pic.replace(/"/g, '%22')}")` : '';
+    const artParts: string[] = [];
+    // --_art is only for full mode (live CSS-blurred art). light uses the pre-blurred canvas;
+    // static and off never show art as the backdrop (HA media-control hides art when off / has no image).
+    if (pic && bd === 'full') artParts.push(`--_art:url("${pic.replace(/"/g, '%22')}")`);
+    // Art contrast only when art is actually shown (full / light). static and off use --text-primary-color on --primary-color.
+    if (pic && (bd === 'full' || bd === 'light')) artParts.push(`--_art-fg:${this._artFg || ART_FG_OVER_DARK_SHADE}`);
+    const artStyle = artParts.join(';');
     const view = (id: TabId, child: unknown) => html`<div class="view" data-view=${id} ?hidden=${this._tab !== id}>${child}</div>`;
     const c = this._config, h = this.hass, q = this.queue, tabs = this.tabs();
     return html`
-      <ha-card class="app bd-${bd} ${bd === 'full' ? '' : 'solid'} ${prefersReducedMotion() ? 'rm' : ''} ${c.large_buttons ? 'lg' : ''}" style="${c.height ? `--jb-height:${c.height};` : ''}${c.show_action_icons !== true ? '--jb-ra-display:none;' : ''}">
+      <ha-card class="app bd-${bd} ${bd === 'full' ? '' : 'solid'} ${prefersReducedMotion() ? 'rm' : ''} ${c.large_buttons ? 'lg' : ''}" style="${c.height ? `--_height:${c.height};` : ''}${c.show_action_icons !== true ? '--_ra-display:none;' : ''}">
         <header class="top">
           <div class="brand">${icon('disc', 'i brand-i')}<span>${c.title ?? 'Jukebox'}</span></div>
           <button class="pill" title=${c.entity!} tabindex="-1" aria-label="${pre} ${name}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk ? 'true' : 'false'}
@@ -802,7 +824,7 @@ export class JukeboxCard extends LitElement {
           <div class="spacer"></div>
           <div class="clock">${this.timeStr()}</div>
         </header>
-        <main class="np ${pic ? 'has-art' : ''}" style=${artStyle}>
+        <main class="np ${pic && (bd === 'full' || bd === 'light') ? 'has-art' : ''}" style=${artStyle}>
           ${bd === 'light' ? html`<canvas class="bdl" width="64" height="40" aria-hidden="true"></canvas>` : nothing}
           ${view('now', html`<jb-now ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
           ${combinedOn(c)
@@ -829,49 +851,108 @@ export class JukeboxCard extends LitElement {
   }
 
   static styles = [tokens, base, css`
-    :host { display: block; height: var(--jb-height, var(--_fit-h, 100dvh)); min-height: 0; }
+    :host { display: block; height: var(--_height, var(--_fit-h, 100dvh)); min-height: 0; }
     .app {
       /* --_fit-h: measured space below the card's top (see fit()); 100dvh only until the first measurement */
-      height: calc(var(--jb-height, var(--_fit-h, 100vh)) / var(--_z, 1)); height: calc(var(--jb-height, var(--_fit-h, 100dvh)) / var(--_z, 1));
+      height: calc(var(--_height, var(--_fit-h, 100vh)) / var(--_z, 1)); height: calc(var(--_height, var(--_fit-h, 100dvh)) / var(--_z, 1));
       zoom: var(--_z, 1); /* large-screen scale, set from ResizeObserver; lengths inside are multiplied, so the height is pre-divided */
       display: grid; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr);
       position: relative; isolation: isolate; overflow: hidden;
       container: jbapp / inline-size; /* the card's own width (e.g. the ~460 px editor preview) decides the header and tab bar, not the screen's */
-      background: var(--_bg); color: var(--_fg); font-family: var(--_font-body); -webkit-font-smoothing: antialiased;
-      border-radius: var(--jb-card-radius, 0); border: 0; box-shadow: none;
+      /* background, color, border, radius, shadow: owned by ha-card / the HA theme */
+      font-family: var(--_font-body); -webkit-font-smoothing: antialiased;
+      color: var(--_fg);
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
     .top { display: flex; align-items: center; gap: 14px; padding: 12px var(--_pad) 12px; min-height: 60px; position: relative; z-index: 2;
-      background: #000; border-bottom: 1px solid var(--_hairline); }
-    .brand { display: flex; align-items: center; gap: 10px; font-family: var(--_font-display); font-weight: 800; font-size: 22px; }
+      background: transparent; border-bottom: 1px solid var(--_hairline); }
+    .brand { display: flex; align-items: center; gap: 10px; font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-xl, 20px); }
     .brand-i { width: 28px; height: 28px; color: var(--_active); }
-    .pill { white-space: nowrap; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: #ffffff0f;
-      border: 1px solid #ffffff1a; font-size: 14px; font-weight: 600; }
-    .pill b { font-weight: 500; color: var(--_muted); }
-    .pill .pl { font-weight: 500; color: var(--_muted); margin-right: -2px; }
+    .pill { white-space: nowrap; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: var(--_chip-bg);
+      border: 1px solid var(--_hairline); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
+    .pill b { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
+    .pill .pl { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); margin-right: -2px; }
     .pill .pc { width: 14px; height: 14px; opacity: .7; margin-left: -2px; }
-    .lost { margin-left: 10px; font-size: 13px; color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: #ffffff26; }
-    .lg .pill { min-height: 52px; font-size: 17px; padding: 0 18px; }
+    .lost { margin-left: 10px; font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: var(--_chip-bg-strong); }
+    .lg .pill { min-height: 52px; font-size: var(--ha-font-size-l, 16px); padding: 0 18px; }
     .spacer { flex: 1; }
-    .clock { white-space: nowrap; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
-    .np { container: np / size; min-height: 0; position: relative; overflow: hidden; background: #000; }
-    .np::before { content: ""; position: absolute; inset: -80px; z-index: 0;
-      background: var(--_art, radial-gradient(60% 50% at 25% 20%, #2a2a2a 0%, transparent 70%), linear-gradient(160deg, #161616, #050505));
-      background-size: cover; background-position: center; filter: blur(var(--_backdrop-blur)) saturate(var(--_backdrop-saturate)); }
-    .np::after { content: ""; position: absolute; inset: 0; z-index: 0; background: var(--_vignette), var(--_shade); pointer-events: none; }
+    .clock { white-space: nowrap; font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
+    .np { container: np / size; min-height: 0; position: relative; overflow: hidden; background: transparent; }
+    /* Empty / no art: HA media-control color-block / .no-img uses --primary-color, text --text-primary-color */
+    .np:not(.has-art)::before { content: ""; position: absolute; inset: 0; z-index: 0;
+      background: var(--primary-color, #03a9f4); filter: none; }
+    .np:not(.has-art)::after { display: none; }
+    /* With art: keep blurred art + shade; contrast tokens for controls over it (HA media-control extractColors / YIQ) */
+    .np.has-art::before { content: ""; position: absolute; inset: -80px; z-index: 0;
+      background: var(--_art) center / cover;
+      filter: blur(var(--_backdrop-blur)) saturate(var(--_backdrop-saturate)); }
+    .np.has-art::after { content: ""; position: absolute; inset: 0; z-index: 0; background: var(--_vignette), var(--_shade); pointer-events: none; }
+    .np.has-art {
+      /* Inherited by jb-now / jb-slider tokens via var(--_art-*, …) — do not set --_* here (child :host resets those).
+         --_art-fg comes from the inline style (ART_FG_OVER_DARK_SHADE); derived tokens follow. */
+      --_art-muted: color-mix(in srgb, var(--_art-fg, #ffffff) 72%, transparent);
+      --_art-inactive: color-mix(in srgb, var(--_art-fg, #ffffff) 55%, transparent);
+      --_art-track: color-mix(in srgb, var(--_art-fg, #ffffff) 30%, transparent);
+      --_art-hairline: color-mix(in srgb, var(--_art-fg, #ffffff) 22%, transparent);
+      --_art-divider: color-mix(in srgb, var(--_art-fg, #ffffff) 22%, transparent);
+      --_art-chip-bg: color-mix(in srgb, var(--_art-fg, #ffffff) 12%, transparent);
+      --_art-chip-bg-strong: color-mix(in srgb, var(--_art-fg, #ffffff) 20%, transparent);
+      --_art-surface-border: color-mix(in srgb, var(--_art-fg, #ffffff) 28%, transparent);
+    }
     /* ---- backdrop modes (see src/backdrop.ts) ---- */
-    .app.solid { --jb-panel-filter: none; --jb-surface: rgba(0, 0, 0, 0.6); --jb-panel-solid: rgba(0, 0, 0, 0.6); }
-    .bd-light .np::before { background: linear-gradient(160deg, #161616, #050505); filter: none; inset: 0; }
+    /* Mode hooks inherit into child :host tokens (do not set --_panel-* here; children reset those). */
+    .app.solid {
+      --_mode-panel-filter: none;
+      --_mode-surface: var(--secondary-background-color, var(--_bg));
+      --_mode-panel-solid: var(--secondary-background-color, var(--_bg));
+    }
+    /* light: pre-blurred canvas shows art; ::before is the media-control no-image underlay. */
+    .bd-light .np::before {
+      background: var(--primary-color, #03a9f4); filter: none; inset: 0;
+    }
     .bdl { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: 0; transition: opacity 600ms ease; pointer-events: none; }
     .bdl.ready { opacity: 1; }
-    .bd-static .np::before { background: radial-gradient(70% 60% at 25% 15%, #262626 0%, transparent 70%), linear-gradient(160deg, #141414, #030303); filter: none; inset: 0; }
-    .bd-off .np::before, .bd-off .np::after { display: none; }
+    /* static: HA media-control no-image fill (flat --primary-color), no art, no filters. */
+    .bd-static .np::before {
+      background: var(--primary-color, #03a9f4); filter: none; inset: 0;
+    }
+    /* off: HA media-control .off.background — --primary-color fill with grayscale; art hidden. */
+    .bd-off .np::before {
+      content: ""; display: block; position: absolute; inset: 0; z-index: 0;
+      background: var(--primary-color, #03a9f4); filter: grayscale(1);
+    }
+    .bd-off .np::after { display: none; }
+    .bd-off .np { background: var(--primary-color, #03a9f4); }
+    /* Now Playing on the primary fill: same as media-control .player { color: var(--text-primary-color) }.
+       Browse/search/queue keep theme surfaces so selected chips stay --primary-color. */
+    .np:not(.has-art) .view[data-view=now],
+    .bd-static .view[data-view=now],
+    .bd-off .view[data-view=now] {
+      --_art-fg: var(--text-primary-color, #fff);
+      --_art-muted: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.7);
+      --_art-inactive: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.55);
+      --_art-track: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.3);
+      --_art-hairline: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.22);
+      --_art-divider: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.22);
+      --_art-chip-bg: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.12);
+      --_art-chip-bg-strong: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.2);
+      --_art-surface-border: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.28);
+      --_canvas-active: var(--text-primary-color, #fff);
+      --_canvas-on: var(--primary-color);
+    }
+    /* Browse / Search / Queue are list views, like HA tile/entity cards: theme card surface and theme text.
+       Art and the media-control primary fill stay on Now Playing only, so light-theme text stays readable. */
+    .view:not([data-view=now]) {
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+    }
     .view { position: absolute; inset: 0; z-index: 1; }
     .view[hidden] { display: none; }
     .badge { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--_active);
-      color: var(--_on-accent); font-style: normal; font-size: 11px; font-weight: 800; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
-    .amb { position: absolute; inset: 0; z-index: 50; background: #000; overflow: hidden; cursor: none; touch-action: none; animation: svin 900ms ease both; }
+      color: var(--_on-accent); font-style: normal; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+    /* Screensaver / Stage: restored to e322336 look (fixed black canvas and white type). Theme rules do not apply here.
+       color: #fff is set so the clock and title stay white now that the parent card uses theme body text. */
+    .amb { position: absolute; inset: 0; z-index: 50; background: #000; color: #fff; overflow: hidden; cursor: none; touch-action: none; animation: svin 900ms ease both; }
     .amb.waking { animation: svout 340ms ease both; }
     @keyframes svin { from { opacity: 0 } to { opacity: 1 } }
     @keyframes svout { to { opacity: 0 } }
@@ -896,69 +977,69 @@ export class JukeboxCard extends LitElement {
        static screen can't burn in. The .rm class mirrors the media query so the dev harness/tests can force it. */
     @media (prefers-reduced-motion: reduce) { .sv-drift, .sv-bg { animation: none; } .sv-drift { animation: hop 600s step-end infinite; } }
     .rm .sv-drift, .rm .sv-bg { animation: none; } .rm .sv-drift { animation: hop 600s step-end infinite; }
-    .rm { --jb-ly-slide: 0ms; } /* inherited into jb-lyrics: the screensaver lyrics move without sliding */
+    .rm { --_ly-slide: 0ms; } /* inherited into jb-lyrics: the screensaver lyrics move without sliding */
     @keyframes hop { 0% { transform: translate(0, 0) } 10% { transform: translate(calc(70cqw - 100%), 18cqh) } 20% { transform: translate(28cqw, calc(64cqh - 100%)) } 30% { transform: translate(calc(78cqw - 100%), 4cqh) } 40% { transform: translate(6cqw, calc(60cqh - 100%)) } 50% { transform: translate(calc(50cqw - 50%), 30cqh) } 60% { transform: translate(calc(74cqw - 100%), calc(66cqh - 100%)) } 70% { transform: translate(12cqw, 10cqh) } 80% { transform: translate(calc(60cqw - 100%), calc(40cqh - 50%)) } 90% { transform: translate(20cqw, calc(66cqh - 100%)) } 100% { transform: translate(0, 0) } }
     .bd-static .amb, .bd-off .amb { background: #000; }
     .sv-drift.has-ly .sv-clock { font-size: clamp(56px, 10cqw, 140px); }
     .sv-ly { margin-top: 18px; width: min(820px, 72cqw); }
     .sv-lys { margin-top: 14px; font-size: clamp(12px, 1.1cqw, 15px); font-weight: 600; letter-spacing: .04em; color: #ffffff6b; text-shadow: 0 1px 8px #000a; white-space: nowrap; }
     /* ---- Stage: the same shared view (see renderAmbient), opened from Now Playing; it sits under the screensaver ---- */
-    :host(:fullscreen), :host(:-webkit-full-screen) { background: #000; }
+    :host(:fullscreen), :host(:-webkit-full-screen) { background: var(--_bg); }
     .amb.stage { z-index: 45; }
-    /* Tab bar (0.5.0, segmented): one rounded translucent track on the black footer, equal segments with hairline
-       dividers, the active segment solid white. Only colour/transform transitions (no layout, no blur). */
+    /* Tab bar (0.5.0, segmented): one rounded translucent track on the theme footer, equal segments with hairline
+       dividers, the active segment using the theme primary. Only colour/transform transitions (no layout, no blur). */
     .tabs { display: grid; grid-template-columns: repeat(var(--tabs, 4), minmax(0, 1fr)); gap: 4px;
-      padding: 11px calc(var(--_pad) + 4px) calc(13px + env(safe-area-inset-bottom)); background: #000;
+      padding: 11px calc(var(--_pad) + 4px) calc(13px + env(safe-area-inset-bottom)); background: transparent;
       border-top: 1px solid var(--_hairline); position: relative; z-index: 2; }
     .tabs::before { content: ""; position: absolute; top: 7px; left: var(--_pad); right: var(--_pad); bottom: calc(9px + env(safe-area-inset-bottom));
-      border-radius: 18px; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .16); pointer-events: none; }
+      border-radius: 18px; background: var(--_chip-bg); border: 1px solid var(--_hairline); pointer-events: none; }
     .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 58px;
       padding: 3px; border-radius: 14px; background: transparent; border: 0;
-      color: rgba(255, 255, 255, .78); font-size: 16px; font-weight: 600; line-height: 1.15; letter-spacing: .01em; position: relative;
+      color: var(--_muted); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: .01em; position: relative;
       transition: background-color 120ms ease, color 120ms ease, transform 120ms ease; }
     .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tab .i { width: 30px; height: 30px; }
-    .tab + .tab::before { content: ""; position: absolute; left: -2.5px; top: 25%; bottom: 25%; width: 1px; background: rgba(255, 255, 255, .16); transition: opacity 120ms ease; }
+    .tab + .tab::before { content: ""; position: absolute; left: -2.5px; top: 25%; bottom: 25%; width: 1px; background: var(--_hairline); transition: opacity 120ms ease; }
     .tab.active::before, .tab.active + .tab::before, .tab:hover::before, .tab:hover + .tab::before { opacity: 0; }
-    @media (hover: hover) { .tab:hover { background: rgba(255, 255, 255, .12); color: #fff; } }
-    .tab:active { transform: scale(.97); background: rgba(255, 255, 255, .2); color: #fff; }
+    @media (hover: hover) { .tab:hover { background: var(--_chip-bg-strong); color: var(--_fg); } }
+    .tab:active { transform: scale(.97); background: var(--_chip-bg-strong); color: var(--_fg); }
     .tab.active, .tab.active:hover, .tab.active:active { background: var(--_active); color: var(--_on-accent); }
     .tab:focus-visible { outline: 2px solid var(--_active); outline-offset: 3px; }
     .tab .badge { top: 4px; left: calc(50% + 6px); }
     .tab.active .badge { background: var(--_on-accent); color: var(--_active); }
-    .lg .tab { min-height: 80px; font-size: 17px; } .lg .tab .i { width: 34px; height: 34px; }
+    .lg .tab { min-height: 80px; font-size: var(--ha-font-size-l, 16px); } .lg .tab .i { width: 34px; height: 34px; }
     /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole.
        0.7.12 fluid: gate and breakpoints follow the card's jbapp width, not the window. */
     @container jbapp (min-width: 641px) {
       @container jbapp (max-width: 600px) { .pill b, .brand span { display: none; } .top { gap: 10px; } }
-      @container jbapp (max-width: 430px) { .lg .pill { padding: 0 12px; font-size: 15px; } .lg .tab { font-size: 15px; } .lg .clock { font-size: 18px; } }
+      @container jbapp (max-width: 430px) { .lg .pill { padding: 0 12px; font-size: var(--ha-font-size-m, 14px); } .lg .tab { font-size: var(--ha-font-size-m, 14px); } .lg .clock { font-size: var(--ha-font-size-l, 16px); } }
     }
     @container jbapp (max-width: 960px) { .pill b { display: none; } }
     @container jbapp (max-width: 800px) { .pill .pl { display: none; } }
     @container jbapp (max-width: 640px) {
-      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .lg .pill { width: 56px; min-height: 56px; } .clock { font-size: 18px; } .top { min-height: 52px; padding-top: 10px; padding-bottom: 10px; }
+      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .lg .pill { width: 56px; min-height: 56px; } .clock { font-size: var(--ha-font-size-l, 16px); } .top { min-height: 52px; padding-top: 10px; padding-bottom: 10px; }
       .tabs { gap: 2px; padding-left: calc(var(--_pad) + 3px); padding-right: calc(var(--_pad) + 3px); }
-      .tab { font-size: 12px; letter-spacing: 0; } .tab .i { width: 26px; height: 26px; }
-      .tab span { white-space: normal; text-align: center; line-height: 1.1; }
-      .lg .tab { min-height: 68px; font-size: 13px; } .lg .tab .i { width: 30px; height: 30px; }
+      .tab { font-size: var(--ha-font-size-s, 12px); letter-spacing: 0; } .tab .i { width: 26px; height: 26px; }
+      .tab span { white-space: normal; text-align: center; line-height: var(--ha-line-height-condensed, 1.2); }
+      .lg .tab { min-height: 68px; font-size: var(--ha-font-size-m, 14px); } .lg .tab .i { width: 30px; height: 30px; }
     }
     /* short panels (fitted height < 700 / < 560 px): tighter header and tab bar so the middle keeps the room */
     :host([data-fit]) .top { min-height: 50px; padding-top: 7px; padding-bottom: 7px; }
-    :host([data-fit]) .brand { font-size: 19px; } :host([data-fit]) .brand-i { width: 24px; height: 24px; } :host([data-fit]) .clock { font-size: 19px; }
-    :host([data-fit]) .pill { padding: 5px 12px; font-size: 13px; }
+    :host([data-fit]) .brand { font-size: var(--ha-font-size-xl, 20px); } :host([data-fit]) .brand-i { width: 24px; height: 24px; } :host([data-fit]) .clock { font-size: var(--ha-font-size-xl, 20px); }
+    :host([data-fit]) .pill { padding: 5px 12px; font-size: var(--ha-font-size-m, 14px); }
     :host([data-fit]) .tabs { gap: 3px; padding: 7px calc(var(--_pad) + 3px) calc(8px + env(safe-area-inset-bottom)); }
     :host([data-fit]) .tabs::before { top: 4px; bottom: calc(5px + env(safe-area-inset-bottom)); border-radius: 15px; }
-    :host([data-fit]) .tab { min-height: 50px; padding: 3px; gap: 3px; font-size: 14px; border-radius: 12px; } :host([data-fit]) .tab .i { width: 24px; height: 24px; }
+    :host([data-fit]) .tab { min-height: 50px; padding: 3px; gap: 3px; font-size: var(--ha-font-size-m, 14px); border-radius: 12px; } :host([data-fit]) .tab .i { width: 24px; height: 24px; }
     :host([data-fit]) .tab + .tab::before { left: -2px; }
-    :host([data-fit]) .lg .tab { min-height: 60px; font-size: 15px; } :host([data-fit]) .lg .tab .i { width: 28px; height: 28px; }
+    :host([data-fit]) .lg .tab { min-height: 60px; font-size: var(--ha-font-size-m, 14px); } :host([data-fit]) .lg .tab .i { width: 28px; height: 28px; }
     :host([data-fit=tiny]) .top { min-height: 44px; padding-top: 5px; padding-bottom: 5px; }
     /* tiny (< 560 px): one row, icon + small label side by side (icons only on narrow screens) */
     :host([data-fit=tiny]) .tabs { padding: 6px calc(var(--_pad) + 3px) calc(6px + env(safe-area-inset-bottom)); }
     :host([data-fit=tiny]) .tabs::before { top: 3px; bottom: calc(3px + env(safe-area-inset-bottom)); border-radius: 14px; }
-    :host([data-fit=tiny]) .tab { flex-direction: row; gap: 8px; min-height: 44px; font-size: 13px; border-radius: 11px; }
+    :host([data-fit=tiny]) .tab { flex-direction: row; gap: 8px; min-height: 44px; font-size: var(--ha-font-size-m, 14px); border-radius: 11px; }
     :host([data-fit=tiny]) .tab .i { width: 22px; height: 22px; }
-    :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 5px; font-size: 10px; flex: none; }
-    :host([data-fit=tiny]) .lg .tab { min-height: 52px; font-size: 14px; } :host([data-fit=tiny]) .lg .tab .i { width: 26px; height: 26px; }
+    :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 5px; font-size: var(--ha-font-size-xs, 10px); flex: none; }
+    :host([data-fit=tiny]) .lg .tab { min-height: 52px; font-size: var(--ha-font-size-m, 14px); } :host([data-fit=tiny]) .lg .tab .i { width: 26px; height: 26px; }
     @container jbapp (max-width: 640px) { :host([data-fit=tiny]) .tab span { display: none; } }
   `];
 }
@@ -968,4 +1049,4 @@ defineElement('jukebox-card', JukeboxCard);
 if (!(window as any).customCards.some((c: any) => c.type === 'jukebox-card'))
   (window as any).customCards.push({ type: 'jukebox-card', name: 'Jukebox', description: 'Kiosk jukebox for Music Assistant: Now Playing, Browse, Search and Queue', preview: false });
 // eslint-disable-next-line no-console
-console.info(`%c JUKEBOX-CARD %c ${VERSION} `, 'background:#fff;color:#000;font-weight:700', 'background:#000;color:#fff');
+console.info(`%c JUKEBOX-CARD %c ${VERSION} `, 'font-weight:700', '');
