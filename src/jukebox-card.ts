@@ -104,7 +104,7 @@ export class JukeboxCard extends LitElement {
   private _idleTimer?: number;
   private queue = new QueueModel();
   /** resolved backdrop mode + reason (exposed as data-backdrop / data-backdrop-why on the host) */
-  private _bd: BackdropMode = 'full';
+  private _bd: BackdropMode = 'plain';
   private _bdWhy = '';
   private _lightKey = '';
   private _ro?: ResizeObserver;
@@ -757,7 +757,8 @@ export class JukeboxCard extends LitElement {
     const status = lyrOn ? SAVER_LYRICS_STATUS[ls] : undefined;
     let date = '';
     try { date = this._now.toLocaleDateString(lang, { weekday: 'long', month: 'long', day: 'numeric' }); } catch { /* */ }
-    const bdOn = this._bd === 'full' || this._bd === 'light';
+    // the screensaver keeps its album-art look in the plain mode too (plain only changes Now Playing)
+    const bdOn = this._bd === 'full' || this._bd === 'light' || this._bd === 'plain';
     const state = use === 'saver' ? this._saver : this._stageOut ? 'waking' : 'on';
     const title = playing ? at.media_title : undefined;
     const swallow = (e: Event) => { e.preventDefault(); e.stopPropagation(); };
@@ -882,8 +883,9 @@ export class JukeboxCard extends LitElement {
     /* Backdrop (album art + shade, or the media-control primary fill): Now Playing only (.on-now).
        Library, Search, Queue and the detail pages are plain HA card surfaces: ha-card paints the one surface. */
     /* Empty / no art: HA media-control color-block / .no-img uses --primary-color, text --text-primary-color */
-    .np.on-now:not(.has-art)::before { content: ""; position: absolute; inset: 0; z-index: 0;
+    .bd-full .np.on-now:not(.has-art)::before, .bd-light .np.on-now:not(.has-art)::before { content: ""; position: absolute; inset: 0; z-index: 0;
       background: var(--primary-color, #03a9f4); filter: none; }
+    /* plain (the default): no ::before, no ::after, no fill, no art-contrast tokens: Now Playing is the same card surface as Library and Queue with theme text */
     /* With art: keep blurred art + shade; contrast tokens for controls over it (HA media-control extractColors / YIQ) */
     .np.on-now.has-art::before { content: ""; position: absolute; inset: -80px; z-index: 0;
       background: var(--_art) center / cover;
@@ -920,7 +922,8 @@ export class JukeboxCard extends LitElement {
     }
     .bd-off .np.on-now { background: var(--primary-color, #03a9f4); }
     /* Now Playing on the primary fill: same as media-control .player { color: var(--text-primary-color) }. */
-    .np:not(.has-art) .view[data-view=now],
+    .bd-full .np:not(.has-art) .view[data-view=now],
+    .bd-light .np:not(.has-art) .view[data-view=now],
     .bd-static .view[data-view=now],
     .bd-off .view[data-view=now] {
       --_art-fg: var(--text-primary-color, #fff);
