@@ -38,9 +38,11 @@ export const tokens = css`
     --_input-line: var(--input-idle-line-color, var(--divider-color));
     /* icon buttons (ha-icon-button): no fill; hover/selected = the icon colour at 10% */
     --_icon-sel: color-mix(in srgb, currentColor 10%, transparent);
-    /* dialog scrim, exactly as ha-dialog paints it: --mdc-dialog-scrim-color (none by default) plus the backdrop filter */
+    /* dialog scrim, as ha-dialog paints it: --mdc-dialog-scrim-color (none) plus the backdrop filter. HA's own default dimmer is the html-level
+       --ha-dialog-scrim-backdrop-filter: brightness(68%) (resources/theme/main.globals.ts), so use that as the last fallback too: pop-ups still dim where
+       the variable is not defined. A theme that sets the variable (even to none) wins. */
     --_scrim: var(--mdc-dialog-scrim-color, transparent);
-    --_scrim-filter: var(--ha-dialog-scrim-backdrop-filter, var(--dialog-backdrop-filter, none));
+    --_scrim-filter: var(--ha-dialog-scrim-backdrop-filter, var(--dialog-backdrop-filter, brightness(68%)));
     --_dialog-bg: var(--ha-dialog-surface-background, var(--mdc-theme-surface, var(--_bg)));
     /* same ceiling as ha-dialog (no phone-size fullscreen override) */
     --_popup-max-h: var(--ha-dialog-max-height, calc(var(--safe-height, 100dvh) - var(--ha-space-20, 80px)));
