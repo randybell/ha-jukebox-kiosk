@@ -83,8 +83,19 @@ const lyrBtn = (pg) => pg.evaluate((s) => { const b = eval(s).querySelector('.ab
   const after = await cur(pg, SEL.ovl);
   check('T7 highlight advances on time without hass updates (timer to the next line)', before === nxt.i - 1 && after === nxt.i, `before=${before} after=${after} want ${nxt.i - 1}→${nxt.i}`);
   check('O3 overlay and card share one lookup (still 2 calls)', (await lyrCmds(pg)).length === 2, J(await lyrCmds(pg)));
-  const bg = await pg.evaluate((s) => getComputedStyle(eval(s).querySelector('.ab.lyr')).backgroundColor, SEL.now);
-  check('O4 active toggle is white (Black Frame Mono)', /rgb\(255, 255, 255\)|rgba\(255, 255, 255, 1\)/.test(bg), bg);
+  const o4 = await pg.evaluate((s) => {
+    const host = eval(s);
+    const btn = host.querySelector('.ab.lyr');
+    const bg = getComputedStyle(btn).backgroundColor;
+    const probe = document.createElement('span');
+    probe.style.backgroundColor = 'var(--primary-color, #03a9f4)';
+    const root = host instanceof ShadowRoot ? host : host.shadowRoot;
+    root.appendChild(probe);
+    const primary = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return { bg, primary };
+  }, SEL.now);
+  check('O4 active toggle uses theme primary color', o4.bg === o4.primary && o4.bg !== 'rgba(0, 0, 0, 0)' && !/^rgb\(255,\s*255,\s*255\)/.test(o4.bg), JSON.stringify(o4));
   await pg.goto(`${ROOT}index.html?keeplyrics=1&latency=40&layout=separate&tab=now`); await pg.waitForFunction('window.__ready === true'); await sleep(300);
   check('O5 overlay choice survives a reload', await pg.evaluate((s) => !!eval(s).querySelector('jb-lyrics') && eval(s).querySelector('.ab.lyr').classList.contains('on'), SEL.now));
   await pg.waitForFunction((s) => { try { return eval(s)?.dataset?.status === 'synced'; } catch { return false; } }, { timeout: 8000 }, SEL.ovl).catch(() => {});
@@ -304,12 +315,13 @@ const lyrBtn = (pg) => pg.evaluate((s) => { const b = eval(s).querySelector('.ab
   check('G9 song without artwork: blurred colour gradient background, no picture', !!na && /noart/.test(na.cls) && /gradient/.test(na.img) && /blur/.test(na.blur) && na.pics === 0, J(na));
   await pg.keyboard.press('Escape'); await sleep(500);
   await pg.close();
-  // nothing playing: Full screen button hidden; the screensaver shows clock + date on black
+  // nothing playing: Full screen button hidden; the screensaver shows clock + date on black (e322336 saver look)
   const id = await newPage({ width: 1024, height: 600 });
   await open(id, '&tab=now&idle=1&saver=0.02');
   check('G10 nothing playing: no Full screen button on Now Playing', await id.evaluate((s) => !eval(s).querySelector('.ab.stg'), SEL.now));
   await id.waitForFunction(() => !!__card.shadowRoot.querySelector('.amb.saver'), { timeout: 6000 }).catch(() => {}); await sleep(500);
-  const ib = await id.evaluate(() => { const a = __card.shadowRoot.querySelector('.amb'); return a && { bg: !!a.querySelector('.sv-bg'), np: !!a.querySelector('.sv-np'), clock: !!a.querySelector('.sv-clock'), date: !!a.querySelector('.sv-date'), color: getComputedStyle(a).backgroundColor, hint: a.querySelector('.sv-hint')?.textContent }; });
+  const ib = await id.evaluate(() => { const a = __card.shadowRoot.querySelector('.amb');
+    return a && { bg: !!a.querySelector('.sv-bg'), np: !!a.querySelector('.sv-np'), clock: !!a.querySelector('.sv-clock'), date: !!a.querySelector('.sv-date'), color: getComputedStyle(a).backgroundColor, hint: a.querySelector('.sv-hint')?.textContent }; });
   check('G11 nothing playing: clock and date on black, no song info, "Tap to close"', !!ib && !ib.bg && !ib.np && ib.clock && ib.date && ib.color === 'rgb(0, 0, 0)' && ib.hint === 'Tap to close', J(ib));
   await id.close();
 
@@ -340,7 +352,15 @@ const lyrBtn = (pg) => pg.evaluate((s) => { const b = eval(s).querySelector('.ab
     const cs = getComputedStyle(el), drift = el.closest('.sv-drift');
     const box = (e) => { const b = e?.getBoundingClientRect(); return b ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
     const hit = (a, b) => !!a && !!b && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
-    const me = box(el), alpha = Number((cs.color.match(/rgba?\(([^)]+)\)/)?.[1].split(',')[3] ?? '1').trim());
+    const me = box(el);
+    const alpha = (() => {
+      const c = cs.color;
+      const rgba = c.match(/rgba?\(([^)]+)\)/);
+      if (rgba) return Number((rgba[1].split(',')[3] ?? rgba[1].split('/')[1] ?? '1').trim());
+      const slash = c.match(/\/\s*([0-9.]+)\s*\)/);
+      if (slash) return Number(slash[1]);
+      return 1;
+    })();
     return { shown: true, text: el.textContent.trim(), status: __card.lyrics.state.status, dataStatus: el.dataset.status,
       lyricsEl: !!r.querySelector('jb-lyrics[mode=saver]'), inDrift: !!drift, driftAnim: drift ? getComputedStyle(drift).animationName : '',
       fontPx: parseFloat(cs.fontSize), alpha, shadow: cs.textShadow !== 'none',

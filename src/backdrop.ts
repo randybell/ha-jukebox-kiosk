@@ -1,9 +1,9 @@
 /**
  * Backdrop performance modes.
  *  full   – live CSS blur (38px) of the full-size art + backdrop-filter on panels (today's look).
- *  light  – one pre-blurred 64px canvas per track change, stretched by the compositor; panels are solid rgba(0,0,0,.6), no backdrop-filter.
- *  static – dark gradient, no art, no filters.
- *  off    – pure black.
+ *  light  – one pre-blurred 64px canvas per track change, stretched by the compositor; panels are a solid theme surface, no backdrop-filter.
+ *  static – no art; HA media-control no-image fill (--primary-color), no filters.
+ *  off    – no art; HA media-control off fill (--primary-color, grayscale).
  *  auto   – light on low-end devices (hardwareConcurrency <= 4 or deviceMemory <= 2) or prefers-reduced-motion, else full.
  */
 export type BackdropMode = 'full' | 'light' | 'static' | 'off';

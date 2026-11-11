@@ -651,14 +651,24 @@ const bdState = () => page.evaluate(() => {
   const r = __card.shadowRoot, np = r.querySelector('main.np'), cv = r.querySelector('canvas.bdl');
   const before = getComputedStyle(np, '::before');
   const panel = r.querySelector('jb-now').shadowRoot.querySelector('.panel');
-  return { mode: __card.dataset.backdrop, why: __card.dataset.backdropWhy, beforeFilter: before.filter, beforeBg: before.backgroundImage.slice(0, 40), beforeDisplay: before.display,
+  const probe = document.createElement('span');
+  probe.style.backgroundColor = 'var(--secondary-background-color, var(--ha-card-background, var(--card-background-color, #fff)))';
+  document.body.appendChild(probe);
+  const themePanel = getComputedStyle(probe).backgroundColor;
+  probe.style.backgroundColor = 'var(--ha-card-background, var(--card-background-color, #fff))';
+  const themeCard = getComputedStyle(probe).backgroundColor;
+  probe.style.backgroundColor = 'var(--primary-color, #03a9f4)';
+  const themePrimary = getComputedStyle(probe).backgroundColor;
+  probe.remove();
+  return { mode: __card.dataset.backdrop, why: __card.dataset.backdropWhy, beforeFilter: before.filter, beforeBg: before.backgroundImage.slice(0, 40), beforeDisplay: before.display, beforeColor: before.backgroundColor,
     npBg: getComputedStyle(np).backgroundColor, panelBF: getComputedStyle(panel).backdropFilter, panelBg: getComputedStyle(panel).backgroundColor,
+    themePanel, themeCard, themePrimary,
     canvas: cv ? { ready: cv.classList.contains('ready'), draws: Number(cv.dataset.draws || 0) } : null };
 });
 await open(page, '&tab=now&backdrop=full'); s = await bdState();
 check('15a backdrop=full: live blur on the backdrop and backdrop-filter on panels', s.mode === 'full' && /blur\(38px\)/.test(s.beforeFilter) && /blur/.test(s.panelBF) && /url/.test(s.beforeBg), JSON.stringify(s));
 await open(page, '&tab=now&backdrop=light'); await sleep(500); s = await bdState();
-check('15b backdrop=light: pre-blurred canvas drawn, no CSS filter, panels solid rgba(0,0,0,.6) without backdrop-filter', s.mode === 'light' && s.canvas?.ready && s.beforeFilter === 'none' && s.panelBF === 'none' && s.panelBg === 'rgba(0, 0, 0, 0.6)' && !/url/.test(s.beforeBg), JSON.stringify(s));
+check('15b backdrop=light: pre-blurred canvas drawn, no CSS filter, solid theme panels without backdrop-filter', s.mode === 'light' && s.canvas?.ready && s.beforeFilter === 'none' && s.panelBF === 'none' && s.panelBg === s.themePanel && !/url/.test(s.beforeBg), JSON.stringify(s));
 { // volume drag must not redraw the canvas (only a track change does)
   const d0 = s.canvas.draws;
   r = await rectOf(page, `__card.shadowRoot.querySelector('jb-now').shadowRoot.querySelector('jb-slider')`);
@@ -672,9 +682,9 @@ check('15b backdrop=light: pre-blurred canvas drawn, no CSS filter, panels solid
   check('15c light canvas redraws on track change only (not on slider drag)', d1 === d0 && d2 > d1, `draws ${d0} → drag ${d1} → next ${d2}`);
 }
 await open(page, '&tab=now&backdrop=static'); s = await bdState();
-check('15d backdrop=static: dark gradient, no art, no filters', s.mode === 'static' && !s.canvas && s.beforeFilter === 'none' && !/url/.test(s.beforeBg) && /gradient/.test(s.beforeBg) && s.panelBF === 'none', JSON.stringify(s));
+check('15d backdrop=static: HA media-control no-image fill (--primary-color), no art, no filters', s.mode === 'static' && !s.canvas && s.beforeFilter === 'none' && !/url/.test(s.beforeBg) && s.beforeColor === s.themePrimary && s.panelBF === 'none', JSON.stringify(s));
 await open(page, '&tab=now&backdrop=off'); s = await bdState();
-check('15e backdrop=off: pure black', s.mode === 'off' && s.beforeDisplay === 'none' && s.npBg === 'rgb(0, 0, 0)' && s.panelBF === 'none', JSON.stringify(s));
+check('15e backdrop=off: no art, HA media-control off fill (--primary-color, grayscale)', s.mode === 'off' && s.beforeDisplay !== 'none' && /grayscale/.test(s.beforeFilter) && s.beforeColor === s.themePrimary && s.npBg === s.themePrimary && s.panelBF === 'none' && !/url/.test(s.beforeBg), JSON.stringify(s));
 await open(page, '&tab=now'); s = await bdState();
 const cores = await page.evaluate(() => [navigator.hardwareConcurrency, navigator.deviceMemory]);
 check('15f backdrop=auto (default) resolves from hardwareConcurrency/deviceMemory', s.mode === ((cores[0] <= 4 || cores[1] <= 2) ? 'light' : 'full'), `${s.mode} (${s.why}) cores/mem=${cores}`);

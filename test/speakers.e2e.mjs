@@ -209,8 +209,13 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   const vs = (await calls(p)).slice(n0).filter((x) => x.service === 'volume_set');
   check('R6 fixed panel room slider → media_player.volume_set on that room (HA only)', vs.length >= 1 && vs.at(-1).target.entity_id === GAR && Math.abs(vs.at(-1).data.volume_level - 0.5) < 0.08, J(vs.at(-1)));
   check('R7 fixed panel makes no Music Assistant players/* calls', (await page_ma(p)).length === 0, J(await page_ma(p)));
-  const cb = await ev(p, `(() => { const b = ${SR}.querySelector('.sheet .x'), r = b.getBoundingClientRect(), cs = getComputedStyle(b); return { text: b.textContent.trim(), w: r.width, h: r.height, bg: cs.backgroundColor, fg: cs.color, svg: !!b.querySelector('svg') }; })()`);
-  check('R8a Speakers close control is a labeled "Close" button (no small X), ≥ 44×44, black on white', cb.text === 'Close' && !cb.svg && cb.w >= 44 && cb.h >= 44 && cb.bg === 'rgb(255, 255, 255)' && cb.fg === 'rgb(0, 0, 0)', J(cb));
+  const cb = await ev(p, `(() => { const b = ${SR}.querySelector('.sheet .x'), r = b.getBoundingClientRect(), cs = getComputedStyle(b);
+    const probe = document.createElement('span');
+    probe.style.cssText = 'background:var(--primary-color, #03a9f4);color:var(--text-primary-color, #fff)';
+    document.body.appendChild(probe);
+    const th = getComputedStyle(probe); const primary = th.backgroundColor, on = th.color; probe.remove();
+    return { text: b.textContent.trim(), w: r.width, h: r.height, bg: cs.backgroundColor, fg: cs.color, svg: !!b.querySelector('svg'), primary, on }; })()`);
+  check('R8a Speakers close control is a labeled "Close" button (no small X), ≥ 44×44, primary-colored', cb.text === 'Close' && !cb.svg && cb.w >= 44 && cb.h >= 44 && cb.bg === cb.primary && cb.fg === cb.on, J(cb));
   await tap(p, `${SR}.querySelector('.x')`); await sleep(300);
   check('R8 close button closes the panel', !(await ev(p, `${SPK}.open`)));
   await a.p.close(); await b.p.close();
@@ -1189,9 +1194,14 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
     // a missed tap used to time out the wait and then crash getComputedStyle on a missing chip
     const reg = await tapRegistered(p, ra(GAR), `${SR}.querySelector('.st')?.dataset.kind === 'error'`, 6000);
     const c = reg.ok ? await chip(p) : null, g = reg.ok ? await geo(p) : null;
-    const look = reg.ok ? await ev(p, `(() => { const el = ${SR}.querySelector('.st'); if (!el) return null; const s = getComputedStyle(el); return [s.backgroundColor, s.color, s.fontSize]; })()`) : null;
-    check('C13 set_members fails → error chip "Couldn\'t drop Garage: …" top-right (white on black inverted, ≥ 14px), no dialog; Garage stays in',
-      reg.ok && !!c && !!g && !!look && /^Couldn't drop Garage/.test(c?.text ?? '') && !(await popups(p)) && c.t >= g.cb - 0.5 && look[0] === 'rgb(255, 255, 255)' && look[1] === 'rgb(0, 0, 0)' && parseFloat(look[2]) >= 14
+    const look = reg.ok ? await ev(p, `(() => { const el = ${SR}.querySelector('.st'); if (!el) return null; const s = getComputedStyle(el);
+      const probe = document.createElement('span');
+      probe.style.cssText = 'background:var(--primary-color, #03a9f4);color:var(--text-primary-color, #fff)';
+      document.body.appendChild(probe);
+      const th = getComputedStyle(probe); const primary = th.backgroundColor, on = th.color; probe.remove();
+      return [s.backgroundColor, s.color, s.fontSize, primary, on]; })()`) : null;
+    check('C13 set_members fails → error chip "Couldn\'t drop Garage: …" top-right (primary-colored, ≥ 14px), no dialog; Garage stays in',
+      reg.ok && !!c && !!g && !!look && /^Couldn't drop Garage/.test(c?.text ?? '') && !(await popups(p)) && c.t >= g.cb - 0.5 && look[0] === look[3] && look[1] === look[4] && parseFloat(look[2]) >= 14
       && (await maMembers(p, GSM)).includes(GW), J({ taps: reg.taps, c, look }));
     if (reg.ok) await tap(p, `${SR}.querySelector('.st [data-action="cancel"]')`);
     check('C14 the error chip can be dismissed', reg.ok && !(await chip(p)), reg.ok ? '' : 'no error chip');

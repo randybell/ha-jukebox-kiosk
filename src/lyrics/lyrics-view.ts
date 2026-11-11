@@ -328,53 +328,60 @@ export class JbLyrics extends LitElement {
   }
 
   static styles = [tokens, base, css`
-    :host { display: block; min-height: 0; color: #fff; font-family: var(--_font-body); }
+    :host { display: block; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     :host(:not([mode=saver])) { height: 100%; }
+    /* Overlay sits on the dark art shade: contrast text, like HA media-control over art (not theme body text). */
+    :host([mode=overlay]) {
+      --_fg: var(--_art-fg, #ffffff);
+      --_muted: color-mix(in srgb, var(--_art-fg, #ffffff) 72%, transparent);
+      --_inactive: color-mix(in srgb, var(--_art-fg, #ffffff) 55%, transparent);
+      color: var(--_fg);
+    }
     .ly { position: relative; height: 100%; min-height: 0; display: flex; flex-direction: column; }
     .sc { position: relative; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; overflow-anchor: none; -webkit-overflow-scrolling: touch;
       -webkit-mask-image: linear-gradient(transparent 0, #000 16%, #000 84%, transparent 100%); mask-image: linear-gradient(transparent 0, #000 16%, #000 84%, transparent 100%); }
     .sc::-webkit-scrollbar { display: none; }
     .pad { height: 42%; }
-    .ln { font-family: var(--_font-display); font-weight: 700; line-height: 1.25; color: rgba(255, 255, 255, .45); padding: .28em 0;
+    .ln { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); color: var(--_inactive); padding: .28em 0;
       transition: color 300ms ease, opacity 300ms ease, transform 300ms ease; transform-origin: left center; text-wrap: balance; overflow-wrap: anywhere; }
-    .plain .ln { color: rgba(255, 255, 255, .82); font-weight: 600; }
-    .synced .ln.past { color: rgba(255, 255, 255, .32); }
-    .synced .ln.cur { color: #fff; }
+    .plain .ln { color: var(--_fg); font-weight: var(--ha-font-weight-medium, 500); }
+    .synced .ln.past { color: var(--_inactive); }
+    .synced .ln.cur { color: var(--_fg); }
     .ln.gap { opacity: .6; }
     .seekable .ln { cursor: pointer; position: relative; }
     /* long-press feedback: a white bar fills under the line while held, then the line flashes */
-    .seekable .ln::after { content: ""; position: absolute; left: 0; bottom: .05em; height: 3px; width: 0; background: #fff; border-radius: 2px; opacity: 0; }
+    .seekable .ln::after { content: ""; position: absolute; left: 0; bottom: .05em; height: 3px; width: 0; background: var(--_active); border-radius: 2px; opacity: 0; }
     .seekable .ln.press::after { width: min(100%, 220px); opacity: .9; transition: width ${LONG_PRESS_MS}ms linear, opacity 120ms; }
     .ln.press { transform: scale(.985); }
-    .ln.flash { color: #fff !important; animation: flash 900ms ease; }
-    @keyframes flash { 0% { background: #ffffff33 } 100% { background: transparent } }
+    .ln.flash { color: var(--_fg) !important; animation: flash 900ms ease; }
+    @keyframes flash { 0% { background: var(--_chip-bg-strong) } 100% { background: transparent } }
     .msg { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 16px; }
-    .mt { font-size: 18px; font-weight: 600; color: rgba(255, 255, 255, .78); }
+    .mt { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .st-loading .mt { animation: breathe 1.8s ease-in-out infinite; }
     @keyframes breathe { 50% { opacity: .45 } }
-    .chip { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: rgba(255, 255, 255, .7);
-      padding: 4px 8px; border-radius: 999px; border: 1px solid #ffffff40; background: #0000008c; white-space: nowrap; }
+    .chip { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; color: var(--_muted);
+      padding: 4px 8px; border-radius: 999px; border: 1px solid var(--_surface-border); background: var(--_scrim); white-space: nowrap; }
     .chip.fl { position: absolute; top: 10px; left: 10px; z-index: 2; }
     .toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; padding: 8px 14px; border-radius: 999px;
-      background: #fff; color: #000; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 6px 24px #0008; }
+      background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; box-shadow: var(--ha-card-box-shadow, 0 6px 24px rgba(0,0,0,.3)); }
 
     /* over the Now Playing art: a shade keeps the text readable on any cover, no backdrop-filter */
     .m-overlay { background: linear-gradient(to top, rgba(0, 0, 0, .8), rgba(0, 0, 0, .42)); padding: 0 6%; container-type: inline-size; }
-    .m-overlay .ln { font-size: clamp(14px, 6.4cqw, 30px); text-shadow: 0 1px 12px #000c; }
-    .m-overlay .msg .mt { font-size: clamp(14px, 5cqw, 20px); text-shadow: 0 1px 10px #000; }
+    .m-overlay .ln { font-size: clamp(var(--ha-font-size-m, 14px), 6.4cqw, var(--ha-font-size-3xl, 28px)); text-shadow: 0 1px 12px #000c; }
+    .m-overlay .msg .mt { font-size: clamp(var(--ha-font-size-m, 14px), 5cqw, var(--ha-font-size-xl, 20px)); text-shadow: 0 1px 10px #000; }
 
 
 
     /* screensaver: a clipped window over a column that slides up (transform only); --jb-ly-slide is 0ms under reduced motion */
     .m-saver { height: auto; }
     .m-saver .win { position: relative; overflow: hidden; }
-    .m-saver .col { position: relative; transition: transform var(--jb-ly-slide, 650ms) cubic-bezier(.22, .8, .24, 1); }
+    .m-saver .col { position: relative; transition: transform var(--_ly-slide, 650ms) cubic-bezier(.22, .8, .24, 1); }
     .m-saver .col.jump, .m-saver .col.jump .ln { transition: none; }
     .m-saver.st-synced .win { height: 5.25em; font-size: clamp(18px, 2.6cqw, 34px);
       -webkit-mask-image: linear-gradient(transparent 0, #000 12%, #000 88%, transparent 100%); mask-image: linear-gradient(transparent 0, #000 12%, #000 88%, transparent 100%); }
     .m-saver.st-synced .ln { font-size: 1em; height: 1.75em; line-height: 1.75em; padding: 0; width: 74%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       text-wrap: nowrap; text-shadow: 0 2px 24px #000c; transform-origin: left center;
-      transition: color var(--jb-ly-slide, 650ms) ease, transform var(--jb-ly-slide, 650ms) cubic-bezier(.22, .8, .24, 1); }
+      transition: color var(--_ly-slide, 650ms) ease, transform var(--_ly-slide, 650ms) cubic-bezier(.22, .8, .24, 1); }
     /* the current line is bigger by scale, not font-size, so every row keeps the same height and the slide stays one row */
     .m-saver.st-synced .ln.cur { color: #fff; transform: scale(1.35); }
     .m-saver.st-synced .ln.past { color: rgba(255, 255, 255, .4); }

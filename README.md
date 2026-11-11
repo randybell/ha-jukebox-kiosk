@@ -1,10 +1,10 @@
-# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.7.20
+# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.8.0
 
 > This README covers the integration and the card bundled in it. Since 0.7.9 the card works only through the Jukebox Kiosk integration (or, with fewer features, the official Music Assistant integration); mass_queue support is gone.
 
 Jukebox Kiosk is a Home Assistant integration that ships the **Jukebox Card**, a Lovelace card for a Home Assistant + Music Assistant jukebox kiosk. It also gives the card its own WebSocket API to Music Assistant.
 
-- **One install.** Setting up the integration serves the card from `/jukebox_kiosk_static/jukebox-card.js` and loads it on every dashboard. You don't add a resource, and you don't unzip fonts.
+- **One install.** Setting up the integration serves the card from `/jukebox_kiosk_static/jukebox-card.js` and loads it on every dashboard. You don't add a resource, and there are no font files to install.
 - **Its own Music Assistant API.** The integration borrows the connection the official Music Assistant integration already holds and exposes it as `jukebox_kiosk/*` WebSocket commands. It forwards only an allowlist of Music Assistant commands, and every one is checked against the calling Home Assistant user (see [Permissions](#permissions)).
 - **Every card feature through one integration.** Queue reading and editing (Play Now, Play Next, Move, Remove with Undo), album/artist/playlist/podcast track lists with server-side paging, lyrics, speaker grouping and transfer, and favourites.
 - **Live queue.** The card subscribes to queue changes (`jukebox_kiosk/subscribe_queue`) instead of polling.
@@ -15,19 +15,33 @@ The card's element is still `custom:jukebox-card`, so existing dashboards keep w
 
 > Some of these pictures were taken before 0.7.20. Since 0.7.20 the Library lists show as rows by default (not tiles, and artists are no longer round), and the row buttons (Add to queue, Play Next, Play Now, Remove and so on) are hidden by default. The pictures still show tiles and the buttons.
 
-**One Library tab, keyboard always open.** The on-screen keyboard stays open on every screen size. Below the search box is an **All sources** button. Tap it and a row opens under the box: All, Library, then each music service set up in Music Assistant. You can turn on more than one. The button names the ones you picked and turns white while any is on. Tap it again to close the row. Big buttons pick Playlists, Artists, Tracks or Radio, and the one you are in is solid white. On the library list, a heart sits at the end of that row. There is no Keyboard pill and no hide handle. An empty box lists your library; typing searches that category, library first.
+> Since 0.8.0 the card follows your Home Assistant theme, so colors, corners and fonts come from the theme, in light and in dark. The Now Playing, Library, Queue, Queue pop-up, Speakers and Screensaver pictures below were retaken for 0.8.0, once with a light theme and once with a dark theme, using Home Assistant's default theme and font (Roboto). They show the Tiles setting, and the Queue shows its row buttons turned on. The Library search pictures, the Library list pictures, the Radio and favorites pictures and the backdrop modes picture were taken before 0.8.0 and still show the old look: a fixed black background, white buttons and the old fonts.
 
-| Library (empty box) | Typing, all sources |
+**One Library tab, keyboard always open.** The on-screen keyboard stays open on every screen size. Below the search box is an **All sources** button. Tap it and a row opens under the box: All, Library, then each music service set up in Music Assistant. You can turn on more than one. The button names the ones you picked and turns your theme's main color while any is on. Tap it again to close the row. Big buttons pick Playlists, Artists, Tracks or Radio, and the one you are in is in your theme's main color. On the library list, a heart sits at the end of that row. There is no Keyboard pill and no hide handle. An empty box lists your library; typing searches that category, library first.
+
+| Library, light theme | Library, dark theme |
 |---|---|
-| ![Library](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-1280x800.png) | ![Library search, all sources](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-search-1280x800.png) |
-| **All sources open, two services on** | **Typing, Spotify only (820x1180)** |
-| ![All sources open](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-sources-1280x800.png) | ![Library search, Spotify only](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-provider-820x1180.png) |
+| ![Library, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-light-1024x600.png) | ![Library, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-dark-1024x600.png) |
 
-![Now Playing at 1024x600](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-1920x1080.png)
+Before 0.8.0 (old look):
 
-| Queue | Screensaver |
+| Typing, all sources | All sources open, two services on | Typing, Spotify only (820x1180) |
+|---|---|---|
+| ![Library search, all sources](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-search-1280x800.png) | ![All sources open](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-sources-1280x800.png) | ![Library search, Spotify only](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-provider-820x1180.png) |
+
+| Now Playing, light theme | Now Playing, dark theme |
 |---|---|
-| ![Queue](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-1920x1080.png) | ![Screensaver](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/screensaver-1920x1080.png) |
+| ![Now Playing, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-light-1024x600.png) | ![Now Playing, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-dark-1024x600.png) |
+
+| Queue, light theme | Queue, dark theme |
+|---|---|
+| ![Queue, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-light-1024x600.png) | ![Queue, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-dark-1024x600.png) |
+
+| Screensaver, light theme | Screensaver, dark theme |
+|---|---|
+| ![Screensaver, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/screensaver-light-1024x600.png) | ![Screensaver, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/screensaver-dark-1024x600.png) |
+
+The Screensaver is the same in both themes: black, with white text. Only its font comes from the theme.
 
 ## Requirements
 
@@ -131,23 +145,38 @@ views:
 
 The rest of this section is how each part of the card behaves.
 
+### Themes
+
+Since 0.8.0 the card follows the Home Assistant theme you use, the way Home Assistant's own cards do.
+
+- **Colors, light and dark.** Text, backgrounds, lines and highlights come from the theme. Light and dark themes both work on every screen. Selected buttons (the tab you are on, the Library category, picked sources, the Play button, the playing row in the Queue) use the theme's main color.
+- **Corners, shadow and border.** The card takes them from the theme's card settings. Pop-ups use the theme's dialog corners, shadow, maximum height and dimmed background.
+- **Fonts.** The card uses the theme's fonts and its text sizes, weights and line spacing. With Home Assistant's default theme that is Roboto. The Inter and Plus Jakarta Sans fonts are no longer bundled, the `fonts/` folder is gone, and the card no longer downloads fonts. Titles and the clock look plainer than before. `font_base` no longer does anything, and you can remove it from your setup.
+- **Now Playing title.** It can't be larger than the biggest size in Home Assistant's text scale (40 px with the default theme).
+- **No picture, or nothing playing.** Now Playing fills with the theme's main color with light text and no art, the way Home Assistant's media player card looks when it is off or has no picture. The `static` and `off` backdrop modes look the same (`off` in gray).
+- **Album art.** Over the art, Now Playing keeps a dark shade and white text, so it stays readable with any cover.
+- **Screensaver and Stage.** They stay black with white text. Only their font comes from the theme.
+- **Card-specific color settings.** There are none. Old `--jb-…` style overrides (from a theme or card-mod) no longer have any effect. Change the colors in your Home Assistant theme instead.
+
+After updating, the card looks different: fonts and colors now come from your theme.
+
 ### Backdrop and performance
 
-The full look puts a 38 px live blur of the album art behind the whole centre and a `backdrop-filter` blur behind every panel (14–18 px). That is cheap on a desktop GPU but expensive on low-end kiosk tablets, because the blurred layers have to be re-rastered whenever anything on top of them changes (a slider knob, a key press, a new search result). The `backdrop` option picks a cheaper look:
+The full look puts a 38 px live blur of the album art behind the Now Playing screen and a `backdrop-filter` blur behind every panel (14–18 px). Since 0.8.0 the Library, Search and Queue screens sit on your theme's card background, not on the art. That is cheap on a desktop GPU but expensive on low-end kiosk tablets, because the blurred layers have to be re-rastered whenever anything on top of them changes (a slider knob, a key press, a new search result). The `backdrop` option picks a cheaper look:
 
 | `backdrop` | Centre backdrop | Panels (rooms, queue, search results, keyboard) |
 |---|---|---|
-| `full` | live CSS `filter: blur(38px) saturate(1.15)` of the full-size art | translucent + `backdrop-filter: blur(14–18px)` |
-| `light` | the art drawn **once per track change** into a 64 px canvas (downscaled to 10 px, then smooth-upscaled and lightly blurred), stretched by the compositor; no CSS filter | solid `rgba(0,0,0,0.6)`, no `backdrop-filter` |
-| `static` | a dark gradient, no art | solid `rgba(0,0,0,0.6)` |
-| `off` | pure black | solid `rgba(0,0,0,0.6)` |
+| `full` | live CSS `filter: blur(38px) saturate(1.15)` of the full-size art | your theme's secondary background color + `backdrop-filter: blur(14–18px)` |
+| `light` | the art drawn **once per track change** into a 64 px canvas (downscaled to 10 px, then smooth-upscaled and lightly blurred), stretched by the compositor; no CSS filter | solid, your theme's secondary background color, no `backdrop-filter` |
+| `static` | no art; a flat fill in your theme's main color, like Home Assistant's media player card when it has no picture | solid, your theme's secondary background color |
+| `off` | no art; the same main-color fill in gray, like Home Assistant's media player card when it is off | solid, your theme's secondary background color |
 | `auto` (default) | `light` if `navigator.hardwareConcurrency <= 4`, or `navigator.deviceMemory <= 2`, or `prefers-reduced-motion: reduce`; otherwise `full` | |
 
 - The resolved mode and the reason are on the element: `<jukebox-card data-backdrop="light" data-backdrop-why="hardwareConcurrency=4">`. Use this to check what a Fully Kiosk tablet picked (Fully's remote admin → "Get page source" or a remote DevTools session).
-- `light` needs no CORS: drawing a cross-origin image into a canvas is allowed as long as nothing reads the pixels back, and the card never does. If an image fails to load, the canvas stays hidden and the gradient shows.
+- `light` needs no CORS: drawing a cross-origin image into a canvas is allowed as long as nothing reads the pixels back, and the card never does. If an image fails to load, the canvas stays hidden and your theme's main color shows.
 - `light` redraws only when the art URL changes or the screen's aspect ratio changes, never on slider drags or key presses (test 15c).
-- Theme overrides: `--jb-panel-filter` (default `blur(14px)`, `none` in non-full modes) and `--jb-surface` / `--jb-panel-solid` for the panel colour.
-- The screensaver shows the art (unblurred, so no filter cost) in `full` and `light`, and plain black in `static` and `off`.
+- Colors: the panel colors come from your Home Assistant theme. The old `--jb-panel-filter`, `--jb-surface` and `--jb-panel-solid` overrides are gone (see [Themes](#themes)).
+- The screensaver is unchanged by themes. It shows the art (unblurred, so no filter cost) in `full` and `light`, and plain black in `static` and `off`.
 
 **Reduced motion.** With `prefers-reduced-motion: reduce` (Android: Settings → Accessibility → Remove animations), `auto` picks `light`, and the screensaver turns off its Ken Burns zoom and its continuous drift. To still protect the panel from burn-in, the clock block jumps to a new position every 60 s with no animation (`step-end`), cycling through 10 spots over 10 minutes.
 
@@ -163,6 +192,8 @@ The full look puts a 38 px live blur of the album art behind the whole centre an
 ![Backdrop modes: full, light, static, off](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk-card/main/docs/backdrop-modes-1920x1080.png)
 
 *Top: `full`, `light`. Bottom: `static`, `off`.*
+
+*This picture was taken before 0.8.0. Since 0.8.0, `static` and `off` fill with your theme's main color (`off` in gray) instead of dark and black.*
 
 - Frame times are `requestAnimationFrame` deltas; long tasks come from a `PerformanceObserver('longtask')`; main-thread and raster/GPU time come from a CDP trace (`ThreadControllerImpl::RunTask` on the renderer main thread vs. compositor, raster and GPU threads).
 - The main thread is not the bottleneck in either mode: no long tasks and a steady ~16.7 ms at 4x throttle. The blur cost is in raster/GPU work, which CPU throttling does not slow down, and on this box's fast CPU it still fits in a frame. The useful number is raster/GPU time, which is where a slow tablet's GPU drops frames. Typing (results re-rendering over a blurred backdrop) costs about 3.5x more raster/GPU time in `full` than in `light`.
@@ -194,7 +225,7 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 ### Now Playing
 
 - **Art.** The card never loads the player's absolute `entity_picture` (`http://<ma-host>:8095/imageproxy?…` is mixed content on an https dashboard and unreachable off the LAN). It uses, in order: `entity_picture_local` (HA's relative `/api/media_player_proxy/…` URL), a relative `entity_picture`, the current mass_queue item's https `media_image`, then the placeholder. The same URL feeds Now Playing, both backdrops (`full` and `light`) and the screensaver. Radio streams with no art get a radio-tower image. Item images are used only when they are https, `data:image` or relative.
-- **Display.** The album art is blurred behind the card. The tab shows the art, title, artist · album, a provider badge from the URI scheme and "Playing on Everywhere".
+- **Display.** The album art is blurred behind the screen, with a dark shade over it so the text stays easy to read. When nothing is playing, or there is no art, the screen fills with your theme's main color with the theme's light text on it, the way Home Assistant's media player card does. The tab shows the art, title, artist · album, a provider badge from the URI scheme and "Playing on Everywhere".
 - **Seek bar.** Tap or drag it to send `media_player.media_seek {seek_position}`. The time label follows the drag.
 - **Transport.** All transport calls target `entity` only:
 
@@ -207,7 +238,7 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
   | Repeat queue | `repeat_set {repeat}` on the same player, toggling off ↔ all; "all" repeats the whole queue. Repeat one is never offered or sent |
 
   Shuffle and repeat are queue settings: they always go to the active target (the group or player the card is playing on, e.g. Everywhere), never to individual member speakers, and there is no per-track or per-row shuffle or repeat. If the player ever reports repeat "one" (set somewhere else), the card shows it as repeat queue and, with `coerce_repeat_one` on (the default), sends a single `repeat_set {repeat: all}` to that player: once per detection, about 1.5 s after it is seen, at most once a minute, and only for a user with Playback permission. A message is never shown for this.
-  Active shuffle and repeat are white with a dot under them; inactive ones are light white. The UI updates optimistically and reconciles when HA reports the new state.
+  Active shuffle and repeat use your theme's main color with a dot under them (on the solid main-color screen they use the theme's light text color); inactive ones are dimmer. The UI updates optimistically and reconciles when HA reports the new state.
 - **Heart.** The heart adds the playing track to Music Assistant's favourites through the integration (`jukebox_kiosk/favorite_current`, needs the `library` class), or, on the native backend, presses the player's own Music Assistant "Favorite current song" button, found on the player's device. A filled heart removes it with `jukebox_kiosk/unfavorite_current`. When the card has no way to favourite, the heart is hidden. There is no option for it (since 0.7.9); an old `favorite_entity:` line in YAML is ignored.
 - **Up next strip.** It shows the next queue item and "+ N more". Tapping it opens the Queue tab.
 - **Volume:**
@@ -222,11 +253,13 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 ### Queue
 
 - **Reading.** The queue comes from `jukebox_kiosk/queue_items {entity_id, limit_before: 1, limit_after: queue_limit (1–1000)}`, and the card subscribes to changes (`jukebox_kiosk/subscribe_queue`).
-- **Layout.** The previous track is dimmed. "Now playing" is the highlighted white row, then a numbered "Up next" list. "+ N more in Music Assistant" appears when the queue is longer than the list.
+- **Layout.** The previous track is dimmed. "Now playing" is the highlighted row, filled with your theme's main color, then a numbered "Up next" list. "+ N more in Music Assistant" appears when the queue is longer than the list.
 - **Tapping a row.** Since 0.7.13, tapping a track opens the same large pop-up as pressing and holding it (see below). Before that a tap did nothing. A radio station in the queue is the exception: tapping it still does nothing. The row's own icons work as before, but since 0.7.20 they are hidden unless `show_action_icons` is `true`.
 - **Row actions.** Since 0.7.20 the row buttons below are hidden unless `show_action_icons` is `true` (see [Row buttons](#row-buttons-hidden-by-default)). When shown, every track row has three buttons with an icon and a label, in this order: **Play Next**, **Play Now**, **Remove**. On a wide card they sit beside the title. Move up and Move down stay as the ↑ and ↓ arrows beside them (`move_queue_item_up` and `move_queue_item_down`). On a phone (the card is 520 px wide or less) Play Next, Play Now and Remove sit on their own row under the title, the arrows are hidden, and **⋯** opens an action sheet with Play Now, Play Next, Move up, Move down and Remove. Tap or press and hold a track row to open the same large pop-up as everywhere else. Since 0.7.12 it always lists **Play Now**, **Play Next**, **Move up**, **Move down** and **Remove**, in that order, then **More Info** (see the press-and-hold pop-up under Library), then **Cancel**. A choice that can't be used for that track stays in its place, greyed, and does nothing: for example Play Next and Move up on the track that is already next, Move down on the last track, and Play Next, Move up, Move down and Remove on the track playing now. Guests get the same list, with Play Next greyed on the track that is already next. In the pop-up, Remove works on the track that is next whenever that row's own Remove button works. A radio station in the queue has no More Info. The ⋯ button still opens its existing menu. With the buttons hidden (the default since 0.7.20) the row's Play Next, Play Now, Remove, Move up, Move down and ⋯ buttons are not shown; the pop-up still has all of those choices.
 
-![Queue press-and-hold options](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/live-queue-hold-popup-0711.png)
+| Queue press-and-hold options, light theme | Queue press-and-hold options, dark theme |
+|---|---|
+| ![Queue press-and-hold options, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-menu-light-1024x600.png) | ![Queue press-and-hold options, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-menu-dark-1024x600.png) |
 
 - **Search queue.** **Search queue** in the header opens a box and an on-screen keyboard that stays open. The list shows tracks whose title, artist or album contains what you type. Press and hold a track in the results (since 0.7.12), or tap it (since 0.7.13), to open the same pop-up as a normal Queue row, with the same choices and the same greyed-out rules. With a physical keyboard, typing goes into the search (since 0.7.13): letters, digits and punctuation are typed and Backspace deletes, so keys such as e, c, d, a and m no longer set off Home Assistant's own shortcuts (its search bar, Assist and so on). This applies only while Queue search is open on the Queue tab, and Esc is left to the card. **Done** closes the search and clears it.
 - **Header.** The Queue tab badge shows how many items are left, and the header says how many are up next.
@@ -246,7 +279,9 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 - **Permissions are a UI lock, not security.** `grouping` / `grouping_users` / `guest_access` only hide or disable controls in this card. Anyone with dashboard access can still call the same services from elsewhere in Home Assistant. Use HA users and dashboards to restrict access.
 - **Editor:** a Speakers section. **Speakers panel** offers "Volume only: always play on the chosen player" or "Choose speakers: pick, group and drop speakers from the card". Only Choose speakers shows the rest: targets, who may change speakers, extra people, everyone else, **Removing the main speaker from a group** ("Allow: the music keeps playing on the other speakers after a short pause" / "Don't allow: use Move to hand the music to another speaker first") and the ask-before-dropping switch. Presets come from Music Assistant's group defaults; there is nothing to set.
 
-![Speakers panel with targets, presets and room volumes](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/live-speakers-volume-0711.png)
+| Speakers panel, light theme | Speakers panel, dark theme |
+|---|---|
+| ![Speakers panel with room volumes, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/speakers-light-1024x600.png) | ![Speakers panel with room volumes, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/speakers-dark-1024x600.png) |
 
 ### Library (search and browse in one tab)
 
@@ -254,7 +289,7 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 - **Search box, with All sources below it.** The box uses the on-screen keyboard and searches on every keystroke (see [How search behaves](#how-search-behaves)). **All sources** sits below the box. Tap it to open a row under the box: **All** (the usual choice), **Library**, then the music services set up in Music Assistant, using the names you gave them. A service that is not available is left out. The row wraps when there are many, and on a phone it scrolls sideways. It does not cover the screen. Tap **All sources** again to close the row.
   - **Picking more than one.** Tapping a service while All is on selects just that service. Tapping more adds them. Tapping a selected one turns it off. When none is left, it goes back to **All**. Tapping **All** clears the others. While any are picked, the button turns white. On a larger screen the button shows the names (shortened if they do not fit); on a phone it says **All** or how many are on. The open row still shows each name in full, and the line under the box is hidden. With `library_keyboard: tap`, and on the separate Search tab, a larger screen shows the names on the button (for example "Apple Music + TuneIn"), shortened if they do not fit, a phone says **All** or how many are on, and the line under the box names the selection.
   - `search_sources: false` hides the button and the row.
-- **Category buttons.** Big buttons with an icon and a name: Playlists (where the tab opens), Artists, Tracks, Radio. The one you are in is solid white. Albums, Podcasts and Audiobooks appear only if you list them in `library_categories`, which also sets the order. There is no Genres button here (since 0.7.9), even if `genre` is in `library_categories`. With the keyboard always open, a phone shows the icons only.
+- **Category buttons.** Big buttons with an icon and a name: Playlists (where the tab opens), Artists, Tracks, Radio. The one you are in is in your theme's main color. Albums, Podcasts and Audiobooks appear only if you list them in `library_categories`, which also sets the order. There is no Genres button here (since 0.7.9), even if `genre` is in `library_categories`. With the keyboard always open, a phone shows the icons only.
 - **Favorites.** On the library list (nothing typed, and All or Library chosen) a small heart sits at the end of the category row. It shows favorites only. There is no sort button (since 0.7.9): lists keep their usual order, A–Z, and radio stations most played first. The heart is hidden while you are typing, while a music service is chosen, while Search in an artist or album is on, or on a detail page. Favorites is no longer a chip in a bar above the list.
 - **Empty box, All or Library alone:** the library list of the selected category. Genres lists `music/genres/library_items` (the older separate-tabs Library layout only; there is no Genres button on the combined tab). Since 0.7.12 there is no genre page, so tapping a genre in that old-layout list opens nothing.
 - **Typed text:** results for the selected category and source only. With **All**, library matches come first ("In your library"), then provider results ("From your providers"); **Library** shows library matches only; providers send one `music/search` with all of them in `providers`; **Library** plus providers shows library matches first, then those providers.
@@ -380,7 +415,7 @@ Lyrics come from Music Assistant's own metadata (its LRCLIB provider, with Geniu
 - **Plain lyrics** scroll in proportion to the track's progress and show an **Unsynced** chip. Scrolling by hand pauses the auto-scroll for a few seconds.
 - **States**: "Looking for lyrics…", "No lyrics found", and "Lyrics unavailable". Failures back off for 60 s; there is never more than one lookup per track in flight.
 - **Lyrics come only from Music Assistant.** The card fetches and displays them through Music Assistant and never stores or redistributes lyric text. Lyric text stays in memory (an LRU of 50 tracks) for the page session only, and a reload fetches it again. `localStorage` (`jukebox-card:lyrics:v2`, 100 tracks, keyed by URI or by `artist|title` for radio) only remembers "not found" markers, with no text, for 1 day. The old `jukebox-card:lyrics:v1` cache, which held lyric text, is deleted on load.
-- **Look**: Black Frame Mono: the current line is white, the others translucent white, over whatever `backdrop` mode is active.
+- **Look**: the current line is bold and bright, and the others are dimmer, over whatever `backdrop` mode is active. Over the album art, and on the Stage and the screensaver, the text is white. The lyrics use your theme's font.
 
 ## Options
 
@@ -401,7 +436,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `library_first` | `true` | Search lists your library matches first ("In your library"), then provider results ("From your providers") with copies of library items removed. Applies to scoped searches too. `false` keeps Music Assistant's order |
 | `slow_ms` | `800` | Search replies slower than this switch on in-flight limiting |
 | `accent` | `mono` | *(YAML only)* Only `mono` exists so far, so it changes nothing |
-| `font_base` | `fonts/` next to the `.js` | Location of the woff2 files. `false` uses system fonts |
+| `font_base` | *(no effect since 0.8.0)* | Still accepted, so old setups keep loading, but it does nothing. The card uses the font from your Home Assistant theme and no longer ships font files. You can remove it from your setup |
 | `height` | fits the window | Card height. By default the card fills the space from its top edge to the bottom of the window (below the HA toolbar, minimum 320 px); set a fixed value such as `700px` to override |
 | `backdrop` | `auto` | `full`, `light`, `static`, `off` or `auto`. See [Backdrop and performance](#backdrop-and-performance) |
 | `scale` | `auto` | Large-screen zoom. `auto` scales the whole UI by min(width/1420, height/800) once that is ≥ 1.15 (1920x1080 → 1.35, capped at 1.8). A number forces it; `1` turns it off |
@@ -464,7 +499,7 @@ Not in 0.7.x: joining a speaker to a dynamic group so playback resumes on it, an
 
 [MIT License](LICENSE). Copyright (c) 2026 Randy Bell.
 
-The bundled fonts (Inter and Plus Jakarta Sans) are SIL Open Font License 1.1, and the icon path data is Apache-2.0 (Google Material Icons), not MIT. Their `LICENSE-*.txt` files ship in `custom_components/jukebox_kiosk/www/fonts/`. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists everything bundled, with full license texts.
+The icon path data is Apache-2.0 (Google Material Icons), not MIT. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists everything bundled, with full license texts.
 
 ### Credits
 
@@ -474,6 +509,5 @@ The bundled fonts (Inter and Plus Jakarta Sans) are SIL Open Font License 1.1, a
 - **Inspiration**: [mass_queue](https://github.com/droans/mass_queue) (Music Assistant Queue Actions) by [droans](https://github.com/droans), which powered the card up to 0.5.x and shaped this API, and **Kiosk MA Cards**. No code from either is included.
 - **[Lit](https://lit.dev)** by Google LLC, BSD-3-Clause, is bundled into `jukebox-card.js`.
 - **Icons**: the UI glyph paths come from, or are adapted from, [Google Material Icons](https://github.com/google/material-design-icons) (Apache-2.0); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-- **Fonts** (OFL-1.1, via [Fontsource](https://fontsource.org)): [Inter](https://rsms.me/inter/) by Rasmus Andersson and The Inter Project Authors, and [Plus Jakarta Sans](https://github.com/tokotype/PlusJakartaSans) by Tokotype and The Plus Jakarta Sans Project Authors.
 
 This project is not affiliated with or endorsed by Music Assistant, Home Assistant, WiiM, Apple or Genius. All trademarks belong to their owners.
