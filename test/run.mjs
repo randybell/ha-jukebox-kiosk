@@ -686,14 +686,26 @@ await open(page, '&tab=now&backdrop=static'); s = await bdState();
 check('15d backdrop=static: HA media-control no-image fill (--primary-color), no art, no filters', s.mode === 'static' && !s.canvas && s.beforeFilter === 'none' && !/url/.test(s.beforeBg) && s.beforeColor === s.themePrimary && s.panelBF === 'none', JSON.stringify(s));
 await open(page, '&tab=now&backdrop=off'); s = await bdState();
 check('15e backdrop=off: no art, HA media-control off fill (--primary-color, grayscale)', s.mode === 'off' && s.beforeDisplay !== 'none' && /grayscale/.test(s.beforeFilter) && s.beforeColor === s.themePrimary && s.npBg === s.themePrimary && s.panelBF === 'none' && !/url/.test(s.beforeBg), JSON.stringify(s));
-await open(page, '&tab=now'); s = await bdState();
+await open(page, '&tab=now&backdrop=auto'); s = await bdState();
 const cores = await page.evaluate(() => [navigator.hardwareConcurrency, navigator.deviceMemory]);
-check('15f backdrop=auto (default) resolves from hardwareConcurrency/deviceMemory', s.mode === ((cores[0] <= 4 || cores[1] <= 2) ? 'light' : 'full'), `${s.mode} (${s.why}) cores/mem=${cores}`);
+check('15f backdrop=auto resolves from hardwareConcurrency/deviceMemory (0.8.1: auto is an explicit choice, plain is the default)', s.mode === ((cores[0] <= 4 || cores[1] <= 2) ? 'light' : 'full'), `${s.mode} (${s.why}) cores/mem=${cores}`);
+// 0.8.1: plain is the default: Now Playing is a plain theme card surface, no art backdrop, no shade, no canvas
+for (const q of ['&tab=now', '&tab=now&backdrop=plain']) {
+  await open(page, q);
+  s = await page.evaluate(() => { const r = __card.shadowRoot, np = r.querySelector('main.np'); const b = getComputedStyle(np, '::before'), a = getComputedStyle(np, '::after');
+    const now = r.querySelector('jb-now').shadowRoot; const ti = now.querySelector('.ti'); const probe = document.createElement('span'); probe.style.color = 'var(--primary-text-color, #212121)'; document.body.appendChild(probe); const text = getComputedStyle(probe).color; probe.remove();
+    return { mode: __card.dataset.backdrop, why: __card.dataset.backdropWhy, before: b.content, after: a.content, npBg: getComputedStyle(np).backgroundColor, canvas: !!r.querySelector('canvas.bdl'), inline: np.getAttribute('style') || '', title: getComputedStyle(ti).color, text }; });
+  check(`15j ${q}: plain is the default: no art backdrop, no shade, no fill, no canvas, theme text colour`, s.mode === 'plain' && s.before === 'none' && s.after === 'none' && s.npBg === 'rgba(0, 0, 0, 0)' && !s.canvas && !/--_art/.test(s.inline) && s.title === s.text, JSON.stringify(s));
+}
+await open(page, '&tab=now&saver=0.02');
+await page.waitForFunction(() => !!__card.shadowRoot.querySelector('.saver .sv-bg'), { timeout: 5000 }).catch(() => {});
+s = await page.evaluate(() => { const bg = __card.shadowRoot.querySelector('.sv-bg'); return { mode: __card.dataset.backdrop, bg: bg ? getComputedStyle(bg).backgroundImage.slice(0, 40) : null }; });
+check('15k plain: the screensaver is unchanged (still shows the album art as its background)', s.mode === 'plain' && /url/.test(s.bg ?? ''), JSON.stringify(s));
 await page.evaluateOnNewDocument(() => { Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => 4 }); });
-await open(page, '&tab=now'); s = await bdState();
+await open(page, '&tab=now&backdrop=auto'); s = await bdState();
 check('15g auto on a 4-core device → light', s.mode === 'light' && /hardwareConcurrency=4/.test(s.why), `${s.mode} (${s.why})`);
 await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
-await open(page, '&tab=now&saver=0.02');
+await open(page, '&tab=now&backdrop=auto&saver=0.02');
 await page.waitForFunction(() => !!__card.shadowRoot.querySelector('.saver .sv-drift'), { timeout: 5000 }).catch(() => {});
 s = await page.evaluate(() => { const r = __card.shadowRoot; const d = r.querySelector('.sv-drift'), bg = r.querySelector('.sv-bg'); return { mode: __card.dataset.backdrop, why: __card.dataset.backdropWhy, drift: d && getComputedStyle(d).animationName, timing: d && getComputedStyle(d).animationTimingFunction, kb: bg ? getComputedStyle(bg).animationName : 'n/a' }; });
 check('15h prefers-reduced-motion: auto → light; screensaver drift + Ken Burns off (discrete hop every 60s only)', s.mode === 'light' && s.why === 'prefers-reduced-motion' && s.drift === 'hop' && /steps|step-end/.test(s.timing) && (s.kb === 'none' || s.kb === 'n/a'), JSON.stringify(s));

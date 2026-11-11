@@ -39,6 +39,8 @@ export async function probe(p) { return p.evaluate(`(${WALK.toString()})()`); }
 export const SCENES = {
   'now': { q: '&tab=now' },
   'now-idle-noart': { q: '&tab=now&idle=1' },
+  'now-radio-nologo': { q: '&tab=now&noart=1', act: async (p) => { await p.evaluate("__setNowPlaying({ artist: 'Late night jazz', title: 'Neon FM', radio: true })"); await sleep(500); } },
+  'now-bd-full': { q: '&tab=now&backdrop=full' },
   'now-bd-light': { q: '&tab=now&backdrop=light' },
   'now-bd-static': { q: '&tab=now&backdrop=static' },
   'now-bd-off': { q: '&tab=now&backdrop=off' },

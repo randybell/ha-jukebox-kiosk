@@ -48,7 +48,7 @@ for (const name of Object.keys(SCENES)) {
 }
 
 // 2. the album-art backdrop, shade and fill belong to Now Playing only (all four looks)
-const SCOPE = ['now', 'now-bd-light', 'lib-playlists-tiles', 'lib-keyboard-123', 'queue', 'track-popup', 'speakers-picker', 'detail-playlist'];
+const SCOPE = ['now', 'now-bd-full', 'now-bd-light', 'lib-playlists-tiles', 'lib-keyboard-123', 'queue', 'track-popup', 'speakers-picker', 'detail-playlist'];
 for (const theme of ['light', 'dark', 'glass', 'wallpaper']) for (const name of SCOPE) {
   let p;
   try {
@@ -58,7 +58,8 @@ for (const theme of ['light', 'dark', 'glass', 'wallpaper']) for (const name of 
         bdl: [...${C}.querySelectorAll('.bdl')].map((e) => cs(e).display),
         views: [...${C}.querySelectorAll('.view')].filter((v) => v.dataset.view !== 'now').map((v) => cs(v).backgroundColor + '|' + cs(v).backgroundImage) }; })()`);
     const isNow = NOW(name);
-    if (isNow) check(`T2 ${theme}/${name}: Now Playing draws its backdrop`, r.onNow && (r.before === '""' || r.bdl.some((d) => d !== 'none')), JSON.stringify({ b: r.before }));
+    if (isNow && /^now-bd-/.test(name)) check(`T2 ${theme}/${name}: the chosen art mode draws its backdrop on Now Playing`, r.onNow && (r.before === '""' || r.bdl.some((d) => d !== 'none')), JSON.stringify({ b: r.before }));
+    else if (isNow) check(`T2 ${theme}/${name}: plain (the default) draws no art, shade or fill on Now Playing`, r.onNow && (r.before === 'none' || r.before === 'normal') && (r.after === 'none' || r.after === 'normal') && r.bdl.every((d) => d === 'none') && r.bgimg === 'none', JSON.stringify(r).slice(0, 200));
     else {
       check(`T2 ${theme}/${name}: no album art, shade or fill behind this screen`, !r.onNow && (r.before === 'none' || r.before === 'normal') && (r.after === 'none' || r.after === 'normal') && r.bdl.every((d) => d === 'none') && r.bgimg === 'none', JSON.stringify(r).slice(0, 200));
       check(`T2 ${theme}/${name}: the screens paint no card colour of their own on top`, r.views.every((v) => v === 'rgba(0, 0, 0, 0)|none'), r.views.join(' ; ').slice(0, 160));
