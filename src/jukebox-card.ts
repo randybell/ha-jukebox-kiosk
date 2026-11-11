@@ -912,16 +912,15 @@ export class JukeboxCard extends LitElement {
     .np.on-now .bdl { display: block; }
     .bdl.ready { opacity: 1; }
     /* static ("Dark: a flat theme colour") and off: a flat --primary-color fill, no art, no filters (off is the same fill in grey, as HA media-control .off).
-       Each ::before needs its own content/position or the fill is never drawn (0.8.1 fix). */
+       Each ::before needs its own content/position or the fill is never drawn (0.8.1 fix). Same as HA's .color-block / .off.background. */
     .bd-static .np.on-now::before, .bd-off .np.on-now::before {
       content: ""; display: block; position: absolute; inset: 0; z-index: 0;
       background: var(--primary-color, #03a9f4); filter: none;
     }
     .bd-off .np.on-now::before { filter: grayscale(1); }
     .bd-off .np.on-now { background: var(--primary-color, #03a9f4); }
-    /* Now Playing on a primary-colour fill (static, off, and full/light with no art). Text is --text-primary-color, as HA media-control
-       .player does; where the browser supports relative colours it is switched to white or black from the fill's own lightness, so it stays
-       readable on any --primary-color (white on HA's default light blue is only 2.8:1). Everything derives from the theme variable. */
+    /* Now Playing on a primary-colour fill (static, off, and full/light with no art): exactly HA's media control card
+       (hui-media-control-card.ts): fill --primary-color (off: the same fill under filter: grayscale(1)), text and icons .player { color: var(--text-primary-color) }. */
     .bd-full .np:not(.has-art) .view[data-view=now],
     .bd-light .np:not(.has-art) .view[data-view=now],
     .bd-static .view[data-view=now],
@@ -935,14 +934,8 @@ export class JukeboxCard extends LitElement {
       --_art-chip-bg: color-mix(in srgb, var(--_art-fg) 12%, transparent);
       --_art-chip-bg-strong: color-mix(in srgb, var(--_art-fg) 20%, transparent);
       --_art-surface-border: color-mix(in srgb, var(--_art-fg) 28%, transparent);
-      --_canvas-active: var(--_art-fg);
+      --_canvas-active: var(--text-primary-color, #fff);
       --_canvas-on: var(--primary-color, #03a9f4);
-    }
-    @supports (color: oklch(from red l c h)) {
-      .bd-full .np:not(.has-art) .view[data-view=now],
-      .bd-light .np:not(.has-art) .view[data-view=now],
-      .bd-static .view[data-view=now],
-      .bd-off .view[data-view=now] { --_art-fg: oklch(from var(--primary-color, #03a9f4) clamp(0, (0.57 - l) * 1000, 1) 0 0); }
     }
     .view { position: absolute; inset: 0; z-index: 1; }
     .view[hidden] { display: none; }

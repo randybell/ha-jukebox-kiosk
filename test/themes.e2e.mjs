@@ -98,20 +98,23 @@ for (const theme of ['light', 'dark', 'glass', 'wallpaper']) for (const name of 
   await p.close();
 }
 
-// 4. every backdrop mode really paints what it promises, and the text on it is readable, in all four looks (0.8.1 fix: "Dark" drew nothing)
+// 4. every backdrop mode really paints what it promises, in all four looks (0.8.1 fix: "Dark" drew nothing). Exactly HA's media control card:
+//    the fill is --primary-color (off: the same under grayscale(1)); text and icons are --text-primary-color. No contrast switching.
 {
-  const primaryOf = (p) => ev(p, `(() => { const i = document.createElement('i'); i.style.color = 'var(--primary-color)'; document.body.appendChild(i); const c = getComputedStyle(i).color; i.remove(); return c; })()`);
+  const rgb3 = (c) => { const m = (c.match(/[\d.]+/g) ?? []).map(Number); return (/^color\(srgb/.test(c) ? m.slice(0, 3).map((v) => Math.round(v * 255)) : m.slice(0, 3)); };
+  const sameRgb = (a, b) => rgb3(a).every((v, i) => Math.abs(v - rgb3(b)[i]) <= 1); // the subtitle is the same colour at 70% (HA's own tint of the text colour)
+  const tokens = (p) => ev(p, `(() => { const o = {}; for (const [k, v] of [['primary', 'var(--primary-color)'], ['tpc', 'var(--text-primary-color, #fff)']]) { const i = document.createElement('i'); i.style.color = v; document.body.appendChild(i); o[k] = getComputedStyle(i).color; i.remove(); } return o; })()`);
   for (const theme of ['light', 'dark', 'glass', 'wallpaper']) {
-    // [scene, label, min title contrast, min subtitle contrast, expected fill]
-    for (const [name, label, minT, minS, fill] of [['now-bd-static', 'static (Dark)', 4.5, 3, 'primary'], ['now-bd-off', 'off', 3, 2.5, 'grey'], ['now-bd-full-noart', 'full with no art', 4.5, 3, 'primary'], ['now-bd-light-noart', 'light with no art', 4.5, 3, 'primary']]) {
+    for (const [name, label, fill] of [['now-bd-static', 'static (Dark)', 'primary'], ['now-bd-off', 'off', 'grey'], ['now-bd-full-noart', 'full with no art', 'primary'], ['now-bd-light-noart', 'light with no art', 'primary']]) {
       let p;
       try {
         p = await newPage(theme, name);
-        const f = await nowFill(p, ev, C); const pr = await primaryOf(p);
-        const want = (pr.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
-        const painted = fill === 'primary' ? f.px.every((v, i) => Math.abs(v - want[i]) <= 2) : Math.max(...f.px) - Math.min(...f.px) <= 2;
-        check(`T4 ${theme}/${label}: the flat fill really renders (painted pixel ${f.px}, ${fill})`, f.content === '""' && f.position === 'absolute' && painted, JSON.stringify({ content: f.content, position: f.position, px: f.px, primary: pr }));
-        check(`T4 ${theme}/${label}: text is readable on it (title ${f.cTitle.toFixed(1)}:1, subtitle ${f.cSub.toFixed(1)}:1)`, f.cTitle >= minT && f.cSub >= minS, JSON.stringify({ title: f.title, sub: f.sub }));
+        const f = await nowFill(p, ev, C); const t = await tokens(p);
+        const pr = (t.primary.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+        const grey = Math.round(0.2126 * pr[0] + 0.7152 * pr[1] + 0.0722 * pr[2]);
+        const painted = fill === 'primary' ? f.px.every((v, i) => Math.abs(v - pr[i]) <= 2) : f.px.every((v) => Math.abs(v - grey) <= 2);
+        check(`T4 ${theme}/${label}: the flat fill really renders (painted pixel ${f.px} = ${fill === 'primary' ? '--primary-color' : 'grayscale(--primary-color)'})`, f.content === '""' && f.position === 'absolute' && painted, JSON.stringify({ content: f.content, position: f.position, px: f.px, primary: t.primary, grey }));
+        check(`T4 ${theme}/${label}: title and subtitle use --text-primary-color (as HA media control .player)`, f.title === t.tpc && sameRgb(f.sub, t.tpc), JSON.stringify({ title: f.title, sub: f.sub, tpc: t.tpc }));
       } catch (e) { check(`T4 ${theme}/${label}: scene opens`, false, String(e.message).slice(0, 140)); }
       try { await p?.close(); } catch {}
     }

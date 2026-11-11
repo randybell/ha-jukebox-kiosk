@@ -686,12 +686,15 @@ check('15b backdrop=light: pre-blurred canvas drawn, no CSS filter, solid theme 
 await open(page, '&tab=now&backdrop=static'); s = await bdState();
 { const f = await nowFill(page, (pg, e) => pg.evaluate((x) => eval(x), e), '__card.shadowRoot');
   const hex = (c) => c.join(', ');
-  check('15d backdrop=static ("Dark"): the flat theme-primary fill really renders (painted pixel = --primary-color) and the text contrasts with it (>= 4.5:1 title, >= 3:1 subtitle)', s.mode === 'static' && !s.canvas && s.beforeFilter === 'none' && !/url/.test(s.beforeBg) && s.beforeColor === s.themePrimary && s.panelBF === 'none'
-    && f.content === '""' && f.position === 'absolute' && `rgb(${hex(f.px)})` === s.themePrimary && f.cTitle >= 4.5 && f.cSub >= 3, JSON.stringify({ px: f.px, title: f.title, sub: f.sub, cTitle: +f.cTitle.toFixed(2), cSub: +f.cSub.toFixed(2), content: f.content, position: f.position })); }
+  const tpc = await page.evaluate(() => { const i = document.createElement('i'); i.style.color = 'var(--text-primary-color, #fff)'; document.body.appendChild(i); const c = getComputedStyle(i).color; i.remove(); return c; });
+  check('15d backdrop=static ("Dark"): exactly HA media control: the flat --primary-color fill really renders (painted pixel) and the title and icons use --text-primary-color', s.mode === 'static' && !s.canvas && s.beforeFilter === 'none' && !/url/.test(s.beforeBg) && s.beforeColor === s.themePrimary && s.panelBF === 'none'
+    && f.content === '""' && f.position === 'absolute' && `rgb(${hex(f.px)})` === s.themePrimary && f.title === tpc, JSON.stringify({ px: f.px, title: f.title, textPrimaryColor: tpc, content: f.content, position: f.position })); }
 await open(page, '&tab=now&backdrop=off'); s = await bdState();
 check('15e backdrop=off: no art, HA media-control off fill (--primary-color, grayscale)', s.mode === 'off' && s.beforeDisplay !== 'none' && /grayscale/.test(s.beforeFilter) && s.beforeColor === s.themePrimary && s.npBg === s.themePrimary && s.panelBF === 'none' && !/url/.test(s.beforeBg), JSON.stringify(s));
 { const f = await nowFill(page, (pg, e) => pg.evaluate((x) => eval(x), e), '__card.shadowRoot');
-  check('15e2 backdrop=off: the grey fill really renders (painted pixel is grey) and the text contrasts with it (>= 3:1)', f.content === '""' && f.position === 'absolute' && Math.max(...f.px) - Math.min(...f.px) <= 2 && f.cTitle >= 3 && f.cSub >= 2.5, JSON.stringify({ px: f.px, title: f.title, cTitle: +f.cTitle.toFixed(2), cSub: +f.cSub.toFixed(2) })); }
+  const [pr, pg2, pb] = (s.themePrimary.match(/\d+/g) ?? []).map(Number); const grey = Math.round(0.2126 * pr + 0.7152 * pg2 + 0.0722 * pb);
+  const tpc = await page.evaluate(() => { const i = document.createElement('i'); i.style.color = 'var(--text-primary-color, #fff)'; document.body.appendChild(i); const c = getComputedStyle(i).color; i.remove(); return c; });
+  check('15e2 backdrop=off: exactly HA media control .off: the fill really renders as --primary-color under grayscale(1) (painted pixel is that grey) and the title uses --text-primary-color', f.content === '""' && f.position === 'absolute' && f.px.every((v) => Math.abs(v - grey) <= 2) && f.title === tpc, JSON.stringify({ px: f.px, want: grey, title: f.title, textPrimaryColor: tpc })); }
 await open(page, '&tab=now&backdrop=auto'); s = await bdState();
 const cores = await page.evaluate(() => [navigator.hardwareConcurrency, navigator.deviceMemory]);
 check('15f backdrop=auto resolves from hardwareConcurrency/deviceMemory (0.8.1: auto is an explicit choice, plain is the default)', s.mode === ((cores[0] <= 4 || cores[1] <= 2) ? 'light' : 'full'), `${s.mode} (${s.why}) cores/mem=${cores}`);
