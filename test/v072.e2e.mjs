@@ -357,7 +357,8 @@ for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobi
     probe.remove();
     return [...${SV}.querySelectorAll('.lcats .lc')].map((b) => [b.classList.contains('on'), getComputedStyle(b).backgroundColor, primary]);
   })()`);
-  check('C7 the selected category button is filled with the theme primary color, the others are not', bg.filter((x) => x[0]).length === 1 && bg.every((x) => x[0] === (x[1] === x[2])), J(bg));
+  // 0.8.1: the selected one is HA's selected filter chip (a soft tint of the text colour), the others are plain
+  check('C7 the selected category button is the HA selected-chip fill, the others have no fill', bg.filter((x) => x[0]).length === 1 && bg.every((x) => x[0] === (x[1] !== 'rgba(0, 0, 0, 0)')), J(bg));
   // corner icons drive the embedded library list
   await wait(p, `${BR}.querySelectorAll('.tile[data-type=playlist]').length > 0`);
   await ev(p, `window.__calls.length = 0`);

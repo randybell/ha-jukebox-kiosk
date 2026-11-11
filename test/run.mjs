@@ -651,6 +651,7 @@ const bdState = () => page.evaluate(() => {
   const r = __card.shadowRoot, np = r.querySelector('main.np'), cv = r.querySelector('canvas.bdl');
   const before = getComputedStyle(np, '::before');
   const panel = r.querySelector('jb-now').shadowRoot.querySelector('.panel');
+  const panelImg = getComputedStyle(panel).backgroundImage;
   const probe = document.createElement('span');
   probe.style.backgroundColor = 'var(--secondary-background-color, var(--ha-card-background, var(--card-background-color, #fff)))';
   document.body.appendChild(probe);
@@ -661,14 +662,14 @@ const bdState = () => page.evaluate(() => {
   const themePrimary = getComputedStyle(probe).backgroundColor;
   probe.remove();
   return { mode: __card.dataset.backdrop, why: __card.dataset.backdropWhy, beforeFilter: before.filter, beforeBg: before.backgroundImage.slice(0, 40), beforeDisplay: before.display, beforeColor: before.backgroundColor,
-    npBg: getComputedStyle(np).backgroundColor, panelBF: getComputedStyle(panel).backdropFilter, panelBg: getComputedStyle(panel).backgroundColor,
+    npBg: getComputedStyle(np).backgroundColor, panelBF: getComputedStyle(panel).backdropFilter, panelBg: getComputedStyle(panel).backgroundColor, panelImg,
     themePanel, themeCard, themePrimary,
     canvas: cv ? { ready: cv.classList.contains('ready'), draws: Number(cv.dataset.draws || 0) } : null };
 });
 await open(page, '&tab=now&backdrop=full'); s = await bdState();
-check('15a backdrop=full: live blur on the backdrop and backdrop-filter on panels', s.mode === 'full' && /blur\(38px\)/.test(s.beforeFilter) && /blur/.test(s.panelBF) && /url/.test(s.beforeBg), JSON.stringify(s));
+check('15a backdrop=full: live blur on the backdrop; the panels are opaque theme surfaces (0.8.1: no blur on them)', s.mode === 'full' && /blur\(38px\)/.test(s.beforeFilter) && s.panelBF === 'none' && s.panelImg.includes(s.themeCard) && /url/.test(s.beforeBg), JSON.stringify(s));
 await open(page, '&tab=now&backdrop=light'); await sleep(500); s = await bdState();
-check('15b backdrop=light: pre-blurred canvas drawn, no CSS filter, solid theme panels without backdrop-filter', s.mode === 'light' && s.canvas?.ready && s.beforeFilter === 'none' && s.panelBF === 'none' && s.panelBg === s.themePanel && !/url/.test(s.beforeBg), JSON.stringify(s));
+check('15b backdrop=light: pre-blurred canvas drawn, no CSS filter, solid theme panels without backdrop-filter', s.mode === 'light' && s.canvas?.ready && s.beforeFilter === 'none' && s.panelBF === 'none' && s.panelImg.includes(s.themeCard) && !/url/.test(s.beforeBg), JSON.stringify(s));
 { // volume drag must not redraw the canvas (only a track change does)
   const d0 = s.canvas.draws;
   r = await rectOf(page, `__card.shadowRoot.querySelector('jb-now').shadowRoot.querySelector('jb-slider')`);
@@ -795,8 +796,9 @@ await page.keyboard.press('Escape');
   check('16s station names trimmed (leading tabs/spaces), badged "Radio"', g.tiles.every((t) => t.name === t.name.trim() && !/\t/.test(t.name) && t.pv === 'Radio') && g.tiles.some((t) => t.name === 'Arrow Classic Rock') && g.tiles.some((t) => t.name === 'ROCKANTENNE Alternative (mp3)'), g.tiles.map((t) => JSON.stringify(t.name)).join(','));
   const hr = g.tiles.find((t) => t.name === 'Hard Rock Radio FM');
   await sleep(500);
+  const deadHidden = await pg.evaluate((b) => { const im = [...eval(b).shadowRoot.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent.startsWith('ROCKANTENNE'))?.querySelector('img'); return !im || getComputedStyle(im).display === 'none'; }, BR);
   const deadImg = await pg.evaluate((b) => [...eval(b).shadowRoot.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent.startsWith('ROCKANTENNE'))?.querySelector('img')?.src.slice(0, 26), BR);
-  check('16t null station image → radio-tower fallback; dead logo (404) swaps to it too', hr && hr.img.startsWith('data:image/svg+xml') && deadImg === 'data:image/svg+xml;charset', `${hr?.img.slice(0, 30)} dead=${deadImg}`);
+  check('16t null station image → theme-coloured placeholder, no fixed-colour picture (0.8.1); a dead logo (404) is hidden so the placeholder shows', hr && hr.img === '' && deadHidden, `${hr?.img.slice(0, 30)} dead=${deadImg} hidden=${deadHidden}`);
   const st = g.tiles.find((t) => t.name === 'Arrow Classic Rock');
   const stEl = `[...${BR}.shadowRoot.querySelectorAll('.tile')].find((x) => x.dataset.uri === '${st?.uri}')`;
   let pr = await pq(async () => { const r = await rectOf(pg, stEl); await pg.mouse.click(r.x - r.w / 4, r.y - r.h / 4); });

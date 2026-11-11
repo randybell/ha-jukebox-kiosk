@@ -86,7 +86,7 @@ const lyrBtn = (pg) => pg.evaluate((s) => { const b = eval(s).querySelector('.ab
   const o4 = await pg.evaluate((s) => {
     const host = eval(s);
     const btn = host.querySelector('.ab.lyr');
-    const bg = getComputedStyle(btn).backgroundColor;
+    const bg = getComputedStyle(btn.querySelector('svg')).color;
     const probe = document.createElement('span');
     probe.style.backgroundColor = 'var(--primary-color, #03a9f4)';
     const root = host instanceof ShadowRoot ? host : host.shadowRoot;
@@ -95,7 +95,7 @@ const lyrBtn = (pg) => pg.evaluate((s) => { const b = eval(s).querySelector('.ab
     probe.remove();
     return { bg, primary };
   }, SEL.now);
-  check('O4 active toggle uses theme primary color', o4.bg === o4.primary && o4.bg !== 'rgba(0, 0, 0, 0)' && !/^rgb\(255,\s*255,\s*255\)/.test(o4.bg), JSON.stringify(o4));
+  check('O4 active toggle: icon uses the theme primary color (0.8.1: HA icon-button look on an opaque surface, not a filled disc)', o4.bg === o4.primary && o4.bg !== 'rgba(0, 0, 0, 0)' && !/^rgb\(255,\s*255,\s*255\)/.test(o4.bg), JSON.stringify(o4));
   await pg.goto(`${ROOT}index.html?keeplyrics=1&latency=40&layout=separate&tab=now`); await pg.waitForFunction('window.__ready === true'); await sleep(300);
   check('O5 overlay choice survives a reload', await pg.evaluate((s) => !!eval(s).querySelector('jb-lyrics') && eval(s).querySelector('.ab.lyr').classList.contains('on'), SEL.now));
   await pg.waitForFunction((s) => { try { return eval(s)?.dataset?.status === 'synced'; } catch { return false; } }, { timeout: 8000 }, SEL.ovl).catch(() => {});
