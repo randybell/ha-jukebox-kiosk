@@ -824,7 +824,7 @@ export class JukeboxCard extends LitElement {
           <div class="spacer"></div>
           <div class="clock">${this.timeStr()}</div>
         </header>
-        <main class="np ${pic && (bd === 'full' || bd === 'light') ? 'has-art' : ''}" style=${artStyle}>
+        <main class="np ${pic && (bd === 'full' || bd === 'light') ? 'has-art' : ''} ${this._tab === 'now' ? 'on-now' : ''}" style=${artStyle}>
           ${bd === 'light' ? html`<canvas class="bdl" width="64" height="40" aria-hidden="true"></canvas>` : nothing}
           ${view('now', html`<jb-now ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
           ${combinedOn(c)
@@ -869,25 +869,26 @@ export class JukeboxCard extends LitElement {
     .brand { display: flex; align-items: center; gap: 10px; font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-xl, 20px); }
     .brand-i { width: 28px; height: 28px; color: var(--_active); }
     .pill { white-space: nowrap; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: var(--_chip-bg);
-      border: 1px solid var(--_hairline); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
+      border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
     .pill b { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .pill .pl { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); margin-right: -2px; }
     .pill .pc { width: 14px; height: 14px; opacity: .7; margin-left: -2px; }
     .lost { margin-left: 10px; font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: var(--_chip-bg-strong); }
+    .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: var(--_chip-sel); }
     .lg .pill { min-height: 52px; font-size: var(--ha-font-size-l, 16px); padding: 0 18px; }
     .spacer { flex: 1; }
     .clock { white-space: nowrap; font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
     .np { container: np / size; min-height: 0; position: relative; overflow: hidden; background: transparent; }
+    /* Backdrop (album art + shade, or the media-control primary fill): Now Playing only (.on-now).
+       Library, Search, Queue and the detail pages are plain HA card surfaces: ha-card paints the one surface. */
     /* Empty / no art: HA media-control color-block / .no-img uses --primary-color, text --text-primary-color */
-    .np:not(.has-art)::before { content: ""; position: absolute; inset: 0; z-index: 0;
+    .np.on-now:not(.has-art)::before { content: ""; position: absolute; inset: 0; z-index: 0;
       background: var(--primary-color, #03a9f4); filter: none; }
-    .np:not(.has-art)::after { display: none; }
     /* With art: keep blurred art + shade; contrast tokens for controls over it (HA media-control extractColors / YIQ) */
-    .np.has-art::before { content: ""; position: absolute; inset: -80px; z-index: 0;
+    .np.on-now.has-art::before { content: ""; position: absolute; inset: -80px; z-index: 0;
       background: var(--_art) center / cover;
       filter: blur(var(--_backdrop-blur)) saturate(var(--_backdrop-saturate)); }
-    .np.has-art::after { content: ""; position: absolute; inset: 0; z-index: 0; background: var(--_vignette), var(--_shade); pointer-events: none; }
+    .np.on-now.has-art::after { content: ""; position: absolute; inset: 0; z-index: 0; background: var(--_vignette), var(--_shade); pointer-events: none; }
     .np.has-art {
       /* Inherited by jb-now / jb-slider tokens via var(--_art-*, …) — do not set --_* here (child :host resets those).
          --_art-fg comes from the inline style (ART_FG_OVER_DARK_SHADE); derived tokens follow. */
@@ -900,32 +901,25 @@ export class JukeboxCard extends LitElement {
       --_art-chip-bg-strong: color-mix(in srgb, var(--_art-fg, #ffffff) 20%, transparent);
       --_art-surface-border: color-mix(in srgb, var(--_art-fg, #ffffff) 28%, transparent);
     }
-    /* ---- backdrop modes (see src/backdrop.ts) ---- */
-    /* Mode hooks inherit into child :host tokens (do not set --_panel-* here; children reset those). */
-    .app.solid {
-      --_mode-panel-filter: none;
-      --_mode-surface: var(--secondary-background-color, var(--_bg));
-      --_mode-panel-solid: var(--secondary-background-color, var(--_bg));
-    }
+    /* ---- backdrop modes (see src/backdrop.ts); all of them draw on Now Playing only ---- */
     /* light: pre-blurred canvas shows art; ::before is the media-control no-image underlay. */
-    .bd-light .np::before {
+    .bd-light .np.on-now::before {
       background: var(--primary-color, #03a9f4); filter: none; inset: 0;
     }
-    .bdl { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: 0; transition: opacity 600ms ease; pointer-events: none; }
+    .bdl { display: none; position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: 0; transition: opacity 600ms ease; pointer-events: none; }
+    .np.on-now .bdl { display: block; }
     .bdl.ready { opacity: 1; }
     /* static: HA media-control no-image fill (flat --primary-color), no art, no filters. */
-    .bd-static .np::before {
+    .bd-static .np.on-now::before {
       background: var(--primary-color, #03a9f4); filter: none; inset: 0;
     }
     /* off: HA media-control .off.background — --primary-color fill with grayscale; art hidden. */
-    .bd-off .np::before {
+    .bd-off .np.on-now::before {
       content: ""; display: block; position: absolute; inset: 0; z-index: 0;
       background: var(--primary-color, #03a9f4); filter: grayscale(1);
     }
-    .bd-off .np::after { display: none; }
-    .bd-off .np { background: var(--primary-color, #03a9f4); }
-    /* Now Playing on the primary fill: same as media-control .player { color: var(--text-primary-color) }.
-       Browse/search/queue keep theme surfaces so selected chips stay --primary-color. */
+    .bd-off .np.on-now { background: var(--primary-color, #03a9f4); }
+    /* Now Playing on the primary fill: same as media-control .player { color: var(--text-primary-color) }. */
     .np:not(.has-art) .view[data-view=now],
     .bd-static .view[data-view=now],
     .bd-off .view[data-view=now] {
@@ -940,11 +934,6 @@ export class JukeboxCard extends LitElement {
       --_art-surface-border: rgba(var(--rgb-text-primary-color, 255, 255, 255), 0.28);
       --_canvas-active: var(--text-primary-color, #fff);
       --_canvas-on: var(--primary-color);
-    }
-    /* Browse / Search / Queue are list views, like HA tile/entity cards: theme card surface and theme text.
-       Art and the media-control primary fill stay on Now Playing only, so light-theme text stays readable. */
-    .view:not([data-view=now]) {
-      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
     }
     .view { position: absolute; inset: 0; z-index: 1; }
     .view[hidden] { display: none; }
@@ -992,7 +981,7 @@ export class JukeboxCard extends LitElement {
       padding: 11px calc(var(--_pad) + 4px) calc(13px + env(safe-area-inset-bottom)); background: transparent;
       border-top: 1px solid var(--_hairline); position: relative; z-index: 2; }
     .tabs::before { content: ""; position: absolute; top: 7px; left: var(--_pad); right: var(--_pad); bottom: calc(9px + env(safe-area-inset-bottom));
-      border-radius: 18px; background: var(--_chip-bg); border: 1px solid var(--_hairline); pointer-events: none; }
+      border-radius: 18px; background: var(--_chip-bg); border: 1px solid var(--_surface-border); pointer-events: none; }
     .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 58px;
       padding: 3px; border-radius: 14px; background: transparent; border: 0;
       color: var(--_muted); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: .01em; position: relative;
@@ -1001,12 +990,12 @@ export class JukeboxCard extends LitElement {
     .tab .i { width: 30px; height: 30px; }
     .tab + .tab::before { content: ""; position: absolute; left: -2.5px; top: 25%; bottom: 25%; width: 1px; background: var(--_hairline); transition: opacity 120ms ease; }
     .tab.active::before, .tab.active + .tab::before, .tab:hover::before, .tab:hover + .tab::before { opacity: 0; }
-    @media (hover: hover) { .tab:hover { background: var(--_chip-bg-strong); color: var(--_fg); } }
-    .tab:active { transform: scale(.97); background: var(--_chip-bg-strong); color: var(--_fg); }
-    .tab.active, .tab.active:hover, .tab.active:active { background: var(--_active); color: var(--_on-accent); }
+    @media (hover: hover) { .tab:hover { background: var(--_chip-sel); color: var(--_fg); } }
+    .tab:active { transform: scale(.97); background: var(--_chip-sel); color: var(--_fg); }
+    /* selected tab: HA sidebar pattern: --sidebar-selected-icon-color text/icon on a tint of that colour at --dark-divider-opacity */
+    .tab.active, .tab.active:hover, .tab.active:active { background: rgba(var(--rgb-primary-color, 3, 169, 244), var(--dark-divider-opacity, 0.12)); color: var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)); }
     .tab:focus-visible { outline: 2px solid var(--_active); outline-offset: 3px; }
     .tab .badge { top: 4px; left: calc(50% + 6px); }
-    .tab.active .badge { background: var(--_on-accent); color: var(--_active); }
     .lg .tab { min-height: 80px; font-size: var(--ha-font-size-l, 16px); } .lg .tab .i { width: 34px; height: 34px; }
     /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole.
        0.7.12 fluid: gate and breakpoints follow the card's jbapp width, not the window. */

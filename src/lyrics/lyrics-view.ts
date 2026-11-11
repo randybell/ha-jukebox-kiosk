@@ -354,16 +354,21 @@ export class JbLyrics extends LitElement {
     .seekable .ln.press::after { width: min(100%, 220px); opacity: .9; transition: width ${LONG_PRESS_MS}ms linear, opacity 120ms; }
     .ln.press { transform: scale(.985); }
     .ln.flash { color: var(--_fg) !important; animation: flash 900ms ease; }
-    @keyframes flash { 0% { background: var(--_chip-bg-strong) } 100% { background: transparent } }
+    @keyframes flash { 0% { background: var(--_chip-sel) } 100% { background: transparent } }
     .msg { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 16px; }
     .mt { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .st-loading .mt { animation: breathe 1.8s ease-in-out infinite; }
     @keyframes breathe { 50% { opacity: .45 } }
     .chip { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; color: var(--_muted);
-      padding: 4px 8px; border-radius: 999px; border: 1px solid var(--_surface-border); background: var(--_scrim); white-space: nowrap; }
+      padding: 4px 8px; border-radius: 999px; border: 1px solid var(--_surface-border); background: var(--_art-chip-bg, var(--_chip-bg)); white-space: nowrap; }
     .chip.fl { position: absolute; top: 10px; left: 10px; z-index: 2; }
-    .toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; padding: 8px 14px; border-radius: 999px;
-      background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; box-shadow: var(--ha-card-box-shadow, 0 6px 24px rgba(0,0,0,.3)); }
+    /* toast: ha-toast styling */
+    .toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; padding: 8px 14px; border-radius: var(--ha-border-radius-sm, 4px);
+      background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; box-shadow: var(--ha-box-shadow-l, none); }
+    /* the screensaver is exempt from theming: its lyrics keep exactly the 0.8.0 look */
+    :host([mode=saver]) { --_chip-sel: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.14); --_surface-border: var(--divider-color, rgba(0, 0, 0, 0.12)); }
+    :host([mode=saver]) .chip { background: rgba(0, 0, 0, 0.32); }
+    :host([mode=saver]) .toast { border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); box-shadow: var(--ha-card-box-shadow, 0 6px 24px rgba(0,0,0,.3)); }
 
     /* over the Now Playing art: a shade keeps the text readable on any cover, no backdrop-filter */
     .m-overlay { background: linear-gradient(to top, rgba(0, 0, 0, .8), rgba(0, 0, 0, .42)); padding: 0 6%; container-type: inline-size; }
