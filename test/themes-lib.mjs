@@ -48,6 +48,8 @@ export async function openPage(browser, hermetic, BASE, theme, query, vp = { wid
     class HaCard extends HTMLElement { constructor() { super(); this.attachShadow({ mode: 'open' }).innerHTML = `<style>${css}</style><slot></slot>`; } }
     if (!customElements.get('ha-card')) customElements.define('ha-card', HaCard);
   }, HACARD);
+  // every scene starts with the lyrics overlay off (the browser is shared, so an earlier scene's choice would leak into the next); a scene asks for it with &overlay=1
+  await page.evaluateOnNewDocument(() => { try { localStorage.removeItem('jukebox-card:lyrics-overlay:v1'); } catch {} });
   page._errs = []; page.on('pageerror', (e) => page._errs.push(e.message));
   await page.goto(`${BASE}?fresh=1&latency=20&kiosk=1${query}`, { waitUntil: 'networkidle0', timeout: 60000 });
   await page.waitForFunction('window.__ready===true', { timeout: 30000 });
