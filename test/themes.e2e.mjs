@@ -5,6 +5,7 @@ import { hermetic } from './intercept.mjs';
 import { devIndex } from './serve.mjs';
 import { launch, openPage, SENT, sleep } from './themes-lib.mjs';
 import { SCENES, probe, ev, C } from './themes-scenes.mjs';
+import { nowFill } from './contrast-lib.mjs';
 const BASE = await devIndex();
 const browser = await launch();
 let failures = 0, total = 0;
@@ -94,6 +95,64 @@ for (const theme of ['light', 'dark', 'glass', 'wallpaper']) for (const name of 
   p = await newPage('light', 'track-popup');
   const bk = await ev(p, `(() => { const e = ${HS}.querySelector('.bk'); if (!e) return null; const s = getComputedStyle(e); return { bg: s.backgroundColor, filter: s.backdropFilter }; })()`);
   check('T3 dialog dimmer is HA\'s dialog scrim (no colour, brightness filter) and nothing else', bk && bk.bg === 'rgba(0, 0, 0, 0)' && /brightness/.test(bk.filter), JSON.stringify(bk));
+  await p.close();
+}
+
+// 4. every backdrop mode really paints what it promises, and the text on it is readable, in all four looks (0.8.1 fix: "Dark" drew nothing)
+{
+  const primaryOf = (p) => ev(p, `(() => { const i = document.createElement('i'); i.style.color = 'var(--primary-color)'; document.body.appendChild(i); const c = getComputedStyle(i).color; i.remove(); return c; })()`);
+  for (const theme of ['light', 'dark', 'glass', 'wallpaper']) {
+    // [scene, label, min title contrast, min subtitle contrast, expected fill]
+    for (const [name, label, minT, minS, fill] of [['now-bd-static', 'static (Dark)', 4.5, 3, 'primary'], ['now-bd-off', 'off', 3, 2.5, 'grey'], ['now-bd-full-noart', 'full with no art', 4.5, 3, 'primary'], ['now-bd-light-noart', 'light with no art', 4.5, 3, 'primary']]) {
+      let p;
+      try {
+        p = await newPage(theme, name);
+        const f = await nowFill(p, ev, C); const pr = await primaryOf(p);
+        const want = (pr.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+        const painted = fill === 'primary' ? f.px.every((v, i) => Math.abs(v - want[i]) <= 2) : Math.max(...f.px) - Math.min(...f.px) <= 2;
+        check(`T4 ${theme}/${label}: the flat fill really renders (painted pixel ${f.px}, ${fill})`, f.content === '""' && f.position === 'absolute' && painted, JSON.stringify({ content: f.content, position: f.position, px: f.px, primary: pr }));
+        check(`T4 ${theme}/${label}: text is readable on it (title ${f.cTitle.toFixed(1)}:1, subtitle ${f.cSub.toFixed(1)}:1)`, f.cTitle >= minT && f.cSub >= minS, JSON.stringify({ title: f.title, sub: f.sub }));
+      } catch (e) { check(`T4 ${theme}/${label}: scene opens`, false, String(e.message).slice(0, 140)); }
+      try { await p?.close(); } catch {}
+    }
+  }
+  // the three art modes still draw their art backdrop (::before of the Now Playing area has content)
+  for (const name of ['now-bd-full', 'now-bd-light']) {
+    const p = await newPage('light', name);
+    const c = await ev(p, `getComputedStyle(${C}.querySelector('main.np'), '::before').content`);
+    check(`T4 light/${name}: the art backdrop is drawn (::before has content)`, c === '""', c);
+    await p.close();
+  }
+}
+
+// 5. pop-up dimmer: HA's dialog scrim (colour none, backdrop filter), with HA's own default dimmer where the variable is not defined
+{
+  const dim = (p, sel) => ev(p, `(() => { const e = ${sel}; if (!e) return null; const s = getComputedStyle(e); return { bg: s.backgroundColor, filter: s.backdropFilter }; })()`);
+  const SPK = `${C}.querySelector('jb-speakers')?.shadowRoot?.querySelector('.sp-scrim')`;
+  for (const [theme, expectFilter, why] of [['light', /brightness\(0?\.68\)/, 'HA default theme defines brightness(68%)'], ['noscrim', /brightness\(0?\.68\)/, 'variable not defined: HA default dimmer'], ['scrimnone', /^(none)?$/, 'variable set to none: the theme wins']]) {
+    let p = await newPage(theme, 'track-popup');
+    const d = await dim(p, `${HS}.querySelector('.bk')`);
+    check(`T5 ${theme}/pop-up dimmer (${why})`, d && d.bg === 'rgba(0, 0, 0, 0)' && expectFilter.test(d.filter === 'none' ? '' : d.filter), JSON.stringify(d));
+    await p.close();
+    p = await newPage(theme, 'speakers-picker');
+    const s2 = await dim(p, SPK);
+    check(`T5 ${theme}/speakers panel dimmer (${why})`, s2 && s2.bg === 'rgba(0, 0, 0, 0)' && expectFilter.test(s2.filter === 'none' ? '' : s2.filter), JSON.stringify(s2));
+    await p.close();
+  }
+  // a theme that sets the legacy colour keeps it
+  const p = await newPage('sentinel', 'track-popup');
+  const d = await dim(p, `${HS}.querySelector('.bk')`);
+  check('T5 sentinel/pop-up dimmer: --mdc-dialog-scrim-color is used as the colour when a theme sets it', d && /rgb\(5, 6, 7\)/.test(d.bg), JSON.stringify(d));
+  await p.close();
+}
+
+// 6. the selected tab is HA's sidebar pattern: --sidebar-selected-icon-color text, the same colour at --dark-divider-opacity behind it
+{
+  const p = await newPage('sentinel', 'queue');
+  const t = await ev(p, `(() => { const e = ${C}.querySelector('.tab.active'); const s = getComputedStyle(e); return { bg: s.backgroundColor, color: s.color }; })()`);
+  const bgv = (t.bg.match(/[\d.]+/g) ?? []).map(Number).map((v, i) => (/^color\(srgb/.test(t.bg) && i < 3 ? Math.round(v * 255) : v));
+  check('T6 selected tab: text is --sidebar-selected-icon-color', /77, 88, 99/.test(t.color), t.color);
+  check('T6 selected tab: background is --sidebar-selected-icon-color at --dark-divider-opacity (0.12)', bgv[0] === 77 && bgv[1] === 88 && bgv[2] === 99 && Math.abs((bgv[3] ?? 1) - 0.12) < 0.01, t.bg);
   await p.close();
 }
 await browser.close();

@@ -1,6 +1,7 @@
 // End-to-end checks for the jukebox-card Search tab against the mock hass (dev/index.html).
 // Real pointer/mouse/touch input via Chrome DevTools Protocol (puppeteer-core + system Chrome).
 // Usage: (starts its own dev server on a free port; JB_PORT / JB_URL override) node test/run.mjs
+import { nowFill, contrast } from './contrast-lib.mjs';
 import puppeteer from 'puppeteer-core';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { hermetic } from './intercept.mjs';
@@ -683,9 +684,14 @@ check('15b backdrop=light: pre-blurred canvas drawn, no CSS filter, solid theme 
   check('15c light canvas redraws on track change only (not on slider drag)', d1 === d0 && d2 > d1, `draws ${d0} → drag ${d1} → next ${d2}`);
 }
 await open(page, '&tab=now&backdrop=static'); s = await bdState();
-check('15d backdrop=static: HA media-control no-image fill (--primary-color), no art, no filters', s.mode === 'static' && !s.canvas && s.beforeFilter === 'none' && !/url/.test(s.beforeBg) && s.beforeColor === s.themePrimary && s.panelBF === 'none', JSON.stringify(s));
+{ const f = await nowFill(page, (pg, e) => pg.evaluate((x) => eval(x), e), '__card.shadowRoot');
+  const hex = (c) => c.join(', ');
+  check('15d backdrop=static ("Dark"): the flat theme-primary fill really renders (painted pixel = --primary-color) and the text contrasts with it (>= 4.5:1 title, >= 3:1 subtitle)', s.mode === 'static' && !s.canvas && s.beforeFilter === 'none' && !/url/.test(s.beforeBg) && s.beforeColor === s.themePrimary && s.panelBF === 'none'
+    && f.content === '""' && f.position === 'absolute' && `rgb(${hex(f.px)})` === s.themePrimary && f.cTitle >= 4.5 && f.cSub >= 3, JSON.stringify({ px: f.px, title: f.title, sub: f.sub, cTitle: +f.cTitle.toFixed(2), cSub: +f.cSub.toFixed(2), content: f.content, position: f.position })); }
 await open(page, '&tab=now&backdrop=off'); s = await bdState();
 check('15e backdrop=off: no art, HA media-control off fill (--primary-color, grayscale)', s.mode === 'off' && s.beforeDisplay !== 'none' && /grayscale/.test(s.beforeFilter) && s.beforeColor === s.themePrimary && s.npBg === s.themePrimary && s.panelBF === 'none' && !/url/.test(s.beforeBg), JSON.stringify(s));
+{ const f = await nowFill(page, (pg, e) => pg.evaluate((x) => eval(x), e), '__card.shadowRoot');
+  check('15e2 backdrop=off: the grey fill really renders (painted pixel is grey) and the text contrasts with it (>= 3:1)', f.content === '""' && f.position === 'absolute' && Math.max(...f.px) - Math.min(...f.px) <= 2 && f.cTitle >= 3 && f.cSub >= 2.5, JSON.stringify({ px: f.px, title: f.title, cTitle: +f.cTitle.toFixed(2), cSub: +f.cSub.toFixed(2) })); }
 await open(page, '&tab=now&backdrop=auto'); s = await bdState();
 const cores = await page.evaluate(() => [navigator.hardwareConcurrency, navigator.deviceMemory]);
 check('15f backdrop=auto resolves from hardwareConcurrency/deviceMemory (0.8.1: auto is an explicit choice, plain is the default)', s.mode === ((cores[0] <= 4 || cores[1] <= 2) ? 'light' : 'full'), `${s.mode} (${s.why}) cores/mem=${cores}`);

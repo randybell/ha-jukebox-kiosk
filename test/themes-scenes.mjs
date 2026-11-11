@@ -42,6 +42,8 @@ export const SCENES = {
   'now-radio-nologo': { q: '&tab=now&noart=1', act: async (p) => { await p.evaluate("__setNowPlaying({ artist: 'Late night jazz', title: 'Neon FM', radio: true })"); await sleep(500); } },
   'now-bd-full': { q: '&tab=now&backdrop=full' },
   'now-bd-light': { q: '&tab=now&backdrop=light' },
+  'now-bd-full-noart': { q: '&tab=now&backdrop=full&idle=1' },
+  'now-bd-light-noart': { q: '&tab=now&backdrop=light&idle=1' },
   'now-bd-static': { q: '&tab=now&backdrop=static' },
   'now-bd-off': { q: '&tab=now&backdrop=off' },
   'now-lyrics-overlay': { q: '&tab=now&overlay=1' },

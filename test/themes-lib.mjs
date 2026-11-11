@@ -35,7 +35,9 @@ export const SENT = {
 };
 export const SENT_CSS = 'html {' + Object.entries(SENT).map(([k, v]) => `${k}: rgb(${v}); --rgb-${k.slice(2)}: ${v};`).join('')
   + '--ha-box-shadow-l: 0 2px 4px rgb(8, 9, 10); --ha-card-background: var(--card-background-color); --ha-dialog-surface-background: var(--card-background-color); --mdc-theme-surface: var(--card-background-color); }';
-export const THEMES = { light: LIGHT, dark: LIGHT + DARK, glass: LIGHT + GLASS, wallpaper: LIGHT + WALLPAPER, sentinel: LIGHT + SENT_CSS };
+// noscrim: a theme that never defines HA's dialog dimmer variable; scrimnone: a theme that sets it to none on purpose
+export const THEMES = { light: LIGHT, dark: LIGHT + DARK, glass: LIGHT + GLASS, wallpaper: LIGHT + WALLPAPER, sentinel: LIGHT + SENT_CSS,
+  noscrim: LIGHT.replace('--ha-dialog-scrim-backdrop-filter: brightness(68%);', ''), scrimnone: LIGHT + 'html { --ha-dialog-scrim-backdrop-filter: none; }' };
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const launch = () => puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 const DERIVE = ['primary-color', 'accent-color', 'primary-text-color', 'secondary-text-color', 'text-primary-color', 'card-background-color', 'secondary-background-color', 'primary-background-color'];
