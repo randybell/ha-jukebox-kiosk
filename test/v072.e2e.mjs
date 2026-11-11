@@ -348,9 +348,17 @@ for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobi
   check('C5 unselecting the last provider: back to All ("All sources", not lit)', J(await srcOn(p)) === J(['all']) && l3[0] === 'All sources' && !l3[1], J(l3));
   await tap(p, `${SV}.querySelector('.srct')`);
   check('C6 tapping the control again folds the choices away', await wait(p, `!${SV}.querySelector('.srco') && ${SV}.querySelector('.srct').getAttribute('aria-expanded') === 'false'`));
-  // selected category is unmistakable: solid light fill vs the dim others
-  const bg = await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].map((b) => [b.classList.contains('on'), getComputedStyle(b).backgroundColor])`);
-  check('C7 the selected category button is filled white, the others are not', bg.filter((x) => x[0]).length === 1 && bg.every((x) => x[0] === (x[1] === 'rgb(255, 255, 255)')), J(bg));
+  // selected category is unmistakable: theme primary fill vs the dim others
+  const bg = await ev(p, `(() => {
+    const probe = document.createElement('span');
+    probe.style.backgroundColor = 'var(--primary-color, #03a9f4)';
+    document.body.appendChild(probe);
+    const primary = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return [...${SV}.querySelectorAll('.lcats .lc')].map((b) => [b.classList.contains('on'), getComputedStyle(b).backgroundColor, primary]);
+  })()`);
+  // 0.8.1: the selected one is HA's selected filter chip (a soft tint of the text colour), the others are plain
+  check('C7 the selected category button is the HA selected-chip fill, the others have no fill', bg.filter((x) => x[0]).length === 1 && bg.every((x) => x[0] === (x[1] !== 'rgba(0, 0, 0, 0)')), J(bg));
   // corner icons drive the embedded library list
   await wait(p, `${BR}.querySelectorAll('.tile[data-type=playlist]').length > 0`);
   await ev(p, `window.__calls.length = 0`);

@@ -417,13 +417,13 @@ export class JbDetail extends LitElement {
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     .dx { position: relative; height: 100%; display: flex; flex-direction: column; min-height: 0; }
     .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; touch-action: pan-y;
-      padding-bottom: calc(16px + var(--jb-fab-space, 0px)); scroll-padding-bottom: var(--jb-fab-space, 0px); }
+      padding-bottom: calc(16px + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
     .scroll::-webkit-scrollbar { display: none; }
     .detail { display: flex; flex-direction: column; gap: 14px; }
     /* Station-only actions: keep Play Now on one line and fully inside its row. */
     .row[data-type="radio"] { min-height: 68px; }
     .row[data-type="radio"] .ra-b[data-act="replace"] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-      width: auto; min-width: 72px; height: auto; min-height: 56px; padding: 6px; font-size: 13px; line-height: 1.2; }
+      width: auto; min-width: 72px; height: auto; min-height: 56px; padding: 6px; font-size: var(--ha-font-size-m, 14px); line-height: var(--ha-line-height-condensed, 1.2); }
     .row[data-type="radio"] .ra-b[data-act="replace"] span { white-space: nowrap; }
     /* 0.7.10: the artist page's Albums rows: icon-only Add to queue / Play next / Play now (/ Start radio) buttons (48px, #42),
        named once by a sticky column header above the list (labels sit exactly over their button column) */
@@ -431,45 +431,45 @@ export class JbDetail extends LitElement {
     .row.sr .du { display: block; } /* no empty trailing grid column, so the buttons end at the list's right edge like the header */
     .row.sr.nor .ra { padding-right: var(--_abw, 48px); }
     /* sticky inside .list.albums only: it leaves with the Albums section; opaque and padded out to the panel edges so no album peeks above or beside it */
-    .ahd { position: sticky; top: -16px; z-index: 2; display: var(--jb-ra-display, flex); justify-content: flex-end; margin: 0 -16px 2px; padding: 6px 16px;
-      background: var(--_bg); }
-    .ahd span { width: var(--_abw, 48px); flex: none; text-align: center; font-size: 11px; font-weight: 700; line-height: 1.15; color: var(--_muted); }
+    .ahd { position: sticky; top: -16px; z-index: 2; display: var(--_ra-display, flex); justify-content: flex-end; margin: 0 -16px 2px; padding: 6px 16px;
+      background: var(--_surface-solid); }
+    .ahd span { width: var(--_abw, 48px); flex: none; text-align: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); color: var(--_muted); }
     :host([large]) .ahd, :host([large]) .row.sr { --_abw: 52px; }
     .nav { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .back { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px 0 12px; border-radius: 999px; background: #ffffff14;
-      border: 1px solid #ffffff33; color: #fff; font-weight: 700; font-size: 15px; }
+    .back { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px 0 12px; border-radius: 999px; background: var(--_chip-bg);
+      border: 1px solid var(--_surface-border); color: var(--_fg); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
     .back .i { width: 22px; height: 22px; }
-    .trail { min-width: 0; font-size: 13px; color: var(--_inactive); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .trail { min-width: 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .dh { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; }
     .dart { width: 150px; height: 150px; border-radius: 12px; }
     .dart.circ { border-radius: 50%; }
     .th.circ { border-radius: 50%; }
     .dt { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-    .dt .eyebrow { font-size: 11px; color: var(--_inactive); }
-    .dt h2 { font-family: var(--_font-display); font-size: 30px; font-weight: 800; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dt small { color: var(--_muted); font-size: 15px; }
-    .meta { font-size: 13px !important; font-variant-numeric: tabular-nums; }
+    .dt .eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
+    .dt h2 { font-family: var(--_font-display); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dt small { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); }
+    .meta { font-size: var(--ha-font-size-m, 14px) !important; font-variant-numeric: tabular-nums; }
     .da { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
     .sbtn.hfav { padding: 0; aspect-ratio: 1; justify-content: center; color: var(--_inactive); }
     .sbtn.hfav.on { color: var(--_active); border-color: currentColor; }
-    .pbtn, .sbtn { display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border-radius: 999px; font-weight: 700; }
+    .pbtn, .sbtn { display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border-radius: 999px; font-weight: var(--ha-font-weight-bold, 700); }
     .pbtn { background: var(--_active); color: var(--_on-accent); }
-    .sbtn { border: 1px solid #ffffff40; color: #fff; }
+    .sbtn { border: 1px solid var(--_surface-border); color: var(--_fg); }
     .pbtn .i, .sbtn .i { width: 22px; height: 22px; }
     .sbtn.scope { border-color: var(--_active); color: var(--_active); max-width: 100%; }
     .sbtn.scope span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .note { font-size: 13px; color: var(--_muted); padding: 10px 12px; border-radius: 10px; border: 1px dashed #ffffff33; }
-    .note.err { color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--_divider); }
+    .note.err { color: var(--_fg); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     .note .retry { height: 38px; }
-    h3.eyebrow { font-size: 12px; color: var(--_muted); } h3 em { font-style: normal; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--_inactive); margin-left: 6px; }
+    h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); } h3 em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; text-transform: none; color: var(--_inactive); margin-left: 6px; }
     .more-t { align-self: center; min-width: 220px; justify-content: center; }
     .empty { padding: 14px; }
     @container np (max-width: 520px) {
       .scroll { padding: 10px; } .ahd { top: -10px; margin: 0 -10px 2px; padding: 6px 10px; }
       .dh { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; } .dart { width: 96px; height: 96px; }
-      .dt h2 { font-size: 22px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+      .dt h2 { font-size: var(--ha-font-size-xl, 20px); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       .da { grid-column: 1 / -1; }
-      .pbtn, .sbtn { height: 42px; padding: 0 14px; font-size: 14px; }
+      .pbtn, .sbtn { height: 42px; padding: 0 14px; font-size: var(--ha-font-size-m, 14px); }
       .row .pv { display: none; }
     }
   `];

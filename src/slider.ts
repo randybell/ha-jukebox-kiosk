@@ -76,14 +76,14 @@ export class JbSlider extends LitElement {
     return html`<div class="t"><div class="f" style="width:${p}%"></div></div><div class="k ${this._drag ? 'on' : ''}" style="left:${p}%"></div>`;
   }
   static styles = css`
-    :host { position: relative; display: block; height: var(--jb-slider-hit, 36px); touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    :host { position: relative; display: block; height: var(--_slider-hit, 36px); touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
     :host([slop]:not([slop="0"])) { touch-action: pan-y; } /* #63: a vertical swipe on a volume slider scrolls the page */
     :host([disabled]) { opacity: .35; cursor: default; }
-    .t { position: absolute; left: 0; right: 0; top: 50%; height: var(--jb-slider-h, 6px); transform: translateY(-50%); border-radius: 99px; background: var(--_track, #ffffff33); overflow: hidden; }
-    .f { position: absolute; inset: 0 auto 0 0; background: var(--_active, #fff); border-radius: 99px; }
-    .k { position: absolute; top: 50%; width: var(--jb-slider-knob, 18px); height: var(--jb-slider-knob, 18px); border-radius: 50%; background: var(--_active, #fff);
-      transform: translate(-50%, -50%); box-shadow: 0 2px 8px #0008; transition: box-shadow .12s; }
-    .k.on { box-shadow: var(--_thumb-ring, 0 0 0 4px #ffffff2e), 0 2px 8px #0008; }
+    .t { position: absolute; left: 0; right: 0; top: 50%; height: var(--_slider-h, 6px); transform: translateY(-50%); border-radius: 99px; background: var(--_track); overflow: hidden; }
+    .f { position: absolute; inset: 0 auto 0 0; background: var(--_active); border-radius: 99px; }
+    .k { position: absolute; top: 50%; width: var(--_slider-knob, 18px); height: var(--_slider-knob, 18px); border-radius: 50%; background: var(--_active);
+      transform: translate(-50%, -50%); transition: box-shadow .12s; }
+    .k.on { box-shadow: var(--_thumb-ring); }
   `;
 }
 defineElement('jb-slider', JbSlider);
