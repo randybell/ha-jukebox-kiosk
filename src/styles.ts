@@ -2,9 +2,8 @@ import { css } from 'lit';
 
 /**
  * Private `--_*` aliases point at Home Assistant theme variables (no public `--jb-*` color knobs).
- * Album-art shade/vignette stay as dark overlays over art (intentional; not theme chrome).
- * Art-contrast (`--_art-*` from .np.has-art) is applied only where text sits on the art shade
- * (see now-view); theme surfaces keep these theme defaults.
+ * Roles follow HA's built-in components (see the comments on each token). The only fixed overlays left are the
+ * album-art readability shade and the screensaver, and both are drawn on Now Playing only.
  */
 export const tokens = css`
   :host {
@@ -13,36 +12,46 @@ export const tokens = css`
        so transport controls stay readable, like media-control's --text-primary-color on --primary-color. */
     --_active: var(--_canvas-active, var(--primary-color, #03a9f4));
     --_inactive: var(--secondary-text-color, var(--state-inactive-color, var(--disabled-text-color)));
-    --_track: var(--divider-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.28));
+    --_track: var(--disabled-color, var(--divider-color)); /* ha-control-slider: track = --disabled-color, fill = --primary-color */
     --_accent: var(--accent-color, var(--_active));
     --_on-accent: var(--_canvas-on, var(--text-primary-color, #fff)); /* label on --_active */
     --_fg: var(--primary-text-color, #212121);
     --_muted: var(--secondary-text-color, #727272);
     --_bg: var(--ha-card-background, var(--card-background-color, #fff));
     --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
-    --_surface: var(--_mode-surface, var(--secondary-background-color, var(--_bg)));
-    --_surface-border: var(--divider-color, rgba(0, 0, 0, 0.12));
+    /* a panel on Now Playing: HA card surface made opaque by compositing it over the page background, like a card on a dashboard */
+    --_surface-solid: linear-gradient(var(--_bg), var(--_bg)), var(--primary-background-color, #fafafa);
+    /* control outline: HA chips and buttons use --outline-color */
+    --_surface-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
     --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
     --_prov-fg: var(--primary-text-color, #212121);
-    --_prov-bg: var(--secondary-background-color, var(--_bg));
-    --_prov-border: var(--divider-color, rgba(0, 0, 0, 0.12));
-    --_thumb-ring: 0 0 0 4px rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.18);
-    --_chip-bg: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08);
-    --_chip-bg-strong: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.14);
-    --_scrim: var(--mdc-dialog-scrim-color, rgba(0, 0, 0, 0.32));
+    --_prov-bg: var(--ha-assist-chip-container-color, transparent);
+    --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
+    --_thumb-ring: 0 0 0 4px rgba(var(--rgb-primary-color, 3, 169, 244), var(--dark-divider-opacity, 0.12));
+    /* chips, keys, pills (ha-assist-chip / ha-filter-chip): idle = no fill with an outline; selected or pressed = text colour at 15% */
+    --_chip-bg: var(--ha-assist-chip-container-color, transparent);
+    --_chip-sel: var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15));
+    /* text inputs (ha-textfield): HA input fill and ink */
+    --_input-bg: var(--input-fill-color, rgb(245, 245, 245));
+    --_input-ink: var(--input-ink-color, var(--primary-text-color, #212121));
+    --_input-label: var(--input-label-ink-color, var(--secondary-text-color, #727272));
+    --_input-line: var(--input-idle-line-color, var(--divider-color));
+    /* icon buttons (ha-icon-button): no fill; hover/selected = the icon colour at 10% */
+    --_icon-sel: color-mix(in srgb, currentColor 10%, transparent);
+    /* dialog scrim, exactly as ha-dialog paints it: --mdc-dialog-scrim-color (none by default) plus the backdrop filter */
+    --_scrim: var(--mdc-dialog-scrim-color, transparent);
     --_scrim-filter: var(--ha-dialog-scrim-backdrop-filter, var(--dialog-backdrop-filter, none));
-    --_panel-filter: var(--_mode-panel-filter, blur(14px));
-    --_panel-solid: var(--_mode-panel-solid, var(--ha-card-background, var(--card-background-color, #fff)));
+    --_dialog-bg: var(--ha-dialog-surface-background, var(--mdc-theme-surface, var(--_bg)));
     /* same ceiling as ha-dialog (no phone-size fullscreen override) */
     --_popup-max-h: var(--ha-dialog-max-height, calc(var(--safe-height, 100dvh) - var(--ha-space-20, 80px)));
     --_dialog-radius: var(--ha-dialog-border-radius, var(--ha-border-radius-3xl, 24px));
-    --_dialog-shadow: var(--dialog-box-shadow, var(--wa-shadow-l, 0 24px 60px rgba(0, 0, 0, 0.35)));
+    --_dialog-shadow: var(--dialog-box-shadow, var(--wa-shadow-l, var(--ha-box-shadow-l, none)));
     --_card-shadow: var(--ha-card-box-shadow, none);
     --_card-border-width: var(--ha-card-border-width, 1px);
     --_card-border-color: var(--ha-card-border-color, var(--divider-color, var(--_surface-border)));
     --_backdrop-blur: 38px;
     --_backdrop-saturate: 1.15;
-    /* Album-art readability overlays — kept (not theme chrome) */
+    /* Album-art readability overlays: drawn on Now Playing only (media-control keeps its art contrast over the picture) */
     --_shade: linear-gradient(180deg, #000000b8 0%, #00000085 35%, #0000009e 70%, #000000e0 100%);
     --_vignette: radial-gradient(120% 90% at 50% 50%, transparent 30%, #0000008c 100%);
     --_font-body: var(--ha-font-family-body, Roboto, Noto, sans-serif);

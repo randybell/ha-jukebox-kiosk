@@ -82,8 +82,8 @@ export class JbSlider extends LitElement {
     .t { position: absolute; left: 0; right: 0; top: 50%; height: var(--_slider-h, 6px); transform: translateY(-50%); border-radius: 99px; background: var(--_track); overflow: hidden; }
     .f { position: absolute; inset: 0 auto 0 0; background: var(--_active); border-radius: 99px; }
     .k { position: absolute; top: 50%; width: var(--_slider-knob, 18px); height: var(--_slider-knob, 18px); border-radius: 50%; background: var(--_active);
-      transform: translate(-50%, -50%); box-shadow: 0 2px 8px rgba(0,0,0,.35); transition: box-shadow .12s; }
-    .k.on { box-shadow: var(--_thumb-ring), 0 2px 8px rgba(0,0,0,.35); }
+      transform: translate(-50%, -50%); transition: box-shadow .12s; }
+    .k.on { box-shadow: var(--_thumb-ring); }
   `;
 }
 defineElement('jb-slider', JbSlider);
