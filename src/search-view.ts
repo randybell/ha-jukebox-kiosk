@@ -854,7 +854,7 @@ export class JbSearch extends LitElement {
     .srcs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; min-width: 0; }
     .srcs .fc.src { height: auto; min-height: 44px; padding: 0 18px; font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
       background: transparent; color: var(--_fg); border: 1.5px solid var(--_surface-border); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .srcs .fc.src.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
+    .srcs .fc.src.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     /* phones: one horizontally scrolling row so the buttons never push the results off screen */
     @container np (max-width: 600px) { .srcs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .srcs::-webkit-scrollbar { display: none; } .srcs .fc.src { flex: none; } }
     /* short phones: shorter keys pay for the button row so a results row stays visible above the keyboard */
@@ -867,24 +867,24 @@ export class JbSearch extends LitElement {
     .lcrow .lcats { flex: 1; min-width: 0; margin-bottom: 0; }
     .lcats .fc.lc { flex: 1 1 auto; min-width: 68px; height: auto; min-height: 62px; padding: 6px 6px; border-radius: 16px; display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 4px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .03em; text-transform: uppercase;
-      color: var(--_muted); background: var(--_chip-bg-strong); border: 1.5px solid var(--_surface-border); transition: background 120ms, color 120ms, box-shadow 120ms; }
+      color: var(--_muted); background: var(--_chip-bg); border: 1.5px solid var(--_surface-border); transition: background 120ms, color 120ms; }
     .lc .lci { width: 26px; height: 26px; flex: none; }
     .lc .lcl { white-space: nowrap; }
-    .lcats .fc.lc.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); box-shadow: 0 0 0 3px rgba(var(--rgb-primary-color, 3, 169, 244), 0.35), var(--ha-card-box-shadow, 0 8px 22px rgba(0,0,0,.35)); }
+    .lcats .fc.lc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .lcorner { display: flex; gap: 6px; flex: none; }
     .cn { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 14px;
-      color: var(--_muted); background: var(--_chip-bg-strong); border: 1.5px solid var(--_surface-border); }
+      color: var(--_muted); background: var(--_chip-bg); border: 1.5px solid var(--_surface-border); }
     .cn .i { width: 22px; height: 22px; } .cn small { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .02em; white-space: nowrap; }
-    .cn.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
+    .cn.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     /* Compact sources control; its choices open as a row under the control (no overlay). */
     .qrow .srcs.srcc { display: flex; flex: none; flex-wrap: nowrap; margin-top: 0; overflow: visible; }
     .srct { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 168px; padding: 0 10px 0 12px; border-radius: 16px; font: inherit; font-size: var(--ha-font-size-s, 12px);
-      font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .03em; text-transform: uppercase; color: var(--_fg); background: var(--_panel-solid); border: 1.5px solid var(--_surface-border); cursor: pointer; }
+      font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .03em; text-transform: uppercase; color: var(--_fg); background: var(--_chip-bg); border: 1.5px solid var(--_surface-border); cursor: pointer; }
     .srct .sts { display: none; }
     .srct .stl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .srct .sti { width: 22px; height: 22px; flex: none; } .srct .stc { width: 20px; height: 20px; flex: none; margin-left: -2px; }
-    .srct.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
-    .srct.open { border-color: var(--_fg); box-shadow: 0 0 0 3px rgba(var(--rgb-primary-color, 3, 169, 244), 0.35); }
+    .srct.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
+    .srct.open { border-color: var(--_active); }
     /* Tablet/monitor: reserve the whole column for the search text. The source control has its own touch-sized row. */
     @container np (min-width: 700px) {
       .qrow { flex-direction: column; }
@@ -899,24 +899,24 @@ export class JbSearch extends LitElement {
     .sx.kb-hidden .kbd { display: none; }
     .qbar {
       position: relative; display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 8px 0 18px; border-radius: var(--_radius);
-      background: var(--_panel-solid); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_card-shadow); -webkit-backdrop-filter: var(--_panel-filter, blur(14px)); backdrop-filter: var(--_panel-filter, blur(14px)); overflow: hidden;
+      background: var(--_input-bg); color: var(--_input-ink); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); overflow: hidden;
     }
     .qi { width: 26px; height: 26px; color: var(--_fg); }
     .q { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-start; font-size: var(--ha-font-size-2xl, 24px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em;
       white-space: pre; overflow: hidden; user-select: none; -webkit-user-select: none; }
     .q .qt { overflow: hidden; text-overflow: clip; direction: ltr; }
-    .q .ph { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; color: var(--_inactive); order: 2; margin-left: 6px; overflow: hidden; text-overflow: ellipsis; }
+    .q .ph { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; color: var(--_input-label); order: 2; margin-left: 6px; overflow: hidden; text-overflow: ellipsis; }
     .caret { display: inline-block; flex: none; width: 3px; height: 30px; margin-left: 3px; background: var(--_fg); border-radius: 2px; animation: blink 1.06s steps(1) infinite; }
     @keyframes blink { 0%, 55% { opacity: 1 } 56%, 100% { opacity: 0 } }
     .qx { width: 44px; height: 44px; flex: none; border-radius: 50%; display: grid; place-items: center; color: var(--_inactive); background: var(--_chip-bg); }
     .qx .i { width: 22px; height: 22px; }
     /* loading hairline: 2px white at ~60% under the query text, no blank flash */
     .hair { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; overflow: hidden; opacity: 0; transition: opacity 120ms; pointer-events: none; }
-    .hair::before { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -40%; background: rgba(var(--rgb-primary-text-color, 33,33,33), .6); animation: hair 900ms ease-in-out infinite; }
+    .hair::before { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -40%; background: var(--_active); animation: hair 900ms ease-in-out infinite; }
     .hair.on { opacity: 1; }
     @keyframes hair { from { left: -40% } to { left: 100% } }
     .qmeta { display: flex; align-items: center; gap: 8px; margin: 7px 4px 0; font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .live { width: 7px; height: 7px; border-radius: 50%; background: var(--_active); box-shadow: 0 0 0 3px var(--_chip-bg-strong); flex: none; }
+    .live { width: 7px; height: 7px; border-radius: 50%; background: var(--_active); box-shadow: 0 0 0 3px var(--_chip-sel); flex: none; }
     .live.busy { animation: pulse 800ms ease-in-out infinite alternate; }
     @keyframes pulse { from { opacity: 1 } to { opacity: .35 } }
     .recents { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; white-space: nowrap; min-width: 0; min-height: 0;
@@ -929,14 +929,14 @@ export class JbSearch extends LitElement {
     .filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: none; }
     .filters::-webkit-scrollbar { display: none; }
     .fc { flex: none; height: 34px; padding: 0 14px; border-radius: 999px; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_inactive); border: 1px solid var(--_surface-border); }
-    .fc.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
+    .fc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     /* v0.7 category chips: count after the label, empty categories dimmed but still tappable */
     .fc em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); margin-left: 6px; opacity: .7; font-variant-numeric: tabular-nums; }
     .fc.zero:not(.on) { opacity: .45; }
     /* v0.7 search filters: scope chips under the query, Clear filters, library-first section labels */
     .scope { display: flex; align-items: center; gap: 8px; margin-top: 10px; min-width: 0; flex-wrap: wrap; }
     .sc { display: inline-flex; align-items: center; gap: 6px; height: 44px; max-width: 100%; padding: 0 8px 0 16px; border-radius: 999px;
-      background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); min-width: 0; }
+      background: var(--_chip-sel); color: var(--_fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); min-width: 0; }
     .sc .scl { opacity: .8; flex: none; }
     .sc b { font-weight: var(--ha-font-weight-bold, 700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .sc .scx { width: 28px; height: 28px; padding: 5px; border-radius: 50%; background: var(--_chip-bg); flex: none; }
@@ -944,7 +944,7 @@ export class JbSearch extends LitElement {
     .empty .fc.clr { margin-top: 14px; }
     .lsec { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .1em; text-transform: uppercase; color: var(--_inactive); }
     .lsec[data-sec="providers"] { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--_divider); }
-    .ar.gen { display: grid; place-items: center; background: var(--_chip-bg); color: var(--_fg); box-shadow: 0 0 0 1px var(--_surface-border); }
+    .ar.gen { display: grid; place-items: center; background: var(--_chip-sel); color: var(--_fg); box-shadow: 0 0 0 1px var(--_surface-border); }
     .ar.gen .i { width: 22px; height: 22px; }
     .ra.go { width: 48px; height: 48px; display: grid; place-items: center; color: var(--_inactive); }
     /* Labeled search actions need their own height and enough width for an unbroken touch label. */
@@ -954,8 +954,8 @@ export class JbSearch extends LitElement {
     .row .ra-b:is([data-act="add"], [data-act="next"], [data-act="replace"], [data-act="remove"], [data-act="radio"]) span { white-space: nowrap; }
 
     .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: 14px;
-      padding: 12px 14px 24px; border-radius: var(--_radius); background: var(--_surface); border: 1px solid var(--_surface-border);
-      -webkit-backdrop-filter: var(--_panel-filter, blur(14px)); backdrop-filter: var(--_panel-filter, blur(14px)); touch-action: pan-y; }
+      padding: 12px 14px 24px; border-radius: var(--_radius); background: transparent; border: 1px solid var(--_surface-border);
+      touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     .dv { flex: 1; min-height: 0; }
     .grp { min-width: 0; }
@@ -963,7 +963,7 @@ export class JbSearch extends LitElement {
     h3 em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); color: var(--_inactive); letter-spacing: 0; }
     h3 .sa { margin-left: auto; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; text-transform: none; color: var(--_inactive); padding: 4px 0 4px 12px; }
     .kb-open { position: absolute; right: var(--_pad); bottom: 16px; z-index: 5; display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 18px;
-      border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); box-shadow: var(--ha-card-box-shadow, 0 10px 30px rgba(0,0,0,.3)); }
+      border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); box-shadow: var(--_card-shadow); }
     /* while the floating Keyboard pill shows, lists (results and detail views) get room below their last row so nothing hides under it */
     .sx.kb-hidden { --_fab-space: 72px; }
     /* landscape: query + recents + keyboard on the left, results on the right */

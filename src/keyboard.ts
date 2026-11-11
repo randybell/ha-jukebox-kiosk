@@ -141,25 +141,25 @@ export class JbKeyboard extends LitElement {
       :host { display: block; min-width: 0; }
       .kb {
         container: kb / inline-size; min-width: 0; padding: 6px 10px 10px; border-radius: var(--_radius);
-        background: var(--_scrim); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_card-shadow);
-        -webkit-backdrop-filter: var(--_panel-filter, blur(18px)); backdrop-filter: var(--_panel-filter, blur(18px));
+        /* HA input fill (ha-textfield); the keys on it are plain HA chips */
+        background: var(--_input-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_card-shadow);
         user-select: none; -webkit-user-select: none; touch-action: manipulation;
       }
       .kb-handle {
         display: var(--_kb-handle-display, flex); align-items: center; justify-content: center; gap: 6px;
         width: 100%; height: var(--_kb-handle-h, 28px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_inactive); position: relative;
       }
-      .kb-handle i { position: absolute; top: 3px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--_chip-bg-strong); }
+      .kb-handle i { position: absolute; top: 3px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--_divider); }
       .kb-handle span { display: var(--_kb-handle-label, inline); }
       .keys { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--kgap, 8px); }
       .k {
         height: var(--kh, 60px); display: grid; place-items: center; border-radius: 12px;
-        font-size: var(--kfs, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: 1px solid var(--_hairline);
+        font-size: var(--kfs, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: 1px solid var(--_surface-border);
         user-select: none; -webkit-user-select: none; transition: transform 60ms, background 60ms;
       }
       .k .i { width: 26px; height: 26px; }
-      .k.sp { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_muted); background: var(--_chip-bg); }
-      .k.pressed { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); transform: scale(0.96); }
+      .k.sp { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); }
+      .k.pressed { background: var(--_chip-sel); color: var(--_fg); transform: scale(0.96); }
       .k.num, .wide-only { display: none; }
       @container kb (min-width: 600px) {
         .keys { grid-template-columns: repeat(10, minmax(0, 1fr)); }

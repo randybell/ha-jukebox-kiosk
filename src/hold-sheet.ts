@@ -154,7 +154,7 @@ export class JbHoldSheet extends LitElement {
     .bk { position: absolute; inset: 0; background: var(--_scrim); -webkit-backdrop-filter: var(--_scrim-filter); backdrop-filter: var(--_scrim-filter); }
     .sh { position: relative; width: min(520px, calc(100% - 32px)); max-height: min(100%, var(--_popup-max-h)); box-sizing: border-box;
       padding: calc(16px * var(--_hs-s, 1)) calc(18px * var(--_hs-s, 1)) calc(18px * var(--_hs-s, 1));
-      display: flex; flex-direction: column; border-radius: var(--_dialog-radius); background: var(--ha-dialog-surface-background, var(--_bg)); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); overflow: auto; }
+      display: flex; flex-direction: column; border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); overflow: auto; }
     .hd { display: flex; align-items: center; gap: calc(16px * var(--_hs-s, 1)); padding: 0 calc(4px * var(--_hs-s, 1)) calc(12px * var(--_hs-s, 1)); border-bottom: 1px solid var(--_divider); margin-bottom: calc(10px * var(--_hs-s, 1)); min-width: 0; flex: none; }
     .hd .ar.big { width: calc(72px * var(--_hs-s, 1)); height: calc(72px * var(--_hs-s, 1)); flex: none; border-radius: calc(12px * var(--_hs-s, 1)); overflow: hidden; display: grid; place-items: center; }
     .hd .ar.big img { width: 100%; height: 100%; object-fit: cover; }
@@ -163,8 +163,8 @@ export class JbHoldSheet extends LitElement {
     .hd small { font-size: calc(var(--ha-font-size-l, 16px) * var(--_hs-s, 1)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .its { display: flex; flex-direction: column; gap: calc(6px * var(--_hs-s, 1)); flex: none; }
     .it { display: flex; align-items: center; gap: calc(16px * var(--_hs-s, 1)); width: 100%; min-height: calc(64px * var(--_hs-s, 1)); padding: 0 calc(20px * var(--_hs-s, 1)); box-sizing: border-box; border-radius: calc(14px * var(--_hs-s, 1));
-      background: var(--_chip-bg); color: var(--_fg); font-size: calc(var(--ha-font-size-xl, 20px) * var(--_hs-s, 1)); font-weight: var(--ha-font-weight-bold, 700); text-align: left; flex: none; }
-    .it:active { background: var(--_chip-bg-strong); }
+      background: var(--_chip-bg); border: 1px solid var(--_surface-border); color: var(--_fg); font-size: calc(var(--ha-font-size-xl, 20px) * var(--_hs-s, 1)); font-weight: var(--ha-font-weight-bold, 700); text-align: left; flex: none; }
+    .it:active { background: var(--_chip-sel); }
     .it .i { width: calc(30px * var(--_hs-s, 1)); height: calc(30px * var(--_hs-s, 1)); flex: none; }
     .it.off { opacity: .35; cursor: default; }
     .it.off:active { background: var(--_chip-bg); }
