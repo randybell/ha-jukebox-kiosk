@@ -846,7 +846,7 @@ export class JbSearch extends LitElement {
       position: relative; z-index: 1; height: 100%; display: grid; gap: 12px; padding: 14px var(--_pad) 12px;
       grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
       grid-template-areas: "q" "rec" "res" "kb";
-      --kh: 60px; --kgap: 8px; --kfs: var(--ha-font-size-xl, 20px);
+      --kh: 60px; --kgap: 8px; --kfs: var(--ha-font-size-2xl, 24px);
     }
     .qwrap { grid-area: q; min-width: 0; }
     .qrow { display: flex; gap: 10px; align-items: stretch; min-width: 0; } .qrow .qbar { flex: 1; min-width: 0; }
@@ -970,7 +970,7 @@ export class JbSearch extends LitElement {
     @container np (orientation: landscape) and (min-width: 700px) {
       .sx { grid-template-columns: minmax(400px, 40%) minmax(0, 1fr); grid-template-rows: auto auto 1fr; column-gap: clamp(16px, 2.5cqw, 32px);
         grid-template-areas: "q res" "rec res" "kb res";
-        --kh: clamp(56px, calc((100cqh - 200px) / 5 - 12px), 88px); --kgap: 10px; --kfs: clamp(var(--ha-font-size-xl, 20px), 2cqw, var(--ha-font-size-2xl, 24px)); }
+        --kh: clamp(56px, calc((100cqh - 200px) / 5 - 12px), 88px); --kgap: 10px; --kfs: clamp(var(--ha-font-size-2xl, 24px), 2.4cqw, var(--ha-font-size-3xl, 28px)); }
       /* the source buttons (two rows here) take room from the keys */
       .sx.srcs-on { --kh: clamp(44px, calc((100cqh - 300px) / 5 - 12px), 88px); }
       /* Keep the unchanged keyboard at the top of its available area, directly below the query/hint. */
@@ -1005,7 +1005,7 @@ export class JbSearch extends LitElement {
     }
     /* phone */
     @container np (max-width: 520px) {
-      .sx { --kh: 44px; --kgap: 5px; --kfs: var(--ha-font-size-xl, 20px); gap: 9px; padding: 10px 12px 8px; }
+      .sx { --kh: 44px; --kgap: 5px; --kfs: var(--ha-font-size-2xl, 24px); gap: 9px; padding: 10px 12px 8px; }
       .qbar { height: 50px; padding-left: 14px; } .q { font-size: var(--ha-font-size-xl, 20px); } .caret { height: 24px; } .q .ph { font-size: var(--ha-font-size-m, 14px); }
       .qmeta { font-size: var(--ha-font-size-s, 12px); margin-top: 5px; }
       .chip { height: 32px; font-size: var(--ha-font-size-m, 14px); padding: 0 12px; }

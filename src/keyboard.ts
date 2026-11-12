@@ -154,7 +154,7 @@ export class JbKeyboard extends LitElement {
       .keys { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--kgap, 8px); }
       .k {
         height: var(--kh, 60px); display: grid; place-items: center; border-radius: 12px;
-        font-size: var(--kfs, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: 1px solid var(--_surface-border);
+        font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: 1px solid var(--_surface-border);
         user-select: none; -webkit-user-select: none; transition: transform 60ms, background 60ms;
       }
       .k .i { width: 26px; height: 26px; }

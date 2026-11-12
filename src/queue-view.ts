@@ -437,7 +437,7 @@ export class JbQueue extends LitElement {
     .qsq { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; border-radius: 14px; background: var(--_input-bg); color: var(--_input-ink); border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); }
     .qsq .ph { color: var(--_input-label); font-weight: var(--ha-font-weight-medium, 500); }
     .qsbar small { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); padding-left: 4px; }
-    .qkbd { grid-area: kb; align-self: end; --kh: 42px; --kgap: 6px; --kfs: var(--ha-font-size-xl, 20px); }
+    .qkbd { grid-area: kb; align-self: end; --kh: 42px; --kgap: 6px; --kfs: var(--ha-font-size-2xl, 24px); }
     .qres { grid-area: res; }
     .qr.sr { grid-template-columns: 22px 44px minmax(0, 1fr) auto; cursor: default; }
     .qr .ra-b { color: var(--_fg); } .qr.now .ra-b { color: var(--_on-accent); }
