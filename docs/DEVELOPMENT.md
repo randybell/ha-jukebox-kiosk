@@ -17,9 +17,9 @@ Every Music Assistant command the integration forwards is in `MA_COMMANDS` in `c
 ## Build
 
 ```bash
-# lit 3, rollup 4, typescript 5.9 (TS 7 breaks @rollup/plugin-typescript), fontsource
+# lit 3, rollup 4, typescript 5.9 (TS 7 breaks @rollup/plugin-typescript)
 npm ci                # or npm install
-npm run build         # -> custom_components/jukebox_kiosk/www/jukebox-card.js (single ES module) + www/fonts/*
+npm run build         # -> custom_components/jukebox_kiosk/www/jukebox-card.js (single ES module)
 npm run watch         # rebuild on change
 npm run typecheck     # tsc --noEmit
 ```
@@ -39,10 +39,10 @@ node scripts/run-tests.mjs --list                  # which files each group runs
 # JB_URL=http://127.0.0.1:8765/dev/index.html (or JB_ROOT=http://127.0.0.1:8765/dev/) uses a server you started.
 npm run shots                                      # = node tools/screenshots/shots-m2.mjs
 node tools/screenshots/shots-m2.mjs f1             # every tab at 1920x1080, 1280x800, 820x1180 and 390x844 -> test/shots/m2/
-JB_SIZES=1920x1080 node tools/screenshots/shots-m2.mjs x1 '&backdrop=light'   # one size, one mode
+JB_SIZES=1920x1080 node tools/screenshots/shots-m2.mjs x1                   # one size
 node tools/screenshots/shots-v040.mjs              # lyrics surfaces, states and the editor at 1280x800, 1920x1080, 390x844 -> test/shots/v040/
-node tools/screenshots/shots-v050.mjs              # speakers panel (fixed, dynamic, guest, presets, move, large buttons), queue row icons and the segmented tab bar at 390x844, 1280x800, 1920x1080 and 1024x666 below the HA toolbar -> test/shots/v050/
-node test/perf.mjs 3                               # frame-time benchmark, see "Backdrop and performance"
+node tools/screenshots/shots-v050.mjs              # speakers panel (fixed, dynamic, guest, presets, move), queue row icons and the segmented tab bar at 390x844, 1280x800, 1920x1080 and 1024x666 below the HA toolbar -> test/shots/v050/
+node test/perf.mjs 3                               # frame-time benchmark (slider drag and keyboard typing, 4x CPU throttle)
 ```
 
 `dev/mock-hass.js` is a fake `hass`. It uses the shapes from the real exports (`dev/fixtures/`):
@@ -88,7 +88,6 @@ URL parameters:
 | `kiosk=1` (default; `kiosk=0` = core Music Assistant only, `config_entries/get` for admins) | loads the Jukebox Kiosk integration mock (`dev/mock-kiosk.js`): `jukebox_kiosk` in `hass.config.components` and its WebSocket API on `callWS` / `connection.subscribeMessage`, so `backend: auto` picks `kiosk`. Every message is logged in `window.__ws`; `window.__kioskPush(entity)` sends a queue push, `window.__kioskSubs()` lists subscriptions |
 | `kcaps=<json>` | with `kiosk=1`, overrides the `features` returned by `jukebox_kiosk/capabilities` |
 | `kfail=<type>` | with `kiosk=1`, that `jukebox_kiosk/<type>` message fails |
-| `backdrop=auto\|full\|light\|static\|off` | sets the `backdrop` option |
 | `ha=toolbar\|kiosk\|masonry` | emulates a Home Assistant view around the card: fixed 56 px toolbar (`--header-height`), toolbar hidden (kiosk mode), or a masonry view with padding and a card above |
 | `sidebar=open\|narrow\|closed\|none` | with `ha=`, the HA sidebar width (256 px, 56 px, or none; default `narrow`) |
 
@@ -125,9 +124,9 @@ docker run --rm -v "$PWD/custom_components:/github/workspace/custom_components" 
 ## Repository, releases and HACS
 
 - `hacs.json`: `{"name": "Jukebox Kiosk", "homeassistant": "2026.10.0"}`, category **integration**.
-- The built card **is committed** in `custom_components/jukebox_kiosk/www/` (bundle, fonts, notices). HACS installs an integration from the tagged source, so the bundle has to be in the tree. `.github/workflows/release.yaml` runs on a `v*` tag: it checks that the tag matches `package.json` and `manifest.json`, runs pytest, the typecheck and the card unit tests, rebuilds, **fails if the committed bundle or notices differ from the rebuild**, runs the browser e2e and fit suites in Chrome (`browser-actions/setup-chrome`), then attaches `jukebox_kiosk.zip` to a GitHub release.
+- The built card **is committed** in `custom_components/jukebox_kiosk/www/` (bundle, notices). HACS installs an integration from the tagged source, so the bundle has to be in the tree. `.github/workflows/release.yaml` runs on a `v*` tag: it checks that the tag matches `package.json` and `manifest.json`, runs pytest, the typecheck and the card unit tests, rebuilds, **fails if the committed bundle or notices differ from the rebuild**, runs the browser e2e and fit suites in Chrome (`browser-actions/setup-chrome`), then attaches `jukebox_kiosk.zip` to a GitHub release.
   - To release: bump `version` in `package.json` (and `package-lock.json`), `custom_components/jukebox_kiosk/manifest.json` and `VERSION` in `src/jukebox-card.ts`, run `npm run build`, commit, then `git tag -a v0.7.3 -m 'Jukebox Kiosk 0.7.3' && git push origin v0.7.3` (push only that tag).
 - `.github/workflows/hassfest.yaml` and `hacs.yaml` validate the integration on every push and nightly.
 - `.github/workflows/ci.yaml` (workflow `CI`) runs on every push and pull request with four jobs: `unit` (typecheck, unit tests, build, committed-bundle check), `e2e` (`npm run test:e2e` in Chrome), `fit` (`npm run test:fit` in Chrome) and `pytest`.
 - `test/shots/` (generated by the tests and screenshot scripts) is git-ignored; the curated screenshots used in the README are in `docs/`.
-- License: MIT (`LICENSE`), Copyright (c) 2026 Randy Bell. The bundled fonts are OFL (licence files ship in `www/fonts/`). Third-party licenses are in `THIRD_PARTY_NOTICES.md`.
+- License: MIT (`LICENSE`), Copyright (c) 2026 Randy Bell. Third-party licenses are in `THIRD_PARTY_NOTICES.md`.

@@ -17,7 +17,8 @@ import './station-confirm';
 import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
 import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
-import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type BackdropMode } from './backdrop';
+/** the screensaver's reduced-motion class (.rm) follows the browser setting */
+const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { pickBackend, createBackend, type MaBackend } from './backend';
 import { defineElement } from './define';
@@ -28,7 +29,7 @@ import './hold-sheet';
 import { volDown, volFlush, setVolDown, onVolState, connected } from './vol-send';
 import type { HoldSheet, JbHoldSheet } from './hold-sheet';
 
-export const VERSION = '0.7.20';
+export const VERSION = '0.8.4';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'now', label: 'Now Playing', icon: 'disc' },
   { id: 'browse', label: 'Browse', icon: 'browse' },
@@ -58,7 +59,6 @@ function validateSpeakers(c: JukeboxCardConfig) {
   oneOf('leader_drop', ['block', 'allow']);
   if (!bool(c.confirm_drop)) throw new Error('jukebox-card: confirm_drop must be true or false.');
   if (!bool(c.coerce_repeat_one)) throw new Error('jukebox-card: coerce_repeat_one must be true or false.');
-  if (!bool(c.large_buttons)) throw new Error('jukebox-card: large_buttons must be true or false.');
   if (!bool(c.show_action_icons)) throw new Error('jukebox-card: show_action_icons must be true or false.');
   if (c.grouping_users !== undefined && (!Array.isArray(c.grouping_users) || !c.grouping_users.every((u) => typeof u === 'string')))
     throw new Error('jukebox-card: grouping_users must be a list of user names or ids.');
@@ -81,7 +81,6 @@ export class JukeboxCard extends LitElement {
     _now: { state: true },
     _qcount: { state: true },
     _saver: { state: true },
-    _bd: { state: true },
     _qart: { state: true },
     _stage: { state: true }, _stAsk: { state: true }, _sheet: { state: true }, _stageOut: { state: true },
     _spk: { state: true },
@@ -101,12 +100,9 @@ export class JukeboxCard extends LitElement {
   private _saver = '';
   private _idleTimer?: number;
   private queue = new QueueModel();
-  /** resolved backdrop mode + reason (exposed as data-backdrop / data-backdrop-why on the host) */
-  private _bd: BackdropMode = 'full';
-  private _bdWhy = '';
-  private _lightKey = '';
   private _ro?: ResizeObserver;
   private _rm?: MediaQueryList;
+  private onMotion = () => this.requestUpdate();
   private _qunsub?: () => void;
   /** one lyrics lookup per track, shared by the art overlay, Stage and the screensaver */
   readonly lyrics = new LyricsStore();
@@ -191,8 +187,6 @@ export class JukeboxCard extends LitElement {
     for (const k of ['show_lyrics', 'screensaver_lyrics', 'lyrics_seek'] as const)
       if (!bool(config[k])) throw new Error(`jukebox-card: ${k} must be true or false.`);
     if (!num(config.lyrics_offset_ms, -5000, 5000)) throw new Error('jukebox-card: lyrics_offset_ms must be between -5000 and 5000.');
-    if (config.backdrop !== undefined && !BACKDROPS.includes(config.backdrop))
-      throw new Error(`jukebox-card: backdrop must be one of ${BACKDROPS.join(', ')}.`);
     validateSpeakers(config);
     const first = !this._config;
     this._base = {
@@ -214,7 +208,6 @@ export class JukeboxCard extends LitElement {
     this.queue.entity = this._config.entity!;
     this.queue.limitAfter = this._config.queue_limit ?? 200;
     ensureFonts(this._config.font_base);
-    this.applyBackdrop();
     this.armIdle();
   }
   /**
@@ -311,12 +304,6 @@ export class JukeboxCard extends LitElement {
     const name = (this.hass?.states[entity]?.attributes?.friendly_name as string) ?? entity;
     return el.ask({ title: `Start ${name}?`, sub: 'Speakers playing elsewhere switch over.', lines, ok: 'Start' });
   };
-  private applyBackdrop = () => {
-    if (!this._config) return;
-    const r = resolveBackdrop(this._config.backdrop);
-    this._bd = r.mode; this._bdWhy = r.why; this._lightKey = '';
-    this.dataset.backdrop = r.mode; this.dataset.backdropWhy = r.why;
-  };
 
   /** visible tabs: Now Playing, Library (plus Search in the separate layout), Queue */
   private tabs() {
@@ -361,7 +348,7 @@ export class JukeboxCard extends LitElement {
     this.armIdle();
     if (this.hass) this.queue.refreshSoon(0);
     this._rm = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
-    this._rm?.addEventListener?.('change', this.applyBackdrop);
+    this._rm?.addEventListener?.('change', this.onMotion);
     window.addEventListener('resize', this.scheduleFit);
     window.addEventListener('orientationchange', this.scheduleFit);
     window.addEventListener('location-changed', this.scheduleFit);
@@ -406,7 +393,7 @@ export class JukeboxCard extends LitElement {
     window.removeEventListener('keydown', this.onKeyCap, true);
     window.removeEventListener('keydown', this.onKey);
     if (this._stage) this.closeStage();
-    this._rm?.removeEventListener?.('change', this.applyBackdrop);
+    this._rm?.removeEventListener?.('change', this.onMotion);
     this._ro?.disconnect(); this._ro = undefined;
     window.removeEventListener('resize', this.scheduleFit);
     window.removeEventListener('orientationchange', this.scheduleFit);
@@ -466,16 +453,15 @@ export class JukeboxCard extends LitElement {
     this.renderRoot.addEventListener('focusin', this.onFocusIn as EventListener);
     const np = this.renderRoot.querySelector('main.np');
     if ('ResizeObserver' in window) {
-      this._ro = new ResizeObserver(() => { this.updateScale(); this._lightKey = ''; this.updateLight(); });
+      this._ro = new ResizeObserver(() => { this.updateScale(); });
       this._ro.observe(this);
     }
     this.updateScale();
   }
   protected updated() {
-    this.updateLight();
     if (!this._spkEl) { const el = this.renderRoot.querySelector('jb-speakers') as HTMLElement | null; if (el) this._spkEl = el; }
   }
-  /** Now-playing art for the backdrop and screensaver (see playerArt: never an absolute entity_picture). */
+  /** Now-playing art for the screensaver (see playerArt: never an absolute entity_picture). */
   private art() {
     const ent = this.hass?.states[this._config?.entity ?? 'media_player.everywhere'];
     return playerArt(ent?.attributes, this.queue.currentItem);
@@ -492,26 +478,6 @@ export class JukeboxCard extends LitElement {
     this._scale = z;
     this.style.setProperty('--_z', String(z));
     this.dataset.scale = String(z);
-  }
-  /** light mode: re-draw the 64px pre-blurred canvas only when the art (or the box aspect) changes */
-  private updateLight() {
-    if (this._bd !== 'light') return;
-    const cv = this.renderRoot.querySelector('canvas.bdl') as HTMLCanvasElement | null;
-    const np = this.renderRoot.querySelector('main.np') as HTMLElement | null;
-    const pic = this.art();
-    if (!cv || !np) return;
-    const w = np.clientWidth, h = np.clientHeight;
-    const key = `${pic}|${Math.round((w / Math.max(1, h)) * 10)}`;
-    if (key === this._lightKey) return;
-    this._lightKey = key;
-    if (!pic) { cv.classList.remove('ready'); return; }
-    const t0 = performance.now();
-    drawPreblurred(cv, pic, w, h).then((ok) => {
-      if (this._lightKey !== key) return;
-      cv.classList.toggle('ready', ok);
-      cv.dataset.drawMs = String(Math.round(performance.now() - t0));
-      cv.dataset.draws = String(Number(cv.dataset.draws ?? 0) + 1);
-    });
   }
 
   // ---------- screensaver ----------
@@ -727,7 +693,7 @@ export class JukeboxCard extends LitElement {
   /** 0.7.8: ONE shared full-screen view for both the screensaver and Stage (identical look and behaviour; only how it
    *  opens differs). Album art fills the background (a soft blurred colour when the song has no art), the clock and date,
    *  the song info and a few sliding lyric lines drift over it (burn-in), "Tap to close" at the bottom. Nothing playing:
-   *  clock and date on black. A tap (or Esc) closes it; the follow-up click is swallowed so it can't hit what is underneath. */
+   *  clock and date on the theme background. A tap (or Esc) closes it; the follow-up click is swallowed so it can't hit what is underneath. */
   private renderAmbient(use: 'saver' | 'stage') {
     const c = this._config, ent = this.hass?.states[c.entity!];
     const at = ent?.attributes ?? {};
@@ -741,13 +707,12 @@ export class JukeboxCard extends LitElement {
     const status = lyrOn ? SAVER_LYRICS_STATUS[ls] : undefined;
     let date = '';
     try { date = this._now.toLocaleDateString(lang, { weekday: 'long', month: 'long', day: 'numeric' }); } catch { /* */ }
-    const bdOn = this._bd === 'full' || this._bd === 'light';
     const state = use === 'saver' ? this._saver : this._stageOut ? 'waking' : 'on';
     const title = playing ? at.media_title : undefined;
     const swallow = (e: Event) => { e.preventDefault(); e.stopPropagation(); };
     return html`<div class="amb ${use} ${state}" role="button" aria-label="Close" data-use=${use}
         @pointerdown=${(e: Event) => this.ambClose(e, use)} @pointerup=${swallow} @click=${swallow}>
-      ${bdOn && playing && title ? pic
+      ${playing && title ? pic
         ? html`<div class="sv-bg" style=${`background-image:url("${pic.replace(/"/g, '%22')}")`}></div>`
         : html`<div class="sv-bg noart" style=${`background:${ART[hash(String(title)) % ART.length]}`}></div>` : nothing}
       <div class="sv-drift ${lyr ? 'has-ly' : ''}">
@@ -774,7 +739,6 @@ export class JukeboxCard extends LitElement {
   render() {
     if (!this._config) return nothing;
     const ent = this.hass?.states[this._config.entity!];
-    const pic = this.art();
     // never borrow 'Everywhere' for another entity: a missing one shows its object id
     const name = ent?.attributes?.friendly_name ?? (ent || !this.hass ? 'Everywhere' : this._config.entity!.replace(/^media_player\./, '').replace(/_/g, ' '));
     const dyn = this._config.speaker_mode === 'dynamic';
@@ -784,12 +748,10 @@ export class JukeboxCard extends LitElement {
     // 0.6.3: the pill reads as a control: "Playing on: Everywhere · 3 speakers"
     const pre = pillPrefix(ent?.state);
     const inlineSpk = dyn && canGroup(this._config, this.hass?.user);
-    const bd = this._bd;
-    const artStyle = pic && bd === 'full' ? `--_art:url("${pic.replace(/"/g, '%22')}")` : '';
     const view = (id: TabId, child: unknown) => html`<div class="view" data-view=${id} ?hidden=${this._tab !== id}>${child}</div>`;
     const c = this._config, h = this.hass, q = this.queue, tabs = this.tabs();
     return html`
-      <ha-card class="app bd-${bd} ${bd === 'full' ? '' : 'solid'} ${prefersReducedMotion() ? 'rm' : ''} ${c.large_buttons ? 'lg' : ''}" style="${c.height ? `--jb-height:${c.height};` : ''}${c.show_action_icons !== true ? '--jb-ra-display:none;' : ''}">
+      <ha-card class="app ${prefersReducedMotion() ? 'rm' : ''}" style="${c.height ? `--_height:${c.height};` : ''}${c.show_action_icons !== true ? '--_ra-display:none;' : ''}">
         <header class="top">
           <div class="brand">${icon('disc', 'i brand-i')}<span>${c.title ?? 'Jukebox'}</span></div>
           <button class="pill" title=${c.entity!} tabindex="-1" aria-label="${pre} ${name}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk ? 'true' : 'false'}
@@ -802,19 +764,18 @@ export class JukeboxCard extends LitElement {
           <div class="spacer"></div>
           <div class="clock">${this.timeStr()}</div>
         </header>
-        <main class="np ${pic ? 'has-art' : ''}" style=${artStyle}>
-          ${bd === 'light' ? html`<canvas class="bdl" width="64" height="40" aria-hidden="true"></canvas>` : nothing}
-          ${view('now', html`<jb-now ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
+        <main class="np">
+          ${view('now', html`<jb-now .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
           ${combinedOn(c)
-            ? view('browse', html`<jb-search combined ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-search>`)
-            : html`${view('browse', html`<jb-browse ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-browse>`)}
-          ${view('search', html`<jb-search ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'search'}></jb-search>`)}`}
-          ${view('queue', html`<jb-queue ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'queue'}></jb-queue>`)}
+            ? view('browse', html`<jb-search combined .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-search>`)
+            : html`${view('browse', html`<jb-browse .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-browse>`)}
+          ${view('search', html`<jb-search .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'search'}></jb-search>`)}`}
+          ${view('queue', html`<jb-queue .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'queue'}></jb-queue>`)}
           <!-- inside the middle: the fitted header and tab bar stay visible and tappable while the panel is open -->
-          <jb-station-confirm ?large=${!!c.large_buttons} .state=${this._stAsk ? { kind: 'station', item: this._stAsk.item, run: () => this.stAnswer(true) } : null}
+          <jb-station-confirm .state=${this._stAsk ? { kind: 'station', item: this._stAsk.item, run: () => this.stAnswer(true) } : null}
             .cancel=${() => this.stAnswer(false)}></jb-station-confirm>
-          <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null} ?large=${!!c.large_buttons}></jb-station>
-          <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver} ?large=${!!c.large_buttons}></jb-speakers>
+          <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null}></jb-station>
+          <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver}></jb-speakers>
         </main>
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
           ${tabs.map((t) => html`<button class="tab ${this._tab === t.id ? 'active' : ''}" role="tab" tabindex=${this._tab === t.id ? '0' : '-1'} data-tab=${t.id}
@@ -829,49 +790,41 @@ export class JukeboxCard extends LitElement {
   }
 
   static styles = [tokens, base, css`
-    :host { display: block; height: var(--jb-height, var(--_fit-h, 100dvh)); min-height: 0; }
+    :host { display: block; height: var(--_height, var(--_fit-h, 100dvh)); min-height: 0; }
     .app {
       /* --_fit-h: measured space below the card's top (see fit()); 100dvh only until the first measurement */
-      height: calc(var(--jb-height, var(--_fit-h, 100vh)) / var(--_z, 1)); height: calc(var(--jb-height, var(--_fit-h, 100dvh)) / var(--_z, 1));
+      height: calc(var(--_height, var(--_fit-h, 100vh)) / var(--_z, 1)); height: calc(var(--_height, var(--_fit-h, 100dvh)) / var(--_z, 1));
       zoom: var(--_z, 1); /* large-screen scale, set from ResizeObserver; lengths inside are multiplied, so the height is pre-divided */
       display: grid; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr);
       position: relative; isolation: isolate; overflow: hidden;
       container: jbapp / inline-size; /* the card's own width (e.g. the ~460 px editor preview) decides the header and tab bar, not the screen's */
-      background: var(--_bg); color: var(--_fg); font-family: var(--_font-body); -webkit-font-smoothing: antialiased;
-      border-radius: var(--jb-card-radius, 0); border: 0; box-shadow: none;
+      /* background, color, border, radius, shadow: owned by ha-card / the HA theme */
+      font-family: var(--_font-body); -webkit-font-smoothing: antialiased;
+      color: var(--_fg);
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
     .top { display: flex; align-items: center; gap: 14px; padding: 12px var(--_pad) 12px; min-height: 60px; position: relative; z-index: 2;
-      background: #000; border-bottom: 1px solid var(--_hairline); }
-    .brand { display: flex; align-items: center; gap: 10px; font-family: var(--_font-display); font-weight: 800; font-size: 22px; }
+      background: transparent; border-bottom: 1px solid var(--_hairline); }
+    .brand { display: flex; align-items: center; gap: 10px; font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-xl, 20px); }
     .brand-i { width: 28px; height: 28px; color: var(--_active); }
-    .pill { white-space: nowrap; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: #ffffff0f;
-      border: 1px solid #ffffff1a; font-size: 14px; font-weight: 600; }
-    .pill b { font-weight: 500; color: var(--_muted); }
-    .pill .pl { font-weight: 500; color: var(--_muted); margin-right: -2px; }
+    .pill { white-space: nowrap; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: var(--_chip-bg);
+      border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
+    .pill b { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
+    .pill .pl { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); margin-right: -2px; }
     .pill .pc { width: 14px; height: 14px; opacity: .7; margin-left: -2px; }
-    .lost { margin-left: 10px; font-size: 13px; color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: #ffffff26; }
-    .lg .pill { min-height: 52px; font-size: 17px; padding: 0 18px; }
+    .lost { margin-left: 10px; font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: var(--_chip-sel); }
     .spacer { flex: 1; }
-    .clock { white-space: nowrap; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
-    .np { container: np / size; min-height: 0; position: relative; overflow: hidden; background: #000; }
-    .np::before { content: ""; position: absolute; inset: -80px; z-index: 0;
-      background: var(--_art, radial-gradient(60% 50% at 25% 20%, #2a2a2a 0%, transparent 70%), linear-gradient(160deg, #161616, #050505));
-      background-size: cover; background-position: center; filter: blur(var(--_backdrop-blur)) saturate(var(--_backdrop-saturate)); }
-    .np::after { content: ""; position: absolute; inset: 0; z-index: 0; background: var(--_vignette), var(--_shade); pointer-events: none; }
-    /* ---- backdrop modes (see src/backdrop.ts) ---- */
-    .app.solid { --jb-panel-filter: none; --jb-surface: rgba(0, 0, 0, 0.6); --jb-panel-solid: rgba(0, 0, 0, 0.6); }
-    .bd-light .np::before { background: linear-gradient(160deg, #161616, #050505); filter: none; inset: 0; }
-    .bdl { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: 0; transition: opacity 600ms ease; pointer-events: none; }
-    .bdl.ready { opacity: 1; }
-    .bd-static .np::before { background: radial-gradient(70% 60% at 25% 15%, #262626 0%, transparent 70%), linear-gradient(160deg, #141414, #030303); filter: none; inset: 0; }
-    .bd-off .np::before, .bd-off .np::after { display: none; }
+    .clock { white-space: nowrap; font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
+    .np { container: np / size; min-height: 0; position: relative; overflow: hidden; background: transparent; }
+    /* Now Playing, Library, Search, Queue and the detail pages are plain HA card surfaces: ha-card paints the one surface (album art is a background on the screensaver only). */
     .view { position: absolute; inset: 0; z-index: 1; }
     .view[hidden] { display: none; }
     .badge { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--_active);
-      color: var(--_on-accent); font-style: normal; font-size: 11px; font-weight: 800; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
-    .amb { position: absolute; inset: 0; z-index: 50; background: #000; overflow: hidden; cursor: none; touch-action: none; animation: svin 900ms ease both; }
+      color: var(--_on-accent); font-style: normal; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+    /* Screensaver / Stage: restored to e322336 look (fixed black canvas and white type). Theme rules do not apply here.
+       color: #fff is set so the clock and title stay white now that the parent card uses theme body text. */
+    .amb { position: absolute; inset: 0; z-index: 50; background: #000; color: #fff; overflow: hidden; cursor: none; touch-action: none; animation: svin 900ms ease both; }
     .amb.waking { animation: svout 340ms ease both; }
     @keyframes svin { from { opacity: 0 } to { opacity: 1 } }
     @keyframes svout { to { opacity: 0 } }
@@ -896,69 +849,77 @@ export class JukeboxCard extends LitElement {
        static screen can't burn in. The .rm class mirrors the media query so the dev harness/tests can force it. */
     @media (prefers-reduced-motion: reduce) { .sv-drift, .sv-bg { animation: none; } .sv-drift { animation: hop 600s step-end infinite; } }
     .rm .sv-drift, .rm .sv-bg { animation: none; } .rm .sv-drift { animation: hop 600s step-end infinite; }
-    .rm { --jb-ly-slide: 0ms; } /* inherited into jb-lyrics: the screensaver lyrics move without sliding */
+    .rm { --_ly-slide: 0ms; } /* inherited into jb-lyrics: the screensaver lyrics move without sliding */
     @keyframes hop { 0% { transform: translate(0, 0) } 10% { transform: translate(calc(70cqw - 100%), 18cqh) } 20% { transform: translate(28cqw, calc(64cqh - 100%)) } 30% { transform: translate(calc(78cqw - 100%), 4cqh) } 40% { transform: translate(6cqw, calc(60cqh - 100%)) } 50% { transform: translate(calc(50cqw - 50%), 30cqh) } 60% { transform: translate(calc(74cqw - 100%), calc(66cqh - 100%)) } 70% { transform: translate(12cqw, 10cqh) } 80% { transform: translate(calc(60cqw - 100%), calc(40cqh - 50%)) } 90% { transform: translate(20cqw, calc(66cqh - 100%)) } 100% { transform: translate(0, 0) } }
-    .bd-static .amb, .bd-off .amb { background: #000; }
     .sv-drift.has-ly .sv-clock { font-size: clamp(56px, 10cqw, 140px); }
     .sv-ly { margin-top: 18px; width: min(820px, 72cqw); }
     .sv-lys { margin-top: 14px; font-size: clamp(12px, 1.1cqw, 15px); font-weight: 600; letter-spacing: .04em; color: #ffffff6b; text-shadow: 0 1px 8px #000a; white-space: nowrap; }
+    /* Portrait (0.8.2, #38): what is playing leads and the clock steps back. Container-based (the shared view's own box is taller
+       than wide), never a phone or device size, so landscape keeps every rule above exactly. Sizes come from HA's type scale
+       (5xl is its top step; the big clock is a whole multiple of it) and grow fluidly with the screen width between those steps,
+       the way the keyboard letters do (--kfs). A long title may use two lines instead of being cut off. */
+    @container (orientation: portrait) {
+      .sv-clock { font-size: clamp(calc(var(--ha-font-size-5xl, 40px) * 1.5), 10.5cqw, calc(var(--ha-font-size-5xl, 40px) * 3)); }
+      .sv-drift.has-ly .sv-clock { font-size: clamp(calc(var(--ha-font-size-5xl, 40px) * 1.25), 8.5cqw, calc(var(--ha-font-size-5xl, 40px) * 2.5)); }
+      .sv-date { font-size: clamp(var(--ha-font-size-xl, 20px), 3cqw, var(--ha-font-size-3xl, 28px)); }
+      .sv-np { max-width: 84cqw; }
+      .sv-np b { font-size: clamp(var(--ha-font-size-5xl, 40px), 6.2cqw, calc(var(--ha-font-size-5xl, 40px) * 1.5)); line-height: 1.1;
+        display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
+      .sv-np small { font-size: clamp(var(--ha-font-size-3xl, 28px), 3.8cqw, var(--ha-font-size-5xl, 40px)); }
+      .sv-lys { font-size: clamp(var(--ha-font-size-m, 14px), 1.8cqw, var(--ha-font-size-l, 16px)); }
+    }
     /* ---- Stage: the same shared view (see renderAmbient), opened from Now Playing; it sits under the screensaver ---- */
-    :host(:fullscreen), :host(:-webkit-full-screen) { background: #000; }
+    :host(:fullscreen), :host(:-webkit-full-screen) { background: var(--_bg); }
     .amb.stage { z-index: 45; }
-    /* Tab bar (0.5.0, segmented): one rounded translucent track on the black footer, equal segments with hairline
-       dividers, the active segment solid white. Only colour/transform transitions (no layout, no blur). */
+    /* Tab bar (0.5.0, segmented): one rounded translucent track on the theme footer, equal segments with hairline
+       dividers, the active segment using the theme primary. Only colour/transform transitions (no layout, no blur). */
     .tabs { display: grid; grid-template-columns: repeat(var(--tabs, 4), minmax(0, 1fr)); gap: 4px;
-      padding: 11px calc(var(--_pad) + 4px) calc(13px + env(safe-area-inset-bottom)); background: #000;
+      padding: 11px calc(var(--_pad) + 4px) calc(13px + env(safe-area-inset-bottom)); background: transparent;
       border-top: 1px solid var(--_hairline); position: relative; z-index: 2; }
     .tabs::before { content: ""; position: absolute; top: 7px; left: var(--_pad); right: var(--_pad); bottom: calc(9px + env(safe-area-inset-bottom));
-      border-radius: 18px; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .16); pointer-events: none; }
+      border-radius: 18px; background: var(--_chip-bg); border: 1px solid var(--_surface-border); pointer-events: none; }
     .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 58px;
       padding: 3px; border-radius: 14px; background: transparent; border: 0;
-      color: rgba(255, 255, 255, .78); font-size: 16px; font-weight: 600; line-height: 1.15; letter-spacing: .01em; position: relative;
+      color: var(--_muted); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: .01em; position: relative;
       transition: background-color 120ms ease, color 120ms ease, transform 120ms ease; }
     .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tab .i { width: 30px; height: 30px; }
-    .tab + .tab::before { content: ""; position: absolute; left: -2.5px; top: 25%; bottom: 25%; width: 1px; background: rgba(255, 255, 255, .16); transition: opacity 120ms ease; }
+    .tab + .tab::before { content: ""; position: absolute; left: -2.5px; top: 25%; bottom: 25%; width: 1px; background: var(--_hairline); transition: opacity 120ms ease; }
     .tab.active::before, .tab.active + .tab::before, .tab:hover::before, .tab:hover + .tab::before { opacity: 0; }
-    @media (hover: hover) { .tab:hover { background: rgba(255, 255, 255, .12); color: #fff; } }
-    .tab:active { transform: scale(.97); background: rgba(255, 255, 255, .2); color: #fff; }
-    .tab.active, .tab.active:hover, .tab.active:active { background: var(--_active); color: var(--_on-accent); }
+    @media (hover: hover) { .tab:hover { background: var(--_chip-sel); color: var(--_fg); } }
+    .tab:active { transform: scale(.97); background: var(--_chip-sel); color: var(--_fg); }
+    /* selected tab: HA sidebar pattern: --sidebar-selected-icon-color text/icon on a tint of that colour at --dark-divider-opacity */
+    .tab.active, .tab.active:hover, .tab.active:active { background: color-mix(in srgb, var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)) calc(var(--dark-divider-opacity, 0.12) * 100%), transparent); color: var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)); }
     .tab:focus-visible { outline: 2px solid var(--_active); outline-offset: 3px; }
     .tab .badge { top: 4px; left: calc(50% + 6px); }
-    .tab.active .badge { background: var(--_on-accent); color: var(--_active); }
-    .lg .tab { min-height: 80px; font-size: 17px; } .lg .tab .i { width: 34px; height: 34px; }
     /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole.
        0.7.12 fluid: gate and breakpoints follow the card's jbapp width, not the window. */
     @container jbapp (min-width: 641px) {
       @container jbapp (max-width: 600px) { .pill b, .brand span { display: none; } .top { gap: 10px; } }
-      @container jbapp (max-width: 430px) { .lg .pill { padding: 0 12px; font-size: 15px; } .lg .tab { font-size: 15px; } .lg .clock { font-size: 18px; } }
     }
     @container jbapp (max-width: 960px) { .pill b { display: none; } }
     @container jbapp (max-width: 800px) { .pill .pl { display: none; } }
     @container jbapp (max-width: 640px) {
-      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .lg .pill { width: 56px; min-height: 56px; } .clock { font-size: 18px; } .top { min-height: 52px; padding-top: 10px; padding-bottom: 10px; }
+      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .clock { font-size: var(--ha-font-size-l, 16px); } .top { min-height: 52px; padding-top: 10px; padding-bottom: 10px; }
       .tabs { gap: 2px; padding-left: calc(var(--_pad) + 3px); padding-right: calc(var(--_pad) + 3px); }
-      .tab { font-size: 12px; letter-spacing: 0; } .tab .i { width: 26px; height: 26px; }
-      .tab span { white-space: normal; text-align: center; line-height: 1.1; }
-      .lg .tab { min-height: 68px; font-size: 13px; } .lg .tab .i { width: 30px; height: 30px; }
+      .tab { font-size: var(--ha-font-size-s, 12px); letter-spacing: 0; } .tab .i { width: 26px; height: 26px; }
+      .tab span { white-space: normal; text-align: center; line-height: var(--ha-line-height-condensed, 1.2); }
     }
     /* short panels (fitted height < 700 / < 560 px): tighter header and tab bar so the middle keeps the room */
     :host([data-fit]) .top { min-height: 50px; padding-top: 7px; padding-bottom: 7px; }
-    :host([data-fit]) .brand { font-size: 19px; } :host([data-fit]) .brand-i { width: 24px; height: 24px; } :host([data-fit]) .clock { font-size: 19px; }
-    :host([data-fit]) .pill { padding: 5px 12px; font-size: 13px; }
+    :host([data-fit]) .brand { font-size: var(--ha-font-size-xl, 20px); } :host([data-fit]) .brand-i { width: 24px; height: 24px; } :host([data-fit]) .clock { font-size: var(--ha-font-size-xl, 20px); }
+    :host([data-fit]) .pill { padding: 5px 12px; font-size: var(--ha-font-size-m, 14px); }
     :host([data-fit]) .tabs { gap: 3px; padding: 7px calc(var(--_pad) + 3px) calc(8px + env(safe-area-inset-bottom)); }
     :host([data-fit]) .tabs::before { top: 4px; bottom: calc(5px + env(safe-area-inset-bottom)); border-radius: 15px; }
-    :host([data-fit]) .tab { min-height: 50px; padding: 3px; gap: 3px; font-size: 14px; border-radius: 12px; } :host([data-fit]) .tab .i { width: 24px; height: 24px; }
+    :host([data-fit]) .tab { min-height: 50px; padding: 3px; gap: 3px; font-size: var(--ha-font-size-m, 14px); border-radius: 12px; } :host([data-fit]) .tab .i { width: 24px; height: 24px; }
     :host([data-fit]) .tab + .tab::before { left: -2px; }
-    :host([data-fit]) .lg .tab { min-height: 60px; font-size: 15px; } :host([data-fit]) .lg .tab .i { width: 28px; height: 28px; }
     :host([data-fit=tiny]) .top { min-height: 44px; padding-top: 5px; padding-bottom: 5px; }
     /* tiny (< 560 px): one row, icon + small label side by side (icons only on narrow screens) */
     :host([data-fit=tiny]) .tabs { padding: 6px calc(var(--_pad) + 3px) calc(6px + env(safe-area-inset-bottom)); }
     :host([data-fit=tiny]) .tabs::before { top: 3px; bottom: calc(3px + env(safe-area-inset-bottom)); border-radius: 14px; }
-    :host([data-fit=tiny]) .tab { flex-direction: row; gap: 8px; min-height: 44px; font-size: 13px; border-radius: 11px; }
+    :host([data-fit=tiny]) .tab { flex-direction: row; gap: 8px; min-height: 44px; font-size: var(--ha-font-size-m, 14px); border-radius: 11px; }
     :host([data-fit=tiny]) .tab .i { width: 22px; height: 22px; }
-    :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 5px; font-size: 10px; flex: none; }
-    :host([data-fit=tiny]) .lg .tab { min-height: 52px; font-size: 14px; } :host([data-fit=tiny]) .lg .tab .i { width: 26px; height: 26px; }
+    :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 5px; font-size: var(--ha-font-size-xs, 10px); flex: none; }
     @container jbapp (max-width: 640px) { :host([data-fit=tiny]) .tab span { display: none; } }
   `];
 }
@@ -968,4 +929,4 @@ defineElement('jukebox-card', JukeboxCard);
 if (!(window as any).customCards.some((c: any) => c.type === 'jukebox-card'))
   (window as any).customCards.push({ type: 'jukebox-card', name: 'Jukebox', description: 'Kiosk jukebox for Music Assistant: Now Playing, Browse, Search and Queue', preview: false });
 // eslint-disable-next-line no-console
-console.info(`%c JUKEBOX-CARD %c ${VERSION} `, 'background:#fff;color:#000;font-weight:700', 'background:#000;color:#fff');
+console.info(`%c JUKEBOX-CARD %c ${VERSION} `, 'font-weight:700', '');

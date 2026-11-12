@@ -646,49 +646,43 @@ cs = actions(await calls(page, n0));
 check('14a screensaver appears after idle minutes (full-screen art + clock)', s.on && /\d:\d\d/.test(s.clock || ''), JSON.stringify(s));
 check('14b tap wakes it and the tap is swallowed (no service calls)', !after.on && cs.length === 0, `${JSON.stringify(after)} calls=${cs.map((c) => c.s)}`);
 
-// ---------- 15. backdrop modes + large-screen scale ----------
-const bdState = () => page.evaluate(() => {
-  const r = __card.shadowRoot, np = r.querySelector('main.np'), cv = r.querySelector('canvas.bdl');
-  const before = getComputedStyle(np, '::before');
-  const panel = r.querySelector('jb-now').shadowRoot.querySelector('.panel');
-  return { mode: __card.dataset.backdrop, why: __card.dataset.backdropWhy, beforeFilter: before.filter, beforeBg: before.backgroundImage.slice(0, 40), beforeDisplay: before.display,
-    npBg: getComputedStyle(np).backgroundColor, panelBF: getComputedStyle(panel).backdropFilter, panelBg: getComputedStyle(panel).backgroundColor,
-    canvas: cv ? { ready: cv.classList.contains('ready'), draws: Number(cv.dataset.draws || 0) } : null };
+// ---------- 15. no Now Playing backdrop (art is a background on the screensaver only) + large-screen scale ----------
+// 0.8.3 (#96): the `backdrop` option is gone. Whatever is saved under it (a real old value, a junk value, a non-string) is ignored quietly.
+const planeState = () => page.evaluate(() => {
+  const r = __card.shadowRoot, np = r.querySelector('main.np');
+  const b = getComputedStyle(np, '::before'), a = getComputedStyle(np, '::after');
+  const now = r.querySelector('jb-now').shadowRoot; const ti = now.querySelector('.ti');
+  const probe = document.createElement('span'); probe.style.color = 'var(--primary-text-color, #212121)'; document.body.appendChild(probe); const text = getComputedStyle(probe).color; probe.remove();
+  return { before: b.content, after: a.content, npBg: getComputedStyle(np).backgroundColor, canvas: !!r.querySelector('canvas.bdl'), inline: np.getAttribute('style') || '', npClass: np.className,
+    host: Object.keys(__card.dataset).filter((k) => /backdrop/i.test(k)), appClass: r.querySelector('ha-card').className, title: getComputedStyle(ti).color, text };
 });
-await open(page, '&tab=now&backdrop=full'); s = await bdState();
-check('15a backdrop=full: live blur on the backdrop and backdrop-filter on panels', s.mode === 'full' && /blur\(38px\)/.test(s.beforeFilter) && /blur/.test(s.panelBF) && /url/.test(s.beforeBg), JSON.stringify(s));
-await open(page, '&tab=now&backdrop=light'); await sleep(500); s = await bdState();
-check('15b backdrop=light: pre-blurred canvas drawn, no CSS filter, panels solid rgba(0,0,0,.6) without backdrop-filter', s.mode === 'light' && s.canvas?.ready && s.beforeFilter === 'none' && s.panelBF === 'none' && s.panelBg === 'rgba(0, 0, 0, 0.6)' && !/url/.test(s.beforeBg), JSON.stringify(s));
-{ // volume drag must not redraw the canvas (only a track change does)
-  const d0 = s.canvas.draws;
-  r = await rectOf(page, `__card.shadowRoot.querySelector('jb-now').shadowRoot.querySelector('jb-slider')`);
-  await page.mouse.move(r.x - r.w / 4, r.y); await page.mouse.down();
-  for (let i = 0; i < 10; i++) { await page.mouse.move(r.x - r.w / 4 + i * 12, r.y); await sleep(16); }
-  await page.mouse.up(); await sleep(300);
-  const d1 = (await bdState()).canvas.draws;
-  await page.evaluate(() => __card.hass.callService('media_player', 'media_next_track', {}, { entity_id: 'media_player.everywhere' }));
-  await sleep(900);
-  const d2 = (await bdState()).canvas.draws;
-  check('15c light canvas redraws on track change only (not on slider drag)', d1 === d0 && d2 > d1, `draws ${d0} → drag ${d1} → next ${d2}`);
+for (const q of ['&tab=now', '&tab=now&backdrop=full', '&tab=now&backdrop=light', '&tab=now&backdrop=auto', '&tab=now&backdrop=plain', '&tab=now&backdrop=static', '&tab=now&backdrop=off', '&tab=now&backdrop=blurry']) {
+  await open(page, q); await sleep(300);
+  s = await planeState();
+  check(`15a ${q}: Now Playing is the plain theme card surface (no art backdrop, no shade, no fill, no canvas, no data-backdrop, theme text colour)`,
+    s.before === 'none' && s.after === 'none' && s.npBg === 'rgba(0, 0, 0, 0)' && !s.canvas && s.inline === '' && s.npClass === 'np' && s.host.length === 0 && !/bd-|solid/.test(s.appClass) && s.title === s.text, JSON.stringify(s));
 }
-await open(page, '&tab=now&backdrop=static'); s = await bdState();
-check('15d backdrop=static: dark gradient, no art, no filters', s.mode === 'static' && !s.canvas && s.beforeFilter === 'none' && !/url/.test(s.beforeBg) && /gradient/.test(s.beforeBg) && s.panelBF === 'none', JSON.stringify(s));
-await open(page, '&tab=now&backdrop=off'); s = await bdState();
-check('15e backdrop=off: pure black', s.mode === 'off' && s.beforeDisplay === 'none' && s.npBg === 'rgb(0, 0, 0)' && s.panelBF === 'none', JSON.stringify(s));
-await open(page, '&tab=now'); s = await bdState();
-const cores = await page.evaluate(() => [navigator.hardwareConcurrency, navigator.deviceMemory]);
-check('15f backdrop=auto (default) resolves from hardwareConcurrency/deviceMemory', s.mode === ((cores[0] <= 4 || cores[1] <= 2) ? 'light' : 'full'), `${s.mode} (${s.why}) cores/mem=${cores}`);
-await page.evaluateOnNewDocument(() => { Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => 4 }); });
-await open(page, '&tab=now'); s = await bdState();
-check('15g auto on a 4-core device → light', s.mode === 'light' && /hardwareConcurrency=4/.test(s.why), `${s.mode} (${s.why})`);
+// a saved backdrop of any kind loads with no error, no warning and no console noise
+{ const noisy = [];
+  const onC = (m) => { if (['error', 'warning', 'warn'].includes(m.type())) noisy.push(m.text()); };
+  page.on('console', onC);
+  for (const v of ['full', 'light', 'auto', 'plain', 'static', 'off', 'blurry', '', 7, null, true, { a: 1 }, ['full']]) {
+    s = await page.evaluate((val) => { try { document.createElement('jukebox-card').setConfig({ type: 'custom:jukebox-card', config_entry_id: 'x', backdrop: val }); return 'ok'; } catch (e) { return e.message; } }, v);
+    check(`15b a saved backdrop of ${JSON.stringify(v)} is ignored quietly (setConfig does not throw)`, s === 'ok', s);
+  }
+  await sleep(200); page.off('console', onC);
+  check('15c no console error or warning from any saved backdrop value', noisy.length === 0, noisy.join(' | ').slice(0, 200));
+}
+await open(page, '&tab=now&saver=0.02');
+await page.waitForFunction(() => !!__card.shadowRoot.querySelector('.saver .sv-bg'), { timeout: 5000 }).catch(() => {});
+s = await page.evaluate(() => { const bg = __card.shadowRoot.querySelector('.sv-bg'); return { bg: bg ? getComputedStyle(bg).backgroundImage.slice(0, 40) : null }; });
+check('15d the screensaver is unchanged (still shows the album art as its background)', /url/.test(s.bg ?? ''), JSON.stringify(s));
 await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
 await open(page, '&tab=now&saver=0.02');
 await page.waitForFunction(() => !!__card.shadowRoot.querySelector('.saver .sv-drift'), { timeout: 5000 }).catch(() => {});
-s = await page.evaluate(() => { const r = __card.shadowRoot; const d = r.querySelector('.sv-drift'), bg = r.querySelector('.sv-bg'); return { mode: __card.dataset.backdrop, why: __card.dataset.backdropWhy, drift: d && getComputedStyle(d).animationName, timing: d && getComputedStyle(d).animationTimingFunction, kb: bg ? getComputedStyle(bg).animationName : 'n/a' }; });
-check('15h prefers-reduced-motion: auto → light; screensaver drift + Ken Burns off (discrete hop every 60s only)', s.mode === 'light' && s.why === 'prefers-reduced-motion' && s.drift === 'hop' && /steps|step-end/.test(s.timing) && (s.kb === 'none' || s.kb === 'n/a'), JSON.stringify(s));
+s = await page.evaluate(() => { const r = __card.shadowRoot; const d = r.querySelector('.sv-drift'), bg = r.querySelector('.sv-bg'); return { drift: d && getComputedStyle(d).animationName, timing: d && getComputedStyle(d).animationTimingFunction, kb: bg ? getComputedStyle(bg).animationName : 'n/a' }; });
+check('15e prefers-reduced-motion: screensaver drift + Ken Burns off (discrete hop every 60s only)', s.drift === 'hop' && /steps|step-end/.test(s.timing) && (s.kb === 'none' || s.kb === 'n/a'), JSON.stringify(s));
 await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'no-preference' }]);
-s = await page.evaluate(() => { try { document.createElement('jukebox-card').setConfig({ type: 'custom:jukebox-card', config_entry_id: 'x', backdrop: 'blurry' }); return 'no error'; } catch (e) { return e.message; } });
-check('15i invalid backdrop value is rejected by setConfig', /backdrop must be one of/.test(s), s);
 // 1920x1080: zoomed up, fits the screen exactly, popover menus still anchor to their button
 await open(page, '&tab=search', { width: 1920, height: 1080 });
 for (const c of 'EAGLES') await tapKey(page, keyIdFor(c));
@@ -724,27 +718,22 @@ await page.keyboard.press('Escape');
   const artState = () => pg.evaluate(() => {
     const r = __card.shadowRoot; const np = r.querySelector('jb-now').shadowRoot;
     const sv = r.querySelector('.saver');
-    return { now: np.querySelector('.art img, img')?.getAttribute('src') ?? '', full: r.querySelector('main.np')?.getAttribute('style') ?? '',
-      light: __card._lightKey ?? '', draws: r.querySelector('canvas.bdl')?.dataset.draws ?? '',
+    return { now: np.querySelector('.art img, img')?.getAttribute('src') ?? '',
       svbg: sv?.querySelector('.sv-bg')?.getAttribute('style') ?? '', svimg: sv?.querySelector('.sv-np img')?.getAttribute('src') ?? '',
       abs: __hass.states['media_player.everywhere'].attributes.entity_picture };
   });
   pg.__img.length = 0;
-  await open(pg, '&latency=20&tab=now&backdrop=full'); await sleep(400);
+  await open(pg, '&latency=20&tab=now'); await sleep(400);
   let a = await artState();
   check('16k Now Playing art = relative entity_picture_local (/api/media_player_proxy/), not the absolute entity_picture', a.now.startsWith('/api/media_player_proxy/media_player.everywhere?') && /^http:\/\/192\.168\./.test(a.abs), JSON.stringify(a));
-  check('16l full backdrop --_art uses the proxy path', /--_art:url\("\/api\/media_player_proxy\//.test(a.full), a.full);
-  await open(pg, '&latency=20&tab=now&backdrop=light'); await sleep(600);
-  a = await artState();
-  check('16m light backdrop canvas drawn from the proxy path', a.light.startsWith('/api/media_player_proxy/') && Number(a.draws) >= 1, JSON.stringify({ light: a.light, draws: a.draws }));
-  await open(pg, '&latency=20&tab=now&backdrop=full&saver=0.02');
+  await open(pg, '&latency=20&tab=now&saver=0.02');
   await pg.waitForFunction(() => !!__card.shadowRoot.querySelector('.saver .sv-bg'), { timeout: 5000 }).catch(() => {});
   a = await artState();
   check('16n screensaver background uses the proxy path (0.7.8: no thumbnail, the art is the background)', /url\("\/api\/media_player_proxy\//.test(a.svbg) && !a.svimg, JSON.stringify({ svbg: a.svbg.slice(0, 80), svimg: a.svimg }));
-  await open(pg, '&latency=20&tab=now&backdrop=full&noart=1'); await sleep(700);
+  await open(pg, '&latency=20&tab=now&noart=1'); await sleep(700);
   a = await artState();
   const cur = await pg.evaluate(() => __card.queue.currentItem?.media_image ?? '');
-  check('16o no entity_picture_local → current queue item image (https/data), never the absolute URL', a.now && a.now === cur && !/^http:/.test(a.now) && a.full.includes(cur.slice(0, 40)), `${a.now.slice(0, 50)} vs ${cur.slice(0, 50)}`);
+  check('16o no entity_picture_local → current queue item image (https/data), never the absolute URL', a.now && a.now === cur && !/^http:/.test(a.now), `${a.now.slice(0, 50)} vs ${cur.slice(0, 50)}`);
   check('16p no request ever goes to the absolute LAN entity_picture host', !pg.__img.some((u) => u.includes('192.168.')), pg.__img.filter((u) => u.includes('192.168.')).join(','));
 
   // 16q-w: radio
@@ -785,8 +774,9 @@ await page.keyboard.press('Escape');
   check('16s station names trimmed (leading tabs/spaces), badged "Radio"', g.tiles.every((t) => t.name === t.name.trim() && !/\t/.test(t.name) && t.pv === 'Radio') && g.tiles.some((t) => t.name === 'Arrow Classic Rock') && g.tiles.some((t) => t.name === 'ROCKANTENNE Alternative (mp3)'), g.tiles.map((t) => JSON.stringify(t.name)).join(','));
   const hr = g.tiles.find((t) => t.name === 'Hard Rock Radio FM');
   await sleep(500);
+  const deadHidden = await pg.evaluate((b) => { const im = [...eval(b).shadowRoot.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent.startsWith('ROCKANTENNE'))?.querySelector('img'); return !im || getComputedStyle(im).display === 'none'; }, BR);
   const deadImg = await pg.evaluate((b) => [...eval(b).shadowRoot.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent.startsWith('ROCKANTENNE'))?.querySelector('img')?.src.slice(0, 26), BR);
-  check('16t null station image → radio-tower fallback; dead logo (404) swaps to it too', hr && hr.img.startsWith('data:image/svg+xml') && deadImg === 'data:image/svg+xml;charset', `${hr?.img.slice(0, 30)} dead=${deadImg}`);
+  check('16t null station image → theme-coloured placeholder, no fixed-colour picture (0.8.1); a dead logo (404) is hidden so the placeholder shows', hr && hr.img === '' && deadHidden, `${hr?.img.slice(0, 30)} dead=${deadImg} hidden=${deadHidden}`);
   const st = g.tiles.find((t) => t.name === 'Arrow Classic Rock');
   const stEl = `[...${BR}.shadowRoot.querySelectorAll('.tile')].find((x) => x.dataset.uri === '${st?.uri}')`;
   let pr = await pq(async () => { const r = await rectOf(pg, stEl); await pg.mouse.click(r.x - r.w / 4, r.y - r.h / 4); });

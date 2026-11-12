@@ -4,6 +4,49 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.8.4 — 2026-11-12
+
+- Now Playing always follows your Home Assistant theme. The Background choice (Plain, Automatic, Full, Light, Dark and Off) is gone from the card editor, and so is the album-art background on Now Playing. Album art is now a background on the screensaver only, and the screensaver itself looks the same as before.
+- The Large buttons switch is gone from the card editor.
+- If your setup still has `backdrop` or `large_buttons`, nothing breaks: the card loads it without an error and ignores both, so you can remove them. If you had picked Dark or Off, Now Playing is now the plain theme card, and the screensaver shows album art.
+- On the on-screen keyboard, the words on the bottom row (123, Space and Clear) are now the same size as the letters, and the backspace symbol grows with them.
+
+## 0.8.2 — 2026-11-11
+
+- The letters on the on-screen keyboard are bigger, in the Library, in Search and when you search the Queue. The keys keep their size, and on large landscape screens the letters grow a little more with the screen.
+- The words on the bottom row of the keyboard (123, Space and Clear) are bigger too. The 123 and backspace keys are a bit wider, and Space and Clear are a bit narrower to make room.
+- On an artist page, the "Filter by <artist>" button now stays in its place while that filter is on. It then reads "Clear filter by <artist>" with an X. A tap clears only the artist filter: the page stays open and any text you typed in the filter stays.
+- Searching inside an artist (the "Search in <artist>" button) uses the same wording. While the search is limited to that artist, its page shows "Clear filter by <artist>", and a tap clears only the artist. Other artist pages still show "Search in <artist>".
+- In portrait, the track on the screensaver is bigger (title and artist) and the clock is smaller. The date is a little bigger, and a long title may take two lines instead of being cut off. In landscape the screensaver is unchanged.
+
+## 0.8.1 — 2026-11-11
+
+- Now Playing no longer has the blurred album-art background by default. It is now a plain card in your Home Assistant theme colors, like Library and Queue, and the cover still shows in its own square. To get the album-art background back, set Background to "Automatic", "Full" or "Light" in the card editor, or set `backdrop: auto`, `backdrop: full` or `backdrop: light` in YAML. The new default is `backdrop: plain`. The other choices (`auto`, `full`, `light`, `static` and `off`) still work when you pick them.
+- When you pick a background that shows album art, the art, its dark shade and the color behind it appear on Now Playing only. Library, Search and Queue use your theme colors alone, also on themes with see-through cards.
+- The "Dark" background (`backdrop: static`) now really shows its flat fill in your theme's main color. It matches Home Assistant's own media control card: the fill is the theme's main color, and the text and icons use the theme's "text on primary" color, with no switching between black and white. "Off" is the same fill in gray, the way Home Assistant draws its media card when it is off. Now Playing looks the same with the Full or Light background when there is no art.
+- The on-screen keyboard now uses Home Assistant's input and button colors. It no longer has a dark grey panel.
+- The Library category buttons, the search boxes, the source buttons and the small tags and chips use Home Assistant's chip and input colors. A selected one has Home Assistant's soft highlight instead of a solid color.
+- The selected tab at the bottom (Now Playing, Library, Queue) has a soft tinted background and a colored label, the way Home Assistant marks the selected item in its own sidebar. It uses the theme's "sidebar selected" color, which is the main color by default. It used to be a solid block.
+- The cover buttons and the corner buttons on tiles are plain round buttons in your theme colors, with no dark fill and no blur.
+- The speakers panel and "Up next" on Now Playing are solid theme cards with theme text.
+- The card no longer draws its own black shadows (on the cover, the Play button, the slider knob and the selected Library category). It uses Home Assistant's card shadow only if your theme sets one.
+- Pop-ups dim the screen behind them once, the way Home Assistant's own dialogs do. If your theme does not say how much, the card uses Home Assistant's own default (68% brightness). A theme that sets it, even to none, wins.
+- Messages (toasts) look like Home Assistant's own.
+- A cover with no picture shows a plain square in your theme's main color. A radio station with no logo shows the same square, and the colored radio-tower picture is gone.
+- In the Queue, the artist line on the playing row is a lighter shade of the row's text color.
+- The screensaver is unchanged.
+- In the card editor, the Background choices now read: "Plain (default)", "Automatic", "Full", "Light", "Dark" and "Off". Dark and Off show no album art.
+
+## 0.8.0 — 2026-11-11
+
+- The card now follows your Home Assistant theme, the way Home Assistant's own cards do. Colors come from the theme, in light and in dark, on every screen. The card's corners, shadow and border come from the theme's card settings, and every pop-up uses the theme's dialog corners, shadow, maximum height and dimmed background. Text sizes, weights and line spacing come from the theme too. Buttons that are selected, such as the tab you are on, the Library category, the picked sources, the Play button and the playing row in the Queue, now use the theme's main color instead of white.
+- The look changes after you update. The Inter and Plus Jakarta Sans fonts are gone, so the card uses your theme's font (Roboto with Home Assistant's default theme), and titles and the clock look plainer than before. The `fonts/` folder is no longer part of the card, and the card no longer downloads fonts.
+- Now Playing: when nothing is playing or there is no art, the screen fills with the theme's main color with light text, the way Home Assistant's media player card looks when it is off or has no picture. The Static and Off backdrop choices look the same (Off in gray) instead of a dark gradient and plain black. With art, the dark shade and white text stay so the text is easy to read on any cover. The Library, Search and Queue screens now sit on the theme's card background instead of the blurred art, and the panels on them use the theme's secondary background color.
+- The Now Playing title is now no larger than the biggest size in Home Assistant's text scale (40 px with the default theme). Before, it could reach 44 px.
+- The screensaver is unchanged, except that it uses the theme's font, and its lyric lines use the theme's text weight and line spacing.
+- `font_base` is still accepted, so old setups keep loading, but it no longer does anything. If you set it, you can remove it from your setup.
+- The `--jb-…` style overrides, such as `--jb-panel-filter`, `--jb-surface` and `--jb-panel-solid`, whether set in a theme or with card-mod, are gone and no longer do anything. Change the colors in your Home Assistant theme instead.
+
 ## 0.7.20 — 2026-11-10
 
 - New setting, Library lists (`library_view`), in the card setup under Library. It chooses how the top of every Library button is drawn: Rows (the default) or Tiles. A row is a list line with a small cover, the title and the line under it, the source badge, the heart, and an arrow where a tap opens a page. Tiles are a grid of big covers. Because Rows is now the default, Playlists, Artists, Albums and Radio show as lists instead of tiles until you pick Tiles. Artists are no longer round in the Library lists. It covers Playlists, Artists, Tracks and Radio (Favorites, More stations and the online station lists too), Albums, Podcasts and Audiobooks when you have added those buttons, and Genres in the older separate-tabs Library. With Tiles, Tracks and Genres become tiles too; they were always rows before. Any other value counts as Rows.

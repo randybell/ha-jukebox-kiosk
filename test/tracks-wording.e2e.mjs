@@ -147,7 +147,7 @@ for (const kind of ['touch', 'mouse']) {
       if (n.shadowRoot) walk(n.shadowRoot); for (const c of n.childNodes) walk(c); };
     walk(__editor.shadowRoot); return out;
   });
-  check('card editor: has Tracks (Library buttons) and the Light screensaver option, and no label or option says song(s)', texts.some((t) => /Tracks/.test(t)) && texts.some((t) => /drawn once per track/.test(t)) && !texts.some((t) => /\bsongs?\b/i.test(t)), J(texts.filter((t) => /song|track/i.test(t))));
+  check('card editor: has Tracks (Library buttons) and no label or option says song(s)', texts.some((t) => /Tracks/.test(t)) && !texts.some((t) => /\bsongs?\b/i.test(t)), J(texts.filter((t) => /song|track/i.test(t))));
   await shot(p, '0714-editor');
   await p.close();
 }

@@ -15,10 +15,10 @@ const DET = `${SV}.querySelector('jb-detail').shadowRoot`;
 const center = (p, expr) => p.evaluate((e) => { const el = eval(e); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, expr);
 
 for (const [name, vp, q] of [['1024x712 (HA toolbar + sidebar)', { width: 1080, height: 768 }, '&ha=toolbar&sidebar=narrow'], ['1024x600', { width: 1024, height: 600 }, '']]) {
-  for (const lg of [false, true]) {
-    const tag = `${name}${lg ? ' large_buttons' : ''}`;
+  {
+    const tag = name;
     const p = await browser.newPage(); await hermetic(p); await p.setViewport({ ...vp, deviceScaleFactor: 1 });
-    await p.goto(`${BASE}?fresh=1&latency=20&tab=browse${q}${lg ? '&cfg=' + encodeURIComponent(JSON.stringify({ large_buttons: true })) : ''}`);
+    await p.goto(`${BASE}?fresh=1&latency=20&tab=browse${q}`);
     await p.waitForFunction('window.__ready === true'); await sleep(500);
     const qb = await center(p, `${SV}.querySelector('.qbar')`); await p.mouse.click(qb.x, qb.y); await sleep(300);
     await p.keyboard.type('EAG', { delay: 50 });
