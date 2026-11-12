@@ -1,7 +1,7 @@
 // 0.8.2 (#91): on the filtered artist's own page the "Filter by <artist>" button stays, in the same place and style, and reads
 // "Clear filter by <artist>" with a close icon; a tap / click / Enter clears only the artist filter (a typed filter stays, the
 // page stays open) and the label goes back to "Filter by <artist>". Library (separate layout), the combined Library tab
-// (host: the search box's artist chip, "Clear search in <artist>") and the Search tab. Viewport 1024x600 only: touch, mouse, keyboard.
+// (host: the search box's artist chip, "Clear filter by <artist>") and the Search tab. Viewport 1024x600 only: touch, mouse, keyboard.
 // Mock data only (dev/mock-hass.js `jjgrey=1`). Usage: node test/artist-filter-clear.e2e.mjs (own dev server). SHOTS=<dir> writes screenshots.
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -119,8 +119,8 @@ for (const [name, query, tab] of [['combined', '&layout=combined&tab=browse', 'l
     await ev(p, `${SVH}.openDetail(${SVH}._scope.artist, 'artist')`);
     await wait(p, `${SD}?.querySelector('.da .scope')`);
     const on = await look(p, SCOPE_BTN(SD));
-    check(`AF8 [${name}/${kind}] artist filter on: the button stays, "Clear search in JJ Grey" with a close icon, same place and style`,
-      on.text === 'Clear search in JJ Grey' && on.action === 'unscope' && on.path !== before.path && on.last && before.last && on.h === before.h && on.fs === before.fs && on.bg === before.bg && on.color === before.color, J({ before, on }));
+    check(`AF8 [${name}/${kind}] artist filter on: the button stays, "Clear filter by JJ Grey" with a close icon, same place and style`,
+      on.text === 'Clear filter by JJ Grey' && on.action === 'unscope' && on.path !== before.path && on.last && before.last && on.h === before.h && on.fs === before.fs && on.bg === before.bg && on.color === before.color, J({ before, on }));
     await shot(p, `082-${name}-clear-${kind}-on`);
     await press(p, navK(kind), SCOPE_BTN(SD));
     await wait(p, `!${SV}.querySelector('.sc[data-scope="artist"]')`);

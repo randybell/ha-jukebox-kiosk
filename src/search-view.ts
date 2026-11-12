@@ -639,8 +639,8 @@ export class JbSearch extends LitElement {
   }
   private scopeLabel = (it: MaItem, type: string) => (!this.filtersOn() || (this._scope?.album && type === 'album' && this._scope.album.uri === it.uri)
     || (type === 'artist' && !this._scope?.album && this._scope?.artist?.uri === it.uri) ? '' : `Search in ${it.name}`);
-  /** 0.8.2 (#91): on the filtered artist's own page the "Search in <artist>" button reads "Clear search in <artist>" */
-  private scopeClear = (it: MaItem, type: string) => (this.filtersOn() && type === 'artist' && !this._scope?.album && this._scope?.artist?.uri === it.uri ? `Clear search in ${it.name}` : '');
+  /** 0.8.2 (#91): on the filtered artist's own page the "Search in <artist>" button reads "Clear filter by <artist>" */
+  private scopeClear = (it: MaItem, type: string) => (this.filtersOn() && type === 'artist' && !this._scope?.album && this._scope?.artist?.uri === it.uri ? `Clear filter by ${it.name}` : '');
   private scopeTpl() {
     const s = this._scope; if (!s) return nothing;
     const chip = (k: 'artist' | 'album', label: string, name: string) => html`<button class="sc" data-scope=${k} tabindex="-1"
