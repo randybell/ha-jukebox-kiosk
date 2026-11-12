@@ -4,6 +4,13 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.8.3 — 2026-11-12
+
+- If the card is pointed at a speaker's own player (for example the speaker's WiiM, LinkPlay or Cast player) instead of its Music Assistant player, the card now finds the Music Assistant player of that same speaker and uses it. It looks for the same device first, then for the same name. This fixes "Queue unavailable" in that case.
+- The Queue, Up next, playing a track, favorites, autoplay and lyrics all use that Music Assistant player. If you already pointed the card at a speaker's own player, it now works without changing anything, as long as Music Assistant has a player for that speaker.
+- In the card editor, the Player and Targets lists show only Music Assistant players.
+- "Playing on" turns each target into its Music Assistant player and leaves out any target that has no Music Assistant player. The card's own player is never left out.
+
 ## 0.8.2 — 2026-11-11
 
 - The letters on the on-screen keyboard are bigger, in the Library, in Search and when you search the Queue. The keys keep their size, and on large landscape screens the letters grow a little more with the screen.
