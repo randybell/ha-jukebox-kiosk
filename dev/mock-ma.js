@@ -83,6 +83,10 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
         current_media: active(g) ? { title: st(d.entity)?.attributes?.media_title ?? null } : null,
       });
     }
+    // wiim=1 (#94): the MA player behind media_player.wiim_sound_lite_aaf2 (HA's native entity of it is a different media_player)
+    if (params.get('wiim') === '1') out.push({ player_id: 'wiim_mock_master', provider: 'wiim', type: 'player', name: 'Master Bedroom', available: true, powered: true, hide_in_ui: true, expose_to_ha: true,
+      playback_state: st('media_player.wiim_sound_lite_aaf2')?.state ?? 'idle', group_members: [], static_group_members: [], can_group_with: [], synced_to: null, active_group: null,
+      supported_features: ['volume_set', 'volume_mute', 'pause'], volume_level: 0.35, current_media: { title: st('media_player.wiim_sound_lite_aaf2')?.attributes?.media_title ?? null } });
     return out;
   }
   /** HA side: group + room entities follow MA */

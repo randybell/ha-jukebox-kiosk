@@ -16,7 +16,7 @@ import './station-sheet';
 import './station-confirm';
 import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
-import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
+import { canGroup, canJumpQueue, targetsOf, targetMa, maEntityOf, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
 import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type BackdropMode } from './backdrop';
 import { ART_FG_OVER_DARK_SHADE } from './art-contrast';
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
@@ -250,6 +250,7 @@ export class JukeboxCard extends LitElement {
     if (this._tab === 'search' && combinedOn(this._config)) this._tab = 'browse';
     if (this._tab !== 'now' && !this.tabs().some((t) => t.id === this._tab)) this._tab = 'now';
     this.queue.configForRemove = this._config;
+    this.queue.entity = this._config.entity!;
     if (refresh && this.hass) this.queue.refreshSoon(0);
     this.startPush();
     this.requestUpdate();
@@ -267,16 +268,19 @@ export class JukeboxCard extends LitElement {
       .catch((e) => { console.warn('[jukebox-card] queue push unavailable', e); });
   }
   private stopPush() { this._push?.off?.(); this._push = undefined; }
-  /** fixed mode: the config as given. dynamic: entity = the remembered target (when it is one of the targets) + start guard. */
+  /** the Music Assistant player behind a media_player: every MA call (queue, play, favorites, autoplay, lyrics) goes to it (#94) */
+  private ma(e: string | undefined): string | undefined { return e ? (maEntityOf(e, this.hass) ?? e) : e; }
+  /** fixed mode: the config as given (its player mapped to its MA player). dynamic: entity = the remembered target (when it is one of the targets) + start guard. */
   private effective(): JukeboxCardConfig {
     const b = this._base;
-    if (b.speaker_mode !== 'dynamic') return b;
+    const be = this.ma(b.entity);
+    if (b.speaker_mode !== 'dynamic') return be === b.entity ? b : { ...b, entity: be };
     let t = '';
-    try { t = localStorage.getItem(TARGET_KEY) ?? ''; } catch { /* private mode */ }
-    const ok = !!t && (b.targets?.length ? targetsOf(b, this.hass).some((x) => x.entity === t) : t.startsWith('media_player.'))
+    try { t = this.ma(localStorage.getItem(TARGET_KEY) ?? '') ?? ''; } catch { /* private mode */ }
+    const ok = !!t && (b.targets?.length ? targetsOf({ ...b, entity: be }, this.hass).some((x) => x.entity === t) : t.startsWith('media_player.'))
       // a saved target that HA no longer has (renamed / deleted group) must not win over the configured one
-      && (!this.hass || !!this.hass.states[t] || t === b.entity);
-    return { ...b, entity: ok ? t : b.entity, _guard: this.guard };
+      && (!this.hass || !!this.hass.states[t] || t === be);
+    return { ...b, entity: ok ? t : be, _guard: this.guard };
   }
   /** Move the card to another group (from the Speakers panel). Allowed users only; remembered per device. */
   private onTarget = (e: CustomEvent) => {
@@ -651,6 +655,7 @@ export class JukeboxCard extends LitElement {
     if (changed.has('hass') && this.hass && (!old || old.config !== this.hass.config || old.connection !== this.hass.connection)) this.syncBackend();
     if ((changed.has('hass') || changed.has('_config')) && this.hass && this._config) this.lyrics.follow(this.hass, this.hass.states[this._config.entity!]);
     if (changed.has('hass') && this.hass) {
+      this.followMaPlayer(old);
       this.watchConn();
       if (!connected(this.hass)) setVolDown(true); else if (volDown()) volFlush(this.hass);
       if (!this._push) this.startPush();
@@ -679,6 +684,16 @@ export class JukeboxCard extends LitElement {
       return now === be && !!(be as any).info && be.caps.queuePlay;
     }
     return true;
+  }
+  /** #94: the card may have been set up before HA's registry arrived, or the registry changed: keep the MA player behind the target current */
+  private followMaPlayer(old?: HomeAssistant) {
+    if (!this._base || (old && old.entities === this.hass!.entities)) return;
+    const e = this.effective().entity;
+    if (e === this._config.entity) return;
+    this._config = this.effective();
+    this.queue.entity = this._config.entity!;
+    this.queue.refreshSoon(0);
+    this.stopPush(); this.startPush();
   }
   /** dynamic mode: a remembered target missing from hass.states is forgotten once, with a notice (it used to fall back silently) */
   private dropLostTarget() {

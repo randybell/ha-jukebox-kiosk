@@ -146,6 +146,22 @@ export function targetMa(entity: string, hass: HomeAssistant | undefined, player
   if (typeof a.active_queue === 'string' && players.has(a.active_queue) && ['playing', 'paused', 'buffering'].includes(s?.state ?? '')) return a.active_queue;
   return all.find((p) => norm(p.name) === n)?.player_id;
 }
+/**
+ * The Music Assistant media_player to use for every MA call (queue, play_media, favorites, autoplay, lyrics) when the card was
+ * pointed at another media_player for the same speaker (e.g. the native WiiM entity: platform wiim, no active_queue, MA has no
+ * queue by its id). Same rule as the rooms, from what HA's registry shows every user: an entity that is positively not a Music
+ * Assistant one (registry platform) maps to the MA media_player on the same device, else the one with the same friendly name
+ * (speakers before groups). An MA entity, or one HA's registry doesn't list, is returned as it is. No counterpart → undefined.
+ */
+export function maEntityOf(entity: string, hass: HomeAssistant | undefined): string | undefined {
+  const reg = hass?.entities, own = reg?.[entity];
+  if (!hass || !reg || !own || own.platform === 'music_assistant') return entity;
+  const ma = Object.keys(reg).filter((id) => id.startsWith('media_player.') && reg[id]?.platform === 'music_assistant' && !!hass.states[id]);
+  const best = (ids: string[]) => ids.find((id) => hass.states[id].attributes?.mass_player_type !== 'group') ?? ids[0];
+  if (own.device_id) { const d = ma.filter((id) => reg[id].device_id === own.device_id); if (d.length) return best(d); }
+  const n = norm(hass.states[entity]?.attributes?.friendly_name ?? entity.replace(/^media_player\./, ''));
+  return n ? best(ma.filter((id) => norm(hass.states[id].attributes?.friendly_name ?? id.replace(/^media_player\./, '')) === n)) : undefined;
+}
 /** config/players/get → a group's configured members and dynamic_members flag (values.<key>.value); undefined when unreadable */
 export interface GroupConfig { members: string[]; dynamic?: boolean }
 export function parseGroupConfig(raw: unknown): GroupConfig | undefined {
@@ -159,11 +175,16 @@ export interface Target { entity: string; name: string; members?: string[] }
 /** dynamic-mode targets: config `targets`, else every HA media_player that is an MA group/player with a queue, groups first */
 export function targetsOf(c: JukeboxCardConfig, hass?: HomeAssistant): Target[] {
   const nameOf = (e: string) => hass?.states[e]?.attributes?.friendly_name ?? e.replace(/^media_player\./, '').replace(/_/g, ' ');
+  const base = maEntityOf(c.entity || 'media_player.everywhere', hass) ?? (c.entity || 'media_player.everywhere');
+  const uniq = (l: Target[]) => l.filter((t, i) => l.findIndex((x) => x.entity === t.entity) === i);
+  // a configured target is the MA player behind it (a native entity of the same speaker is mapped); one with no MA player and
+  // no MA queue is not offered. The current target always is.
   if (Array.isArray(c.targets) && c.targets.length)
-    return c.targets.map((t) => { const o: TargetConfig = typeof t === 'string' ? { entity: t } : t; return { entity: o.entity, name: o.name || nameOf(o.entity), members: o.members }; });
+    return uniq(c.targets.map((t) => { const o: TargetConfig = typeof t === 'string' ? { entity: t } : t; return { o, e: maEntityOf(o.entity, hass) }; })
+      .filter((x) => x.e !== undefined || x.o.entity === base)
+      .map(({ o, e }) => ({ entity: e ?? o.entity, name: o.name || nameOf(o.entity), members: o.members })));
   const out = Object.values(hass?.states ?? {}).filter((s) => s.entity_id.startsWith('media_player.') && s.attributes?.mass_player_type === 'group')
     .map((s) => ({ entity: s.entity_id, name: nameOf(s.entity_id) }));
-  const base = c.entity || 'media_player.everywhere';
   if (!out.some((t) => t.entity === base)) out.unshift({ entity: base, name: nameOf(base) });
   return out;
 }

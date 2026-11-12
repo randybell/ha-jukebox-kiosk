@@ -52,7 +52,7 @@ const sel = (options: Array<{ value: string; label: string }>) => ({ select: { o
 export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
   const choose = c.speaker_mode === 'dynamic';
   return [
-    { name: 'entity', selector: { entity: { domain: 'media_player' } } },
+    { name: 'entity', selector: { entity: { domain: 'media_player', integration: 'music_assistant' } } },
     { name: 'rooms', selector: { entity: { domain: 'media_player', multiple: true } } },
     {
       type: 'expandable', name: 'display', title: 'Display', icon: 'mdi:monitor', flatten: true, expanded: true,
@@ -78,7 +78,7 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
           { value: 'fixed', label: 'Volume only: always play on the chosen player' },
           { value: 'dynamic', label: 'Choose speakers: pick, group and drop speakers from the card' }]) },
         ...(choose ? [
-          { name: 'targets', selector: { entity: { domain: 'media_player', multiple: true } } },
+          { name: 'targets', selector: { entity: { domain: 'media_player', integration: 'music_assistant', multiple: true } } },
           { name: 'grouping', selector: sel([{ value: 'admins', label: 'Admins' }, { value: 'everyone', label: 'Everyone' }, { value: 'nobody', label: 'Nobody' }]) },
           { name: 'grouping_users', selector: { text: {} } },
           { name: 'guest_access', selector: sel([{ value: 'volume', label: 'Can change the volume and mute' }, { value: 'none', label: 'Can only look' }]) },
