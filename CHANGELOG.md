@@ -4,6 +4,14 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.8.2 — 2026-11-11
+
+- The letters on the on-screen keyboard are bigger, in the Library, in Search and when you search the Queue. The keys keep their size, and on large landscape screens the letters grow a little more with the screen.
+- The words on the bottom row of the keyboard (123, Space and Clear) are bigger too. The 123 and backspace keys are a bit wider, and Space and Clear are a bit narrower to make room.
+- On an artist page, the "Filter by <artist>" button now stays in its place while that filter is on. It then reads "Clear filter by <artist>" with an X. A tap clears only the artist filter: the page stays open and any text you typed in the filter stays.
+- Searching inside an artist (the "Search in <artist>" button) uses the same wording. While the search is limited to that artist, its page shows "Clear filter by <artist>", and a tap clears only the artist. Other artist pages still show "Search in <artist>".
+- In portrait, the track on the screensaver is bigger (title and artist) and the clock is smaller. The date is a little bigger, and a long title may take two lines instead of being cut off. In landscape the screensaver is unchanged.
+
 ## 0.8.1 — 2026-11-11
 
 - Now Playing no longer has the blurred album-art background by default. It is now a plain card in your Home Assistant theme colors, like Library and Queue, and the cover still shows in its own square. To get the album-art background back, set Background to "Automatic", "Full" or "Light" in the card editor, or set `backdrop: auto`, `backdrop: full` or `backdrop: light` in YAML. The new default is `backdrop: plain`. The other choices (`auto`, `full`, `light`, `static` and `off`) still work when you pick them.

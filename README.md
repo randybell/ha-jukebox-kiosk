@@ -15,17 +15,17 @@ The card's element is still `custom:jukebox-card`, so existing dashboards keep w
 
 > Some of these pictures were taken before 0.7.20. Since 0.7.20 the Library lists show as rows by default (not tiles, and artists are no longer round), and the row buttons (Add to queue, Play Next, Play Now, Remove and so on) are hidden by default. The pictures still show tiles and the buttons.
 
-> Since 0.8.0 the card follows your Home Assistant theme, so colors, corners and fonts come from the theme, in light and in dark. Since 0.8.1 Now Playing has no album-art background unless you choose one (see [Backdrop and performance](#backdrop-and-performance)). The Now Playing, Library, Library typing, Library artists, Queue, Queue pop-up, Speakers and Now Playing background pictures below were retaken for 0.8.1, once with a light theme and once with a dark theme, using Home Assistant's default theme and font (Roboto). They show the Tiles setting, and the Queue shows its row buttons turned on. The Screensaver pictures are from 0.8.0; the screensaver has not changed. The pictures of the sources row, of Spotify only, of the track rows, of Radio and of the favorites heart were taken before 0.8.0 and still show the old look: a fixed black background, white buttons and the old fonts.
+> Since 0.8.0 the card follows your Home Assistant theme, so colors, corners and fonts come from the theme, in light and in dark. Since 0.8.1 Now Playing has no album-art background unless you choose one (see [Backdrop and performance](#backdrop-and-performance)). The Now Playing, Library, Library typing, Library artists, Queue, Queue pop-up, Speakers and Now Playing background pictures below were retaken for 0.8.1, once with a light theme and once with a dark theme, using Home Assistant's default theme and font (Roboto). They show the Tiles setting, and the Queue shows its row buttons turned on. The Library, Library typing, Library artists and Library artist page pictures were retaken for 0.8.2 (bigger keyboard letters, the Clear filter button). The Screensaver pictures are from 0.8.0 and show landscape, which has not changed; in portrait the screensaver now has a bigger track and a smaller clock. The pictures of the sources row, of Spotify only, of the track rows, of Radio and of the favorites heart were taken before 0.8.0 and still show the old look: a fixed black background, white buttons and the old fonts.
 
 **One Library tab, keyboard always open.** The on-screen keyboard stays open on every screen size. Below the search box is an **All sources** button. Tap it and a row opens under the box: All, Library, then each music service set up in Music Assistant. You can turn on more than one. The button names the ones you picked and gets Home Assistant's soft selected highlight while any is on. Tap it again to close the row. Big buttons pick Playlists, Artists, Tracks or Radio, and the one you are in has the soft selected highlight. On the library list, a heart sits at the end of that row. There is no Keyboard pill and no hide handle. An empty box lists your library; typing searches that category, library first.
 
 | Library, light theme | Library, dark theme |
 |---|---|
-| ![Library, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-light-081-1024x712.png) | ![Library, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-dark-081-1024x712.png) |
+| ![Library, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-light-082-1024x712.png) | ![Library, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-dark-082-1024x712.png) |
 
 | Library, typing, light theme | Library, typing, dark theme |
 |---|---|
-| ![Library, typing, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-light-081-1024x712.png) | ![Library, typing, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-dark-081-1024x712.png) |
+| ![Library, typing, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-light-082-1024x712.png) | ![Library, typing, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-dark-082-1024x712.png) |
 
 Before 0.8.0 (old look):
 
@@ -307,12 +307,16 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 - **Empty box, All or Library alone:** the library list of the selected category. Genres lists `music/genres/library_items` (the older separate-tabs Library layout only; there is no Genres button on the combined tab). Since 0.7.12 there is no genre page, so tapping a genre in that old-layout list opens nothing.
 - **Typed text:** results for the selected category and source only. With **All**, library matches come first ("In your library"), then provider results ("From your providers"); **Library** shows library matches only; providers send one `music/search` with all of them in `providers`; **Library** plus providers shows library matches first, then those providers.
 - **Provider with an empty box:** one provider shows its folders (`music/browse <provider>://`, admins) or an inline hint "Type to search <provider>"; several providers show the inline hint ("Type to search Apple Music + TuneIn") — never a popup.
-- **Filters.** "Search in <artist / album>" adds the artist/album chip and **Clear filters** next to the box. Clear filters also empties the box and puts the source back to All. If the All sources row is open, it stays open. The screensaver, with `idle_clear_filters` on (the default), clears the same things and also closes that row.
+- **Filters.** "Search in <artist / album>" adds the artist/album chip and **Clear filters** next to the box. While an artist filter is on, that artist's page shows **Clear filter by <artist>** with an X in place of **Search in <artist>** (or **Filter by <artist>**), and a tap clears only the artist filter: the page stays open and any typed text stays. Clear filters also empties the box and puts the source back to All. If the All sources row is open, it stays open. The screensaver, with `idle_clear_filters` on (the default), clears the same things and also closes that row.
 - **Old configs.** `default_tab: search`, a saved Search tab or any "search" shortcut opens the Library tab with the keyboard up. `library_home: true` from 0.7.1 is ignored (no tiles). `library_layout: separate` brings back the 0.7.1 Library + Search tabs (tile home with `library_home: true`, the 0.7.1 chip row). On that Search tab the source buttons stay in a row under the box.
 
 | Library artists, light theme | Library artists, dark theme |
 |---|---|
-| ![Library artists, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-light-081-1024x712.png) | ![Library artists, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-dark-081-1024x712.png) |
+| ![Library artists, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-light-082-1024x712.png) | ![Library artists, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-dark-082-1024x712.png) |
+
+| Artist page with its filter on, light theme | Artist page with its filter on, dark theme |
+|---|---|
+| ![Artist page, Clear filter by Abba, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artist-clear-light-082-1024x712.png) | ![Artist page, Clear filter by Abba, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artist-clear-dark-082-1024x712.png) |
 
 Before 0.8.0 (old look), Library track rows:
 
@@ -364,6 +368,7 @@ Before 0.8.0 (old look), Library track rows:
 
 - **Start.** After `screensaver_minutes` with no touches or keys, a full-screen overlay appears: the current art with a slow Ken Burns zoom, and a big clock, date and the current track, all drifting slowly (240 s loop) to avoid burn-in.
 - **Reduced motion.** No zoom and no drift; the clock block jumps to a new spot every 60 s instead.
+- **Portrait.** Since 0.8.2, in portrait the track (title and artist) is bigger and the clock is smaller, so what is playing leads; the date is a little bigger and a long title may take two lines. Landscape is unchanged.
 - **Wake.** A tap wakes it. The tap is swallowed, so it never presses whatever is underneath, and the overlay fades out over 350 ms.
 
 ### How search behaves
@@ -407,7 +412,7 @@ Before 0.8.0 (old look), Library track rows:
 
   Ctrl, Alt and Meta shortcuts are ignored. Queue search takes the same keys since 0.7.13 (see [Queue](#queue)).
 - **On-screen keyboard:**
-  - 7 columns when narrow, 10 with a number row when wide.
+  - 7 columns when narrow, 10 with a number row when wide. Since 0.8.2 the letters are one step bigger (and grow a little more on large landscape screens), and so are the words on the bottom row. `123` / `#+=` and backspace are a bit wider than before, Space is the widest key, and Space and Clear are a bit narrower to make room.
   - `123` / `#+=` switches to symbols.
   - Holding backspace clears the query.
   - Keys fire on release (pointerup), so a touch that slides off a key does not type.
@@ -448,7 +453,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `limit` | `8` (1–50) | Search results per type. 1-character queries always use 5 |
 | `default_tab` | `now` | `now`, `browse`, `search` (separate layout only) or `queue`. An unknown tab is ignored and Now Playing opens |
 | `library_only` | `false` | Search only the MA library |
-| `search_filters` | `true` | v0.7 filters. An artist page in Search offers **Search in JJ Grey** (an album page: **Search in** that album); the next searches stay inside it, shown as a removable chip (`Artist: JJ Grey ✕`) with **Clear filters**. Library gets a **Filter** button (type to narrow the list) and **Filter by** on artist pages (that artist's albums / tracks). `false` hides all of it |
+| `search_filters` | `true` | v0.7 filters. An artist page in Search offers **Search in JJ Grey** (an album page: **Search in** that album); the next searches stay inside it, shown as a removable chip (`Artist: JJ Grey ✕`) with **Clear filters**. Library gets a **Filter** button (type to narrow the list) and **Filter by** on artist pages (that artist's albums / tracks). While that filter is on, the button reads **Clear filter by <artist>** and clears only the artist filter, in Library and in Search. `false` hides all of it |
 | `idle_clear_filters` | `true` | When the screensaver comes on (`screensaver_minutes`), the Search scope chips (`Artist: … ✕`) and the Library filters are cleared, so the next person starts from everything. `false` keeps them until ✕ / Clear filters |
 | `library_first` | `true` | Search lists your library matches first ("In your library"), then provider results ("From your providers") with copies of library items removed. Applies to scoped searches too. `false` keeps Music Assistant's order |
 | `slow_ms` | `800` | Search replies slower than this switch on in-flight limiting |
