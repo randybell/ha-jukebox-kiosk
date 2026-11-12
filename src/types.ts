@@ -167,8 +167,6 @@ export interface JukeboxCardConfig {
   confirm_drop?: boolean;
   /** 0.6.5: a player that reports repeat 'one' is shown as 'all' and gets one repeat_set 'all' (needs Playback). Default true. */
   coerce_repeat_one?: boolean;
-  /** Bigger touch targets and text. Default false. */
-  large_buttons?: boolean;
   /** 0.7.14 (#80): false hides the row action buttons (Add to queue, Play Next, Play Now, Remove, Start radio, More, the Queue row buttons) on every list row. 0.7.20: the default is now false (off) and the card setup screen no longer shows the switch; `true` in YAML still shows them. Taps and holds still open the pop-ups. */
   show_action_icons?: boolean;
   /** @internal the Music Assistant config entry the card uses (what the integration reports, else an admin lookup) */

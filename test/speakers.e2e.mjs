@@ -26,8 +26,10 @@ const row = (e) => `${SR}.querySelector('[data-room="${e}"]')`;
 const act = (e) => `${row(e)}?.querySelector('.act')`;
 const FAST = { call: 2500, join: 2500, move: 3000, poll: 250, fast: 120 };
 
+let onNewPage = null; // a test can listen to a page's console from the first byte
 async function open(query = '', vp = { width: 1280, height: 800 }, timeouts = FAST, undoMs = 8000) {
   const page = await browser.newPage();
+  onNewPage?.(page);
   await hermetic(page);
   await page.setViewport({ deviceScaleFactor: 1, ...vp });
   await page.evaluateOnNewDocument((t, u) => { window.__jbSpeakerTimeouts = t; window.__jbUndoMs = u; }, timeouts, undoMs);
@@ -193,7 +195,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   // group-config read (config/players/get) are not counted here
   const page_ma = (p) => p.evaluate(() => window.__maLog.map((x) => x.command).filter((c) => c !== 'player_queues/get' && c !== 'config/players/get'));
   const a = await seq(null);
-  const b = await seq({ speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', large_buttons: false });
+  const b = await seq({ speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow' });
   check('R1 default config = fixed mode: no Music Assistant players/* calls at all (not even players/all)', a.m.length === 0, J(a.m));
   const writes = (c) => c.filter((x) => !/^get_/.test(x.service));
   check('R2 default config makes the same (write) calls as an explicit fixed config', J(writes(a.c)) === J(writes(b.c)) && writes(a.c).length >= 3, J(writes(a.c).map((x) => x.service)) + ' vs ' + J(writes(b.c).map((x) => x.service)));
@@ -502,18 +504,25 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await p4.close();
 }
 
-// ───────────── large buttons, phone, short card ─────────────
+// ───────────── 0.8.3 #97: "Large buttons" is gone; a saved large_buttons is ignored; phone, short card ─────────────
 {
   const sizes = async (p) => ev(p, `(() => { const n = ${NOW}.shadowRoot; const pp = n.querySelector('.pp').getBoundingClientRect(); const tab = __card.shadowRoot.querySelector('.tab')?.getBoundingClientRect(); return { pp: Math.round(pp.height), tab: Math.round(tab?.height ?? 0), lg: __card.shadowRoot.querySelector('ha-card').classList.contains('lg'), large: n.host.hasAttribute('large') }; })()`);
+  // console warnings/errors per page (the dev mock itself logs a Music Assistant lookup warning on every dynamic-panel page, so the pages with a saved large_buttons must log nothing the plain page does not)
+  const logs = [];
+  onNewPage = (pg) => { const mine = []; logs.push(mine); pg.on('pageerror', (e) => mine.push('pageerror: ' + e.message)); pg.on('console', (m) => { if (['warning', 'warn', 'error'].includes(m.type())) mine.push(m.type() + ': ' + m.text()); }); };
   const a = await open('&spk=dyn&admin=1');
   const b = await open(`&spk=dyn&admin=1&cfg=${encodeURIComponent(J({ large_buttons: true }))}`);
-  const sa = await sizes(a), sb = await sizes(b);
-  check('B1 large_buttons: card gets .lg and children [large]', sb.lg && sb.large && !sa.lg && !sa.large, J({ sa, sb }));
-  check('B2 large_buttons: bigger play button and tabs', sb.pp > sa.pp && sb.tab >= sa.tab, J({ sa, sb }));
+  const b2 = await open(`&spk=dyn&admin=1&cfg=${encodeURIComponent(J({ large_buttons: 'yes please' }))}`);
+  onNewPage = null;
+  const sa = await sizes(a), sb = await sizes(b), sb2 = await sizes(b2);
+  check('B1 a saved large_buttons: true (or any value) is ignored: no .lg class, no [large] attribute', !sb.lg && !sb.large && !sb2.lg && !sb2.large, J({ sa, sb, sb2 }));
+  check('B2 a saved large_buttons: true gives the same play button and tab sizes as no setting', sb.pp === sa.pp && sb.tab === sa.tab && sb2.pp === sa.pp && sb2.tab === sa.tab, J({ sa, sb, sb2 }));
   await openPanel(a); await waitLoaded(a); await openPanel(b); await waitLoaded(b);
   const ha = await rectOf(a, `${SR}.querySelector('[data-target]')`), hb = await rectOf(b, `${SR}.querySelector('[data-target]')`);
-  check('B3 large_buttons: bigger panel chips', hb.h > ha.h && hb.h >= 52, `${ha.h} → ${hb.h}`);
-  await a.close(); await b.close();
+  check('B3 a saved large_buttons: true gives the same panel chip height as no setting', hb.h === ha.h, `${ha.h} → ${hb.h}`);
+  const extra = logs.slice(1).flat().filter((m) => !logs[0].includes(m));
+  check('B3b a saved large_buttons: no errors and no console warnings beyond what the plain page logs', extra.length === 0 && !logs.flat().some((m) => /large|setConfig|must be true or false/i.test(m)), J({ base: logs[0], extra }));
+  await a.close(); await b.close(); await b2.close();
   const c = await open('&spk=dyn&admin=1', { width: 390, height: 844, isMobile: true, hasTouch: true });
   const pr = await rectOf(c, `__card.shadowRoot.querySelector('.pill')`);
   check('B4 phone: header status is an icon button ≥ 44 px', pr && pr.w >= 44 && pr.h >= 44, J(pr));
@@ -847,7 +856,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await p.close();
 }
 
-// ---------- E. editor: Speakers section + large_buttons ----------
+// ---------- E. editor: Speakers section ----------
 {
   const pg = await browser.newPage();
   await hermetic(pg);
@@ -858,7 +867,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   const F = `__editor.shadowRoot.querySelector('ha-form')`;
   const names = await ev(pg, `[...${F}.querySelectorAll('details[data-section=speakers] [data-name]')].map((e) => e.dataset.name)`);
   check('E1 editor: Speakers section in "Volume only" mode shows just the Speakers panel choice', J(names) === J(['speaker_mode']), J(names));
-  check('E2 editor: large_buttons under Display', await ev(pg, `!!${F}.querySelector('details[data-section=display] [data-name=large_buttons]')`));
+  check('E2 editor: no large_buttons switch (removed in 0.8.3)', !(await ev(pg, `!!${F}.querySelector('[data-name=large_buttons]')`)));
   const ch0 = await ev(pg, `window.__changes.length`);
   check('E3 a 0.4 config opens without the editor writing speaker keys', ch0 === 0 || !(await ev(pg, `JSON.stringify(window.__changes.at(-1))`)).includes('speaker_mode'), String(ch0));
   await ev(pg, `(() => { const s = ${F}.querySelector('[data-name=speaker_mode] select'); s.value = 'dynamic'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
@@ -1293,15 +1302,15 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
   await p.close();
 }
 
-// 0.7.8 #50: the labeled Close button at tablet, phone and large-buttons sizes: visible, fits, closes the panel
-for (const [vp, lg] of [[{ width: 1024, height: 600 }, false], [{ width: 820, height: 1180, isMobile: true, hasTouch: true }, false], [{ width: 390, height: 844, isMobile: true, hasTouch: true }, false], [{ width: 390, height: 844, isMobile: true, hasTouch: true }, true]]) {
-  const tag = `${vp.width}x${vp.height}${lg ? ' large_buttons' : ''}`;
-  const p = await open(`&spk=dyn&admin=1${lg ? '&cfg=' + encodeURIComponent(J({ large_buttons: true })) : ''}`, vp);
+// 0.7.8 #50: the labeled Close button at tablet and phone sizes: visible, fits, closes the panel
+for (const vp of [{ width: 1024, height: 600 }, { width: 820, height: 1180, isMobile: true, hasTouch: true }, { width: 390, height: 844, isMobile: true, hasTouch: true }]) {
+  const tag = `${vp.width}x${vp.height}`;
+  const p = await open('&spk=dyn&admin=1', vp);
   await openPanel(p);
   const g = await ev(p, `(() => { const R = ${SR}, b = R.querySelector('.sheet .x'), r = b.getBoundingClientRect(), s = R.querySelector('.sheet').getBoundingClientRect(), h = R.querySelector('.sh');
     const hit = R.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
     return { text: b.textContent.trim(), w: r.width, h: r.height, inSheet: r.left >= s.left - 0.5 && r.right <= s.right + 0.5 && r.top >= s.top - 0.5, inView: r.right <= innerWidth && r.top >= 0, hdFits: h.scrollWidth <= h.clientWidth + 1, onTop: hit === b || b.contains(hit) }; })()`);
-  check(`CL1 ${tag}: Close button visible, labeled, ≥ ${lg ? 56 : 44}px tall, inside the panel header, nothing overflows`, g.text === 'Close' && g.h >= (lg ? 56 : 44) && g.w >= 44 && g.inSheet && g.inView && g.hdFits && g.onTop, J(g));
+  check(`CL1 ${tag}: Close button visible, labeled, ≥ 44px tall, inside the panel header, nothing overflows`, g.text === 'Close' && g.h >= 44 && g.w >= 44 && g.inSheet && g.inView && g.hdFits && g.onTop, J(g));
   await tap(p, `${SR}.querySelector('.sheet .x')`); await sleep(350);
   check(`CL2 ${tag}: Close closes the Speakers panel`, !(await ev(p, `${SPK}.open`)) && !(await ev(p, `!!${SR}.querySelector('section.sheet')`)));
   await p.close();

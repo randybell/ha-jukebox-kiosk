@@ -35,7 +35,7 @@ const NOW = `${C}.querySelector('jb-now').shadowRoot`, QV = `${C}.querySelector(
 const ST = `${C}.querySelector('jb-station').shadowRoot`, BRW = `${C}.querySelector('jb-browse')`;
 const esc = async (p) => { await p.keyboard.press('Escape'); await sleep(250); };
 const media = (p, n) => p.evaluate((n) => __calls.slice(n).filter((c) => /^media_|play_media|play_queue/.test(c.service)).map((c) => c.service), n);
-// a labeled Close pill: text "Close", no icon, theme primary, at least 48 px (60 with large buttons)
+// a labeled Close pill: text "Close", no icon, theme primary, at least 48 px
 const pill = (p, expr) => ev(p, `(() => { const b = ${expr}; if (!b) return null; const r = b.getBoundingClientRect(), cs = getComputedStyle(b);
   const probe = document.createElement('span');
   probe.style.backgroundColor = 'var(--primary-color, #03a9f4)';
@@ -45,8 +45,8 @@ const pill = (p, expr) => ev(p, `(() => { const b = ${expr}; if (!b) return null
   return { text: b.textContent.trim(), svg: b.querySelectorAll('svg').length, h: Math.round(r.height), w: Math.round(r.width), bg: cs.backgroundColor, primary }; })()`);
 const isPill = (x, h = 48) => !!x && x.text === 'Close' && x.svg === 0 && x.h >= h && x.w >= 88 && x.bg === x.primary && x.bg !== 'rgba(0, 0, 0, 0)';
 
-for (const large of [false, true]) {
-  const L = large ? ' (large buttons)' : '', H = large ? 60 : 48, cfg = large ? { large_buttons: true } : {};
+{
+  const L = '', H = 48, cfg = {};
   // ---- radio station sheet ----
   const p = await open('&tab=browse&lhome=0', cfg);
   const openSt = () => ev(p, `(() => { const it = { uri: 'library://radio/1', name: 'Test FM', media_type: 'radio' }; ${BRW}.dispatchEvent(new CustomEvent('jukebox-station', { detail: { item: it }, bubbles: true, composed: true })); })()`);
@@ -84,7 +84,7 @@ for (const large of [false, true]) {
   check(`X11 Speakers panel closes with Esc (new)${L}`, !(await ev(s, `${C}.querySelector('jb-speakers').open`)));
   await ev(s, `${C}.querySelector('jb-speakers').fail("Couldn't change the speakers")`); await sleep(200);
   const cx = await ev(s, `(() => { const b = ${SP}.querySelector('.st [data-action="cancel"]'); return b && { text: b.textContent.trim(), svg: b.querySelectorAll('svg').length, h: Math.round(b.getBoundingClientRect().height) }; })()`);
-  check(`X12 Speakers status chip: labeled "Close" (was an X "Dismiss")${L}`, cx?.text === 'Close' && cx.svg === 0 && cx.h >= (large ? 42 : 34), J(cx));
+  check(`X12 Speakers status chip: labeled "Close" (was an X "Dismiss")${L}`, cx?.text === 'Close' && cx.svg === 0 && cx.h >= 34, J(cx));
   await tap(s, `${SP}.querySelector('.st [data-action="cancel"]')`); await sleep(250);
   check(`X13 the chip closes with Close${L}`, !(await ev(s, `!!${SP}.querySelector('.st')`)));
   await ev(s, `${C}.querySelector('jb-speakers').fail("Couldn't change the speakers")`); await sleep(200); await esc(s);

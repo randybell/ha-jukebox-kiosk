@@ -59,7 +59,6 @@ function validateSpeakers(c: JukeboxCardConfig) {
   oneOf('leader_drop', ['block', 'allow']);
   if (!bool(c.confirm_drop)) throw new Error('jukebox-card: confirm_drop must be true or false.');
   if (!bool(c.coerce_repeat_one)) throw new Error('jukebox-card: coerce_repeat_one must be true or false.');
-  if (!bool(c.large_buttons)) throw new Error('jukebox-card: large_buttons must be true or false.');
   if (!bool(c.show_action_icons)) throw new Error('jukebox-card: show_action_icons must be true or false.');
   if (c.grouping_users !== undefined && (!Array.isArray(c.grouping_users) || !c.grouping_users.every((u) => typeof u === 'string')))
     throw new Error('jukebox-card: grouping_users must be a list of user names or ids.');
@@ -812,7 +811,7 @@ export class JukeboxCard extends LitElement {
     const view = (id: TabId, child: unknown) => html`<div class="view" data-view=${id} ?hidden=${this._tab !== id}>${child}</div>`;
     const c = this._config, h = this.hass, q = this.queue, tabs = this.tabs();
     return html`
-      <ha-card class="app bd-${bd} ${bd === 'full' ? '' : 'solid'} ${prefersReducedMotion() ? 'rm' : ''} ${c.large_buttons ? 'lg' : ''}" style="${c.height ? `--_height:${c.height};` : ''}${c.show_action_icons !== true ? '--_ra-display:none;' : ''}">
+      <ha-card class="app bd-${bd} ${bd === 'full' ? '' : 'solid'} ${prefersReducedMotion() ? 'rm' : ''}" style="${c.height ? `--_height:${c.height};` : ''}${c.show_action_icons !== true ? '--_ra-display:none;' : ''}">
         <header class="top">
           <div class="brand">${icon('disc', 'i brand-i')}<span>${c.title ?? 'Jukebox'}</span></div>
           <button class="pill" title=${c.entity!} tabindex="-1" aria-label="${pre} ${name}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk ? 'true' : 'false'}
@@ -827,17 +826,17 @@ export class JukeboxCard extends LitElement {
         </header>
         <main class="np ${pic && (bd === 'full' || bd === 'light') ? 'has-art' : ''} ${this._tab === 'now' ? 'on-now' : ''}" style=${artStyle}>
           ${bd === 'light' ? html`<canvas class="bdl" width="64" height="40" aria-hidden="true"></canvas>` : nothing}
-          ${view('now', html`<jb-now ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
+          ${view('now', html`<jb-now .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
           ${combinedOn(c)
-            ? view('browse', html`<jb-search combined ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-search>`)
-            : html`${view('browse', html`<jb-browse ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-browse>`)}
-          ${view('search', html`<jb-search ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'search'}></jb-search>`)}`}
-          ${view('queue', html`<jb-queue ?large=${!!c.large_buttons} .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'queue'}></jb-queue>`)}
+            ? view('browse', html`<jb-search combined .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-search>`)
+            : html`${view('browse', html`<jb-browse .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-browse>`)}
+          ${view('search', html`<jb-search .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'search'}></jb-search>`)}`}
+          ${view('queue', html`<jb-queue .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'queue'}></jb-queue>`)}
           <!-- inside the middle: the fitted header and tab bar stay visible and tappable while the panel is open -->
-          <jb-station-confirm ?large=${!!c.large_buttons} .state=${this._stAsk ? { kind: 'station', item: this._stAsk.item, run: () => this.stAnswer(true) } : null}
+          <jb-station-confirm .state=${this._stAsk ? { kind: 'station', item: this._stAsk.item, run: () => this.stAnswer(true) } : null}
             .cancel=${() => this.stAnswer(false)}></jb-station-confirm>
-          <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null} ?large=${!!c.large_buttons}></jb-station>
-          <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver} ?large=${!!c.large_buttons}></jb-speakers>
+          <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null}></jb-station>
+          <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver}></jb-speakers>
         </main>
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
           ${tabs.map((t) => html`<button class="tab ${this._tab === t.id ? 'active' : ''}" role="tab" tabindex=${this._tab === t.id ? '0' : '-1'} data-tab=${t.id}
@@ -876,7 +875,6 @@ export class JukeboxCard extends LitElement {
     .pill .pc { width: 14px; height: 14px; opacity: .7; margin-left: -2px; }
     .lost { margin-left: 10px; font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: var(--_chip-sel); }
-    .lg .pill { min-height: 52px; font-size: var(--ha-font-size-l, 16px); padding: 0 18px; }
     .spacer { flex: 1; }
     .clock { white-space: nowrap; font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
     .np { container: np / size; min-height: 0; position: relative; overflow: hidden; background: transparent; }
@@ -1012,21 +1010,18 @@ export class JukeboxCard extends LitElement {
     .tab.active, .tab.active:hover, .tab.active:active { background: color-mix(in srgb, var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)) calc(var(--dark-divider-opacity, 0.12) * 100%), transparent); color: var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)); }
     .tab:focus-visible { outline: 2px solid var(--_active); outline-offset: 3px; }
     .tab .badge { top: 4px; left: calc(50% + 6px); }
-    .lg .tab { min-height: 80px; font-size: var(--ha-font-size-l, 16px); } .lg .tab .i { width: 34px; height: 34px; }
     /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole.
        0.7.12 fluid: gate and breakpoints follow the card's jbapp width, not the window. */
     @container jbapp (min-width: 641px) {
       @container jbapp (max-width: 600px) { .pill b, .brand span { display: none; } .top { gap: 10px; } }
-      @container jbapp (max-width: 430px) { .lg .pill { padding: 0 12px; font-size: var(--ha-font-size-m, 14px); } .lg .tab { font-size: var(--ha-font-size-m, 14px); } .lg .clock { font-size: var(--ha-font-size-l, 16px); } }
     }
     @container jbapp (max-width: 960px) { .pill b { display: none; } }
     @container jbapp (max-width: 800px) { .pill .pl { display: none; } }
     @container jbapp (max-width: 640px) {
-      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .lg .pill { width: 56px; min-height: 56px; } .clock { font-size: var(--ha-font-size-l, 16px); } .top { min-height: 52px; padding-top: 10px; padding-bottom: 10px; }
+      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .clock { font-size: var(--ha-font-size-l, 16px); } .top { min-height: 52px; padding-top: 10px; padding-bottom: 10px; }
       .tabs { gap: 2px; padding-left: calc(var(--_pad) + 3px); padding-right: calc(var(--_pad) + 3px); }
       .tab { font-size: var(--ha-font-size-s, 12px); letter-spacing: 0; } .tab .i { width: 26px; height: 26px; }
       .tab span { white-space: normal; text-align: center; line-height: var(--ha-line-height-condensed, 1.2); }
-      .lg .tab { min-height: 68px; font-size: var(--ha-font-size-m, 14px); } .lg .tab .i { width: 30px; height: 30px; }
     }
     /* short panels (fitted height < 700 / < 560 px): tighter header and tab bar so the middle keeps the room */
     :host([data-fit]) .top { min-height: 50px; padding-top: 7px; padding-bottom: 7px; }
@@ -1036,7 +1031,6 @@ export class JukeboxCard extends LitElement {
     :host([data-fit]) .tabs::before { top: 4px; bottom: calc(5px + env(safe-area-inset-bottom)); border-radius: 15px; }
     :host([data-fit]) .tab { min-height: 50px; padding: 3px; gap: 3px; font-size: var(--ha-font-size-m, 14px); border-radius: 12px; } :host([data-fit]) .tab .i { width: 24px; height: 24px; }
     :host([data-fit]) .tab + .tab::before { left: -2px; }
-    :host([data-fit]) .lg .tab { min-height: 60px; font-size: var(--ha-font-size-m, 14px); } :host([data-fit]) .lg .tab .i { width: 28px; height: 28px; }
     :host([data-fit=tiny]) .top { min-height: 44px; padding-top: 5px; padding-bottom: 5px; }
     /* tiny (< 560 px): one row, icon + small label side by side (icons only on narrow screens) */
     :host([data-fit=tiny]) .tabs { padding: 6px calc(var(--_pad) + 3px) calc(6px + env(safe-area-inset-bottom)); }
@@ -1044,7 +1038,6 @@ export class JukeboxCard extends LitElement {
     :host([data-fit=tiny]) .tab { flex-direction: row; gap: 8px; min-height: 44px; font-size: var(--ha-font-size-m, 14px); border-radius: 11px; }
     :host([data-fit=tiny]) .tab .i { width: 22px; height: 22px; }
     :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 5px; font-size: var(--ha-font-size-xs, 10px); flex: none; }
-    :host([data-fit=tiny]) .lg .tab { min-height: 52px; font-size: var(--ha-font-size-m, 14px); } :host([data-fit=tiny]) .lg .tab .i { width: 26px; height: 26px; }
     @container jbapp (max-width: 640px) { :host([data-fit=tiny]) .tab span { display: none; } }
   `];
 }

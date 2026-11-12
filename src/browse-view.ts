@@ -960,7 +960,6 @@ export class JbBrowse extends LitElement {
     .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--_surface-solid); color: var(--_muted); }
     .tw .tfav.on { color: var(--_active); }
     .tw .tfav .i { width: 20px; height: 20px; }
-    :host([large]) .tw .tfav { width: 42px; height: 42px; } :host([large]) .tw .tfav .i { width: 24px; height: 24px; }
     .mo.fav.on { color: var(--_active); }
     .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto auto; }
     .row .ra { flex: none; } .row .ra-b { flex-shrink: 0; }

@@ -16,14 +16,13 @@ import { FavController } from './heart';
 export class JbStation extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, item: { attribute: false },
-    large: { type: Boolean, reflect: true }, open: { type: Boolean, reflect: true },
+    open: { type: Boolean, reflect: true },
     _detail: { state: true }, _busy: { state: true }, _toast: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
   /** the station to show; null closes the sheet */
   item: MaItem | null = null;
-  large = false;
   open = false;
   private _detail: MaItem | null = null;
   private _busy = false;
@@ -129,7 +128,6 @@ export class JbStation extends LitElement {
       background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; box-shadow: var(--_dialog-shadow); }
     .x { position: absolute; top: 12px; right: 12px; z-index: 1; } /* #51: the labeled Close pill (was an X) */
     .top { display: flex; gap: 16px; align-items: flex-start; padding-right: 104px; }
-    :host([large]) .top { padding-right: 120px; }
     .ar.logo { width: 96px; height: 96px; flex: none; border-radius: 14px; overflow: hidden; display: block; }
     .ar.logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .tt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -148,7 +146,6 @@ export class JbStation extends LitElement {
     .fav .i { width: 28px; height: 28px; } .fav.on { color: var(--_active); border-color: currentColor; } .fav:disabled { opacity: .6; }
     .note { margin: -6px 0 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; }
     .toast.solo { z-index: 3; bottom: 96px; pointer-events: auto; }
-    :host([large]) .play, :host([large]) .fav { height: 68px; } :host([large]) .fav { width: 68px; }
     /* tablet / desktop: a centred dialog */
     @container st (min-width: 700px) {
       .sheet { left: 50%; top: 50%; bottom: auto; transform: translate(-50%, -50%); width: min(560px, 90cqw); border-radius: var(--_dialog-radius); padding: 26px 26px 20px; }

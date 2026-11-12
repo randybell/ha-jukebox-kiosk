@@ -382,7 +382,6 @@ export const mediaStyles = css`
   .cls { height: 48px; min-width: 88px; padding: 0 20px; display: grid; place-items: center; border-radius: 999px; flex: none;
     background: var(--_active); color: var(--_on-accent); font: inherit; font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; }
   .cls:active { transform: scale(.96); background: var(--_chip-sel); }
-  :host([large]) .cls { height: 60px; min-width: 104px; padding: 0 24px; font-size: var(--ha-font-size-l, 16px); }
   /* no picture: media-control's no-image look, a flat --primary-color block */
   .ar { position: relative; display: block; flex: none; overflow: hidden; background: var(--primary-color, #03a9f4); box-shadow: 0 0 0 1px var(--_hairline); }
   .ar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -487,13 +486,6 @@ export const mediaStyles = css`
   .eyebrow { font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; }
   .empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; color: var(--_muted); font-size: var(--ha-font-size-m, 14px); padding: 24px; }
   .empty b { color: var(--_fg); font-family: var(--_font-display); font-size: var(--ha-font-size-l, 16px); }
-  /* large_buttons: the card sets the large attribute on every view */
-  :host([large]) .row { min-height: 72px; }
-  :host([large]) .rt b { font-size: var(--ha-font-size-l, 16px); } :host([large]) .rt small { font-size: var(--ha-font-size-m, 14px); }
-  :host([large]) .ra-b { width: 52px; height: 52px; } :host([large]) .ra-b .i { width: 28px; height: 28px; }
-  :host([large]) .cbtn { height: 60px; font-size: var(--ha-font-size-l, 16px); min-width: 128px; }
-  :host([large]) .mi, :host([large]) .menu.sheet .mi { height: 60px; font-size: var(--ha-font-size-l, 16px); }
-  :host([large]) .toast { font-size: var(--ha-font-size-l, 16px); padding: 14px 20px; }
 `;
 
 /** The Music Assistant config entry for music_assistant.* services: what the card found (integration, else admin lookup). */

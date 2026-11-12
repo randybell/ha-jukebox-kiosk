@@ -9,9 +9,8 @@ import { defineElement } from './define';
  * Play (0.7.11, was Replace) plays the station; Cancel, Esc or a tap outside does nothing (the #51 close rules).
  */
 export class JbStationConfirm extends LitElement {
-  static properties = { state: { attribute: false }, large: { type: Boolean, reflect: true }, open: { type: Boolean, reflect: true } };
+  static properties = { state: { attribute: false }, open: { type: Boolean, reflect: true } };
   state: ConfirmState | null = null;
-  large = false;
   open = false;
   /** the Cancel path (Cancel button, tap outside): set by the card */
   cancel: () => void = () => {};

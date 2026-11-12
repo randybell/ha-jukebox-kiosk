@@ -530,7 +530,6 @@ export class JbNow extends LitElement {
       border: 1px solid var(--_surface-border); transition: background 150ms, color 150ms; }
     .ab .i { width: 24px; height: 24px; }
     .art .sleep-strip { position: absolute; z-index: 2; top: calc(18px + max(40px, calc(48px / var(--_z, 1)))); right: 10px; left: 10px; margin: 0; justify-content: flex-end; }
-    :host([large]) .art .sleep-strip { top: 70px; }
     .art .sleep-strip .sp { background: var(--_surface-solid); border-color: var(--_surface-border); }
     .art .sleep-strip .sp.on { background: var(--_surface-solid); }
     /* on = HA's icon-button 'selected' colour (--primary-color), as the media browser's favourite button */
@@ -659,22 +658,12 @@ export class JbNow extends LitElement {
     .vr.pending .ra { animation: jb-pulse 1s ease-in-out infinite; }
     @keyframes jb-pulse { 50% { opacity: .35; } }
     .vn .else { display: block; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    /* large_buttons */
-    :host([large]) .tb { width: 68px; height: 68px; } :host([large]) .tb .i { width: 34px; height: 34px; }
-    :host([large]) .tb.pp { width: 96px; height: 96px; } :host([large]) .tb.pp .i { width: 44px; height: 44px; }
-    :host([large]) .tb.pr, :host([large]) .tb.nx { width: 84px; height: 84px; } :host([large]) .tb.pr .i, :host([large]) .tb.nx .i { width: 48px; height: 48px; }
-    :host([large]) .vr { min-height: 60px; } :host([large]) .vm { width: 48px; height: 48px; } :host([large]) .vm .i { width: 26px; height: 26px; }
-    :host([large]) .vn { font-size: var(--ha-font-size-l, 16px); } :host([large]) .vs { --_slider-h: 10px; --_slider-knob: 30px; --_slider-hit: 52px; }
-    :host([large]) .ra { width: 48px; height: 48px; } :host([large]) .spkb { height: 48px; font-size: var(--ha-font-size-l, 16px); padding: 0 16px; }
-    :host([large]) .vol.acts .rooms .vr { grid-template-columns: 48px minmax(70px, 28%) minmax(0, 1fr) 34px 48px; }
-    :host([large]) .ab { width: 52px; height: 52px; } :host([large]) .upn { height: 56px; } :host([large]) .upn b { font-size: var(--ha-font-size-l, 16px); }
     .vr.muted .vs { opacity: .45; }
     @container vol (min-width: 600px) {
       .rooms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 20px; padding-top: 8px; }
       .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 30px; grid-template-areas: "m n n" "s s v"; row-gap: 0; min-height: 0; padding-bottom: 4px; }
       .rooms .vm { grid-area: m; } .rooms .vn { grid-area: n; } .rooms .vs { grid-area: s; } .rooms .vv { grid-area: v; }
       .vol.acts .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 34px; grid-template-areas: "m n a" "s s v"; }
-      :host([large]) .vol.acts .rooms .vr { grid-template-columns: 48px minmax(0, 1fr) 48px; }
       .rooms .ra { grid-area: a; }
     }
     @container np (orientation: portrait) and (min-width: 521px) { .nw { align-content: safe center; } }
@@ -717,14 +706,6 @@ export class JbNow extends LitElement {
       /* phone: the sleep choices stay on one row on the artwork (≥ 40px tall) */
       .art .sleep-strip { flex-wrap: nowrap; gap: 4px; }
       .art .sleep-strip .sp { height: 40px; min-width: 40px; padding: 0 9px; flex: none; }
-      /* phone + large_buttons: the row must fit (~362px); Prev/Next < Play/Pause, arrows ~90% of the Pause glyph, taps ≥ 44px */
-      :host([large]) .tb { width: 56px; height: 56px; } :host([large]) .tb .i { width: 30px; height: 30px; }
-      :host([large]) .tb.pp { width: 76px; height: 76px; } :host([large]) .tb.pp .i { width: 44px; height: 44px; }
-      :host([large]) .tb.pr, :host([large]) .tb.nx { width: 64px; height: 64px; } :host([large]) .tb.pr .i, :host([large]) .tb.nx .i { width: 46px; height: 46px; }
-      :host([large]) .tp:has(.tb.fv) .tb { width: 44px; height: 44px; } :host([large]) .tp:has(.tb.fv) .tb .i { width: 24px; height: 24px; }
-      :host([large]) .tp:has(.tb.fv) .tb.pp { width: 60px; height: 60px; } :host([large]) .tp:has(.tb.fv) .tb.pp .i { width: 32px; height: 32px; }
-      :host([large]) .tp:has(.tb.fv) .tb.pr, :host([large]) .tp:has(.tb.fv) .tb.nx { width: 50px; height: 50px; }
-      :host([large]) .tp:has(.tb.fv) .tb.pr .i, :host([large]) .tp:has(.tb.fv) .tb.nx .i { width: 36px; height: 36px; }
       .upn { display: none; }
       .vol { padding: 4px 12px; }
       .vr { grid-template-columns: 28px 86px minmax(0, 1fr) 30px; min-height: 48px; }

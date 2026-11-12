@@ -305,8 +305,7 @@ for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: t
 }
 
 // ---------------- 0.7.3: big icon category buttons, compact sources control, Favorites / A–Z corner icons ----------------
-for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }, {}], ['1024x600 large_buttons', { width: 1024, height: 600, isMobile: true, hasTouch: true }, { large_buttons: true }],
-  ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }, {}], ['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }, {}], ['360x640', { width: 360, height: 640, isMobile: true, hasTouch: true }, {}]]) {
+for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }, {}],   ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }, {}], ['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }, {}], ['360x640', { width: 360, height: 640, isMobile: true, hasTouch: true }, {}]]) {
   const p = await open('&ha=toolbar&sidebar=none', cfg, vp);
   await wait(p, `!!${SV}.querySelector('.srct') && ${SV}.querySelectorAll('.lcats .lc').length >= 5 && !!${SV}.querySelector('.lcorner')`);
   const geo = `(() => { const R = (el) => { const b = el?.getBoundingClientRect(); return b && b.height ? { t: b.top, b: b.bottom, l: b.left, r: b.right, h: b.height } : null; };

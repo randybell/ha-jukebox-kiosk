@@ -63,9 +63,6 @@ for (const vp of VPS) {
   // guest (volume only) + quiet hours cap
   await open(pg, `&spk=dyn&target=${IN}`, vp); await panel(pg); await shot(pg, 'guest-view', vp);
   await open(pg, `&spk=dyn&target=${IN}${cfg({ quiet_hours: { start: '00:00', end: '00:00', max_volume: 30 } })}`, vp); await panel(pg); await shot(pg, 'guest-quiet-hours', vp);
-  // large buttons
-  await open(pg, `&spk=dyn&admin=1${cfg({ large_buttons: true })}`, vp); await shot(pg, 'large-buttons-now', vp);
-  await panel(pg); await shot(pg, 'large-buttons-speakers', vp);
   // queue rows: icons, Play now confirm, Remove + Undo bar, narrow ⋯ action sheet
   await open(pg, '&admin=1&tab=queue', vp); await wait(pg, `${QV}.querySelectorAll('.qr.next').length > 3`); await sleep(400);
   await shot(pg, 'queue-row-icons', vp);
@@ -95,7 +92,6 @@ for (const vp of VPS) {
   pg.on('pageerror', (e) => errors.push(e.message));
   await open(pg, `${ha}&admin=1`, vp); await panel(pg); await shot(pg, 'speakers-fixed-toolbar', vp);
   await open(pg, `${ha}&spk=dyn&admin=1`, vp); await panel(pg); await shot(pg, 'speakers-dynamic-toolbar', vp);
-  await open(pg, `${ha}&spk=dyn&admin=1${cfg({ large_buttons: true })}`, vp); await panel(pg); await shot(pg, 'large-buttons-speakers-toolbar', vp);
   await open(pg, `${ha}&admin=1&tab=queue`, vp); await wait(pg, `${QV}.querySelectorAll('.qr.next').length > 3`); await sleep(400);
   const ids = await ev(pg, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`);
   await tap(pg, `${QV}.querySelector('.qr[data-id="${ids[3]}"] .qa[data-action="remove"]')`);
@@ -114,7 +110,6 @@ for (const vp of VPS) {
   };
   const runs = [
     [{ width: 1024, height: 666 }, '&ha=toolbar&sidebar=narrow', 'tabs-b-toolbar'],
-    [{ width: 1024, height: 666 }, `&ha=toolbar&sidebar=narrow${cfg({ large_buttons: true })}`, 'tabs-b-large-toolbar'],
     [{ width: 1024, height: 600 }, '&ha=toolbar&sidebar=narrow', 'tabs-b-tiny-toolbar'],
     [{ width: 1280, height: 800 }, '', 'tabs-b'],
     [{ width: 390, height: 844, isMobile: true, hasTouch: true }, '', 'tabs-b'],

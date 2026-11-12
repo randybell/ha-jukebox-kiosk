@@ -636,16 +636,6 @@ export class JbSpeakers extends LitElement {
       .rooms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
       .vr + .vr { border-top: 0; } .rooms .vr { border-bottom: 1px solid var(--_divider); }
     }
-    /* large_buttons */
-    :host([large]) .chip { height: 56px; font-size: var(--ha-font-size-l, 16px); padding: 0 20px; }
-    :host([large]) .act { height: 52px; font-size: var(--ha-font-size-l, 16px); padding: 0 18px; }
-    :host([large]) .vm { width: 52px; height: 52px; } :host([large]) .vm .i { width: 28px; height: 28px; }
-    :host([large]) .vr { grid-template-columns: 52px minmax(0, 1fr) auto; }
-    :host([large]) .vn { font-size: var(--ha-font-size-l, 16px); } :host([large]) .vn small { font-size: var(--ha-font-size-m, 14px); }
-    :host([large]) .vs { --_slider-h: 10px; --_slider-knob: 30px; --_slider-hit: 52px; }
-    :host([large]) .x { height: 60px; min-width: 104px; padding: 0 24px; font-size: var(--ha-font-size-l, 16px); }
-    :host([large]) .st { font-size: var(--ha-font-size-l, 16px); min-height: 48px; } :host([large]) .st .ca { height: 42px; font-size: var(--ha-font-size-l, 16px); padding: 0 18px; } :host([large]) .st .cx { height: 42px; font-size: var(--ha-font-size-l, 16px); padding: 0 18px; }
-    :host([large][open]) .st { right: 132px; max-width: min(360px, calc(100% - 132px - var(--_pad))); }
     @media (prefers-reduced-motion: reduce) { .chip:active { transform: none; } .st, .st .dot { animation: none; } }
   `];
 }
