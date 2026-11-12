@@ -974,6 +974,20 @@ export class JukeboxCard extends LitElement {
     .sv-drift.has-ly .sv-clock { font-size: clamp(56px, 10cqw, 140px); }
     .sv-ly { margin-top: 18px; width: min(820px, 72cqw); }
     .sv-lys { margin-top: 14px; font-size: clamp(12px, 1.1cqw, 15px); font-weight: 600; letter-spacing: .04em; color: #ffffff6b; text-shadow: 0 1px 8px #000a; white-space: nowrap; }
+    /* Portrait (0.8.2, #38): what is playing leads and the clock steps back. Container-based (the shared view's own box is taller
+       than wide), never a phone or device size, so landscape keeps every rule above exactly. Sizes come from HA's type scale
+       (5xl is its top step; the big clock is a whole multiple of it) and grow fluidly with the screen width between those steps,
+       the way the keyboard letters do (--kfs). A long title may use two lines instead of being cut off. */
+    @container (orientation: portrait) {
+      .sv-clock { font-size: clamp(calc(var(--ha-font-size-5xl, 40px) * 1.5), 10.5cqw, calc(var(--ha-font-size-5xl, 40px) * 3)); }
+      .sv-drift.has-ly .sv-clock { font-size: clamp(calc(var(--ha-font-size-5xl, 40px) * 1.25), 8.5cqw, calc(var(--ha-font-size-5xl, 40px) * 2.5)); }
+      .sv-date { font-size: clamp(var(--ha-font-size-xl, 20px), 3cqw, var(--ha-font-size-3xl, 28px)); }
+      .sv-np { max-width: 84cqw; }
+      .sv-np b { font-size: clamp(var(--ha-font-size-5xl, 40px), 6.2cqw, calc(var(--ha-font-size-5xl, 40px) * 1.5)); line-height: 1.1;
+        display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
+      .sv-np small { font-size: clamp(var(--ha-font-size-3xl, 28px), 3.8cqw, var(--ha-font-size-5xl, 40px)); }
+      .sv-lys { font-size: clamp(var(--ha-font-size-m, 14px), 1.8cqw, var(--ha-font-size-l, 16px)); }
+    }
     /* ---- Stage: the same shared view (see renderAmbient), opened from Now Playing; it sits under the screensaver ---- */
     :host(:fullscreen), :host(:-webkit-full-screen) { background: var(--_bg); }
     .amb.stage { z-index: 45; }
