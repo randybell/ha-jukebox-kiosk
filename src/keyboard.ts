@@ -14,7 +14,7 @@ const DIGITS = '1234567890'.split('');
 const SYMBOLS = ['&', '.', ',', '!', '?', '(', ')', '/', '+', '#', ':', '$', '%', '@', '"', ';', '=', '*'];
 const HOLD_CLEAR_MS = 600;
 
-interface KeyDef { id: string; label?: string; cls?: string; span?: number; aria?: string; icon?: string; act: () => KeyDetail | 'toggle' }
+interface KeyDef { id: string; label?: string; cls?: string; aria?: string; icon?: string; act: () => KeyDetail | 'toggle' }
 
 /**
  * On-screen alphabetical keyboard (alphabetical grid, TV-remote style).
@@ -51,11 +51,11 @@ export class JbKeyboard extends LitElement {
       out.push(ch("'", '', 'Apostrophe'), ch('-', '', 'Hyphen'));
     }
     out.push(
-      { id: 'k-toggle-n', label: this._sym ? 'ABC' : '123', cls: 'sp narrow-only', aria: this._sym ? 'Letters' : 'Numbers and symbols', act: () => 'toggle' },
-      { id: 'k-toggle-w', label: this._sym ? 'ABC' : '#+=', cls: 'sp wide-only', span: 2, aria: this._sym ? 'Letters' : 'Symbols', act: () => 'toggle' },
-      { id: 'k-space', label: 'Space', cls: 'sp space', span: 3, aria: 'Space', act: () => ({ type: 'char', value: ' ' }) },
+      { id: 'k-toggle-n', label: this._sym ? 'ABC' : '123', cls: 'sp tg narrow-only', aria: this._sym ? 'Letters' : 'Numbers and symbols', act: () => 'toggle' },
+      { id: 'k-toggle-w', label: this._sym ? 'ABC' : '#+=', cls: 'sp tg wide-only', aria: this._sym ? 'Letters' : 'Symbols', act: () => 'toggle' },
+      { id: 'k-space', label: 'Space', cls: 'sp space', aria: 'Space', act: () => ({ type: 'char', value: ' ' }) },
       { id: 'k-bksp', cls: 'sp bk', aria: 'Backspace (hold to clear)', icon: 'bksp', act: () => ({ type: 'backspace' }) },
-      { id: 'k-clear', label: 'Clear', cls: 'sp clr', span: 2, aria: 'Clear search', act: () => ({ type: 'clear' }) },
+      { id: 'k-clear', label: 'Clear', cls: 'sp clr', aria: 'Clear search', act: () => ({ type: 'clear' }) },
     );
     return out;
   }
@@ -117,7 +117,6 @@ export class JbKeyboard extends LitElement {
           ${this.keys().map(
             (k) => html`<button
               class="k ${k.cls ?? ''} ${this._pressed === k.id ? 'pressed' : ''}"
-              style=${k.span ? `grid-column:span ${k.span}` : ''}
               data-key=${k.id}
               tabindex="-1"
               aria-label=${k.aria ?? k.label ?? ''}
@@ -151,23 +150,31 @@ export class JbKeyboard extends LitElement {
       }
       .kb-handle i { position: absolute; top: 3px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--_divider); }
       .kb-handle span { display: var(--_kb-handle-label, inline); }
-      .keys { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--kgap, 8px); }
+      .keys { display: grid; grid-template-columns: repeat(28, minmax(0, 1fr)); gap: var(--kgap, 8px); }
+      /* Four grid tracks make one letter key (the gap between tracks is the same as between keys, so a letter is as wide as before).
+         The bottom row is a little re-balanced in the same units: 123 and backspace a bit wider than a letter key, Space still the
+         widest, Clear the smallest. Narrow: 5 + 11 + 5 + 7 = 28 tracks (7 letter keys). Wide (below): 10 + 14 + 10 + 6 = 40 (10 letter keys). */
+      .k { grid-column: span 4; }
+      .k.tg, .k.bk { grid-column: span 5; }
+      .k.space { grid-column: span 11; }
+      .k.clr { grid-column: span 7; }
       .k {
         height: var(--kh, 60px); display: grid; place-items: center; border-radius: 12px;
         font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: 1px solid var(--_surface-border);
         user-select: none; -webkit-user-select: none; transition: transform 60ms, background 60ms;
       }
       .k .i { width: 26px; height: 26px; }
-      .k.sp { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); }
+      .k.sp { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); }
       .k.pressed { background: var(--_chip-sel); color: var(--_fg); transform: scale(0.96); }
       .k.num, .wide-only { display: none; }
       @container kb (min-width: 600px) {
-        .keys { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+        .keys { grid-template-columns: repeat(40, minmax(0, 1fr)); }
         .k { height: var(--kh-wide, 56px); }
         .k.num, .wide-only { display: grid; }
         .narrow-only { display: none !important; }
-        .k.space { grid-column: span 4 !important; }
-        .k.bk { grid-column: span 2 !important; }
+        .k.tg, .k.bk { grid-column: span 10; }
+        .k.space { grid-column: span 14; }
+        .k.clr { grid-column: span 6; }
       }
       @container kb (max-width: 380px) {
         .kb-handle span { display: none; }
