@@ -1,14 +1,15 @@
 /**
  * Backdrop performance modes.
+ *  plain  – the default (0.8.1): no album art or shade behind Now Playing; it is a plain theme card surface like Library and Queue, the cover shows in its own square.
  *  full   – live CSS blur (38px) of the full-size art + backdrop-filter on panels (today's look).
- *  light  – one pre-blurred 64px canvas per track change, stretched by the compositor; panels are solid rgba(0,0,0,.6), no backdrop-filter.
- *  static – dark gradient, no art, no filters.
- *  off    – pure black.
+ *  light  – one pre-blurred 64px canvas per track change, stretched by the compositor; panels are a solid theme surface, no backdrop-filter.
+ *  static – no art; HA media-control no-image fill (--primary-color), no filters.
+ *  off    – no art; HA media-control off fill (--primary-color, grayscale).
  *  auto   – light on low-end devices (hardwareConcurrency <= 4 or deviceMemory <= 2) or prefers-reduced-motion, else full.
  */
-export type BackdropMode = 'full' | 'light' | 'static' | 'off';
+export type BackdropMode = 'plain' | 'full' | 'light' | 'static' | 'off';
 export type BackdropSetting = BackdropMode | 'auto';
-export const BACKDROPS: BackdropSetting[] = ['auto', 'full', 'light', 'static', 'off'];
+export const BACKDROPS: BackdropSetting[] = ['plain', 'auto', 'full', 'light', 'static', 'off'];
 
 export function deviceIsLowEnd(nav: Navigator = navigator): { low: boolean; why: string } {
   const cores = nav.hardwareConcurrency;
@@ -20,7 +21,7 @@ export function deviceIsLowEnd(nav: Navigator = navigator): { low: boolean; why:
 export const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 export function resolveBackdrop(setting: BackdropSetting | undefined): { mode: BackdropMode; why: string } {
-  const s = setting ?? 'auto';
+  const s = setting ?? 'plain';
   if (s !== 'auto') return { mode: s, why: 'config' };
   if (prefersReducedMotion()) return { mode: 'light', why: 'prefers-reduced-motion' };
   const d = deviceIsLowEnd();

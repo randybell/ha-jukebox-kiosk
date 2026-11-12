@@ -348,9 +348,17 @@ for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobi
   check('C5 unselecting the last provider: back to All ("All sources", not lit)', J(await srcOn(p)) === J(['all']) && l3[0] === 'All sources' && !l3[1], J(l3));
   await tap(p, `${SV}.querySelector('.srct')`);
   check('C6 tapping the control again folds the choices away', await wait(p, `!${SV}.querySelector('.srco') && ${SV}.querySelector('.srct').getAttribute('aria-expanded') === 'false'`));
-  // selected category is unmistakable: solid light fill vs the dim others
-  const bg = await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].map((b) => [b.classList.contains('on'), getComputedStyle(b).backgroundColor])`);
-  check('C7 the selected category button is filled white, the others are not', bg.filter((x) => x[0]).length === 1 && bg.every((x) => x[0] === (x[1] === 'rgb(255, 255, 255)')), J(bg));
+  // selected category is unmistakable: theme primary fill vs the dim others
+  const bg = await ev(p, `(() => {
+    const probe = document.createElement('span');
+    probe.style.backgroundColor = 'var(--primary-color, #03a9f4)';
+    document.body.appendChild(probe);
+    const primary = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return [...${SV}.querySelectorAll('.lcats .lc')].map((b) => [b.classList.contains('on'), getComputedStyle(b).backgroundColor, primary]);
+  })()`);
+  // 0.8.1: the selected one is HA's selected filter chip (a soft tint of the text colour), the others are plain
+  check('C7 the selected category button is the HA selected-chip fill, the others have no fill', bg.filter((x) => x[0]).length === 1 && bg.every((x) => x[0] === (x[1] !== 'rgba(0, 0, 0, 0)')), J(bg));
   // corner icons drive the embedded library list
   await wait(p, `${BR}.querySelectorAll('.tile[data-type=playlist]').length > 0`);
   await ev(p, `window.__calls.length = 0`);
@@ -379,12 +387,13 @@ for (const vp of [{ width: 1024, height: 600 }, { width: 820, height: 1180 }, { 
       placeholder: ph.scrollWidth <= ph.clientWidth + 1, scale: R(s.querySelector('.sx')).width / s.querySelector('.sx').offsetWidth,
       gap: innerWidth > innerHeight ? kr.top - hint.bottom : kr.top - res.bottom,
       art: tiles.map(t => { const a = R(t.querySelector('.big')), b = R(t.querySelector('.pv')); return { square: Math.abs(a.width - a.height) < 1, clear: b.top >= a.bottom, badgeFits: b.left >= a.left && b.right <= a.right + 1 }; }),
-      columns: getComputedStyle(kb.shadowRoot.querySelector('.keys')).gridTemplateColumns.split(' ').length };
+      columns: (() => { const ks = [...kb.shadowRoot.querySelectorAll('.keys > *')].filter(k => k.offsetParent !== null), t0 = ks[0].getBoundingClientRect().top;
+        return ks.filter(k => Math.abs(k.getBoundingClientRect().top - t0) < 1).length; })() };
   })()`);
   check(`L1 ${tag}: full-width search and uncut placeholder; All sources on its own row`, g.full && g.below && g.placeholder, J(g));
   check(`L2 ${tag}: keyboard follows the hint/results without empty dead space`, g.gap >= 0 && g.gap <= 14 * g.scale, J(g));
   check(`L3 ${tag}: square playlist art and provider badge fully visible without overlap`, g.art.length > 0 && g.art.every(a => a.square && a.clear && a.badgeFits), J(g));
-  check(`L4 ${tag}: unchanged responsive keyboard grid`, g.columns === (vp.width > vp.height ? 7 : 10), J(g));
+  check(`L4 ${tag}: unchanged responsive keyboard grid (letters per row)`, g.columns === (vp.width > vp.height ? 7 : 10), J(g));
   await p.close();
 }
 
