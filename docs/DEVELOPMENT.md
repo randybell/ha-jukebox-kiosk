@@ -39,10 +39,10 @@ node scripts/run-tests.mjs --list                  # which files each group runs
 # JB_URL=http://127.0.0.1:8765/dev/index.html (or JB_ROOT=http://127.0.0.1:8765/dev/) uses a server you started.
 npm run shots                                      # = node tools/screenshots/shots-m2.mjs
 node tools/screenshots/shots-m2.mjs f1             # every tab at 1920x1080, 1280x800, 820x1180 and 390x844 -> test/shots/m2/
-JB_SIZES=1920x1080 node tools/screenshots/shots-m2.mjs x1 '&backdrop=light'   # one size, one mode
+JB_SIZES=1920x1080 node tools/screenshots/shots-m2.mjs x1                   # one size
 node tools/screenshots/shots-v040.mjs              # lyrics surfaces, states and the editor at 1280x800, 1920x1080, 390x844 -> test/shots/v040/
-node tools/screenshots/shots-v050.mjs              # speakers panel (fixed, dynamic, guest, presets, move, large buttons), queue row icons and the segmented tab bar at 390x844, 1280x800, 1920x1080 and 1024x666 below the HA toolbar -> test/shots/v050/
-node test/perf.mjs 3                               # frame-time benchmark, see "Backdrop and performance"
+node tools/screenshots/shots-v050.mjs              # speakers panel (fixed, dynamic, guest, presets, move), queue row icons and the segmented tab bar at 390x844, 1280x800, 1920x1080 and 1024x666 below the HA toolbar -> test/shots/v050/
+node test/perf.mjs 3                               # frame-time benchmark (slider drag and keyboard typing, 4x CPU throttle)
 ```
 
 `dev/mock-hass.js` is a fake `hass`. It uses the shapes from the real exports (`dev/fixtures/`):
@@ -88,7 +88,6 @@ URL parameters:
 | `kiosk=1` (default; `kiosk=0` = core Music Assistant only, `config_entries/get` for admins) | loads the Jukebox Kiosk integration mock (`dev/mock-kiosk.js`): `jukebox_kiosk` in `hass.config.components` and its WebSocket API on `callWS` / `connection.subscribeMessage`, so `backend: auto` picks `kiosk`. Every message is logged in `window.__ws`; `window.__kioskPush(entity)` sends a queue push, `window.__kioskSubs()` lists subscriptions |
 | `kcaps=<json>` | with `kiosk=1`, overrides the `features` returned by `jukebox_kiosk/capabilities` |
 | `kfail=<type>` | with `kiosk=1`, that `jukebox_kiosk/<type>` message fails |
-| `backdrop=plain\|auto\|full\|light\|static\|off` | sets the `backdrop` option (without it the card uses its default, `plain`, since 0.8.1) |
 | `ha=toolbar\|kiosk\|masonry` | emulates a Home Assistant view around the card: fixed 56 px toolbar (`--header-height`), toolbar hidden (kiosk mode), or a masonry view with padding and a card above |
 | `sidebar=open\|narrow\|closed\|none` | with `ha=`, the HA sidebar width (256 px, 56 px, or none; default `narrow`) |
 

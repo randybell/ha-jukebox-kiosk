@@ -4,6 +4,13 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.8.4 — 2026-11-12
+
+- Now Playing always follows your Home Assistant theme. The Background choice (Plain, Automatic, Full, Light, Dark and Off) is gone from the card editor, and so is the album-art background on Now Playing. Album art is now a background on the screensaver only, and the screensaver itself looks the same as before.
+- The Large buttons switch is gone from the card editor.
+- If your setup still has `backdrop` or `large_buttons`, nothing breaks: the card loads it without an error and ignores both, so you can remove them. If you had picked Dark or Off, Now Playing is now the plain theme card, and the screensaver shows album art.
+- On the on-screen keyboard, the words on the bottom row (123, Space and Clear) are now the same size as the letters, and the backspace symbol grows with them.
+
 ## 0.8.2 — 2026-11-11
 
 - The letters on the on-screen keyboard are bigger, in the Library, in Search and when you search the Queue. The keys keep their size, and on large landscape screens the letters grow a little more with the screen.

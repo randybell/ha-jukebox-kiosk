@@ -15,17 +15,17 @@ The card's element is still `custom:jukebox-card`, so existing dashboards keep w
 
 > Some of these pictures were taken before 0.7.20. Since 0.7.20 the Library lists show as rows by default (not tiles, and artists are no longer round), and the row buttons (Add to queue, Play Next, Play Now, Remove and so on) are hidden by default. The pictures still show tiles and the buttons.
 
-> Since 0.8.0 the card follows your Home Assistant theme, so colors, corners and fonts come from the theme, in light and in dark. Since 0.8.1 Now Playing has no album-art background unless you choose one (see [Backdrop and performance](#backdrop-and-performance)). The Now Playing, Library, Library typing, Library artists, Queue, Queue pop-up, Speakers and Now Playing background pictures below were retaken for 0.8.1, once with a light theme and once with a dark theme, using Home Assistant's default theme and font (Roboto). They show the Tiles setting, and the Queue shows its row buttons turned on. The Library, Library typing, Library artists and Library artist page pictures were retaken for 0.8.2 (bigger keyboard letters, the Clear filter button). The Screensaver pictures are from 0.8.0 and show landscape, which has not changed; in portrait the screensaver now has a bigger track and a smaller clock. The pictures of the sources row, of Spotify only, of the track rows, of Radio and of the favorites heart were taken before 0.8.0 and still show the old look: a fixed black background, white buttons and the old fonts.
+> Since 0.8.0 the card follows your Home Assistant theme, so colors, corners and fonts come from the theme, in light and in dark. Since 0.8.4 Now Playing always follows the theme too: it has no album-art background and no option for one (album art is a background on the screensaver only). The Now Playing, Queue, Queue pop-up and Speakers pictures below were retaken for 0.8.1, once with a light theme and once with a dark theme, using Home Assistant's default theme and font (Roboto). They show the Tiles setting, and the Queue shows its row buttons turned on. The Library, Library typing and Library artists pictures were retaken for 0.8.4 (the bottom row of the keyboard now has the same size of text as the letters), and the Library artist page pictures for 0.8.2 (the Clear filter button). The Screensaver pictures are from 0.8.0 and show landscape, which has not changed; in portrait the screensaver now has a bigger track and a smaller clock. The pictures of the sources row, of Spotify only, of the track rows, of Radio and of the favorites heart were taken before 0.8.0 and still show the old look: a fixed black background, white buttons and the old fonts.
 
 **One Library tab, keyboard always open.** The on-screen keyboard stays open on every screen size. Below the search box is an **All sources** button. Tap it and a row opens under the box: All, Library, then each music service set up in Music Assistant. You can turn on more than one. The button names the ones you picked and gets Home Assistant's soft selected highlight while any is on. Tap it again to close the row. Big buttons pick Playlists, Artists, Tracks or Radio, and the one you are in has the soft selected highlight. On the library list, a heart sits at the end of that row. There is no Keyboard pill and no hide handle. An empty box lists your library; typing searches that category, library first.
 
 | Library, light theme | Library, dark theme |
 |---|---|
-| ![Library, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-light-082-1024x712.png) | ![Library, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-dark-082-1024x712.png) |
+| ![Library, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-light-084-1024x712.png) | ![Library, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-dark-084-1024x712.png) |
 
 | Library, typing, light theme | Library, typing, dark theme |
 |---|---|
-| ![Library, typing, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-light-082-1024x712.png) | ![Library, typing, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-dark-082-1024x712.png) |
+| ![Library, typing, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-light-084-1024x712.png) | ![Library, typing, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-dark-084-1024x712.png) |
 
 Before 0.8.0 (old look):
 
@@ -144,7 +144,6 @@ views:
         screensaver_minutes: 10
         default_tab: now                               # now | browse | search (separate layout) | queue
         show_lyrics: true
-        backdrop: plain                                # plain (default) | auto | full | light | static | off
 ```
 
 The rest of this section is how each part of the card behaves.
@@ -157,60 +156,17 @@ Since 0.8.0 the card follows the Home Assistant theme you use, the way Home Assi
 - **Corners, shadow and border.** The card takes them from the theme's card settings. The card draws no black shadows of its own (not on the cover, the Play button, the slider knob or the selected Library category); it uses Home Assistant's own card shadow only if your theme sets one. Pop-ups use the theme's dialog corners, shadow and maximum height, and they dim the screen behind them once, the way Home Assistant's own dialogs do. If your theme does not say how much, the card uses Home Assistant's own default (68% brightness); a theme that sets it, even to none, wins. Messages (toasts) look like Home Assistant's own.
 - **Fonts.** The card uses the theme's fonts and its text sizes, weights and line spacing. With Home Assistant's default theme that is Roboto. The Inter and Plus Jakarta Sans fonts are no longer bundled, the `fonts/` folder is gone, and the card no longer downloads fonts. Titles and the clock look plainer than before. `font_base` no longer does anything, and you can remove it from your setup.
 - **Now Playing title.** It can't be larger than the biggest size in Home Assistant's text scale (40 px with the default theme).
-- **Now Playing background.** Since 0.8.1 there is none by default: `backdrop: plain` shows Now Playing as a plain theme card, like Library and Queue. Choose **Automatic**, **Full** or **Light** in the card editor (`backdrop: auto`, `full` or `light`) to get the blurred album art back. With those, the art, its dark shade and white text sit on Now Playing only. See [Backdrop and performance](#backdrop-and-performance).
-- **No picture.** A cover with no picture, and a radio station with no logo, show a plain square in the theme's main color. The colored radio-tower picture is gone. With the `static` (Dark) background, Now Playing always has a flat fill in the theme's main color, `off` has the same fill in gray, and `full` and `light` have it only when there is no art. Text and icons on that fill use the theme's "text on primary" color, exactly like Home Assistant's media control card (no switching between black and white).
-- **Panels on Now Playing.** The speakers panel and "up next" are solid theme cards with theme text, in every mode.
+- **Now Playing.** It is a plain card in your theme's colors, like Library and Queue, and the cover shows in its own square. There is no background option for it any more (since 0.8.4, there are no Background or Large buttons settings in the card editor). An old config that still has `backdrop` or `large_buttons` keeps working: the card loads it without an error and ignores both keys, so you can remove them. Album art is a background on the screensaver only.
+- **No picture.** A cover with no picture, and a radio station with no logo, show a plain square in the theme's main color. The colored radio-tower picture is gone.
+- **Panels on Now Playing.** The speakers panel and "up next" are solid theme cards with theme text.
 - **Screensaver and Stage.** They stay black with white text. Only their font comes from the theme.
 - **Card-specific color settings.** There are none. Old `--jb-…` style overrides (from a theme or card-mod) no longer have any effect. Change the colors in your Home Assistant theme instead.
 
-After updating, the card looks different: fonts and colors now come from your theme, and from 0.8.1 Now Playing has no album-art background unless you choose one.
+After updating, the card looks different: fonts and colors now come from your theme, and Now Playing has no album-art background.
 
-### Backdrop and performance
+### Reduced motion
 
-By default (`backdrop: plain`, since 0.8.1) Now Playing has no album-art background: it is a plain card in your theme's colors, like Library and Queue, and the cover shows in its own square. To get the blurred album art back, set **Background** in the card editor to **Automatic**, **Full** or **Light**, or in YAML set `backdrop: auto`, `full` or `light`. The art, its dark shade and the color behind it are drawn on Now Playing only. The Library, Search and Queue screens use your theme's colors alone, also on themes with see-through cards.
-
-The full look puts a 38 px live blur of the album art behind the Now Playing screen. That is cheap on a desktop GPU but expensive on low-end kiosk tablets, because the blurred layers have to be re-rastered whenever anything on top of them changes (a slider knob, a new track). The `backdrop` option picks the look:
-
-| `backdrop` | Now Playing background |
-|---|---|
-| `plain` (default) | no art, no shade and no fill: your theme's card surface, like Library and Queue. The cheapest look |
-| `auto` | album art: `light` if `navigator.hardwareConcurrency <= 4`, or `navigator.deviceMemory <= 2`, or `prefers-reduced-motion: reduce`; otherwise `full` |
-| `full` | album art: live CSS `filter: blur(38px) saturate(1.15)` of the full-size art, with a dark shade over it |
-| `light` | album art: the art drawn **once per track change** into a 64 px canvas (downscaled to 10 px, then smooth-upscaled and lightly blurred), stretched by the compositor; no CSS filter |
-| `static` | no art; a flat fill in your theme's main color, with the theme's "text on primary" color for text and icons (**Dark** in the editor), like Home Assistant's media control card |
-| `off` | no art; the same fill in gray (**Off** in the editor), like Home Assistant's media control card when it is off |
-
-- The speakers panel and "up next" on Now Playing are solid theme cards in every mode, with no `backdrop-filter`.
-- The resolved mode and the reason are on the element: `<jukebox-card data-backdrop="light" data-backdrop-why="hardwareConcurrency=4">`. Use this to check what a Fully Kiosk tablet picked (Fully's remote admin → "Get page source" or a remote DevTools session). With the default it reads `data-backdrop="plain"`.
-- `light` needs no CORS: drawing a cross-origin image into a canvas is allowed as long as nothing reads the pixels back, and the card never does. If an image fails to load, the canvas stays hidden and your theme's main color shows.
-- `light` redraws only when the art URL changes or the screen's aspect ratio changes, never on slider drags or key presses (test 15c).
-- Colors: they come from your Home Assistant theme. The old `--jb-panel-filter`, `--jb-surface` and `--jb-panel-solid` overrides are gone (see [Themes](#themes)).
-- The screensaver is not affected by `plain` or by themes. It shows the art (unblurred, so no filter cost) in `plain`, `full` and `light`, and plain black in `static` and `off`.
-
-**Reduced motion.** With `prefers-reduced-motion: reduce` (Android: Settings → Accessibility → Remove animations), `auto` picks `light`, and the screensaver turns off its Ken Burns zoom and its continuous drift. To still protect the panel from burn-in, the clock block jumps to a new position every 60 s with no animation (`step-end`), cycling through 10 spots over 10 minutes.
-
-**Measured** with `node test/perf.mjs 3` in headless Chrome at 1920x1080 with a 4x CPU throttle (CDP `Emulation.setCPUThrottlingRate`), means of 3 runs of about 6.4 s each. Frame times are in ms.
-
-| Scenario | avg | p95 | max | frames >33 ms | long tasks | main-thread ms | raster/GPU ms |
-|---|---|---|---|---|---|---|---|
-| slider drag, `full` | 16.7 | 16.8 | 16.8 | 0% | 0 | 665 | 190 |
-| slider drag, `light` | 16.7 | 16.7 | 16.8 | 0% | 0 | 692 | 175 |
-| keyboard typing, `full` | 16.8 | 16.8 | 44.5 | 0.3% | 0 | 1701 | 1438 |
-| keyboard typing, `light` | 16.8 | 16.7 | 33.3 | 0% | 0 | 1706 | 407 |
-
-| `full` | `light` | `static` | `off` |
-|---|---|---|---|
-| ![Now Playing, backdrop full](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-backdrop-full-light-081-1024x712.png) | ![Now Playing, backdrop light](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-backdrop-light-light-081-1024x712.png) | ![Now Playing, backdrop static](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-backdrop-static-light-081-1024x712.png) | ![Now Playing, backdrop off](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-backdrop-off-light-081-1024x712.png) |
-
-*Now Playing with a light theme and the Home Assistant default colors. `plain` (the default) is the picture in the Screenshots section above.*
-
-| `static`, dark theme | `off`, dark theme |
-|---|---|
-| ![Now Playing, backdrop static, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-backdrop-static-dark-081-1024x712.png) | ![Now Playing, backdrop off, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-backdrop-off-dark-081-1024x712.png) |
-
-- Frame times are `requestAnimationFrame` deltas; long tasks come from a `PerformanceObserver('longtask')`; main-thread and raster/GPU time come from a CDP trace (`ThreadControllerImpl::RunTask` on the renderer main thread vs. compositor, raster and GPU threads).
-- The main thread is not the bottleneck in either mode: no long tasks and a steady ~16.7 ms at 4x throttle. The blur cost is in raster/GPU work, which CPU throttling does not slow down, and on this box's fast CPU it still fits in a frame. The useful number is raster/GPU time, which is where a slow tablet's GPU drops frames. Typing (results re-rendering over a blurred backdrop) costs about 3.5x more raster/GPU time in `full` than in `light`. These numbers were measured before 0.8.0, when the art sat behind every screen; since 0.8.0 only Now Playing draws it.
-- Re-check on the real tablet: open the dashboard with `backdrop: full`, then `light`, and compare how smooth the volume drag feels. If `auto` picked `full` on a weak tablet, set `backdrop: light` (or leave the default `plain`).
+With `prefers-reduced-motion: reduce` (Android: Settings → Accessibility → Remove animations), the screensaver turns off its Ken Burns zoom and its continuous drift. To still protect the panel from burn-in, the clock block jumps to a new position every 60 s with no animation (`step-end`), cycling through 10 spots over 10 minutes.
 
 ### Large screens (1920x1080)
 
@@ -237,8 +193,8 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 
 ### Now Playing
 
-- **Art.** The card never loads the player's absolute `entity_picture` (`http://<ma-host>:8095/imageproxy?…` is mixed content on an https dashboard and unreachable off the LAN). It uses, in order: `entity_picture_local` (HA's relative `/api/media_player_proxy/…` URL), a relative `entity_picture`, the current mass_queue item's https `media_image`, then the placeholder. The same URL feeds Now Playing, both backdrops (`full` and `light`) and the screensaver. Radio streams with no art get a radio-tower image. Item images are used only when they are https, `data:image` or relative.
-- **Display.** By default (`backdrop: plain`, since 0.8.1) Now Playing is a plain card in your theme's colors, like Library and Queue, and the cover shows in its own square. With the `auto`, `full` or `light` background the album art is blurred behind the screen, with a dark shade over it so the text stays easy to read; when nothing is playing, or there is no art, the screen then fills with your theme's main color with the theme's "text on primary" color on it, the way Home Assistant's media control card does. `static` and `off` always do. The tab shows the art, title, artist · album, a provider badge from the URI scheme and "Playing on Everywhere".
+- **Art.** The card never loads the player's absolute `entity_picture` (`http://<ma-host>:8095/imageproxy?…` is mixed content on an https dashboard and unreachable off the LAN). It uses, in order: `entity_picture_local` (HA's relative `/api/media_player_proxy/…` URL), a relative `entity_picture`, the current mass_queue item's https `media_image`, then the placeholder. The same URL feeds Now Playing and the screensaver. Radio streams with no art get a radio-tower image. Item images are used only when they are https, `data:image` or relative.
+- **Display.** Now Playing is a plain card in your theme's colors, like Library and Queue, and the cover shows in its own square. The tab shows the art, title, artist · album, a provider badge from the URI scheme and "Playing on Everywhere".
 - **Seek bar.** Tap or drag it to send `media_player.media_seek {seek_position}`. The time label follows the drag.
 - **Transport.** All transport calls target `entity` only:
 
@@ -312,7 +268,7 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 
 | Library artists, light theme | Library artists, dark theme |
 |---|---|
-| ![Library artists, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-light-082-1024x712.png) | ![Library artists, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-dark-082-1024x712.png) |
+| ![Library artists, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-light-084-1024x712.png) | ![Library artists, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-dark-084-1024x712.png) |
 
 | Artist page with its filter on, light theme | Artist page with its filter on, dark theme |
 |---|---|
@@ -412,7 +368,7 @@ Before 0.8.0 (old look), Library track rows:
 
   Ctrl, Alt and Meta shortcuts are ignored. Queue search takes the same keys since 0.7.13 (see [Queue](#queue)).
 - **On-screen keyboard:**
-  - 7 columns when narrow, 10 with a number row when wide. Since 0.8.2 the letters are one step bigger (and grow a little more on large landscape screens), and so are the words on the bottom row. `123` / `#+=` and backspace are a bit wider than before, Space is the widest key, and Space and Clear are a bit narrower to make room.
+  - 7 columns when narrow, 10 with a number row when wide. Since 0.8.2 the letters are one step bigger (and grow a little more on large landscape screens), and so are the words on the bottom row. Since 0.8.4 those words (`123`, Space and Clear) use the same text size and weight as the letters, and the backspace icon grows with them. `123` / `#+=` and backspace are a bit wider than before, Space is the widest key, and Space and Clear are a bit narrower to make room.
   - `123` / `#+=` switches to symbols.
   - Holding backspace clears the query.
   - Keys fire on release (pointerup), so a touch that slides off a key does not type.
@@ -437,7 +393,7 @@ Lyrics come from Music Assistant's own metadata (its LRCLIB provider, with Geniu
 - **Plain lyrics** scroll in proportion to the track's progress and show an **Unsynced** chip. Scrolling by hand pauses the auto-scroll for a few seconds.
 - **States**: "Looking for lyrics…", "No lyrics found", and "Lyrics unavailable". Failures back off for 60 s; there is never more than one lookup per track in flight.
 - **Lyrics come only from Music Assistant.** The card fetches and displays them through Music Assistant and never stores or redistributes lyric text. Lyric text stays in memory (an LRU of 50 tracks) for the page session only, and a reload fetches it again. `localStorage` (`jukebox-card:lyrics:v2`, 100 tracks, keyed by URI or by `artist|title` for radio) only remembers "not found" markers, with no text, for 1 day. The old `jukebox-card:lyrics:v1` cache, which held lyric text, is deleted on load.
-- **Look**: the current line is bold and bright, and the others are dimmer, over whatever `backdrop` mode is active. Over the album art, and on the Stage and the screensaver, the text is white. The lyrics use your theme's font.
+- **Look**: the current line is bold and bright, and the others are dimmer. On the Stage and the screensaver the text is white. The lyrics use your theme's font.
 
 ## Options
 
@@ -460,7 +416,6 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `accent` | `mono` | *(YAML only)* Only `mono` exists so far, so it changes nothing |
 | `font_base` | *(no effect since 0.8.0)* | Still accepted, so old setups keep loading, but it does nothing. The card uses the font from your Home Assistant theme and no longer ships font files. You can remove it from your setup |
 | `height` | fits the window | Card height. By default the card fills the space from its top edge to the bottom of the window (below the HA toolbar, minimum 320 px); set a fixed value such as `700px` to override |
-| `backdrop` | `plain` | `plain`, `auto`, `full`, `light`, `static` or `off`. Since 0.8.1 the default is `plain`: no album-art background behind Now Playing. `auto`, `full` and `light` bring the art back. See [Backdrop and performance](#backdrop-and-performance) |
 | `scale` | `auto` | Large-screen zoom. `auto` scales the whole UI by min(width/1420, height/800) once that is ≥ 1.15 (1920x1080 → 1.35, capped at 1.8). A number forces it; `1` turns it off |
 | `title` | `Jukebox` | Brand text in the header |
 | `show_lyrics` | `true` | Master switch for lyrics: art overlay toggle, Stage and screensaver lyrics |
@@ -475,7 +430,6 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `leader_drop` | `allow` | Dropping the leader of a playing group: `allow` (MA re-forms the group on the other rooms after about 6 s of silence; the panel shows "Regrouping…"), or `block` (hand off with Move) |
 | `coerce_repeat_one` | `true` | A player that reports repeat "one" is switched back to repeat all (the whole queue) with one `media_player.repeat_set`, once per detection with a one-minute cooldown, only for the card's active player and only for users with Playback. `false` sends nothing (repeat "one" is still shown as repeat queue, and the card never offers it) |
 | `confirm_drop` | `false` | `true` asks in a centred dialog before a drop, a takeover or pausing the last room (the 0.6.3 behaviour). `false` (default) drops on tap and shows a small status chip top-right with Undo; a takeover or last-room question is asked in the chip |
-| `large_buttons` | `false` | Bigger touch targets and text everywhere |
 | `show_action_icons` | `false` | *(0.7.14; default changed from `true` to `false` in 0.7.20)* `true` shows the row buttons (Add to queue, Play Next, Play Now, Start radio, Remove, Move up, Move down, More and a station's Play) on every list row that has them, including the track and episode rows on artist, album, playlist and podcast pages. Hidden otherwise. The editor no longer has a switch for it, and the option will be removed in a later release. See [Row buttons](#row-buttons-hidden-by-default) |
 | `hearts` | `true` | *(0.7)* A favourite heart on Search and Library rows and tiles, on playlist rows and on album, artist and playlist pages. See [Favourites (hearts)](#favourites-hearts). Needs the Jukebox Kiosk backend and the `library` class. `false` keeps the 0.6 hearts only (Search radio rows, the station sheet and Now Playing) |
 | `radio_favorites_only` | `false` | *(0.7)* Browse › Radio **My stations** lists favourite stations only. Default: favourites first, then the other library stations |
@@ -496,7 +450,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 
 *(0.7.9)* `config_entry_id`, `favorite_entity`, `presets` and `backend` are gone: the card always finds the Music Assistant entry itself (through the integration, else an admin lookup), the heart always works out who adds the favourite, and the backend is always automatic. Leftover lines for them in YAML are simply ignored.
 
-The visual editor shows on-screen wording only. Top: **Player** and **Room volume sliders**. **Display**: Start tab (the bar's names: Now Playing, Library, Queue, plus Search in the separate layout), screensaver, screensaver lyrics, Background, large buttons, repeat one. **Speakers** (see [Speakers](#speakers-050)). **Lyrics**: lyrics on/off, press-and-hold to jump, timing. **Search** and **Library** sections; in Library, **Library lists (every Library button: rows or tiles)** comes after the category buttons, and **Tile columns (2 to 6)** appears under it only when Tiles is chosen. There is no Lyrics tab and no Autoplay switch (the Queue shows the Autoplay switch whenever Music Assistant supports it). `accent` is YAML only. Quiet hours were removed in 0.7.9.
+The visual editor shows on-screen wording only. Top: **Player** and **Room volume sliders**. **Display**: Start tab (the bar's names: Now Playing, Library, Queue, plus Search in the separate layout), screensaver, screensaver lyrics, repeat one. **Speakers** (see [Speakers](#speakers-050)). **Lyrics**: lyrics on/off, press-and-hold to jump, timing. **Search** and **Library** sections; in Library, **Library lists (every Library button: rows or tiles)** comes after the category buttons, and **Tile columns (2 to 6)** appears under it only when Tiles is chosen. There is no Lyrics tab and no Autoplay switch (the Queue shows the Autoplay switch whenever Music Assistant supports it). `accent` is YAML only. Quiet hours were removed in 0.7.9.
 
 
 ## Known issues
@@ -515,7 +469,6 @@ Not in 0.7.x: joining a speaker to a dynamic group so playback resumes on it, an
 - **Play Next, Play Now or Remove are greyed, or the heart or grouping is missing, for one user.** Greyed queue actions mean that person may not change the queue (`grouping`, or `queue_play` left off). A missing heart means no `library` class (see [Permissions](#permissions)).
 - **Lyrics say "Lyrics unavailable".** Music Assistant has no lyrics provider enabled, or the user lacks `read`. Music Assistant won't fetch lyrics for library tracks, so the card asks for the provider copy of the track.
 - **No album art.** The card never loads the player's absolute `entity_picture` (mixed content on https). It uses `entity_picture_local`, then a relative `entity_picture`, then an https queue image.
-- **Typing or volume drags stutter on a kiosk tablet.** Set `backdrop` to `plain` (the default since 0.8.1), or to `light`, `static` or `off` if you want to keep a Now Playing background.
 
 ## License
 
