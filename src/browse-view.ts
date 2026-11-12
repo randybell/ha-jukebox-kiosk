@@ -598,6 +598,8 @@ export class JbBrowse extends LitElement {
       });
   }
   private scopeLabel = (it: MaItem, type: string) => (this.filtersOn() && type === 'artist' && this._lart?.uri !== it.uri ? `Filter by ${it.name}` : '');
+  /** 0.8.2 (#91): on the filtered artist's own page the same button reads "Clear filter by <artist>" */
+  private scopeClear = (it: MaItem, type: string) => (this.filtersOn() && type === 'artist' && this._lart?.uri === it.uri ? `Clear filter by ${it.name}` : '');
   private clearBtn() {
     return html`<button class="fc clr" data-action="clear-filters" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.clearFilters()}>Clear filters</button>`;
   }
@@ -668,6 +670,9 @@ export class JbBrowse extends LitElement {
         return;
       }
       this.setArtistFilter(e.detail.item, d && !d.loading ? { albums: d.albums ?? [], tracks: d.tracks ?? [] } : undefined);
+    } else if (e.detail.op === 'unscope') {
+      // 0.8.2 (#91): clear only the artist filter; the artist page stays open, any typed filter text stays
+      const st = this._stack; this.setArtistFilter(null); this._stack = st;
     } else this.openDetail(e.detail.item, e.detail.type);
   }
 
@@ -867,7 +872,7 @@ export class JbBrowse extends LitElement {
           <div class="lkcol">${this.filterBox()}${this.filterTpl()}<jb-keyboard class="kbd" @jb-key=${this.onFilterKey}></jb-keyboard></div>
           <div class="scroll panel" @scroll=${this.onScroll}>${this.renderGrid()}</div>
         </div>`
-      : top ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${top} .scopeLabel=${this.scopeLabel}
+      : top ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${top} .scopeLabel=${this.scopeLabel} .scopeClear=${this.scopeClear}
           .trail=${[trail0, ...this._stack.slice(0, -1).map((x) => x.item.name)]} @jb-nav=${this.onNav}></jb-detail>`
         : html`<div class="scroll panel" @scroll=${this.onScroll}>${this.renderGrid()}</div>`}
       ${m ? menuTpl(m.pos, { item: m.item, sub: this.sub(m.item, m.type) || providerLabel(m.item.uri) }, m.actions,

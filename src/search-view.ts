@@ -618,6 +618,7 @@ export class JbSearch extends LitElement {
     e.stopPropagation();
     if (e.detail.op === 'back') this.back();
     else if (e.detail.op === 'scope') this.scopeFromDetail(e.detail.item, e.detail.type, e.detail.data);
+    else if (e.detail.op === 'unscope') this.setScope(null); // 0.8.2 (#91): the artist page stays open
     else this.openDetail(e.detail.item, e.detail.type);
   }
 
@@ -638,6 +639,8 @@ export class JbSearch extends LitElement {
   }
   private scopeLabel = (it: MaItem, type: string) => (!this.filtersOn() || (this._scope?.album && type === 'album' && this._scope.album.uri === it.uri)
     || (type === 'artist' && !this._scope?.album && this._scope?.artist?.uri === it.uri) ? '' : `Search in ${it.name}`);
+  /** 0.8.2 (#91): on the filtered artist's own page the "Search in <artist>" button reads "Clear search in <artist>" */
+  private scopeClear = (it: MaItem, type: string) => (this.filtersOn() && type === 'artist' && !this._scope?.album && this._scope?.artist?.uri === it.uri ? `Clear search in ${it.name}` : '');
   private scopeTpl() {
     const s = this._scope; if (!s) return nothing;
     const chip = (k: 'artist' | 'album', label: string, name: string) => html`<button class="sc" data-scope=${k} tabindex="-1"
@@ -820,7 +823,7 @@ export class JbSearch extends LitElement {
           ${this.combined && !this._stack.length ? this.lcatsTpl() : nothing}
           ${this.combined ? html`<div class="lib" ?hidden=${!this.libShown()}><jb-browse embedded .hass=${this.hass} .config=${this.config} .active=${this.active && this.libShown()}
             @jb-cat=${this.onBrowseCat} @jb-lib-scope=${this.onLibScope}></jb-browse></div>` : nothing}
-          ${this._stack.length ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${this._stack[this._stack.length - 1]} .scopeLabel=${this.scopeLabel}
+          ${this._stack.length ? html`<jb-detail class="dv" .hass=${this.hass} .config=${this.config} .entry=${this._stack[this._stack.length - 1]} .scopeLabel=${this.scopeLabel} .scopeClear=${this.scopeClear}
               .trail=${[sc ? `Search in ${name}${this._query ? ` “${this._query}”` : ''}` : this.combined && !this._query ? (this.srcOn() ? this.srcLabel() : 'Library') : `Search “${this._shownQuery || this._query}”`, ...this._stack.slice(0, -1).map((x) => x.item.name)]} @jb-nav=${this.onNav}></jb-detail>`
           : this.libShown() ? nothing
           : this.combined && !sc && !this._query ? html`<div class="scroll" @scroll=${() => this.press.scrolled()}>${this.renderPb()}</div>`

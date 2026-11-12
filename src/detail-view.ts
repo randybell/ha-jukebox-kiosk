@@ -141,7 +141,7 @@ const ALBUM_HEAD = { add: 'Add to queue', next: 'Play next', replace: 'Play now'
 
 export class JbDetail extends LitElement {
   static properties = {
-    hass: { attribute: false }, config: { attribute: false }, entry: { attribute: false }, trail: { attribute: false }, scopeLabel: { attribute: false },
+    hass: { attribute: false }, config: { attribute: false }, entry: { attribute: false }, trail: { attribute: false }, scopeLabel: { attribute: false }, scopeClear: { attribute: false },
     _menu: { state: true }, _toast: { state: true }, _confirm: { state: true }, _sel: { state: true },
   };
   hass?: HomeAssistant;
@@ -151,6 +151,8 @@ export class JbDetail extends LitElement {
   trail: string[] = [];
   /** v0.7 search filters: set by the host on artist / album pages; "Search in JJ Grey" emits jb-nav {op:'scope'} */
   scopeLabel?: (it: MaItem, type: string) => string;
+  /** 0.8.2 (#91): while this page's own filter is on the host returns the "Clear filter by …" label (else ''); a tap emits jb-nav {op:'unscope'} */
+  scopeClear?: (it: MaItem, type: string) => string;
   private _menu: { item: MaItem; type: string; pos: MenuPos; actions: MenuAction[] } | null = null;
   private _toast = '';
   private _toastTimer?: number;
@@ -359,6 +361,9 @@ export class JbDetail extends LitElement {
   }
 
   private scopeTpl(it: MaItem, type: string, d: DetailData) {
+    const clear = (type === 'artist' || type === 'album') && this.scopeClear ? this.scopeClear(it, type) : '';
+    if (clear) return html`<button class="sbtn scope" data-action="unscope" tabindex="-1" aria-label=${clear} @pointerdown=${noFocus}
+      @click=${() => { this.closeMenu(); fire(this, 'jb-nav', { op: 'unscope', item: it, type }); }}>${icon('close')}<span>${clear}</span></button>`;
     const label = (type === 'artist' || type === 'album') && this.scopeLabel ? this.scopeLabel(it, type) : '';
     if (!label) return nothing;
     return html`<button class="sbtn scope" data-action="scope" tabindex="-1" aria-label=${label} @pointerdown=${noFocus}
