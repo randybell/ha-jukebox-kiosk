@@ -387,8 +387,10 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
         font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: 1px solid var(--_surface-border);
         user-select: none; -webkit-user-select: none; transition: transform 60ms, background 60ms;
       }
-      .k .i { width: 26px; height: 26px; }
-      .k.sp { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); }
+      /* The backspace icon grows with the key labels (26px at the 24px default), so it stays in proportion. */
+      .k .i { width: calc(var(--kfs, var(--ha-font-size-2xl, 24px)) + 2px); height: calc(var(--kfs, var(--ha-font-size-2xl, 24px)) + 2px); }
+      /* 123, Space and Clear use the same label size and weight as the letter keys. */
+      .k.sp { font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); }
       .k.pressed { background: var(--_chip-sel); color: var(--_fg); transform: scale(0.96); }
       .k.num, .wide-only { display: none; }
       @container kb (min-width: 600px) {
