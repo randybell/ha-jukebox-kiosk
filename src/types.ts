@@ -81,8 +81,6 @@ export interface JukeboxCardConfig {
   /** Upcoming queue items fetched. Default 200. */
   queue_limit?: number;
   accent?: 'mono' | 'fixed' | 'art';
-  /** Backdrop/blur performance mode. Default auto (light on low-end or reduced-motion devices, else full). */
-  backdrop?: 'plain' | 'auto' | 'full' | 'light' | 'static' | 'off';
   /** Results per media type from 2 characters. 1-character queries always use 5. */
   limit?: number;
   default_tab?: TabId;

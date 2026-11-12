@@ -5,7 +5,6 @@ import { hermetic } from './intercept.mjs';
 import { devIndex } from './serve.mjs';
 import { launch, openPage, SENT, sleep } from './themes-lib.mjs';
 import { SCENES, probe, ev, C } from './themes-scenes.mjs';
-import { nowFill } from './contrast-lib.mjs';
 const BASE = await devIndex();
 const browser = await launch();
 let failures = 0, total = 0;
@@ -48,21 +47,20 @@ for (const name of Object.keys(SCENES)) {
   try { await p?.close(); } catch {}
 }
 
-// 2. the album-art backdrop, shade and fill belong to Now Playing only (all four looks)
-const SCOPE = ['now', 'now-bd-full', 'now-bd-light', 'lib-playlists-tiles', 'lib-keyboard-123', 'queue', 'track-popup', 'speakers-picker', 'detail-playlist'];
+// 2. no screen has an album-art backdrop, shade or fill behind it: Now Playing follows the theme like the rest (all four looks; a saved `backdrop` is ignored)
+const SCOPE = ['now', 'now-saved-backdrop', 'lib-playlists-tiles', 'lib-keyboard-123', 'queue', 'track-popup', 'speakers-picker', 'detail-playlist'];
 for (const theme of ['light', 'dark', 'glass', 'wallpaper']) for (const name of SCOPE) {
   let p;
   try {
     p = await newPage(theme, name);
     const r = await ev(p, `(() => { const np = ${C}.querySelector('main.np'); const cs = (el, pe) => getComputedStyle(el, pe);
-      return { onNow: np.classList.contains('on-now'), before: cs(np, '::before').content, after: cs(np, '::after').content, bgimg: cs(np).backgroundImage,
+      return { before: cs(np, '::before').content, after: cs(np, '::after').content, bgimg: cs(np).backgroundImage,
         bdl: [...${C}.querySelectorAll('.bdl')].map((e) => cs(e).display),
         views: [...${C}.querySelectorAll('.view')].filter((v) => v.dataset.view !== 'now').map((v) => cs(v).backgroundColor + '|' + cs(v).backgroundImage) }; })()`);
     const isNow = NOW(name);
-    if (isNow && /^now-bd-/.test(name)) check(`T2 ${theme}/${name}: the chosen art mode draws its backdrop on Now Playing`, r.onNow && (r.before === '""' || r.bdl.some((d) => d !== 'none')), JSON.stringify({ b: r.before }));
-    else if (isNow) check(`T2 ${theme}/${name}: plain (the default) draws no art, shade or fill on Now Playing`, r.onNow && (r.before === 'none' || r.before === 'normal') && (r.after === 'none' || r.after === 'normal') && r.bdl.every((d) => d === 'none') && r.bgimg === 'none', JSON.stringify(r).slice(0, 200));
+    if (isNow) check(`T2 ${theme}/${name}: Now Playing draws no art, shade or fill behind it (the theme card surface)`, (r.before === 'none' || r.before === 'normal') && (r.after === 'none' || r.after === 'normal') && r.bdl.every((d) => d === 'none') && r.bgimg === 'none', JSON.stringify(r).slice(0, 200));
     else {
-      check(`T2 ${theme}/${name}: no album art, shade or fill behind this screen`, !r.onNow && (r.before === 'none' || r.before === 'normal') && (r.after === 'none' || r.after === 'normal') && r.bdl.every((d) => d === 'none') && r.bgimg === 'none', JSON.stringify(r).slice(0, 200));
+      check(`T2 ${theme}/${name}: no album art, shade or fill behind this screen`, (r.before === 'none' || r.before === 'normal') && (r.after === 'none' || r.after === 'normal') && r.bdl.every((d) => d === 'none') && r.bgimg === 'none', JSON.stringify(r).slice(0, 200));
       check(`T2 ${theme}/${name}: the screens paint no card colour of their own on top`, r.views.every((v) => v === 'rgba(0, 0, 0, 0)|none'), r.views.join(' ; ').slice(0, 160));
     }
     check(`T2 ${theme}/${name}: no page errors`, p._errs.length === 0, p._errs[0] ?? '');
@@ -96,36 +94,6 @@ for (const theme of ['light', 'dark', 'glass', 'wallpaper']) for (const name of 
   const bk = await ev(p, `(() => { const e = ${HS}.querySelector('.bk'); if (!e) return null; const s = getComputedStyle(e); return { bg: s.backgroundColor, filter: s.backdropFilter }; })()`);
   check('T3 dialog dimmer is HA\'s dialog scrim (no colour, brightness filter) and nothing else', bk && bk.bg === 'rgba(0, 0, 0, 0)' && /brightness/.test(bk.filter), JSON.stringify(bk));
   await p.close();
-}
-
-// 4. every backdrop mode really paints what it promises, in all four looks (0.8.1 fix: "Dark" drew nothing). Exactly HA's media control card:
-//    the fill is --primary-color (off: the same under grayscale(1)); text and icons are --text-primary-color. No contrast switching.
-{
-  const rgb3 = (c) => { const m = (c.match(/[\d.]+/g) ?? []).map(Number); return (/^color\(srgb/.test(c) ? m.slice(0, 3).map((v) => Math.round(v * 255)) : m.slice(0, 3)); };
-  const sameRgb = (a, b) => rgb3(a).every((v, i) => Math.abs(v - rgb3(b)[i]) <= 1); // the subtitle is the same colour at 70% (HA's own tint of the text colour)
-  const tokens = (p) => ev(p, `(() => { const o = {}; for (const [k, v] of [['primary', 'var(--primary-color)'], ['tpc', 'var(--text-primary-color, #fff)']]) { const i = document.createElement('i'); i.style.color = v; document.body.appendChild(i); o[k] = getComputedStyle(i).color; i.remove(); } return o; })()`);
-  for (const theme of ['light', 'dark', 'glass', 'wallpaper']) {
-    for (const [name, label, fill] of [['now-bd-static', 'static (Dark)', 'primary'], ['now-bd-off', 'off', 'grey'], ['now-bd-full-noart', 'full with no art', 'primary'], ['now-bd-light-noart', 'light with no art', 'primary']]) {
-      let p;
-      try {
-        p = await newPage(theme, name);
-        const f = await nowFill(p, ev, C); const t = await tokens(p);
-        const pr = (t.primary.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
-        const grey = Math.round(0.2126 * pr[0] + 0.7152 * pr[1] + 0.0722 * pr[2]);
-        const painted = fill === 'primary' ? f.px.every((v, i) => Math.abs(v - pr[i]) <= 2) : f.px.every((v) => Math.abs(v - grey) <= 2);
-        check(`T4 ${theme}/${label}: the flat fill really renders (painted pixel ${f.px} = ${fill === 'primary' ? '--primary-color' : 'grayscale(--primary-color)'})`, f.content === '""' && f.position === 'absolute' && painted, JSON.stringify({ content: f.content, position: f.position, px: f.px, primary: t.primary, grey }));
-        check(`T4 ${theme}/${label}: title and subtitle use --text-primary-color (as HA media control .player)`, f.title === t.tpc && sameRgb(f.sub, t.tpc), JSON.stringify({ title: f.title, sub: f.sub, tpc: t.tpc }));
-      } catch (e) { check(`T4 ${theme}/${label}: scene opens`, false, String(e.message).slice(0, 140)); }
-      try { await p?.close(); } catch {}
-    }
-  }
-  // the three art modes still draw their art backdrop (::before of the Now Playing area has content)
-  for (const name of ['now-bd-full', 'now-bd-light']) {
-    const p = await newPage('light', name);
-    const c = await ev(p, `getComputedStyle(${C}.querySelector('main.np'), '::before').content`);
-    check(`T4 light/${name}: the art backdrop is drawn (::before has content)`, c === '""', c);
-    await p.close();
-  }
 }
 
 // 5. pop-up dimmer: HA's dialog scrim (colour none, backdrop filter), with HA's own default dimmer where the variable is not defined

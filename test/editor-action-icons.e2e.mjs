@@ -30,7 +30,7 @@ for (const [tag, cfg] of [['missing', base], ['true in YAML', { ...base, show_ac
   check(`show_action_icons ${tag}: the editor has no field for it`, !all.includes('show_action_icons'), J(all));
   check(`show_action_icons ${tag}: no "Show Action Icons" (or "action icon") text anywhere in the editor`, !labels.some((t) => /action icon/i.test(t)), J(labels.filter((t) => /action/i.test(t))));
   const disp = await ev(p, `[...${F}.querySelectorAll('details[data-section=display] [data-name]')].map((e) => e.dataset.name)`);
-  check(`show_action_icons ${tag}: Display section is just its other settings, in order`, J(disp) === J(['default_tab', 'screensaver_minutes', 'screensaver_lyrics', 'backdrop', 'coerce_repeat_one']), J(disp));
+  check(`show_action_icons ${tag}: Display section is just its other settings, in order`, J(disp) === J(['default_tab', 'screensaver_minutes', 'screensaver_lyrics', 'coerce_repeat_one']), J(disp));
   // an edit made in the editor keeps whatever YAML had
   await ev(p, `__changes.length = 0`);
   await ev(p, `(() => { const i = ${F}.querySelector('[data-name=coerce_repeat_one] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);

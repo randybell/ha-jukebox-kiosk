@@ -537,30 +537,27 @@ export class JbNow extends LitElement {
     .ab:active { transform: scale(.94); }
     .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     /* no picture: media-control's no-image look: the player icon in the on-primary colour */
-    .art .ph { position: absolute; inset: 0; display: grid; place-items: center; background: var(--_art-chip-bg, var(--_chip-sel)); }
-    .art .ph .i { width: 30%; height: 30%; color: var(--_art-muted, var(--_inactive)); }
+    .art .ph { position: absolute; inset: 0; display: grid; place-items: center; background: var(--_chip-sel); }
+    .art .ph .i { width: 30%; height: 30%; color: var(--_inactive); }
     /* Cover overlay buttons sit on the picture: an HA icon button (no shadow, theme icon colour) on the opaque theme surface, so the icon stays readable on any cover */
     .art .sleep-strip .sp { color: var(--_fg); }
     .art .sleep-strip .sp.on { color: var(--_active); border-color: var(--_active); }
     .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: 10px;
-      /* Text drawn on the art shade: HA media-control art contrast (--_art-* from .np.has-art; no-op when empty) */
-      --_fg: var(--_art-fg, var(--primary-text-color, #212121));
-      --_muted: var(--_art-muted, var(--secondary-text-color, #727272));
-      --_inactive: var(--_art-inactive, var(--secondary-text-color, var(--disabled-text-color)));
-      --_track: var(--_art-track, var(--disabled-color, var(--divider-color)));
-      --_hairline: var(--_art-hairline, var(--divider-color, rgba(0, 0, 0, 0.12)));
-      --_divider: var(--_art-divider, var(--divider-color, rgba(0, 0, 0, 0.12)));
-      --_chip-bg: var(--_art-chip-bg, var(--ha-assist-chip-container-color, transparent));
-      --_chip-sel: var(--_art-chip-bg-strong, var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15)));
-      --_surface-border: var(--_art-surface-border, var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12))));
-      --_prov-fg: var(--_art-fg, var(--primary-text-color, #212121));
-      --_prov-bg: var(--_art-chip-bg, var(--ha-assist-chip-container-color, transparent));
-      --_prov-border: var(--_art-surface-border, var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12))));
+      --_fg: var(--primary-text-color, #212121);
+      --_muted: var(--secondary-text-color, #727272);
+      --_inactive: var(--secondary-text-color, var(--disabled-text-color));
+      --_track: var(--disabled-color, var(--divider-color));
+      --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
+      --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
+      --_chip-bg: var(--ha-assist-chip-container-color, transparent);
+      --_chip-sel: var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15));
+      --_surface-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
+      --_prov-fg: var(--primary-text-color, #212121);
+      --_prov-bg: var(--ha-assist-chip-container-color, transparent);
+      --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
       color: var(--_fg); }
-    /* Theme surfaces (speakers panel, up next, More speakers): an opaque HA card surface with theme text and the theme's primary colour — never art-contrast or canvas invert */
+    /* Theme surfaces (speakers panel, up next, More speakers): an opaque HA card surface with theme text and the theme's primary colour */
     .info .panel, .info .vmore {
-      --_canvas-active: var(--primary-color, #03a9f4);
-      --_canvas-on: var(--text-primary-color, #fff);
       --_active: var(--primary-color, #03a9f4);
       --_on-accent: var(--text-primary-color, #fff);
       --_fg: var(--primary-text-color, #212121);

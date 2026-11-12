@@ -91,9 +91,9 @@ for (const vp of VPS) {
   await wait(pg, `/No stations yet/.test(${BR}.querySelector('.empty')?.textContent ?? '')`);
   await shot(pg, '10-library-radio-empty', vp, 'Library → Radio with no stations: the favourites hint');
   await pg.close();
-  pg = await open('&tab=browse&backdrop=light', { ...ALL, ...LH, library_tiles: ['playlist', 'artist', 'album', 'radio', 'search', 'track', 'podcast', 'audiobook', 'genre', 'discover'] }, vp);
+  pg = await open('&tab=browse', { ...ALL, ...LH, library_tiles: ['playlist', 'artist', 'album', 'radio', 'search', 'track', 'podcast', 'audiobook', 'genre', 'discover'] }, vp);
   await wait(pg, `${BR}.querySelectorAll('.lt').length === 10`);
-  await shot(pg, '11-library-all-tiles-blur', vp, 'Library: all ten tiles (optional ones on), light blur backdrop');
+  await shot(pg, '11-library-all-tiles', vp, 'Library: all ten tiles (optional ones on));
   await pg.close();
   // Autoplay style (Q14): Queue header pill + chevron → style sheet → playlist chooser
   {

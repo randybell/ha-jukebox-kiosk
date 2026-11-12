@@ -2,19 +2,16 @@ import { css } from 'lit';
 
 /**
  * Private `--_*` aliases point at Home Assistant theme variables (no public `--jb-*` color knobs).
- * Roles follow HA's built-in components (see the comments on each token). The only fixed overlays left are the
- * album-art readability shade and the screensaver, and both are drawn on Now Playing only.
+ * Roles follow HA's built-in components (see the comments on each token). The only fixed look left is the screensaver.
  */
 export const tokens = css`
   :host {
-    /* selected / on: HA primary + label on primary (built-in media-control / sidebar pattern).
-       --_canvas-active/--_canvas-on are set on the Now Playing primary-color fill (no art / static / off)
-       so transport controls stay readable, like media-control's --text-primary-color on --primary-color. */
-    --_active: var(--_canvas-active, var(--primary-color, #03a9f4));
+    /* selected / on: HA primary + label on primary (built-in media-control / sidebar pattern). */
+    --_active: var(--primary-color, #03a9f4);
     --_inactive: var(--secondary-text-color, var(--state-inactive-color, var(--disabled-text-color)));
     --_track: var(--disabled-color, var(--divider-color)); /* ha-control-slider: track = --disabled-color, fill = --primary-color */
     --_accent: var(--accent-color, var(--_active));
-    --_on-accent: var(--_canvas-on, var(--text-primary-color, #fff)); /* label on --_active */
+    --_on-accent: var(--text-primary-color, #fff); /* label on --_active */
     --_fg: var(--primary-text-color, #212121);
     --_muted: var(--secondary-text-color, #727272);
     --_bg: var(--ha-card-background, var(--card-background-color, #fff));
@@ -51,11 +48,6 @@ export const tokens = css`
     --_card-shadow: var(--ha-card-box-shadow, none);
     --_card-border-width: var(--ha-card-border-width, 1px);
     --_card-border-color: var(--ha-card-border-color, var(--divider-color, var(--_surface-border)));
-    --_backdrop-blur: 38px;
-    --_backdrop-saturate: 1.15;
-    /* Album-art readability overlays: drawn on Now Playing only (media-control keeps its art contrast over the picture) */
-    --_shade: linear-gradient(180deg, #000000b8 0%, #00000085 35%, #0000009e 70%, #000000e0 100%);
-    --_vignette: radial-gradient(120% 90% at 50% 50%, transparent 30%, #0000008c 100%);
     --_font-body: var(--ha-font-family-body, Roboto, Noto, sans-serif);
     --_font-display: var(--ha-font-family-heading, var(--ha-card-header-font-family, var(--ha-font-family-body, Roboto, Noto, sans-serif)));
     --_pad: clamp(14px, 3vw, 36px);

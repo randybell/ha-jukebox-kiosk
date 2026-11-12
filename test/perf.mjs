@@ -1,4 +1,4 @@
-// Frame-time benchmark: 1920x1080, 4x CPU throttle (CDP Emulation.setCPUThrottlingRate), backdrop full vs light.
+// Frame-time benchmark: 1920x1080, 4x CPU throttle (CDP Emulation.setCPUThrottlingRate).
 // Scenarios: dragging the "Everywhere" volume slider on Now Playing; typing on the on-screen keyboard in Search.
 // Metrics: rAF frame deltas (avg / p95 / max / % over 33 ms), long tasks (PerformanceObserver 'longtask'),
 // and from a CDP trace: renderer main-thread busy ms and raster/GPU ms (where the live blur is paid).
@@ -62,10 +62,10 @@ function traceStats(events) {
 }
 
 const results = [];
-for (const scen of ['slider-drag', 'keyboard-typing']) for (const mode of ['full', 'light']) for (let run = 0; run < RUNS; run++) {
+for (const scen of ['slider-drag', 'keyboard-typing']) for (const mode of ['default']) for (let run = 0; run < RUNS; run++) {
   const p = await b.newPage();
   await p.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
-  await p.goto(`${BASE}?latency=40&fresh=1&tab=${scen === 'slider-drag' ? 'now' : 'search'}&backdrop=${mode}`);
+  await p.goto(`${BASE}?latency=40&fresh=1&tab=${scen === 'slider-drag' ? 'now' : 'search'}`);
   await p.waitForFunction('window.__ready'); await sleep(1200);
   const cdp = await p.createCDPSession();
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });

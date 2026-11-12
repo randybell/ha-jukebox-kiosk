@@ -1,14 +1,14 @@
 // 0.8.1: the card's styles may only paint with Home Assistant theme variables. Reads the source (no browser) and fails on a
-// fixed colour, a fixed shadow, or the dialog dimmer used as a fill. The screensaver, the album-art shade and the lyrics
-// shade on Now Playing are the documented exceptions. Usage: node test/unit/theme-rules.unit.mjs
-import { readFileSync, readdirSync } from 'node:fs';
+// fixed colour, a fixed shadow, or the dialog dimmer used as a fill. The screensaver and the lyrics shade on Now Playing
+// are the documented exceptions. Usage: node test/unit/theme-rules.unit.mjs
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 const SRC = new URL('../../src/', import.meta.url);
 const files = ['styles.ts', 'jukebox-card.ts', 'now-view.ts', 'queue-view.ts', 'search-view.ts', 'browse-view.ts', 'detail-view.ts', 'keyboard.ts', 'hold-sheet.ts',
   'speakers-view.ts', 'station-sheet.ts', 'shared.ts', 'slider.ts', 'lyrics/lyrics-view.ts'];
 let failures = 0, total = 0;
 const check = (name, ok, info = '') => { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); };
-// allowed fixed looks: screensaver / stage (exempt), the art shade tokens and art-contrast white, the lyrics shade over the art
-const EXEMPT = /\.amb|\.sv-|sv-bg|@keyframes|\.rm |\.m-saver|:host\(\[mode=saver\]\)|\.m-overlay|--_shade|--_vignette|--_art-|mask-image|\.bd-static \.amb|\.sv-lys/;
+// allowed fixed looks: screensaver / stage (exempt), the lyrics shade over the art
+const EXEMPT = /\.amb|\.sv-|sv-bg|@keyframes|\.rm |\.m-saver|:host\(\[mode=saver\]\)|\.m-overlay|--_art-|mask-image|\.sv-lys/;
 const stripVars = (t) => { // remove every var( ... ) with balanced parentheses
   for (let i = t.indexOf('var('); i >= 0; i = t.indexOf('var(')) {
     let d = 0, j = i + 3;
@@ -43,6 +43,7 @@ check('TR2 the dialog scrim is only --mdc-dialog-scrim-color (none by default) p
 check('TR3 chips use HA chip tokens (assist chip idle, filter chip selected)', /--ha-assist-chip-container-color/.test(styles) && /--ha-filter-chip-selected-container-color/.test(styles));
 check('TR4 inputs use HA input tokens', /--input-fill-color/.test(styles) && /--input-ink-color/.test(styles) && /--input-label-ink-color/.test(styles));
 const card = readFileSync(new URL('jukebox-card.ts', SRC), 'utf8');
-check('TR5 art, shade and the primary fill are drawn on Now Playing only (.on-now); the list views paint no surface of their own', !/\.np\.has-art::before/.test(card) && /\.np\.on-now\.has-art::before/.test(card) && !/\.view:not\(\[data-view=now\]\)/.test(card));
+check('TR5 no album-art backdrop outside the screensaver: no backdrop option, module, shade tokens or Now Playing art layer; the list views paint no surface of their own',
+  !/\.has-art|\.on-now|\.bd-|\.bdl|--_shade|--_vignette|--_backdrop|data-backdrop|dataset\.backdrop|resolveBackdrop|drawPreblurred/.test(card + styles) && !/backdrop\b(?!-filter)/.test(card.replace(/Backdrop/g, '')) && !existsSync(new URL('backdrop.ts', SRC)) && !/\.view:not\(\[data-view=now\]\)/.test(card));
 console.log(`\n${total - failures}/${total} theme-rule checks passed`);
 process.exit(failures ? 1 : 0);

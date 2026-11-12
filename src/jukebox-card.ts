@@ -17,8 +17,8 @@ import './station-confirm';
 import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
 import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
-import { resolveBackdrop, drawPreblurred, BACKDROPS, prefersReducedMotion, type BackdropMode } from './backdrop';
-import { ART_FG_OVER_DARK_SHADE } from './art-contrast';
+/** the screensaver's reduced-motion class (.rm) follows the browser setting */
+const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { pickBackend, createBackend, type MaBackend } from './backend';
 import { defineElement } from './define';
@@ -81,14 +81,12 @@ export class JukeboxCard extends LitElement {
     _now: { state: true },
     _qcount: { state: true },
     _saver: { state: true },
-    _bd: { state: true },
     _qart: { state: true },
     _stage: { state: true }, _stAsk: { state: true }, _sheet: { state: true }, _stageOut: { state: true },
     _spk: { state: true },
     _station: { state: true },
     _spkEl: { state: true },
     _lost: { state: true },
-    _artFg: { state: true },
   };
   hass?: HomeAssistant;
   private _config!: JukeboxCardConfig;
@@ -102,12 +100,9 @@ export class JukeboxCard extends LitElement {
   private _saver = '';
   private _idleTimer?: number;
   private queue = new QueueModel();
-  /** resolved backdrop mode + reason (exposed as data-backdrop / data-backdrop-why on the host) */
-  private _bd: BackdropMode = 'plain';
-  private _bdWhy = '';
-  private _lightKey = '';
   private _ro?: ResizeObserver;
   private _rm?: MediaQueryList;
+  private onMotion = () => this.requestUpdate();
   private _qunsub?: () => void;
   /** one lyrics lookup per track, shared by the art overlay, Stage and the screensaver */
   readonly lyrics = new LyricsStore();
@@ -138,9 +133,6 @@ export class JukeboxCard extends LitElement {
   private _spkEl?: HTMLElement;
   /** one-time notice: the saved speaker target is gone from HA */
   private _lost = '';
-  /** contrast fg over album-art backdrop (#fff/#000), like HA media-control */
-  private _artFg = '';
-  private _artFgKey = '';
   private _lostTimer?: number;
   /** 0.7.10 volume while HA is disconnected: status + flush on reconnect (see vol-send.ts) */
   private _vunsub?: () => void;
@@ -195,8 +187,6 @@ export class JukeboxCard extends LitElement {
     for (const k of ['show_lyrics', 'screensaver_lyrics', 'lyrics_seek'] as const)
       if (!bool(config[k])) throw new Error(`jukebox-card: ${k} must be true or false.`);
     if (!num(config.lyrics_offset_ms, -5000, 5000)) throw new Error('jukebox-card: lyrics_offset_ms must be between -5000 and 5000.');
-    if (config.backdrop !== undefined && !BACKDROPS.includes(config.backdrop))
-      throw new Error(`jukebox-card: backdrop must be one of ${BACKDROPS.join(', ')}.`);
     validateSpeakers(config);
     const first = !this._config;
     this._base = {
@@ -218,7 +208,6 @@ export class JukeboxCard extends LitElement {
     this.queue.entity = this._config.entity!;
     this.queue.limitAfter = this._config.queue_limit ?? 200;
     ensureFonts(this._config.font_base);
-    this.applyBackdrop();
     this.armIdle();
   }
   /**
@@ -315,12 +304,6 @@ export class JukeboxCard extends LitElement {
     const name = (this.hass?.states[entity]?.attributes?.friendly_name as string) ?? entity;
     return el.ask({ title: `Start ${name}?`, sub: 'Speakers playing elsewhere switch over.', lines, ok: 'Start' });
   };
-  private applyBackdrop = () => {
-    if (!this._config) return;
-    const r = resolveBackdrop(this._config.backdrop);
-    this._bd = r.mode; this._bdWhy = r.why; this._lightKey = '';
-    this.dataset.backdrop = r.mode; this.dataset.backdropWhy = r.why;
-  };
 
   /** visible tabs: Now Playing, Library (plus Search in the separate layout), Queue */
   private tabs() {
@@ -365,7 +348,7 @@ export class JukeboxCard extends LitElement {
     this.armIdle();
     if (this.hass) this.queue.refreshSoon(0);
     this._rm = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
-    this._rm?.addEventListener?.('change', this.applyBackdrop);
+    this._rm?.addEventListener?.('change', this.onMotion);
     window.addEventListener('resize', this.scheduleFit);
     window.addEventListener('orientationchange', this.scheduleFit);
     window.addEventListener('location-changed', this.scheduleFit);
@@ -410,7 +393,7 @@ export class JukeboxCard extends LitElement {
     window.removeEventListener('keydown', this.onKeyCap, true);
     window.removeEventListener('keydown', this.onKey);
     if (this._stage) this.closeStage();
-    this._rm?.removeEventListener?.('change', this.applyBackdrop);
+    this._rm?.removeEventListener?.('change', this.onMotion);
     this._ro?.disconnect(); this._ro = undefined;
     window.removeEventListener('resize', this.scheduleFit);
     window.removeEventListener('orientationchange', this.scheduleFit);
@@ -470,30 +453,18 @@ export class JukeboxCard extends LitElement {
     this.renderRoot.addEventListener('focusin', this.onFocusIn as EventListener);
     const np = this.renderRoot.querySelector('main.np');
     if ('ResizeObserver' in window) {
-      this._ro = new ResizeObserver(() => { this.updateScale(); this._lightKey = ''; this.updateLight(); });
+      this._ro = new ResizeObserver(() => { this.updateScale(); });
       this._ro.observe(this);
     }
     this.updateScale();
   }
   protected updated() {
-    this.updateLight();
-    this.updateArtFg(this.art());
     if (!this._spkEl) { const el = this.renderRoot.querySelector('jb-speakers') as HTMLElement | null; if (el) this._spkEl = el; }
   }
-  /** Now-playing art for the backdrop and screensaver (see playerArt: never an absolute entity_picture). */
+  /** Now-playing art for the screensaver (see playerArt: never an absolute entity_picture). */
   private art() {
     const ent = this.hass?.states[this._config?.entity ?? 'media_player.everywhere'];
     return playerArt(ent?.attributes, this.queue.currentItem);
-  }
-  /** Contrast fg over album-art backdrop (HA media-control extractColors / YIQ).
-   *  has-art always applies dark --_shade/--_vignette over blurred art, so the effective
-   *  surface is dark — same case as HA getYiq() < 200 → #ffffff (see art-contrast.ts).
-   *  Sampling the raw cover alone would pick black on light art and fail over that shade. */
-  private updateArtFg(pic: string | undefined) {
-    const key = pic || '';
-    if (key === this._artFgKey) return;
-    this._artFgKey = key;
-    this._artFg = pic ? ART_FG_OVER_DARK_SHADE : '';
   }
   /** Large-screen scale: the layout is designed around ~1280x800; on bigger panels zoom it so art/text grow instead of spreading thin. */
   private _scale = 1;
@@ -507,26 +478,6 @@ export class JukeboxCard extends LitElement {
     this._scale = z;
     this.style.setProperty('--_z', String(z));
     this.dataset.scale = String(z);
-  }
-  /** light mode: re-draw the 64px pre-blurred canvas only when the art (or the box aspect) changes */
-  private updateLight() {
-    if (this._bd !== 'light') return;
-    const cv = this.renderRoot.querySelector('canvas.bdl') as HTMLCanvasElement | null;
-    const np = this.renderRoot.querySelector('main.np') as HTMLElement | null;
-    const pic = this.art();
-    if (!cv || !np) return;
-    const w = np.clientWidth, h = np.clientHeight;
-    const key = `${pic}|${Math.round((w / Math.max(1, h)) * 10)}`;
-    if (key === this._lightKey) return;
-    this._lightKey = key;
-    if (!pic) { cv.classList.remove('ready'); return; }
-    const t0 = performance.now();
-    drawPreblurred(cv, pic, w, h).then((ok) => {
-      if (this._lightKey !== key) return;
-      cv.classList.toggle('ready', ok);
-      cv.dataset.drawMs = String(Math.round(performance.now() - t0));
-      cv.dataset.draws = String(Number(cv.dataset.draws ?? 0) + 1);
-    });
   }
 
   // ---------- screensaver ----------
@@ -756,14 +707,12 @@ export class JukeboxCard extends LitElement {
     const status = lyrOn ? SAVER_LYRICS_STATUS[ls] : undefined;
     let date = '';
     try { date = this._now.toLocaleDateString(lang, { weekday: 'long', month: 'long', day: 'numeric' }); } catch { /* */ }
-    // the screensaver keeps its album-art look in the plain mode too (plain only changes Now Playing)
-    const bdOn = this._bd === 'full' || this._bd === 'light' || this._bd === 'plain';
     const state = use === 'saver' ? this._saver : this._stageOut ? 'waking' : 'on';
     const title = playing ? at.media_title : undefined;
     const swallow = (e: Event) => { e.preventDefault(); e.stopPropagation(); };
     return html`<div class="amb ${use} ${state}" role="button" aria-label="Close" data-use=${use}
         @pointerdown=${(e: Event) => this.ambClose(e, use)} @pointerup=${swallow} @click=${swallow}>
-      ${bdOn && playing && title ? pic
+      ${playing && title ? pic
         ? html`<div class="sv-bg" style=${`background-image:url("${pic.replace(/"/g, '%22')}")`}></div>`
         : html`<div class="sv-bg noart" style=${`background:${ART[hash(String(title)) % ART.length]}`}></div>` : nothing}
       <div class="sv-drift ${lyr ? 'has-ly' : ''}">
@@ -790,7 +739,6 @@ export class JukeboxCard extends LitElement {
   render() {
     if (!this._config) return nothing;
     const ent = this.hass?.states[this._config.entity!];
-    const pic = this.art();
     // never borrow 'Everywhere' for another entity: a missing one shows its object id
     const name = ent?.attributes?.friendly_name ?? (ent || !this.hass ? 'Everywhere' : this._config.entity!.replace(/^media_player\./, '').replace(/_/g, ' '));
     const dyn = this._config.speaker_mode === 'dynamic';
@@ -800,18 +748,10 @@ export class JukeboxCard extends LitElement {
     // 0.6.3: the pill reads as a control: "Playing on: Everywhere · 3 speakers"
     const pre = pillPrefix(ent?.state);
     const inlineSpk = dyn && canGroup(this._config, this.hass?.user);
-    const bd = this._bd;
-    const artParts: string[] = [];
-    // --_art is only for full mode (live CSS-blurred art). light uses the pre-blurred canvas;
-    // static and off never show art as the backdrop (HA media-control hides art when off / has no image).
-    if (pic && bd === 'full') artParts.push(`--_art:url("${pic.replace(/"/g, '%22')}")`);
-    // Art contrast only when art is actually shown (full / light). static and off use --text-primary-color on --primary-color.
-    if (pic && (bd === 'full' || bd === 'light')) artParts.push(`--_art-fg:${this._artFg || ART_FG_OVER_DARK_SHADE}`);
-    const artStyle = artParts.join(';');
     const view = (id: TabId, child: unknown) => html`<div class="view" data-view=${id} ?hidden=${this._tab !== id}>${child}</div>`;
     const c = this._config, h = this.hass, q = this.queue, tabs = this.tabs();
     return html`
-      <ha-card class="app bd-${bd} ${bd === 'full' ? '' : 'solid'} ${prefersReducedMotion() ? 'rm' : ''}" style="${c.height ? `--_height:${c.height};` : ''}${c.show_action_icons !== true ? '--_ra-display:none;' : ''}">
+      <ha-card class="app ${prefersReducedMotion() ? 'rm' : ''}" style="${c.height ? `--_height:${c.height};` : ''}${c.show_action_icons !== true ? '--_ra-display:none;' : ''}">
         <header class="top">
           <div class="brand">${icon('disc', 'i brand-i')}<span>${c.title ?? 'Jukebox'}</span></div>
           <button class="pill" title=${c.entity!} tabindex="-1" aria-label="${pre} ${name}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk ? 'true' : 'false'}
@@ -824,8 +764,7 @@ export class JukeboxCard extends LitElement {
           <div class="spacer"></div>
           <div class="clock">${this.timeStr()}</div>
         </header>
-        <main class="np ${pic && (bd === 'full' || bd === 'light') ? 'has-art' : ''} ${this._tab === 'now' ? 'on-now' : ''}" style=${artStyle}>
-          ${bd === 'light' ? html`<canvas class="bdl" width="64" height="40" aria-hidden="true"></canvas>` : nothing}
+        <main class="np">
           ${view('now', html`<jb-now .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
           ${combinedOn(c)
             ? view('browse', html`<jb-search combined .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-search>`)
@@ -878,63 +817,7 @@ export class JukeboxCard extends LitElement {
     .spacer { flex: 1; }
     .clock { white-space: nowrap; font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
     .np { container: np / size; min-height: 0; position: relative; overflow: hidden; background: transparent; }
-    /* Backdrop (album art + shade, or the media-control primary fill): Now Playing only (.on-now).
-       Library, Search, Queue and the detail pages are plain HA card surfaces: ha-card paints the one surface. */
-    /* Empty / no art: HA media-control color-block / .no-img uses --primary-color, text --text-primary-color */
-    .bd-full .np.on-now:not(.has-art)::before, .bd-light .np.on-now:not(.has-art)::before { content: ""; position: absolute; inset: 0; z-index: 0;
-      background: var(--primary-color, #03a9f4); filter: none; }
-    /* plain (the default): no ::before, no ::after, no fill, no art-contrast tokens: Now Playing is the same card surface as Library and Queue with theme text */
-    /* With art: keep blurred art + shade; contrast tokens for controls over it (HA media-control extractColors / YIQ) */
-    .np.on-now.has-art::before { content: ""; position: absolute; inset: -80px; z-index: 0;
-      background: var(--_art) center / cover;
-      filter: blur(var(--_backdrop-blur)) saturate(var(--_backdrop-saturate)); }
-    .np.on-now.has-art::after { content: ""; position: absolute; inset: 0; z-index: 0; background: var(--_vignette), var(--_shade); pointer-events: none; }
-    .np.has-art {
-      /* Inherited by jb-now / jb-slider tokens via var(--_art-*, …) — do not set --_* here (child :host resets those).
-         --_art-fg comes from the inline style (ART_FG_OVER_DARK_SHADE); derived tokens follow. */
-      --_art-muted: color-mix(in srgb, var(--_art-fg, #ffffff) 72%, transparent);
-      --_art-inactive: color-mix(in srgb, var(--_art-fg, #ffffff) 55%, transparent);
-      --_art-track: color-mix(in srgb, var(--_art-fg, #ffffff) 30%, transparent);
-      --_art-hairline: color-mix(in srgb, var(--_art-fg, #ffffff) 22%, transparent);
-      --_art-divider: color-mix(in srgb, var(--_art-fg, #ffffff) 22%, transparent);
-      --_art-chip-bg: color-mix(in srgb, var(--_art-fg, #ffffff) 12%, transparent);
-      --_art-chip-bg-strong: color-mix(in srgb, var(--_art-fg, #ffffff) 20%, transparent);
-      --_art-surface-border: color-mix(in srgb, var(--_art-fg, #ffffff) 28%, transparent);
-    }
-    /* ---- backdrop modes (see src/backdrop.ts); all of them draw on Now Playing only ---- */
-    /* light: pre-blurred canvas shows art; ::before is the media-control no-image underlay. */
-    .bd-light .np.on-now::before {
-      background: var(--primary-color, #03a9f4); filter: none; inset: 0;
-    }
-    .bdl { display: none; position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: 0; transition: opacity 600ms ease; pointer-events: none; }
-    .np.on-now .bdl { display: block; }
-    .bdl.ready { opacity: 1; }
-    /* static ("Dark: a flat theme colour") and off: a flat --primary-color fill, no art, no filters (off is the same fill in grey, as HA media-control .off).
-       Each ::before needs its own content/position or the fill is never drawn (0.8.1 fix). Same as HA's .color-block / .off.background. */
-    .bd-static .np.on-now::before, .bd-off .np.on-now::before {
-      content: ""; display: block; position: absolute; inset: 0; z-index: 0;
-      background: var(--primary-color, #03a9f4); filter: none;
-    }
-    .bd-off .np.on-now::before { filter: grayscale(1); }
-    .bd-off .np.on-now { background: var(--primary-color, #03a9f4); }
-    /* Now Playing on a primary-colour fill (static, off, and full/light with no art): exactly HA's media control card
-       (hui-media-control-card.ts): fill --primary-color (off: the same fill under filter: grayscale(1)), text and icons .player { color: var(--text-primary-color) }. */
-    .bd-full .np:not(.has-art) .view[data-view=now],
-    .bd-light .np:not(.has-art) .view[data-view=now],
-    .bd-static .view[data-view=now],
-    .bd-off .view[data-view=now] {
-      --_art-fg: var(--text-primary-color, #fff);
-      --_art-muted: color-mix(in srgb, var(--_art-fg) 70%, transparent);
-      --_art-inactive: color-mix(in srgb, var(--_art-fg) 55%, transparent);
-      --_art-track: color-mix(in srgb, var(--_art-fg) 30%, transparent);
-      --_art-hairline: color-mix(in srgb, var(--_art-fg) 22%, transparent);
-      --_art-divider: color-mix(in srgb, var(--_art-fg) 22%, transparent);
-      --_art-chip-bg: color-mix(in srgb, var(--_art-fg) 12%, transparent);
-      --_art-chip-bg-strong: color-mix(in srgb, var(--_art-fg) 20%, transparent);
-      --_art-surface-border: color-mix(in srgb, var(--_art-fg) 28%, transparent);
-      --_canvas-active: var(--text-primary-color, #fff);
-      --_canvas-on: var(--primary-color, #03a9f4);
-    }
+    /* Now Playing, Library, Search, Queue and the detail pages are plain HA card surfaces: ha-card paints the one surface (album art is a background on the screensaver only). */
     .view { position: absolute; inset: 0; z-index: 1; }
     .view[hidden] { display: none; }
     .badge { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--_active);
@@ -968,7 +851,6 @@ export class JukeboxCard extends LitElement {
     .rm .sv-drift, .rm .sv-bg { animation: none; } .rm .sv-drift { animation: hop 600s step-end infinite; }
     .rm { --_ly-slide: 0ms; } /* inherited into jb-lyrics: the screensaver lyrics move without sliding */
     @keyframes hop { 0% { transform: translate(0, 0) } 10% { transform: translate(calc(70cqw - 100%), 18cqh) } 20% { transform: translate(28cqw, calc(64cqh - 100%)) } 30% { transform: translate(calc(78cqw - 100%), 4cqh) } 40% { transform: translate(6cqw, calc(60cqh - 100%)) } 50% { transform: translate(calc(50cqw - 50%), 30cqh) } 60% { transform: translate(calc(74cqw - 100%), calc(66cqh - 100%)) } 70% { transform: translate(12cqw, 10cqh) } 80% { transform: translate(calc(60cqw - 100%), calc(40cqh - 50%)) } 90% { transform: translate(20cqw, calc(66cqh - 100%)) } 100% { transform: translate(0, 0) } }
-    .bd-static .amb, .bd-off .amb { background: #000; }
     .sv-drift.has-ly .sv-clock { font-size: clamp(56px, 10cqw, 140px); }
     .sv-ly { margin-top: 18px; width: min(820px, 72cqw); }
     .sv-lys { margin-top: 14px; font-size: clamp(12px, 1.1cqw, 15px); font-weight: 600; letter-spacing: .04em; color: #ffffff6b; text-shadow: 0 1px 8px #000a; white-space: nowrap; }

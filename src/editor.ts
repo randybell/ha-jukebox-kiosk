@@ -60,13 +60,6 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
         { name: 'default_tab', selector: sel(startTabOptions(c)) },
         { name: 'screensaver_minutes', selector: { select: { options: saverOptions(c.screensaver_minutes), mode: 'dropdown', custom_value: true } } },
         { name: 'screensaver_lyrics', selector: { boolean: {} } },
-        { name: 'backdrop', selector: sel([
-          { value: 'plain', label: 'Plain (default): a theme card surface, no album art behind Now Playing' },
-          { value: 'auto', label: 'Automatic: album art behind Now Playing, Full on fast screens and Light on slow ones' },
-          { value: 'full', label: 'Full: live blurred album art behind Now Playing' },
-          { value: 'light', label: 'Light: blurred album art behind Now Playing, drawn once per track (easier on slow tablets)' },
-          { value: 'static', label: 'Dark: a flat theme colour, no album art' },
-          { value: 'off', label: 'Off: a grey theme colour, no album art' }]) },
         { name: 'coerce_repeat_one', selector: { boolean: {} } },
       ],
     },
@@ -136,7 +129,6 @@ export const LABELS: Record<string, string> = {
   default_tab: 'Start tab',
   screensaver_minutes: 'Screensaver after (pick, or type minutes up to 1440)',
   screensaver_lyrics: 'Lyrics on the screensaver',
-  backdrop: 'Background',
   coerce_repeat_one: 'Turn "repeat one" back into repeat all (the card only offers off and all)',
   speaker_mode: 'Speakers panel',
   targets: 'Groups to play on (empty = every speaker group)',
@@ -169,7 +161,7 @@ export const LABELS: Record<string, string> = {
 };
 /** defaults shown for unset options, never written back unless the user changes them */
 export const SHOWN_DEFAULTS = {
-  default_tab: 'now', backdrop: 'plain',
+  default_tab: 'now',
   show_lyrics: true, screensaver_lyrics: true, lyrics_seek: true,
   radio_favorites_only: false, library_home: false, library_view: DEFAULT_LIBRARY_VIEW, library_columns: DEFAULT_LIBRARY_COLUMNS, library_layout: 'combined', search_sources: true, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
   coerce_repeat_one: true,
