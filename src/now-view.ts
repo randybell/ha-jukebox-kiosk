@@ -3,7 +3,7 @@ import { tokens, base } from './styles';
 import { icon } from './icons';
 import { providerLabel } from './providers';
 import { combinedOn, libraryTabLabel } from './library-home';
-import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, status, ART, hash, playerArt, isRadio, RADIO_ART } from './shared';
+import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, status, playerArt } from './shared';
 import { throttle } from './slider';
 import { sendVolume } from './vol-send';
 import './slider';
@@ -423,8 +423,7 @@ export class JbNow extends LitElement {
     const title = a.media_title as string | undefined;
     const idle = !e || !title || ['off', 'idle', 'unavailable', 'standby'].includes(e.state);
     const cur = this._snap && this._snap.current >= 0 ? this._snap.items[this._snap.current] : undefined;
-    const radioNow = a.media_content_type === 'radio' || isRadio({ uri: a.media_content_id ?? '' } as any);
-    const pic = playerArt(a, cur) || (radioNow && !idle ? RADIO_ART : '');
+    const pic = playerArt(a, cur);
     const prov = providerLabel(a.media_content_id);
     const playing = this.isPlaying();
     const shuffle = this.flag('shuffle', !!a.shuffle);
@@ -449,7 +448,7 @@ export class JbNow extends LitElement {
     // #51: while the sleep choices are open, a tap anywhere else closes them (the tap does nothing else)
     const slx = this._sleepOpen ? html`<div class="slx" data-action="sleep-close" @pointerdown=${this.sleepAway}></div>` : nothing;
     return html`<div class="nw ${idle ? 'idle' : ''} ${this._sleepOpen ? 'sl-open' : ''}" data-state=${e?.state ?? 'unknown'}>${slx}
-      <div class="art ${showLyr && this._overlay ? 'lyr-on' : ''}" style="background:${ART[hash(title || 'x') % ART.length]}">
+      <div class="art ${showLyr && this._overlay ? 'lyr-on' : ''}">
         ${pic ? html`<img src=${pic} alt="" draggable="false" @error=${(ev: Event) => ((ev.target as HTMLElement).style.display = 'none')} />`
           : html`<span class="ph">${icon('disc')}</span>`}
         ${showLyr && this._overlay ? html`<jb-lyrics class="ovl" mode="overlay" @jukebox-lyrics-tap=${() => { this._overlay = false; writeOverlay(false); }} .hass=${this.hass} .config=${this.config} .store=${this.lyrics}
@@ -520,39 +519,78 @@ export class JbNow extends LitElement {
       /* 0.7.9 #55: rows as tall as their content, so the square art always pushes the title down (never under it) */
       grid-auto-rows: max-content; }
     .nw::-webkit-scrollbar { display: none; }
-    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), 44cqh, 580px); aspect-ratio: 1; border-radius: 14px; overflow: hidden;
-      box-shadow: 0 24px 60px #000000b3, 0 0 0 1px #ffffff14; }
+    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), 44cqh, 580px); aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: var(--primary-color, #03a9f4);
+      box-shadow: 0 0 0 1px var(--_hairline); }
     .art .ovl { position: absolute; inset: 0; z-index: 1; }
     .slx { position: absolute; inset: 0; z-index: 4; } .art .slx { z-index: 1; }
     .nw.sl-open .art { z-index: 5; }
     .art-btns { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 8px; }
     /* #42: ≥48px at 1x; on zoomed big screens (--_z > 1) the same 40px floor as before (54px at 1920x1080) */
-    .ab { width: max(40px, calc(48px / var(--_z, 1))); height: max(40px, calc(48px / var(--_z, 1))); border-radius: 50%; display: grid; place-items: center; background: #000000a6; color: rgba(255, 255, 255, .72);
-      border: 1px solid #ffffff2e; box-shadow: 0 4px 14px #0007; transition: background 150ms, color 150ms; }
+    .ab { width: max(40px, calc(48px / var(--_z, 1))); height: max(40px, calc(48px / var(--_z, 1))); border-radius: 50%; display: grid; place-items: center; background: var(--_surface-solid); color: var(--_fg);
+      border: 1px solid var(--_surface-border); transition: background 150ms, color 150ms; }
     .ab .i { width: 24px; height: 24px; }
     .art .sleep-strip { position: absolute; z-index: 2; top: calc(18px + max(40px, calc(48px / var(--_z, 1)))); right: 10px; left: 10px; margin: 0; justify-content: flex-end; }
     :host([large]) .art .sleep-strip { top: 70px; }
-    .art .sleep-strip .sp { background: #000000b3; border-color: #ffffff3d; box-shadow: 0 4px 14px #0007; }
-    .art .sleep-strip .sp.on { background: var(--_active); }
-    .ab.on { background: #fff; color: #000; border-color: #fff; }
+    .art .sleep-strip .sp { background: var(--_surface-solid); border-color: var(--_surface-border); }
+    .art .sleep-strip .sp.on { background: var(--_surface-solid); }
+    /* on = HA's icon-button 'selected' colour (--primary-color), as the media browser's favourite button */
+    .ab.on { color: var(--_active); border-color: var(--_active); }
     .ab:active { transform: scale(.94); }
     .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-    .art .ph { position: absolute; inset: 0; display: grid; place-items: center; background: #111; }
-    .art .ph .i { width: 30%; height: 30%; color: #ffffff30; }
-    .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+    /* no picture: media-control's no-image look: the player icon in the on-primary colour */
+    .art .ph { position: absolute; inset: 0; display: grid; place-items: center; background: var(--_art-chip-bg, var(--_chip-sel)); }
+    .art .ph .i { width: 30%; height: 30%; color: var(--_art-muted, var(--_inactive)); }
+    /* Cover overlay buttons sit on the picture: an HA icon button (no shadow, theme icon colour) on the opaque theme surface, so the icon stays readable on any cover */
+    .art .sleep-strip .sp { color: var(--_fg); }
+    .art .sleep-strip .sp.on { color: var(--_active); border-color: var(--_active); }
+    .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: 10px;
+      /* Text drawn on the art shade: HA media-control art contrast (--_art-* from .np.has-art; no-op when empty) */
+      --_fg: var(--_art-fg, var(--primary-text-color, #212121));
+      --_muted: var(--_art-muted, var(--secondary-text-color, #727272));
+      --_inactive: var(--_art-inactive, var(--secondary-text-color, var(--disabled-text-color)));
+      --_track: var(--_art-track, var(--disabled-color, var(--divider-color)));
+      --_hairline: var(--_art-hairline, var(--divider-color, rgba(0, 0, 0, 0.12)));
+      --_divider: var(--_art-divider, var(--divider-color, rgba(0, 0, 0, 0.12)));
+      --_chip-bg: var(--_art-chip-bg, var(--ha-assist-chip-container-color, transparent));
+      --_chip-sel: var(--_art-chip-bg-strong, var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15)));
+      --_surface-border: var(--_art-surface-border, var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12))));
+      --_prov-fg: var(--_art-fg, var(--primary-text-color, #212121));
+      --_prov-bg: var(--_art-chip-bg, var(--ha-assist-chip-container-color, transparent));
+      --_prov-border: var(--_art-surface-border, var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12))));
+      color: var(--_fg); }
+    /* Theme surfaces (speakers panel, up next, More speakers): an opaque HA card surface with theme text and the theme's primary colour — never art-contrast or canvas invert */
+    .info .panel, .info .vmore {
+      --_canvas-active: var(--primary-color, #03a9f4);
+      --_canvas-on: var(--text-primary-color, #fff);
+      --_active: var(--primary-color, #03a9f4);
+      --_on-accent: var(--text-primary-color, #fff);
+      --_fg: var(--primary-text-color, #212121);
+      --_muted: var(--secondary-text-color, #727272);
+      --_inactive: var(--secondary-text-color, var(--state-inactive-color, var(--disabled-text-color)));
+      --_track: var(--disabled-color, var(--divider-color));
+      --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
+      --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
+      --_chip-bg: var(--ha-assist-chip-container-color, transparent);
+      --_chip-sel: var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15));
+      --_surface-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
+      --_prov-fg: var(--primary-text-color, #212121);
+      --_prov-bg: var(--ha-assist-chip-container-color, transparent);
+      --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
+      color: var(--_fg);
+    }
     .badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .pv.big { font-size: 11px; padding: 4px 10px; }
-    .where { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-      padding: 4px 10px; border-radius: 999px; background: #00000066; border: 1px solid #ffffff1f; color: var(--_muted); }
-    .ti { font-family: var(--_font-display); font-weight: 800; font-size: clamp(28px, 4.6cqw, 44px); line-height: 1.08; letter-spacing: -.01em;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: 0 2px 20px #0008; }
-    .sub { font-size: clamp(15px, 1.8cqw, 19px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -4px; }
-    .prog { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: center; gap: 10px; font-size: 12px; color: var(--_muted); font-variant-numeric: tabular-nums; }
+    .pv.big { font-size: var(--ha-font-size-s, 12px); padding: 4px 10px; }
+    .where { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
+      padding: 4px 10px; border-radius: 999px; background: var(--_chip-sel); border: 1px solid var(--_hairline); color: var(--_muted); }
+    .ti { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-3xl, 28px), 4.6cqw, var(--ha-font-size-5xl, 40px)); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: -.01em;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: none; }
+    .sub { font-size: clamp(var(--ha-font-size-m, 14px), 1.8cqw, var(--ha-font-size-xl, 20px)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -4px; }
+    .prog { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: center; gap: 10px; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
     .prog .tr { text-align: right; }
     /* live labels: text comes from data-v so drag handlers can update it without touching Lit-owned text nodes */
     .tl::after, .vv::after { content: attr(data-v); }
-    .ps { --jb-slider-h: 4px; --jb-slider-knob: 14px; --jb-slider-hit: 34px; }
-    .vs { --jb-slider-h: 7px; --jb-slider-knob: 22px; --jb-slider-hit: 40px; }
+    .ps { --_slider-h: 4px; --_slider-knob: 14px; --_slider-hit: 34px; }
+    .vs { --_slider-h: 7px; --_slider-knob: 22px; --_slider-hit: 40px; }
     .prog.nodur .ps { opacity: .5; }
     .tp { display: grid; grid-template-columns: repeat(6, 1fr); align-items: center; justify-items: center; margin: 2px 0; }
     .tp:has(.tb:nth-child(5):last-child) { grid-template-columns: repeat(5, 1fr); }
@@ -563,28 +601,28 @@ export class JbNow extends LitElement {
     .tb.sh.on, .tb.rp.on, .tb.fv.on, .tb.sl.on { color: var(--_active); }
     .tb.fv { color: var(--_inactive); } .tb.fv .i { width: 26px; height: 26px; }
     .sleep-strip { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin: -2px 0 2px; }
-    .sleep-strip .sp { height: 34px; min-width: 44px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
-      background: #ffffff14; border: 1px solid #ffffff24; color: var(--_fg); }
-    .sleep-strip .sp.on { background: var(--_active); color: var(--_on-accent, #111); border-color: transparent; }
+    .sleep-strip .sp { height: 34px; min-width: 44px; padding: 0 14px; border-radius: 999px; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+      background: var(--_chip-bg); border: 1px solid var(--_surface-border); color: var(--_fg); }
+    .sleep-strip .sp.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .sleep-strip .sp:active { transform: scale(.96); }
     .sleep-cd { letter-spacing: .04em; font-variant-numeric: tabular-nums; }
     .sleep-strip .sp.sleep-cd { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; }
     .sleep-strip .sp.sleep-cd .i { width: 14px; height: 14px; }
     .tb .dot { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: currentColor; }
-    .tb.pp { width: 80px; height: 80px; background: var(--_active); color: var(--_on-accent); box-shadow: 0 10px 30px #0009; }
+    .tb.pp { width: 80px; height: 80px; background: var(--_active); color: var(--_on-accent); }
     .tb.pp .i { width: 44px; height: 44px; }
     .tb.pr, .tb.nx { width: 72px; height: 72px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
     .tb:active { transform: scale(.94); }
     .tb:disabled { opacity: .3; }
     .upn { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; text-align: left; min-width: 0; width: 100%; }
-    .upn .eyebrow { font-size: 10px; flex: none; }
-    .upn b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .upn .eyebrow { font-size: var(--ha-font-size-xs, 10px); flex: none; }
+    .upn b { font-size: var(--ha-font-size-m, 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .upn .pv { flex: none; }
-    .upn .more { margin-left: auto; font-size: 12px; color: var(--_muted); flex: none; }
+    .upn .more { margin-left: auto; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); flex: none; }
     .vol { container: vol / inline-size; padding: 6px 14px; display: flex; flex-direction: column; }
     .volw { position: relative; display: flex; flex-direction: column; min-height: 0; }
     .vmore { display: none; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 2; align-items: center; gap: 4px;
-      padding: 4px 12px; min-height: 30px; border-radius: 999px; border: 1px solid #ffffff2e; background: #000000d9; color: var(--_fg); font: 600 12px var(--_font-body); cursor: pointer; }
+      padding: 4px 12px; min-height: 30px; border-radius: 999px; border: 1px solid var(--_surface-border); background: var(--_surface-solid); color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
     .vmore .i { width: 12px; height: 12px; }
     .volw.more-b .vmore { display: inline-flex; }
     .volw.over .vol { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
@@ -598,38 +636,38 @@ export class JbNow extends LitElement {
     .vm .i { width: 20px; height: 20px; }
     .vr.room .vm { color: var(--_inactive); } .vr.room .vm .i { width: 18px; height: 18px; }
     .vr.muted .vm { color: var(--_active); }
-    .vn { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .vr.main .vn { font-weight: 700; }
-    .vn i { font-style: normal; font-size: 11px; color: var(--_inactive); }
-    .vv { font-size: 12px; color: var(--_muted); text-align: right; font-variant-numeric: tabular-nums; }
+    .vn { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vr.main .vn { font-weight: var(--ha-font-weight-bold, 700); }
+    .vn i { font-style: normal; font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
+    .vv { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); text-align: right; font-variant-numeric: tabular-nums; }
     .vr.off { opacity: .5; }
     /* 0.6.3 speaker controls: a trailing column for Speakers (main row) and Drop/Add (rooms) */
     .vol.acts .vr.main { grid-template-columns: 30px minmax(0, max-content) minmax(0, 1fr) 34px auto; }
     .vol.acts .rooms .vr { grid-template-columns: 30px minmax(70px, 28%) minmax(0, 1fr) 34px 36px; }
-    .spkb { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
-      background: #ffffff14; border: 1px solid #ffffff24; color: var(--_fg); white-space: nowrap; }
-    .spkb:active { background: #ffffff2a; }
-    .ra { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 1px solid #ffffff2e; color: var(--_fg); background: #ffffff0d; justify-self: end; }
+    .spkb { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+      background: var(--_chip-bg); border: 1px solid var(--_surface-border); color: var(--_fg); white-space: nowrap; }
+    .spkb:active { background: var(--_chip-sel); }
+    .ra { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--_surface-border); color: var(--_fg); background: var(--_chip-bg); justify-self: end; }
     .ra span { display: none; }
     .ra .i { width: 18px; height: 18px; }
-    .ra.add { background: var(--_active); border-color: transparent; color: var(--_on-active, #111); }
+    .ra.add { background: var(--_active); border-color: transparent; color: var(--_on-accent); }
     .ra.drop { color: var(--_fg); }
     .ra[aria-disabled="true"] { opacity: .45; }
-    .ra.add[aria-disabled="true"] { background: #ffffff14; color: var(--_muted); }
+    .ra.add[aria-disabled="true"] { background: var(--_chip-bg); color: var(--_muted); }
     .ra:disabled { opacity: .5; }
     .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: .5; }
     .vr.pending .ra { animation: jb-pulse 1s ease-in-out infinite; }
     @keyframes jb-pulse { 50% { opacity: .35; } }
-    .vn .else { display: block; font-size: 11px; font-weight: 500; color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vn .else { display: block; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* large_buttons */
     :host([large]) .tb { width: 68px; height: 68px; } :host([large]) .tb .i { width: 34px; height: 34px; }
     :host([large]) .tb.pp { width: 96px; height: 96px; } :host([large]) .tb.pp .i { width: 44px; height: 44px; }
     :host([large]) .tb.pr, :host([large]) .tb.nx { width: 84px; height: 84px; } :host([large]) .tb.pr .i, :host([large]) .tb.nx .i { width: 48px; height: 48px; }
     :host([large]) .vr { min-height: 60px; } :host([large]) .vm { width: 48px; height: 48px; } :host([large]) .vm .i { width: 26px; height: 26px; }
-    :host([large]) .vn { font-size: 17px; } :host([large]) .vs { --jb-slider-h: 10px; --jb-slider-knob: 30px; --jb-slider-hit: 52px; }
-    :host([large]) .ra { width: 48px; height: 48px; } :host([large]) .spkb { height: 48px; font-size: 16px; padding: 0 16px; }
+    :host([large]) .vn { font-size: var(--ha-font-size-l, 16px); } :host([large]) .vs { --_slider-h: 10px; --_slider-knob: 30px; --_slider-hit: 52px; }
+    :host([large]) .ra { width: 48px; height: 48px; } :host([large]) .spkb { height: 48px; font-size: var(--ha-font-size-l, 16px); padding: 0 16px; }
     :host([large]) .vol.acts .rooms .vr { grid-template-columns: 48px minmax(70px, 28%) minmax(0, 1fr) 34px 48px; }
-    :host([large]) .ab { width: 52px; height: 52px; } :host([large]) .upn { height: 56px; } :host([large]) .upn b { font-size: 16px; }
+    :host([large]) .ab { width: 52px; height: 52px; } :host([large]) .upn { height: 56px; } :host([large]) .upn b { font-size: var(--ha-font-size-l, 16px); }
     .vr.muted .vs { opacity: .45; }
     @container vol (min-width: 600px) {
       .rooms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 20px; padding-top: 8px; }
@@ -651,8 +689,8 @@ export class JbNow extends LitElement {
       .volw > .vol { min-height: 0; max-height: 100%; }
       .art { width: min(calc(100cqh - 40px), 46cqw); align-self: center; }
       .info { max-width: none; gap: 9px; }
-      .ti { font-size: clamp(28px, 3.4cqw, 40px); }
-      .vs { --jb-slider-h: 6px; --jb-slider-knob: 20px; --jb-slider-hit: 36px; }
+      .ti { font-size: clamp(var(--ha-font-size-3xl, 28px), 3.4cqw, var(--ha-font-size-5xl, 40px)); }
+      .vs { --_slider-h: 6px; --_slider-knob: 20px; --_slider-hit: 36px; }
       .tb.pp { width: 74px; height: 74px; }
       .tb.pr, .tb.nx { width: 64px; height: 64px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; }
     }
@@ -664,10 +702,10 @@ export class JbNow extends LitElement {
     @container np (max-width: 520px) {
       .nw { gap: 14px; padding: 12px 14px 14px; }
       .art { width: min(calc(100cqw - 140px), 30cqh); }
-      .vs { --jb-slider-knob: 24px; }
+      .vs { --_slider-knob: 24px; }
       .info { gap: 8px; }
-      .ti { font-size: 26px; -webkit-line-clamp: 1; display: block; white-space: nowrap; text-overflow: ellipsis; }
-      .sub { font-size: 16px; }
+      .ti { font-size: var(--ha-font-size-2xl, 24px); -webkit-line-clamp: 1; display: block; white-space: nowrap; text-overflow: ellipsis; }
+      .sub { font-size: var(--ha-font-size-l, 16px); }
       .prog { grid-template-columns: 40px minmax(0, 1fr) 40px; }
       .tb { width: 48px; height: 48px; } .tb.pp { width: 70px; height: 70px; }
       .tb.pr, .tb.nx { width: 58px; height: 58px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; }
@@ -675,7 +713,7 @@ export class JbNow extends LitElement {
       .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: 48px; height: 48px; } .tp:has(.tb.fv) .tb.pr .i, .tp:has(.tb.fv) .tb.nx .i { width: 34px; height: 34px; }
       .tp:has(.tb.fv) .tb .i { width: 22px; height: 22px; } .tp:has(.tb.fv) .tb.pp .i { width: 32px; height: 32px; }
       .tp:has(.tb.fv) .tb.sh .i, .tp:has(.tb.fv) .tb.rp .i, .tp:has(.tb.fv) .tb.sl .i { width: 20px; height: 20px; }
-      .sleep-strip .sp { height: 32px; padding: 0 12px; font-size: 12px; }
+      .sleep-strip .sp { height: 32px; padding: 0 12px; font-size: var(--ha-font-size-s, 12px); }
       /* phone: the sleep choices stay on one row on the artwork (≥ 40px tall) */
       .art .sleep-strip { flex-wrap: nowrap; gap: 4px; }
       .art .sleep-strip .sp { height: 40px; min-width: 40px; padding: 0 9px; flex: none; }
@@ -690,7 +728,7 @@ export class JbNow extends LitElement {
       .upn { display: none; }
       .vol { padding: 4px 12px; }
       .vr { grid-template-columns: 28px 86px minmax(0, 1fr) 30px; min-height: 48px; }
-      .vn { font-size: 14px; }
+      .vn { font-size: var(--ha-font-size-m, 14px); }
       /* phone: name + Speakers on top, the group slider below; rooms keep one line with a round Drop/Add */
       .vol.acts .vr.main { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "m n b" "s s v"; row-gap: 0; padding-top: 4px; }
       .vol.acts .vr.main .vm { grid-area: m; } .vol.acts .vr.main .vn { grid-area: n; } .vol.acts .vr.main .vs { grid-area: s; }

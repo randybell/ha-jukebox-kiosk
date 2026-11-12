@@ -1,6 +1,6 @@
 {
   "name": "ha-jukebox-kiosk",
-  "version": "0.7.20",
+  "version": "0.8.3",
   "description": "Jukebox Kiosk: Home Assistant integration + bundled Jukebox Card, a kiosk jukebox for Music Assistant (Now Playing, Browse, Search, Queue, Lyrics, Speakers)",
   "repository": {
     "type": "git",
@@ -9,7 +9,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "rollup -c && node scripts/copy-fonts.mjs",
+    "build": "rollup -c",
     "watch": "rollup -c -w",
     "typecheck": "tsc --noEmit",
     "test": "tsc --noEmit && node scripts/run-tests.mjs unit && node scripts/run-tests.mjs e2e",
@@ -25,8 +25,6 @@
     "lit": "^3.3.3"
   },
   "devDependencies": {
-    "@fontsource/inter": "^5.3.0",
-    "@fontsource/plus-jakarta-sans": "^5.3.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^1.0.2",
     "@rollup/plugin-typescript": "^12.3.1",

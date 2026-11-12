@@ -351,6 +351,20 @@ for (const [id, [name, v]] of Object.entries(ROOMS))
 setState('button.everywhere_favorite_current_song', 'unknown', { friendly_name: 'Everywhere Favorite current song' });
 const ma = createMa({ params, st, setState, commit: () => commit(), sleep, QS, syncNowPlaying, EVERY, libTracks, qItem });
 afterGroupState = (id) => ma.groupStateChanged(id);
+// wiim=1 (#94): one speaker HA knows twice, like a WiiM next to Music Assistant. NATIVE: the WiiM integration's own entity (platform wiim,
+// no active_queue, no MA queue by its id). MA_WIIM: the Music Assistant entity of the same speaker (same friendly name, own queue,
+// player 'wiim_mock_master' in players/all). ORPHAN_WIIM: a native entity Music Assistant has no player for.
+const WIIM = params.get('wiim') === '1';
+const NATIVE_WIIM = 'media_player.master_bedroom_master_bedroom', MA_WIIM = 'media_player.wiim_sound_lite_aaf2', ORPHAN_WIIM = 'media_player.hall_orphan';
+if (WIIM) {
+  QS[MA_WIIM] = { items: ['Teardrop', 'Porcelain', 'Angel', 'Dreams', 'Yellow', 'Three Little Birds'].map((n) => qItem(libTracks.find((t) => t.name === n))), index: 1 };
+  setState(MA_WIIM, 'playing', { friendly_name: 'Master Bedroom', group_members: [], app_id: 'music_assistant', active_queue: 'wiim_mock_master', mass_player_id: null, mass_player_type: 'player',
+    volume_level: 0.35, is_volume_muted: false, shuffle: false, repeat: 'off', supported_features: 152463 });
+  syncNowPlaying(true, MA_WIIM);
+  const a = st(MA_WIIM).attributes;
+  setState(NATIVE_WIIM, 'playing', { friendly_name: 'Master Bedroom', volume_level: 0.35, is_volume_muted: false, media_title: a.media_title, media_artist: a.media_artist, supported_features: 152463 });
+  setState(ORPHAN_WIIM, 'idle', { friendly_name: 'Hall Speaker', volume_level: 0.2, is_volume_muted: false, supported_features: 152463 });
+}
 
 const listeners = new Set();
 export const onHass = (fn) => listeners.add(fn);
@@ -570,7 +584,7 @@ const kiosk = params.get('kiosk') !== '0' ? createKiosk({ DEMO_PROVIDERS, params
 function registry() {
   const out = {};
   for (const id of Object.keys(states)) {
-    if (id.startsWith('media_player.')) out[id] = { entity_id: id, device_id: 'dev_' + id.slice(13), platform: 'music_assistant' };
+    if (id.startsWith('media_player.')) out[id] = { entity_id: id, device_id: 'dev_' + id.slice(13), platform: WIIM && (id === NATIVE_WIIM || id === ORPHAN_WIIM) ? 'wiim' : 'music_assistant' };
     if (id === 'button.everywhere_favorite_current_song') out[id] = { entity_id: id, device_id: 'dev_everywhere', platform: 'music_assistant', translation_key: 'favorite_now_playing' };
   }
   return out;

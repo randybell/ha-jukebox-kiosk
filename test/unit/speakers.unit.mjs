@@ -337,5 +337,44 @@ console.warn = origWarn;
   check('Q62-U10 with no question pending every message shows at once', new AH.AskHold().admit({ text: 'x' }, false) === true);
 }
 
+// ---- #94: a native media_player of a speaker maps to its Music Assistant player; the picker offers only targets with an MA player ----
+{
+  const st = (n, extra = {}) => ({ state: 'playing', attributes: { friendly_name: n, ...extra } });
+  const ent = (platform, device_id) => ({ platform, device_id });
+  const hass = {
+    states: Object.fromEntries(Object.entries({
+      'media_player.master_bedroom_master_bedroom': st('Master Bedroom'), 'media_player.master_bedroom_master_bedroom_2': st('Master Bedroom'),
+      'media_player.master_bedroom_cast': st('Master Bedroom'), 'media_player.wiim_sound_lite_aaf2': st('Master Bedroom', { active_queue: 'syncgroup_x', mass_player_type: 'player' }),
+      'media_player.master_bedroom_grp': st('Master Bedroom', { mass_player_type: 'group' }),
+      'media_player.everywhere': st('Everywhere', { mass_player_type: 'group' }), 'media_player.hall_orphan': st('Hall'),
+      'media_player.den_native': st('Den'), 'media_player.den_ma': st('Den Speaker', { mass_player_type: 'player' }), 'media_player.unlisted': st('Unlisted'),
+    }).map(([k, v]) => [k, { entity_id: k, ...v }])),
+    entities: {
+      'media_player.master_bedroom_master_bedroom': ent('wiim', 'd_wiim'), 'media_player.master_bedroom_master_bedroom_2': ent('linkplay', 'd_lp'),
+      'media_player.master_bedroom_cast': ent('cast', 'd_cast'), 'media_player.wiim_sound_lite_aaf2': ent('music_assistant', 'd_ma'),
+      'media_player.master_bedroom_grp': ent('music_assistant', 'd_g'), 'media_player.everywhere': ent('music_assistant', 'd_e'),
+      'media_player.hall_orphan': ent('wiim', 'd_h'), 'media_player.den_native': ent('wiim', 'd_ma_den'), 'media_player.den_ma': ent('music_assistant', 'd_ma_den'),
+    },
+  };
+  const me = (e, h = hass) => M.maEntityOf(e, h);
+  check('U94-1 maEntityOf: the native WiiM entity → the MA media_player with the same friendly name (not a group of that name, not another non-MA twin)',
+    me('media_player.master_bedroom_master_bedroom') === 'media_player.wiim_sound_lite_aaf2', me('media_player.master_bedroom_master_bedroom'));
+  check('U94-2 maEntityOf: the other non-MA twins (linkplay, cast) also map to the MA entity, never to each other',
+    me('media_player.master_bedroom_master_bedroom_2') === 'media_player.wiim_sound_lite_aaf2' && me('media_player.master_bedroom_cast') === 'media_player.wiim_sound_lite_aaf2');
+  check('U94-3 maEntityOf: the same device wins over the name (Den native → den_ma although the names differ)', me('media_player.den_native') === 'media_player.den_ma', me('media_player.den_native'));
+  check('U94-4 maEntityOf: an MA entity maps to itself; a group too', me('media_player.wiim_sound_lite_aaf2') === 'media_player.wiim_sound_lite_aaf2' && me('media_player.everywhere') === 'media_player.everywhere');
+  check('U94-5 maEntityOf: a native entity with no MA player → undefined', me('media_player.hall_orphan') === undefined);
+  check('U94-6 maEntityOf: an entity HA\'s registry does not list, no registry, or no hass → returned as it is (as before)',
+    me('media_player.unlisted') === 'media_player.unlisted' && me('media_player.master_bedroom_master_bedroom', { states: hass.states }) === 'media_player.master_bedroom_master_bedroom' && me('media_player.x', undefined) === 'media_player.x');
+  const names = (c) => J(M.targetsOf(c, hass).map((t) => t.entity + '=' + t.name));
+  check('U94-7 targetsOf: a configured native target is listed once as its MA player; one with no MA player is not offered; the rest stay',
+    names({ entity: 'media_player.everywhere', targets: [{ entity: 'media_player.everywhere', name: 'Everywhere' }, 'media_player.master_bedroom_master_bedroom', { entity: 'media_player.wiim_sound_lite_aaf2', name: 'Bedroom' }, { entity: 'media_player.hall_orphan', name: 'Hall' }] })
+      === J(['media_player.everywhere=Everywhere', 'media_player.wiim_sound_lite_aaf2=Master Bedroom']), names({ entity: 'media_player.everywhere', targets: [{ entity: 'media_player.everywhere', name: 'Everywhere' }, 'media_player.master_bedroom_master_bedroom', { entity: 'media_player.hall_orphan', name: 'Hall' }] }));
+  const dl = M.targetsOf({ entity: 'media_player.master_bedroom_master_bedroom' }, hass).map((t) => t.entity);
+  check('U94-8 targetsOf: the card\'s own player is added once, as its MA player, to the default list (groups)', dl.filter((e) => e === 'media_player.wiim_sound_lite_aaf2').length === 1 && !dl.includes('media_player.master_bedroom_master_bedroom') && dl.includes('media_player.everywhere'), J(dl));
+  check('U94-9 targetsOf: the current target stays listed even when it has no MA player (nothing disappears under it)', names({ entity: 'media_player.hall_orphan', targets: ['media_player.everywhere', 'media_player.hall_orphan'] }) === J(['media_player.everywhere=Everywhere', 'media_player.hall_orphan=Hall']), names({ entity: 'media_player.hall_orphan', targets: ['media_player.everywhere', 'media_player.hall_orphan'] }));
+  check('U94-10 targetMa on the mapped MA entity finds the MA player by name (the queue and speaker panel agree)', M.targetMa('media_player.wiim_sound_lite_aaf2', hass, new Map([['wiim_uuid_x', { player_id: 'wiim_uuid_x', type: 'player', name: 'Master Bedroom', provider: 'wiim', group_members: [], static_group_members: [], supported_features: [] }]])) === 'wiim_uuid_x');
+}
+
 console.log(`\n${total - failures}/${total} speakers unit checks passed`);
 process.exit(failures ? 1 : 0);
