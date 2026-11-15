@@ -67,6 +67,8 @@ except ImportError:  # pragma: no cover
     impersonation_arg = None  # type: ignore[assignment]
 
 COMMAND_TIMEOUT = 30
+# Lyrics lookups can take 8-33 s the first time (rate limits), and the card waits 60 s for them (src/lyrics/store.ts CALL_TIMEOUT).
+COMMAND_TIMEOUTS: dict[str, float] = {"metadata/get_track_lyrics": 60}
 
 TRACK_COMMANDS = {
     "album": ("music/albums/album_tracks", "tracks"),
@@ -151,7 +153,7 @@ def _impersonation(client: MusicAssistantClient, user: User | None) -> dict[str,
 
 async def _send(client: MusicAssistantClient, command: str, **kwargs: Any) -> Any:
     try:
-        async with asyncio.timeout(COMMAND_TIMEOUT):
+        async with asyncio.timeout(COMMAND_TIMEOUTS.get(command, COMMAND_TIMEOUT)):
             return await client.send_command(command, **kwargs)
     except TimeoutError as err:
         raise KioskError("timeout", f"Music Assistant did not answer {command}") from err

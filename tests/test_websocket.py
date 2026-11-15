@@ -674,3 +674,26 @@ async def test_v072_search_limited_and_genre_list(
     assert res["success"]
     c, args = fake_ma.calls[-1]
     assert c == "music/genres/library_items" and args["limit"] == 500 and args["user"]["user_id"] == user.id
+
+
+async def test_command_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Lyrics get 60 s (the card's own wait); every other command keeps 30 s."""
+    import asyncio
+
+    from custom_components.jukebox_kiosk import websocket_api as wsa
+
+    assert wsa.COMMAND_TIMEOUT == 30
+    assert wsa.COMMAND_TIMEOUTS == {"metadata/get_track_lyrics": 60}
+
+    class SlowClient:
+        async def send_command(self, command: str, **kwargs: Any) -> str:
+            await asyncio.sleep(0.2)
+            return "ok"
+
+    # shrink the clock: default 0.05 s, lyrics 0.5 s, a command slower than the default but inside the lyrics limit
+    monkeypatch.setattr(wsa, "COMMAND_TIMEOUT", 0.05)
+    monkeypatch.setattr(wsa, "COMMAND_TIMEOUTS", {"metadata/get_track_lyrics": 0.5})
+    assert await wsa._send(SlowClient(), "metadata/get_track_lyrics") == "ok"
+    with pytest.raises(wsa.KioskError) as err:
+        await wsa._send(SlowClient(), "music/search")
+    assert err.value.code == "timeout"
