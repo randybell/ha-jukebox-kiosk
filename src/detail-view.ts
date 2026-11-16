@@ -424,6 +424,8 @@ export class JbDetail extends LitElement {
     .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; touch-action: pan-y;
       padding-bottom: calc(16px + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
     .scroll::-webkit-scrollbar { display: none; }
+    /* the list sits directly on the HA card surface: no second fill */
+    .scroll.panel { background: transparent; }
     .detail { display: flex; flex-direction: column; gap: 14px; }
     /* Station-only actions: keep Play Now on one line and fully inside its row. */
     .row[data-type="radio"] { min-height: 68px; }

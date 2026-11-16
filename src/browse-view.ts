@@ -934,6 +934,8 @@ export class JbBrowse extends LitElement {
     }
     .scroll { flex: 1; min-height: 0; overflow-y: auto; container: np / inline-size; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
+    /* the list sits directly on the HA card surface: no second fill */
+    .scroll.panel { background: transparent; }
     /* v0.7 Library home */
     .home { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
     .lt { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 4px; min-height: 180px; padding: 22px 24px;

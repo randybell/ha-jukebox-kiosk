@@ -957,7 +957,7 @@ export class JbSearch extends LitElement {
     .row .ra-b:is([data-act="add"], [data-act="next"], [data-act="replace"], [data-act="remove"], [data-act="radio"]) span { white-space: nowrap; }
 
     .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: 14px;
-      padding: 12px 14px 24px; border-radius: var(--_radius); background: var(--_bg); border: 1px solid var(--_surface-border);
+      padding: 12px 14px 24px; border-radius: var(--_radius); background: transparent; border: 1px solid var(--_surface-border);
       touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     .dv { flex: 1; min-height: 0; }
