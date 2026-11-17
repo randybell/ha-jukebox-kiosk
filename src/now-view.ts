@@ -556,7 +556,7 @@ export class JbNow extends LitElement {
       --_prov-bg: var(--ha-assist-chip-container-color, transparent);
       --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
       color: var(--_fg); }
-    /* Theme surfaces (speakers panel, up next, More speakers): an opaque HA card surface with theme text and the theme's primary colour */
+    /* Theme surfaces (volume panel, up next, More speakers): theme text and the theme's primary colour */
     .info .panel, .info .vmore {
       --_active: var(--primary-color, #03a9f4);
       --_on-accent: var(--text-primary-color, #fff);
@@ -621,8 +621,12 @@ export class JbNow extends LitElement {
     /* the Up next panel sits directly on the HA card surface: no second fill */
     .upn.panel { background: transparent; }
     .volw { position: relative; display: flex; flex-direction: column; min-height: 0; }
+    /* More speakers floats over the fading speaker list: use ha-card's fill + backdrop-filter (not a transparent hole, not --_surface-solid) so the label stays readable. */
     .vmore { display: none; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 2; align-items: center; gap: 4px;
-      padding: 4px 12px; min-height: 30px; border-radius: 999px; border: 1px solid var(--_surface-border); background: var(--_surface-solid); color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
+      padding: 4px 12px; min-height: 30px; border-radius: 999px; border: 1px solid var(--_surface-border);
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
+      color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
     .vmore .i { width: 12px; height: 12px; }
     .volw.more-b .vmore { display: inline-flex; }
     .volw.over .vol { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
