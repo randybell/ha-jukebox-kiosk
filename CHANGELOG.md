@@ -4,6 +4,16 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.8.5 — 2026-11-16
+
+- More of the card now follows your Home Assistant theme. With a see-through theme over a wallpaper, these parts used to show as solid black boxes. Now they use your theme's card color, the way the Queue list already did:
+  - The Library lists, including search results and the track list on a playlist or artist page
+  - The Open and heart buttons on Library tiles
+  - The header that stays at the top while you scroll an artist page
+  - On Now Playing: the volume panel, Up next, the More speakers button, the buttons over the album art, and the sleep timer strip
+- The volume sliders use your theme's slider colors when your theme sets them. While you drag, the ring around the knob matches. If your theme doesn't set slider colors, the sliders look the same as before.
+- Nothing moved or changed size.
+
 ## 0.8.4 — 2026-11-12
 
 - Now Playing always follows your Home Assistant theme. The Background choice (Plain, Automatic, Full, Light, Dark and Off) is gone from the card editor, and so is the album-art background on Now Playing. Album art is now a background on the screensaver only, and the screensaver itself looks the same as before.
