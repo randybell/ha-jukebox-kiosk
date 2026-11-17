@@ -58,10 +58,10 @@ The Screensaver is the same in both themes: black, with white text. Only its fon
 
 ## Install
 
-### HACS (custom repository)
+### Marketplace (custom repository)
 
-1. HACS → ⋮ → **Custom repositories** → `https://github.com/randybell/ha-jukebox-kiosk`, category **Integration**.
-2. Install **Jukebox Kiosk**, then restart Home Assistant.
+1. **Settings → Marketplace** → ⋮ → **Custom repositories** → `https://github.com/randybell/ha-jukebox-kiosk`, category **Integration**.
+2. Install **Jukebox Kiosk**, then restart Home Assistant. New versions show up under **Settings → Updates**.
 3. **Settings → Devices & services → Add integration → Jukebox Kiosk**, then choose your Music Assistant entry.
 4. Add `type: custom:jukebox-card` to a dashboard (see [Configuration](#configuration)).
 
@@ -71,7 +71,7 @@ Copy `custom_components/jukebox_kiosk/` (from the repository or the `jukebox_kio
 
 ### Coming from the old Jukebox Card plugin (0.5.x)
 
-The integration finds dashboard resources that still point at `/hacsfiles/ha-jukebox-kiosk-card/` (or `/local/community/ha-jukebox-kiosk-card/`, where Home Assistant 2026.11's Marketplace serves plugins) and removes them, so the card doesn't load twice. It then raises a Repairs issue that asks you to remove the old **Jukebox Card** plugin in HACS or the Marketplace. The issue stays, also across restarts, until the old plugin files are gone. YAML-mode resources can't be edited automatically; the Repairs issue lists the line to delete. Card configs keep working as they are. `mass_queue_entry_id` is ignored unless you set `backend: mass_queue`.
+The integration finds dashboard resources that still point at `/hacsfiles/ha-jukebox-kiosk-card/` (or `/local/community/ha-jukebox-kiosk-card/`, where Home Assistant 2026.11's Marketplace serves plugins) and removes them, so the card doesn't load twice. It then raises a Repairs issue that asks you to remove the old **Jukebox Card** plugin under **Settings → Marketplace**. The issue stays, also across restarts, until the old plugin files are gone. YAML-mode resources can't be edited automatically; the Repairs issue lists the line to delete. Card configs keep working as they are. `mass_queue_entry_id` is ignored unless you set `backend: mass_queue`.
 
 ## Backends
 
@@ -124,9 +124,11 @@ No allowlisted command in `MA_COMMANDS` (`custom_components/jukebox_kiosk/const.
 
 > The card reference below was written for 0.5.x. Wherever it still names a `mass_queue.*` action, read the matching `jukebox_kiosk/*` command: that is what the card sends since 0.7.9. Track lists are paged by the server 100 at a time.
 
-**A fresh card needs nothing typed.** Add the card, pick the player, and it plays: the card finds the Music Assistant entry through the integration (non-admins too), and the heart finds a way to favourite by itself.
+**A fresh card needs nothing typed.** When you add the card, **Player** is already filled in with the first Music Assistant player Home Assistant knows; change it if you want another one. If Home Assistant has no Music Assistant player yet, pick one before the card works. The card finds the Music Assistant entry through the integration (non-admins too), and the heart finds a way to favourite by itself.
 
-Add the card to a dashboard. A single **panel** view is the layout it is built for. Entity ids in the example are labeled `example:`. Keys you leave out use the defaults in [Options](#options); those defaults are unchanged.
+**A player is required.** The card plays only on the player you picked (`entity`). It never falls back to another player. A card with no `entity`, or with an entity that is not a media player, shows Home Assistant's error "Specify an entity from within the media_player domain" until you pick a player. Before 0.8.6, a card with no `entity:` line quietly played on `media_player.everywhere`.
+
+Add the card to a dashboard. A single **panel** view is the layout it is built for. Entity ids in the example are labeled `example:`. `entity` is required. Other keys you leave out use the defaults in [Options](#options).
 
 ```yaml
 # Example configuration. Entity ids below are examples; replace them with yours.
@@ -136,7 +138,7 @@ views:
     type: panel
     cards:
       - type: custom:jukebox-card
-        entity: media_player.everywhere                # example: Music Assistant group player; every play_media goes here
+        entity: media_player.everywhere                # required; example: Music Assistant group player; every play_media goes here
         rooms:                                         # example
           - { name: Living Room, entity: media_player.living_room }
           - { name: Kitchen,     entity: media_player.kitchen }
@@ -194,7 +196,7 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 ### Now Playing
 
 - **Art.** The card never loads the player's absolute `entity_picture` (`http://<ma-host>:8095/imageproxy?…` is mixed content on an https dashboard and unreachable off the LAN). It uses, in order: `entity_picture_local` (HA's relative `/api/media_player_proxy/…` URL), a relative `entity_picture`, the current mass_queue item's https `media_image`, then the placeholder. The same URL feeds Now Playing and the screensaver. Radio streams with no art get a radio-tower image. Item images are used only when they are https, `data:image` or relative.
-- **Display.** Now Playing is a plain card in your theme's colors, like Library and Queue, and the cover shows in its own square. The tab shows the art, title, artist · album, a provider badge from the URI scheme and "Playing on Everywhere".
+- **Display.** Now Playing is a plain card in your theme's colors, like Library and Queue, and the cover shows in its own square. The tab shows the art, title, artist · album, a provider badge from the URI scheme and "Playing on" with your player's name (for example "Playing on Everywhere").
 - **Seek bar.** Tap or drag it to send `media_player.media_seek {seek_position}`. The time label follows the drag.
 - **Transport.** All transport calls target `entity` only:
 
@@ -211,7 +213,7 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 - **Heart.** The heart adds the playing track to Music Assistant's favourites through the integration (`jukebox_kiosk/favorite_current`, needs the `library` class), or, on the native backend, presses the player's own Music Assistant "Favorite current song" button, found on the player's device. A filled heart removes it with `jukebox_kiosk/unfavorite_current`. When the card has no way to favourite, the heart is hidden. There is no option for it (since 0.7.9); an old `favorite_entity:` line in YAML is ignored.
 - **Up next strip.** It shows the next queue item and "+ N more". Tapping it opens the Queue tab.
 - **Volume:**
-  - **Everywhere** sends `volume_set` to the group player.
+  - **The player's own slider** (the top one, named after your player, for example Everywhere) sends `volume_set` to `entity`.
   - **Each room** sends `volume_set {volume_level}` to **that room's entity only**.
   - Slide sideways to change the volume: the slider waits for a short sideways movement before the number follows your finger. A tap, a stray touch or scrolling up and down does not change it. This applies to Now Playing and the Speakers panel; the seek bar is unchanged.
   - While you drag, the card sends at most one call every 200 ms, and always sends the final value on release.
@@ -298,7 +300,7 @@ Before 0.8.0 (old look), Library track rows:
 
   Pages are cached per category, favorite and sort, and load more on scroll.
 - **Tap never plays.** Artists, albums, playlists (and podcasts) open the detail view described under Search, with the same buttons and confirmations. On album, artist, playlist and podcast pages a tap or a press and hold on a track or episode opens the large pop-up (since 0.7.20; see below). Their rows have **Play Next**, **Play Now** and **Remove** buttons only with `show_action_icons: true`. On an artist page the Albums rows are different (since 0.7.10): small icon buttons for Add to queue, Play next, Play now and, where offered, Start radio, named once in a column header that stays in place while you scroll. There is no Remove or More on these rows. Since 0.7.20 the buttons and the column header are hidden unless `show_action_icons` is `true`. Since 0.7.13 the buttons work on a normal tap or click (in 0.7.10 to 0.7.12 they needed a press-and-hold of about half a second); Play now and Start radio still ask first. Press and hold the row itself (off its buttons) to open the pop-up for that album. Search result buttons work the same way, but their icons and short names appear on each result row rather than in a column header. **A tap on a track in the Tracks list opens the large pop-up** (since 0.7.13), the same one that pressing and holding the row opens, in both the combined and the older separate-tabs Library layout. The old small menu is gone for tracks, and the **More** button on a track row opens the pop-up too. A tap on a track also opens the pop-up in Search results and in the Queue, and on track tiles in Discover rows. Since 0.7.20 a tap or a press and hold on a track or podcast episode on an artist, album, playlist or podcast page opens it too. It lists Add to queue, Play next, Play now, Start radio and More Info, then Cancel, the same as in the Tracks list, and Play now and Start radio still ask first. A podcast episode has no Start radio. A radio station row on those pages is still only highlighted by a tap. A tap on a station opens the station panel with its details, a heart where allowed, Play and Close; Play asks "This will replace your queue" (Cancel / Play) when the queue has tracks. **Press and hold** (since 0.7.10) opens a large options panel with the item's art and name: Open (when the item has a page), Add to queue, Play next, Play now, Start radio, and Cancel. Since 0.7.12 Start radio is always listed on track, album, artist and playlist pop-ups; when that item can't start a radio it stays in its place, greyed, and does nothing. Podcast, episode and audiobook pop-ups have no Start radio. Tracks, podcast episodes and audiobooks also get **More Info**, just above Cancel (since 0.7.12). More Info changes the same pop-up to a details view; **Back** returns to the choices. It shows only what Music Assistant already sent with the item, and leaves out any line that is unknown. Tracks show Album, Year, Length, Source and Quality. Podcast episodes show Show, Episode (the episode number), Published (a date such as "Nov 1, 2026"), Length, Left, Source and Quality. Audiobooks show Author, Narrator, Publisher, Published, Length, Left, Source and Quality. Left is the time remaining, and only appears once you're partway through; it reads "Played" when the episode or book is finished. Episodes and audiobooks show no description. More Info is greyed and does nothing when no line other than Source has anything to show (a source on its own doesn't count). Album, artist, playlist, whole-podcast and station pop-ups have no More Info, and More Info is not a button on the rows. Stations get Open, Play now and Cancel. Since 0.7.12 every pop-up is only as tall as its buttons need and stays between the top bar and the bottom tab bar, with one shared button and text size, so all pop-ups look alike; if the choices would not fit, everything shrinks together. Cancel comes right after the last choice. Tap outside the panel or Cancel to close it.
-- **Radio.** Browse > Radio lists `get_library {media_type: radio}`. Favorites appear first, followed by other library stations. If there are none, the card shows "No stations yet" with a **Search stations** button and a hint to search by name; it no longer fills the grid with a search for "radio". With `radio_favorites_only`, only favorites appear, and an empty list says "No favorite stations yet". Station names are trimmed (Radio Browser pads some with tabs), every station has a **Radio** badge, and a station with no logo or a dead logo gets a radio-tower image. A tap does not play the station: it opens the station panel with its details, a heart where allowed, Play and Close. Play asks "This will replace your queue" (Cancel / Play) when the queue has tracks, then sends `play_media {media_id: radiobrowser://radio/…, media_type: radio, enqueue: replace}` to `media_player.everywhere`, never with `radio_mode`.
+- **Radio.** Browse > Radio lists `get_library {media_type: radio}`. Favorites appear first, followed by other library stations. If there are none, the card shows "No stations yet" with a **Search stations** button and a hint to search by name; it no longer fills the grid with a search for "radio". With `radio_favorites_only`, only favorites appear, and an empty list says "No favorite stations yet". Station names are trimmed (Radio Browser pads some with tabs), every station has a **Radio** badge, and a station with no logo or a dead logo gets a radio-tower image. A tap does not play the station: it opens the station panel with its details, a heart where allowed, Play and Close. Play asks "This will replace your queue" (Cancel / Play) when the queue has tracks, then sends `play_media {media_id: radiobrowser://radio/…, media_type: radio, enqueue: replace}` to your player (`entity`), never with `radio_mode`.
 - **Drill-down.** The › button on artist, album and playlist tiles (or the › arrow at the end of their rows), or Open in the menu, opens a detail page:
   - a back button, Play, Shuffle, Add to queue and Start radio (`radio_mode: true`, tracks / artists / albums only), and a track list. Tapping or pressing and holding a track opens the pop-up (since 0.7.20; before that a tap only highlighted the row). The rows have **Play Next**, **Play Now** and **Remove** buttons only with `show_action_icons: true`
   - tracks come from `jukebox_kiosk/item_tracks {uri, page, page_size: 100}`. Each row shows its duration, and the header shows the count and total time ("9 tracks · 43 min", with "+" while more pages may follow)
@@ -401,7 +403,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 
 | key | default | |
 |---|---|---|
-| `entity` | `media_player.everywhere` | Player for transport, the Everywhere volume, the queue and every `play_media` |
+| `entity` | *(required)* | Player for transport, its own volume slider, the queue and every `play_media`. A new card fills it in with the first Music Assistant player. Missing, or not a media player: the card shows "Specify an entity from within the media_player domain". Since 0.8.6 there is no default; before that it was `media_player.everywhere` |
 | `rooms` | `[]` | `[{name, entity, icon?}]`, or bare entity ids (the name then comes from `friendly_name`). Each room gets its own volume slider |
 | `screensaver_minutes` | `10` (0–1440) | Idle minutes before the screensaver. `0` turns it off. The editor offers Off, 1, 5, 10, 15, 30, 60 and Custom; any 0–1440 value from YAML still loads |
 | `browse_limit` | `60` (1–500) | Items per Browse page (infinite scroll pages by `offset`) |
@@ -464,6 +466,8 @@ Not in 0.7.x: joining a speaker to a dynamic group so playback resumes on it, an
 
 ## Troubleshooting
 
+- **The card says "Specify an entity from within the media_player domain".** The card has no player, or the one in `entity` is not a media player. Open the card's settings and pick one under **Player**, or add `entity:` with your player's id to the YAML. Since 0.8.6 the card no longer plays on `media_player.everywhere` by itself.
+- **The card says "Entity not available:" and a player id.** The player in `entity` is not in Home Assistant (renamed or removed). Pick another one under **Player**. This is Home Assistant's own warning, so it shows in your Home Assistant language.
 - **The card says "Custom element doesn't exist: jukebox-card".** Make sure Jukebox Kiosk is set up (not only installed), then reload the browser. Fully Kiosk may need **Clear cache**.
 - **The card loads twice, or shows the old version.** An old `/hacsfiles/ha-jukebox-kiosk-card/` (or `/local/community/ha-jukebox-kiosk-card/`) resource is still there. See the Repairs issue, or delete it under **Settings → Dashboards → Resources**.
 - **Play Next, Play Now or Remove are greyed, or the heart or grouping is missing, for one user.** Greyed queue actions mean that person may not change the queue (`grouping`, or `queue_play` left off). A missing heart means no `library` class (see [Permissions](#permissions)).

@@ -4,6 +4,14 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.8.6 — 2026-11-17
+
+- The card no longer falls back to the "Everywhere" player on its own. Playing, shuffle, the queue, lyrics, the speakers panel and the volume sliders all use the player you picked in the card's settings, and nothing else.
+- Messages such as "Playing … on …", and the "Playing on" line on Now Playing, use your player's name. They no longer say "Everywhere" unless that is the player you picked.
+- When you add a new card, Player is filled in with the first Music Assistant player Home Assistant knows. If there is none, pick one in the card's settings.
+- If the player you picked is no longer in Home Assistant, the card shows Home Assistant's usual warning, "Entity not available:" followed by the player's id, instead of the jukebox.
+- **Upgrade note:** a card with no `entity:` line in its YAML used to play on Everywhere without saying so. It now shows the error "Specify an entity from within the media_player domain" until you pick a player. Open the card's settings and choose one under Player, or add `entity:` with your player's id to the YAML. Cards that already name a player work as before.
+
 ## 0.8.5 — 2026-11-16
 
 - More of the card now follows your Home Assistant theme. With a see-through theme over a wallpaper, these parts used to show as solid black boxes. Now they use your theme's card color, the way the Queue list already did:
