@@ -526,12 +526,17 @@ export class JbNow extends LitElement {
     .nw.sl-open .art { z-index: 5; }
     .art-btns { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 8px; }
     /* #42: ≥48px at 1x; on zoomed big screens (--_z > 1) the same 40px floor as before (54px at 1920x1080) */
-    .ab { width: max(40px, calc(48px / var(--_z, 1))); height: max(40px, calc(48px / var(--_z, 1))); border-radius: 50%; display: grid; place-items: center; background: var(--_surface-solid); color: var(--_fg);
+    .ab { width: max(40px, calc(48px / var(--_z, 1))); height: max(40px, calc(48px / var(--_z, 1))); border-radius: 50%; display: grid; place-items: center;
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
+      color: var(--_fg);
       border: 1px solid var(--_surface-border); transition: background 150ms, color 150ms; }
     .ab .i { width: 24px; height: 24px; }
     .art .sleep-strip { position: absolute; z-index: 2; top: calc(18px + max(40px, calc(48px / var(--_z, 1)))); right: 10px; left: 10px; margin: 0; justify-content: flex-end; }
-    .art .sleep-strip .sp { background: var(--_surface-solid); border-color: var(--_surface-border); }
-    .art .sleep-strip .sp.on { background: var(--_surface-solid); }
+    .art .sleep-strip .sp { background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
+      border-color: var(--_surface-border); }
+    .art .sleep-strip .sp.on { background: var(--ha-card-background, var(--card-background-color, var(--_bg))); }
     /* on = HA's icon-button 'selected' colour (--primary-color), as the media browser's favourite button */
     .ab.on { color: var(--_active); border-color: var(--_active); }
     .ab:active { transform: scale(.94); }
@@ -539,7 +544,7 @@ export class JbNow extends LitElement {
     /* no picture: media-control's no-image look: the player icon in the on-primary colour */
     .art .ph { position: absolute; inset: 0; display: grid; place-items: center; background: var(--_chip-sel); }
     .art .ph .i { width: 30%; height: 30%; color: var(--_inactive); }
-    /* Cover overlay buttons sit on the picture: an HA icon button (no shadow, theme icon colour) on the opaque theme surface, so the icon stays readable on any cover */
+    /* Cover overlay buttons sit on the picture: an HA icon button (no shadow, theme icon colour) on the ha-card surface, so the icon stays readable on any cover */
     .art .sleep-strip .sp { color: var(--_fg); }
     .art .sleep-strip .sp.on { color: var(--_active); border-color: var(--_active); }
     .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: 10px;
