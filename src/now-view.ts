@@ -618,6 +618,8 @@ export class JbNow extends LitElement {
     .vol { container: vol / inline-size; padding: 6px 14px; display: flex; flex-direction: column; }
     /* the volume panel sits directly on the HA card surface: no second fill */
     .vol.panel { background: transparent; }
+    /* the Up next panel sits directly on the HA card surface: no second fill */
+    .upn.panel { background: transparent; }
     .volw { position: relative; display: flex; flex-direction: column; min-height: 0; }
     .vmore { display: none; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 2; align-items: center; gap: 4px;
       padding: 4px 12px; min-height: 30px; border-radius: 999px; border: 1px solid var(--_surface-border); background: var(--_surface-solid); color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
