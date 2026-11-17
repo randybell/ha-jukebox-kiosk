@@ -12,6 +12,7 @@ export async function removeQueuedItem(hass: HomeAssistant | undefined, config: 
   entity?: string;
 }, backend: MaBackend | undefined, entity: string, it: QueueRemovableItem) {
   if (!hass || !it.uri) throw new Error('This item has no queue media to remove');
+  if (!entity) return;
   const be = backend;
   if (!be?.caps.queueEdit) throw new Error('Queue changes are not allowed');
   const w = await be.queueWindow(entity, 1000, false);

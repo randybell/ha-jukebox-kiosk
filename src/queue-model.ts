@@ -69,7 +69,7 @@ export const isBufferedError = (e: unknown) => /already (played|buffered|played\
 export class QueueModel {
   snap: QueueSnapshot = { items: [], current: -1, loading: false, error: '', at: 0 };
   hass?: HomeAssistant;
-  entity = 'media_player.everywhere';
+  entity = '';
   limitAfter = 200;
   /** the card's Music Assistant backend (set by the card) */
   backend?: MaBackend;
@@ -98,6 +98,7 @@ export class QueueModel {
 
   async refresh() {
     const hass = this.hass; if (!hass) return;
+    if (!this.entity) { this.set({ loading: false, error: '' }); return; }
     const seq = ++this.seq;
     this.set({ loading: true });
     const entity = this.entity, be = this.backend;
@@ -130,6 +131,7 @@ export class QueueModel {
 
   /** Optimistic Autoplay toggle; rolls back and rethrows on failure. */
   async setAutoplay(enabled: boolean) {
+    if (!this.entity) return;
     const be = this.backend;
     if (!be?.setAutoplay) throw new BackendError('unsupported', 'Autoplay is not available');
     const prev = this.snap.autoplay;
@@ -142,13 +144,13 @@ export class QueueModel {
   /** Autoplay style for this queue (kiosk only). */
   async autoplayOptions(): Promise<AutoplayOptions> {
     const be = this.backend;
-    if (!be?.autoplayOptions) throw new BackendError('unsupported', 'Autoplay style is not available');
+    if (!this.entity || !be?.autoplayOptions) throw new BackendError('unsupported', 'Autoplay style is not available');
     return be.autoplayOptions(this.entity);
   }
   /** Pin the Autoplay style (not optimistic: the sheet shows a busy row until MA saved it). */
   async setAutoplayMode(mode: AutoplayMode, playlist?: string) {
     const be = this.backend;
-    if (!be?.setAutoplayMode) throw new BackendError('unsupported', 'Autoplay style is not available');
+    if (!this.entity || !be?.setAutoplayMode) throw new BackendError('unsupported', 'Autoplay style is not available');
     await be.setAutoplayMode(this.entity, mode, playlist);
   }
 
@@ -163,6 +165,7 @@ export class QueueModel {
       if (r) this.set({ items: r.items, current: r.current });
     }
     try {
+      if (!this.entity) return;
       if (send) await send();
       else if (this.backend) await this.backend.queueAction(this.entity, service as QueueAction, id, this.snap.queueId);
       else throw new BackendError('config', 'no backend');
@@ -216,7 +219,7 @@ export class QueueModel {
     return removeQueuedItem(this.hass, this.configForRemove, this.backend, this.entity, it);
   }
   /** Set by the card with its runtime entity/backend; direct model tests keep using their own backend. */
-  configForRemove: { entity?: string } = { entity: 'media_player.everywhere' };
+  configForRemove: { entity?: string } = {};
   remove(id: string) {
     return this.act('remove', id, (items, i) => {
       const cur = this.snap.current; items.splice(i, 1);

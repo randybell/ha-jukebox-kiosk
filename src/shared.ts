@@ -125,7 +125,8 @@ export function enqueueFor(it: Partial<MaItem> | undefined, mediaType: string, e
 export const isRadioUri = (uri?: string) => /^[a-z0-9_\-]+:\/\/radio\//i.test(uri ?? '');
 export async function playMedia(hass: HomeAssistant, config: JukeboxCardConfig, it: MaItem, mediaType: string, enqueue: Enqueue = 'play', radio = false) {
   enqueue = enqueueFor(it, mediaType, enqueue);
-  const entity_id = config.entity || 'media_player.everywhere';
+  const entity_id = config.entity;
+  if (!entity_id) return null;
   const data: Record<string, any> = { media_id: it.uri, ...(mediaType ? { media_type: mediaType } : {}), enqueue };
   if (radio && mediaType !== 'radio' && !isRadio(it)) data.radio_mode = true;
   const key = `${entity_id}|${it.uri}|${enqueue}|${radio ? 1 : 0}`;
@@ -147,7 +148,8 @@ export async function playMedia(hass: HomeAssistant, config: JukeboxCardConfig, 
  * random order (supported, documented services only; no client-side reordering of hundreds of URIs).
  */
 export async function shufflePlay(hass: HomeAssistant, config: JukeboxCardConfig, it: MaItem, mediaType: string, enqueue: Enqueue = 'replace') {
-  const entity_id = config.entity || 'media_player.everywhere';
+  const entity_id = config.entity;
+  if (!entity_id) return null;
   const key = `${entity_id}|${it.uri}|shuffle`;
   if (inflight.has(key)) return null;
   inflight.add(key);
@@ -161,16 +163,20 @@ export async function shufflePlay(hass: HomeAssistant, config: JukeboxCardConfig
 }
 /** "Play" from a detail view means in order: if the player is shuffling, turn shuffle off first (awaited). */
 export async function playInOrder(hass: HomeAssistant, config: JukeboxCardConfig, it: MaItem, mediaType: string, enqueue: Enqueue = 'replace') {
-  const entity_id = config.entity || 'media_player.everywhere';
+  const entity_id = config.entity;
+  if (!entity_id) return null;
   if (config._guard) { if (!(await config._guard(entity_id))) return null; config = { ...config, _guard: undefined }; }
   if (hass.states[entity_id]?.attributes?.shuffle === true && !isInflight(`${entity_id}|${it.uri}|${enqueue}|0`))
     await hass.callService('media_player', 'shuffle_set', { shuffle: false }, { entity_id });
   return playMedia(hass, config, it, mediaType, enqueue);
 }
 export function playMessage(hass: HomeAssistant | undefined, config: JukeboxCardConfig, it: MaItem, enqueue: Enqueue, radio: boolean, shuffle = false) {
-  const name = hass?.states[config.entity || 'media_player.everywhere']?.attributes?.friendly_name ?? 'Everywhere';
-  return shuffle ? `Shuffling ${it.name} on ${name}` : radio ? `Starting radio from ${it.name}` : enqueue === 'next' ? `${it.name} plays next`
-    : enqueue === 'add' ? `Added ${it.name} to the queue` : enqueue === 'replace' ? `Queue replaced with ${it.name}` : `Playing ${it.name} on ${name}`;
+  const eid = config.entity;
+  const name = (hass?.states[eid ?? '']?.attributes?.friendly_name as string | undefined)
+    ?? (eid ? eid.replace(/^media_player\./, '').replace(/_/g, ' ') : '');
+  const on = name ? ` on ${name}` : '';
+  return shuffle ? `Shuffling ${it.name}${on}` : radio ? `Starting radio from ${it.name}` : enqueue === 'next' ? `${it.name} plays next`
+    : enqueue === 'add' ? `Added ${it.name} to the queue` : enqueue === 'replace' ? `Queue replaced with ${it.name}` : `Playing ${it.name}${on}`;
 }
 
 /* ---------------- long-press controller: tap = onTap, hold 500 ms = onLong ---------------- */

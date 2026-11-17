@@ -63,7 +63,7 @@ export class JbLyrics extends LitElement {
   /** index of the highlighted line at the last render (tests read data-cur) */
   cur = -1;
 
-  private get eid() { return this.config?.entity || 'media_player.everywhere'; }
+  private get eid() { return this.config?.entity || ''; }
   private get ent(): HassEntity | undefined { return this.hass?.states[this.eid]; }
 
   connectedCallback() {
@@ -172,6 +172,7 @@ export class JbLyrics extends LitElement {
     window.clearTimeout(this._chipTimer);
     this._chipTimer = window.setTimeout(() => { this._flash = -1; this._chip = ''; }, 1400);
     try { navigator.vibrate?.(12); } catch { /* */ }
+    if (!this.eid) return;
     this.hass.callService('media_player', 'media_seek', { seek_position: p }, { entity_id: this.eid }).catch((err: any) => {
       console.warn('[jukebox-card] lyrics seek failed', err);
       this._seekHold = undefined; this._chip = 'Could not seek'; this.requestUpdate();

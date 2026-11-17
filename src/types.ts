@@ -26,6 +26,8 @@ export interface HomeAssistant {
     sendMessagePromise<T = any>(msg: Record<string, unknown>): Promise<T>;
     subscribeMessage<T = any>(cb: (ev: T) => void, msg: Record<string, unknown>): Promise<() => Promise<void> | void>;
   };
+  /** Lovelace translations (used for Home Assistant's standard entity-not-found warning). */
+  localize?(key: string, ...args: any[]): string;
   callService(
     domain: string,
     service: string,
@@ -62,7 +64,7 @@ export type Enqueue = 'play' | 'next' | 'add' | 'replace' | 'replace_next';
 
 export interface JukeboxCardConfig {
   type: string;
-  /** Player that receives play_media. Default media_player.everywhere */
+  /** Player that receives play_media. Required; a new card's stub picks the first Music Assistant player. */
   entity?: string;
   /** Room players for the per-room volume sliders. `{name, entity}`; a bare entity id string is also accepted. */
   rooms?: Array<RoomConfig | string>;

@@ -667,7 +667,7 @@ for (const q of ['&tab=now', '&tab=now&backdrop=full', '&tab=now&backdrop=light'
   const onC = (m) => { if (['error', 'warning', 'warn'].includes(m.type())) noisy.push(m.text()); };
   page.on('console', onC);
   for (const v of ['full', 'light', 'auto', 'plain', 'static', 'off', 'blurry', '', 7, null, true, { a: 1 }, ['full']]) {
-    s = await page.evaluate((val) => { try { document.createElement('jukebox-card').setConfig({ type: 'custom:jukebox-card', config_entry_id: 'x', backdrop: val }); return 'ok'; } catch (e) { return e.message; } }, v);
+    s = await page.evaluate((val) => { try { document.createElement('jukebox-card').setConfig({ type: 'custom:jukebox-card', entity: 'media_player.everywhere', config_entry_id: 'x', backdrop: val }); return 'ok'; } catch (e) { return e.message; } }, v);
     check(`15b a saved backdrop of ${JSON.stringify(v)} is ignored quietly (setConfig does not throw)`, s === 'ok', s);
   }
   await sleep(200); page.off('console', onC);

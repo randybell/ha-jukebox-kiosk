@@ -72,7 +72,7 @@ export class JbNow extends LitElement {
   private seek?: Pending<number> & { upd?: string };
   private senders = new Map<string, ReturnType<typeof throttle<[number]>>>();
 
-  private get eid() { return this.config.entity || 'media_player.everywhere'; }
+  private get eid() { return this.config.entity || ''; }
   private get ent(): HassEntity | undefined { return this.hass?.states[this.eid]; }
 
   connectedCallback() {
@@ -159,6 +159,7 @@ export class JbNow extends LitElement {
   private flag<T>(k: string, actual: T) { return this.held(this.flags, k, actual, (x, y) => x === y); }
 
   private call(domain: string, service: string, data: Record<string, any>, entity_id: string) {
+    if (!entity_id) return Promise.resolve();
     return this.hass!.callService(domain, service, data, { entity_id }).catch((err: any) => {
       console.warn(`[jukebox-card] ${domain}.${service} failed`, err);
       this.toast('That did not work. Check the player.');
@@ -429,7 +430,7 @@ export class JbNow extends LitElement {
     const shuffle = this.flag('shuffle', !!a.shuffle);
     const repeat = this.flag('repeat', shownRepeat(a.repeat));
     const { pos, dur } = this.position();
-    const where = (a.friendly_name as string) ?? 'Everywhere';
+    const where = (a.friendly_name as string) ?? (this.eid ? this.eid.replace(/^media_player\./, '').replace(/_/g, ' ') : '');
     const stateWord = playing ? 'Playing on' : e?.state === 'paused' || this.flag('state', e?.state) === 'paused' ? 'Paused on' : 'Ready on';
     const rooms = roomsOf(this.config, this.hass);
     const up = this.queue?.upNext ?? [];

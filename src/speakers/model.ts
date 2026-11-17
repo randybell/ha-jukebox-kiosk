@@ -163,8 +163,8 @@ export function targetsOf(c: JukeboxCardConfig, hass?: HomeAssistant): Target[] 
     return c.targets.map((t) => { const o: TargetConfig = typeof t === 'string' ? { entity: t } : t; return { entity: o.entity, name: o.name || nameOf(o.entity), members: o.members }; });
   const out = Object.values(hass?.states ?? {}).filter((s) => s.entity_id.startsWith('media_player.') && s.attributes?.mass_player_type === 'group')
     .map((s) => ({ entity: s.entity_id, name: nameOf(s.entity_id) }));
-  const base = c.entity || 'media_player.everywhere';
-  if (!out.some((t) => t.entity === base)) out.unshift({ entity: base, name: nameOf(base) });
+  const base = c.entity;
+  if (base && !out.some((t) => t.entity === base)) out.unshift({ entity: base, name: nameOf(base) });
   return out;
 }
 

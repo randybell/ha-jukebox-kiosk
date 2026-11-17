@@ -91,7 +91,14 @@
     customElements.define('ha-form', StubHaForm);
     await import('../custom_components/jukebox_kiosk/www/jukebox-card.js');
     const params = new URLSearchParams(location.search);
-    const cfg = params.get('cfg') ? JSON.parse(params.get('cfg')) : { type: 'custom:jukebox-card', entity: 'media_player.everywhere' };
+    // stub=1: a brand-new card as Home Assistant adds it (getStubConfig). Without hass, that is {}.
+    // Default cfg still uses the mock Everywhere player so existing editor tests stay as they are.
+    let cfg;
+    if (params.get('cfg')) cfg = JSON.parse(params.get('cfg'));
+    else if (params.get('stub') === '1') {
+      const stubHass = window.__hass || { states: {}, entities: {} };
+      cfg = { type: 'custom:jukebox-card', ...customElements.get('jukebox-card').getStubConfig(stubHass) };
+    } else cfg = { type: 'custom:jukebox-card', entity: 'media_player.everywhere' };
     const ed = document.createElement('jukebox-card-editor');
     ed.setConfig(cfg);
     window.__changes = [];

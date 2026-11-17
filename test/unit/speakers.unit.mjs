@@ -130,6 +130,8 @@ function fakeHass(withQueueId = true, { buf, curIdx = 7, ignoreDelete = false, m
 /** a QueueModel on the Jukebox Kiosk backend for this fake hass */
 async function model(hass) {
   const qm = new Q.QueueModel(); qm.hass = hass;
+  qm.entity = 'media_player.everywhere';
+  qm.configForRemove = { entity: 'media_player.everywhere' };
   qm.backend = new K.KioskBackend(() => hass); await qm.backend.ready;
   return qm;
 }

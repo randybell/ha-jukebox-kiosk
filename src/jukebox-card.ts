@@ -20,6 +20,7 @@ import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, liveCount, membe
 /** the screensaver's reduced-motion class (.rm) follows the browser setting */
 const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
+import { firstMusicAssistantPlayer } from './ma-player';
 import { pickBackend, createBackend, type MaBackend } from './backend';
 import { defineElement } from './define';
 import { libraryTabLabel, combinedOn } from './library-home';
@@ -166,8 +167,7 @@ export class JukeboxCard extends LitElement {
   static getConfigElement() { return document.createElement('jukebox-card-editor'); }
   /** A new card: the first Music Assistant player HA knows (nothing else to fill in). */
   static getStubConfig(hass?: HomeAssistant): Partial<JukeboxCardConfig> {
-    const reg = hass?.entities ?? {};
-    const ma = Object.keys(reg).find((id) => id.startsWith('media_player.') && reg[id]?.platform === 'music_assistant' && !!hass?.states[id]);
+    const ma = firstMusicAssistantPlayer(hass);
     return ma ? { entity: ma } : {};
   }
 
@@ -187,10 +187,13 @@ export class JukeboxCard extends LitElement {
     for (const k of ['show_lyrics', 'screensaver_lyrics', 'lyrics_seek'] as const)
       if (!bool(config[k])) throw new Error(`jukebox-card: ${k} must be true or false.`);
     if (!num(config.lyrics_offset_ms, -5000, 5000)) throw new Error('jukebox-card: lyrics_offset_ms must be between -5000 and 5000.');
+    if (!config.entity || config.entity.split('.')[0] !== 'media_player') {
+      throw new Error('Specify an entity from within the media_player domain');
+    }
     validateSpeakers(config);
     const first = !this._config;
     this._base = {
-      entity: 'media_player.everywhere', accent: 'mono', limit: 8,
+      accent: 'mono', limit: 8,
       screensaver_minutes: 10, ...config, _favs: this.favs, _stationGuard: this.stationGuard,
     };
     this._config = this.effective();
@@ -463,7 +466,7 @@ export class JukeboxCard extends LitElement {
   }
   /** Now-playing art for the screensaver (see playerArt: never an absolute entity_picture). */
   private art() {
-    const ent = this.hass?.states[this._config?.entity ?? 'media_player.everywhere'];
+    const ent = this._config?.entity ? this.hass?.states[this._config.entity] : undefined;
     return playerArt(ent?.attributes, this.queue.currentItem);
   }
   /** Large-screen scale: the layout is designed around ~1280x800; on bigger panels zoom it so art/text grow instead of spreading thin. */
@@ -738,9 +741,19 @@ export class JukeboxCard extends LitElement {
 
   render() {
     if (!this._config) return nothing;
-    const ent = this.hass?.states[this._config.entity!];
-    // never borrow 'Everywhere' for another entity: a missing one shows its object id
-    const name = ent?.attributes?.friendly_name ?? (ent || !this.hass ? 'Everywhere' : this._config.entity!.replace(/^media_player\./, '').replace(/_/g, ' '));
+    const eid = this._config.entity;
+    // Home Assistant's media-control card: a configured entity that is missing shows the standard warning.
+    if (this.hass && eid && !this.hass.states[eid]) {
+      const loc = this.hass.localize;
+      const fromHa = typeof loc === 'function'
+        ? (loc('ui.panel.lovelace.warning.entity_not_found', { entity: eid }) || loc('ui.panel.lovelace.warning.entity_not_found', 'entity', eid))
+        : undefined;
+      const warning = (fromHa && !fromHa.startsWith('ui.panel.') ? fromHa : '') || `Entity not available: ${eid}`;
+      return html`<hui-warning>${warning}</hui-warning>`;
+    }
+    const ent = eid ? this.hass?.states[eid] : undefined;
+    const name = (ent?.attributes?.friendly_name as string | undefined)
+      ?? (eid ? eid.replace(/^media_player\./, '').replace(/_/g, ' ') : '');
     const dyn = this._config.speaker_mode === 'dynamic';
     const live = dyn ? this.pillCount() : 0;
     this._pn = live;
