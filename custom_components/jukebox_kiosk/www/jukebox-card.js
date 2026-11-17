@@ -272,6 +272,8 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; touch-action: pan-y;
       padding-bottom: calc(16px + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
     .scroll::-webkit-scrollbar { display: none; }
+    /* the list sits directly on the HA card surface: no second fill */
+    .scroll.panel { background: transparent; }
     .detail { display: flex; flex-direction: column; gap: 14px; }
     /* Station-only actions: keep Play Now on one line and fully inside its row. */
     .row[data-type="radio"] { min-height: 68px; }
@@ -283,9 +285,10 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .row.sr .ra-b span { display: none; }
     .row.sr .du { display: block; } /* no empty trailing grid column, so the buttons end at the list's right edge like the header */
     .row.sr.nor .ra { padding-right: var(--_abw, 48px); }
-    /* sticky inside .list.albums only: it leaves with the Albums section; opaque and padded out to the panel edges so no album peeks above or beside it */
+    /* sticky inside .list.albums only: it leaves with the Albums section; padded out to the panel edges. ha-card surface so rows stay hidden in opaque themes and may blur behind it in a translucent one */
     .ahd { position: sticky; top: -16px; z-index: 2; display: var(--_ra-display, flex); justify-content: flex-end; margin: 0 -16px 2px; padding: 6px 16px;
-      background: var(--_surface-solid); }
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none); }
     .ahd span { width: var(--_abw, 48px); flex: none; text-align: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); color: var(--_muted); }
     .nav { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .back { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px 0 12px; border-radius: 999px; background: var(--_chip-bg);
@@ -535,6 +538,8 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     }
     .scroll { flex: 1; min-height: 0; overflow-y: auto; container: np / inline-size; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
+    /* the list sits directly on the HA card surface: no second fill */
+    .scroll.panel { background: transparent; }
     /* v0.7 Library home */
     .home { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
     .lt { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 4px; min-height: 180px; padding: 22px 24px;
@@ -556,9 +561,15 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     /* Playlist artwork (including lettering near its lower edge) must not sit behind a provider badge. */
     .tile[data-type="playlist"] .tw .pv { position: static; display: block; margin-top: 6px; max-width: 100%; }
     .tile[data-type="playlist"] b { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
-    .tw .open { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--_surface-solid); color: var(--_fg); }
+    .tw .open { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
+      color: var(--_fg); }
     .tw .open .i { width: 20px; height: 20px; }
-    .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--_surface-solid); color: var(--_muted); }
+    .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
+      color: var(--_muted); }
     .tw .tfav.on { color: var(--_active); }
     .tw .tfav .i { width: 20px; height: 20px; }
     .mo.fav.on { color: var(--_active); }
@@ -914,11 +925,12 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     :host { position: relative; display: block; height: var(--_slider-hit, 36px); touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
     :host([slop]:not([slop="0"])) { touch-action: pan-y; } /* #63: a vertical swipe on a volume slider scrolls the page */
     :host([disabled]) { opacity: .35; cursor: default; }
-    .t { position: absolute; left: 0; right: 0; top: 50%; height: var(--_slider-h, 6px); transform: translateY(-50%); border-radius: 99px; background: var(--_track); overflow: hidden; }
-    .f { position: absolute; inset: 0 auto 0 0; background: var(--_active); border-radius: 99px; }
-    .k { position: absolute; top: 50%; width: var(--_slider-knob, 18px); height: var(--_slider-knob, 18px); border-radius: 50%; background: var(--_active);
+    /* ha-slider colours (HA 2026 frontend ha-slider.ts): track, fill, thumb. Fall back to the card tokens (--_track / --_active) which already point at --disabled-color and --primary-color. */
+    .t { position: absolute; left: 0; right: 0; top: 50%; height: var(--_slider-h, 6px); transform: translateY(-50%); border-radius: 99px; background: var(--ha-slider-track-color, var(--_track)); overflow: hidden; }
+    .f { position: absolute; inset: 0 auto 0 0; background: var(--ha-slider-indicator-color, var(--_active)); border-radius: 99px; }
+    .k { position: absolute; top: 50%; width: var(--_slider-knob, 18px); height: var(--_slider-knob, 18px); border-radius: 50%; background: var(--ha-slider-thumb-color, var(--_active));
       transform: translate(-50%, -50%); transition: box-shadow .12s; }
-    .k.on { box-shadow: var(--_thumb-ring); }
+    .k.on { box-shadow: 0 0 0 4px color-mix(in srgb, var(--ha-slider-thumb-color, var(--_active)) calc(var(--dark-divider-opacity, 0.12) * 100%), transparent); }
   `,ke("jb-slider",gs);const ys=new Map;let _s=!1;const xs=new Set,ws=()=>_s;function ks(t){_s!==t&&(_s=t,xs.forEach(t=>t()))}const $s=t=>!1!==t?.connection?.connected;async function qs(t,e,i){if(t){if(_s||!$s(t))return ys.set(e,{v:i,t:Date.now()}),void ks(!0);try{await t.callService("media_player","volume_set",{volume_level:i},{entity_id:e},!1)}catch(t){if(!(t=>3===t?.error?.code||3===t?.code||/connection lost/i.test(String(t?.message??t?.error?.message??"")))(t))throw t;ys.has(e)||ys.set(e,{v:i,t:Date.now()}),ks(!0)}}}function zs(t){if(!t||!$s(t))return;ks(!1);const e=Date.now();for(const[i,s]of[...ys])ys.delete(i),e-s.t>3e4||qs(t,i,s.v).catch(t=>console.warn("[jukebox-card] volume_set failed",t))}const Ss=()=>!!globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches,As=/^\s*\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/,Ms=/^\s*\[([a-z#]+)\s*:(.*)\]\s*$/i,Cs=/<\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?>/g,js=t=>t.replace(Cs,"").replace(/[\s\u00a0]+/g," ").trim();function Ts(t){if(!t||"string"!=typeof t)return[];let e=0;const i=[];for(const s of t.replace(/\r\n?/g,"\n").split("\n")){let t=s;const a=[];let r;for(;r=As.exec(t);){const e=r[3]?Number("0."+r[3]):0;a.push(60*Number(r[1])+Number(r[2])+e),t=t.slice(r[0].length)}if(!a.length){const t=Ms.exec(s);if(t&&"offset"===t[1].toLowerCase()){const i=Number(t[2].trim());Number.isFinite(i)&&(e=i)}continue}const o=js(t);for(const t of a)i.push({t:t,text:o})}const s=e/1e3,a=i.map((t,e)=>({...t,t:Math.max(0,t.t-s),i:e})).sort((t,e)=>t.t-e.t||t.i-e.i),r=[];for(const t of a)(t.text||!r.length||r[r.length-1].text)&&r.push({t:Math.round(1e3*t.t)/1e3,text:t.text});for(;r.length&&!r[r.length-1].text;)r.pop();return r}const Es=t=>"string"==typeof t&&/^\s*\[\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?\]/m.test(t);function Ls(t){if(!t||"string"!=typeof t)return[];const e=t.replace(/\r\n?/g,"\n").split("\n").map(t=>t.replace(/[\s\u00a0]+/g," ").trim()),i=[];for(const t of e)(t||i.length&&i[i.length-1])&&i.push(t);for(;i.length&&!i[i.length-1];)i.pop();return i.map((t,e)=>({t:e,text:t}))}function Rs(t,e){for(const i of[e,t])if(Es(i)){const t=Ts(i);if(t.some(t=>t.text))return{kind:"synced",lines:t}}for(const i of[t,e])if("string"==typeof i&&!Es(i)){const t=Ls(i);if(t.some(t=>t.text))return{kind:"plain",lines:t}}return null}const Ps=6e3,Hs="Looking for lyrics…",Os="No lyrics found",Ds="Lyrics unavailable",Ns="Nothing playing";class Fs extends ot{constructor(){super(...arguments),this.mode="overlay",this.active=!1,this._s={status:"idle",lines:[]},this._press=-1,this._flash=-1,this._chip="",this._suppressClick=!1,this._userAt=0,this._scrollAt=0,this._lastCur=-2,this._roEls=[],this.cur=-1,this.onDown=t=>{if(this._userAt=Date.now(),this._tap="mouse"===t.pointerType&&0!==t.button||this.onControl(t)||Date.now()-this._scrollAt<250?void 0:{x:t.clientX,y:t.clientY,t:Date.now(),id:t.pointerId},!this.seekable()||"mouse"===t.pointerType&&0!==t.button)return;const e=this.lineOf(t);if(!e)return;const i=Number(e.dataset.i);this._s.lines[i]&&(this._start={x:t.clientX,y:t.clientY,id:t.pointerId},this._press=i,window.clearTimeout(this._holdTimer),this._holdTimer=window.setTimeout(()=>this.fireSeek(i),550))},this.onMove=t=>{this._tap&&t.pointerId===this._tap.id&&Math.hypot(t.clientX-this._tap.x,t.clientY-this._tap.y)>10&&(this._tap=void 0),this._start&&t.pointerId===this._start.id&&Math.hypot(t.clientX-this._start.x,t.clientY-this._start.y)>10&&this.cancelPress()},this.onUp=t=>{const e=this._tap;this._tap=void 0;const i=this._suppressClick;this.cancelPress(),!e||t.pointerId!==e.id||i||Date.now()-e.t>500||Math.hypot(t.clientX-e.x,t.clientY-e.y)>10||this._scrollAt>e.t||"overlay"===this.mode&&this.dispatchEvent(new CustomEvent("jukebox-lyrics-tap",{detail:{mode:this.mode},bubbles:!0,composed:!0}))},this.onCancelTap=()=>{this._tap=void 0,this.cancelPress()},this.onScroll=()=>{Date.now()-this._userScrollAt>1500||(this._scrollAt=Date.now())},this.cancelPress=()=>{window.clearTimeout(this._holdTimer),this._start=void 0,this._press>=0&&(this._press=-1)},this.onClickCapture=t=>{this._suppressClick&&(this._suppressClick=!1,t.stopPropagation(),t.preventDefault())},this.onUserScroll=()=>{this._userAt=this._userScrollAt=Date.now()},this._userScrollAt=0}get eid(){return this.config?.entity||"media_player.everywhere"}get ent(){return this.hass?.states[this.eid]}connectedCallback(){super.connectedCallback(),this.store&&!this._unsub&&(this._unsub=this.store.subscribe(t=>this._s=t))}disconnectedCallback(){super.disconnectedCallback(),this._unsub?.(),this._unsub=void 0,window.clearTimeout(this._timer),window.clearTimeout(this._holdTimer),window.clearTimeout(this._chipTimer),this._ro?.disconnect(),this._roEls=[],this._svY=void 0}willUpdate(t){t.has("store")&&(this._unsub?.(),this._unsub=this.isConnected?this.store?.subscribe(t=>this._s=t):void 0)}shouldUpdate(t){if(1===t.size&&t.has("hass")){const e=t.get("hass");return!e||!this.hass||e.states[this.eid]!==this.hass.states[this.eid]}return!0}offset(){const t=Number(this.config?.lyrics_offset_ms??500);return Number.isFinite(t)?t/1e3:0}position(t=Date.now()){const e=this.ent,i=e?.attributes?.media_position_updated_at;if(this._seekHold){if(!(i!==this._seekHold.upd||t-this._seekHold.t>4e3))return this._seekHold.v+("playing"===e?.state?(t-this._seekHold.t)/1e3:0);this._seekHold=void 0}return function(t,e,i=Date.now()){const s=t??{};let a=Number(s.media_position)||0;const r=s.media_position_updated_at;if("playing"===e&&r){const t=(i-Date.parse(r))/1e3;Number.isFinite(t)&&t>0&&(a+=t)}const o=Number(s.media_duration)||0;return o?Math.max(0,Math.min(o,a)):Math.max(0,a)}(e?.attributes,e?.state,t)}playing(){return"playing"===this.ent?.state}seekable(){const t=this._s,e=this.ent;if("synced"!==t.status||!t.track||t.track.radio||!1===this.config?.lyrics_seek)return!1;if(!((Number(e?.attributes?.media_duration)||t.track.duration)>0))return!1;const i=e?.attributes?.supported_features;return"number"!=typeof i||!(2&~i)}lineOf(t){for(const e of t.composedPath()){const t=e;if(t?.classList?.contains("ln"))return t;if(t===this)break}return null}onControl(t){for(const e of t.composedPath()){const t=e;if(t===this)break;if(t?.matches?.("button, a, input, [role=button], [data-act]"))return!0}return!1}fireSeek(t){const e=this._s.lines[t];if(this._start=void 0,this._press=-1,!e||!this.hass||!this.seekable())return;const i=Math.max(0,Math.floor(e.t));this._suppressClick=!0,window.setTimeout(()=>this._suppressClick=!1,800),this._seekHold={v:e.t,t:Date.now(),upd:this.ent?.attributes?.media_position_updated_at},this._userAt=0,this._flash=t,this._chip=`Jumped to ${zt(i)}`,window.clearTimeout(this._chipTimer),this._chipTimer=window.setTimeout(()=>{this._flash=-1,this._chip=""},1400);try{navigator.vibrate?.(12)}catch{}this.hass.callService("media_player","media_seek",{seek_position:i},{entity_id:this.eid}).catch(t=>{console.warn("[jukebox-card] lyrics seek failed",t),this._seekHold=void 0,this._chip="Could not seek",this.requestUpdate()}),this.dispatchEvent(new CustomEvent("jukebox-lyrics-seek",{detail:{position:i,line:t},bubbles:!0,composed:!0}))}updated(){window.clearTimeout(this._timer);const t=this._s;if(this.dataset.status=t.status,this.dataset.cur=String(this.cur),this.observeSize(),!this.active||"synced"!==t.status&&"plain"!==t.status)return;const e=this._lastLines!==t.lines;if(this._lastLines=t.lines,"saver"===this.mode)this.slideSaver(e);else{const i=this.renderRoot.querySelector(".sc");"synced"===t.status?i&&(this.cur!==this._lastCur||e)&&Date.now()-this._userAt>Ps&&this.center(i,e,this.cur>this._lastCur):i&&this.plainScroll(i,e)}if(this._lastCur=this.cur,this.playing())if("synced"===t.status){const e=t.lines[this.cur+1];if(e){const t=1e3*(e.t-(this.position()+this.offset()))+30;this._timer=window.setTimeout(()=>this.requestUpdate(),Math.max(60,Math.min(15e3,t)))}}else this._timer=window.setTimeout(()=>this.updated(),2e3)}observeSize(){const t=[...this.renderRoot.querySelectorAll(".sc, .sc > .col, .win, .win > .col")];t.length===this._roEls.length&&t.every((t,e)=>t===this._roEls[e])||"undefined"!=typeof ResizeObserver&&(this._ro??=new ResizeObserver(()=>this.onResize()),this._ro.disconnect(),this._roEls=t,t.forEach(t=>this._ro.observe(t)))}onResize(){const t=this._s;if(!this.active||"synced"!==t.status&&"plain"!==t.status)return;if("saver"===this.mode)return void this.slideSaver(!0);const e=this.renderRoot.querySelector(".sc");e&&("synced"===t.status?Date.now()-this._userAt>Ps&&this.center(e,!0):this.plainScroll(e,!0))}center(t,e,i=!1){const s=t.querySelector(`.ln[data-i="${Math.max(0,this.cur)}"]`);if(!s)return;const a=Math.max(0,s.offsetTop-(t.clientHeight-s.offsetHeight)/2);i&&a<t.scrollTop-1&&(e=!0),t.scrollTo({top:a,behavior:e||Ss()?"auto":"smooth"})}plainScroll(t,e){if(Date.now()-this._userAt<9e3)return;const i=Number(this.ent?.attributes?.media_duration)||this._s.track?.duration||0,s=t.scrollHeight-t.clientHeight;if(!i||s<=0)return;const a=Math.round(this.plainFrac(i)*s);t.scrollTo({top:a,behavior:e||a<t.scrollTop-1||Ss()?"auto":"smooth"})}plainFrac(t){return Math.max(0,Math.min(1,(this.position()-10)/Math.max(1,t-30)))}slideSaver(t){const e=this.renderRoot.querySelector(".win"),i=e?.querySelector(".col");if(!e||!i)return;const s=i.children;if(!s.length)return;let a=0;if("synced"===this._s.status){const t=i.querySelector(`.ln[data-i="${this.cur}"]`),e=s.length>1?s[1].offsetTop-s[0].offsetTop:s[0].offsetHeight;t&&(a=t.offsetTop-e)}else{const t=Number(this.ent?.attributes?.media_duration)||this._s.track?.duration||0,r=i.offsetHeight-e.clientHeight;if(t&&r>0){const i=Math.min(s.length-1,Math.floor(this.plainFrac(t)*s.length));a=Math.max(0,Math.min(r,s[i].offsetTop-Math.round(e.clientHeight/3)))}}if(a=Math.round(a),a===this._svY&&!t)return;const r=t||void 0===this._svY||a<this._svY||Ss();r&&i.classList.add("jump"),i.style.transform=`translate3d(0, ${-a}px, 0)`,r&&(i.offsetHeight,i.classList.remove("jump")),this._svY=a,i.dataset.y=String(a)}msg(t){return I`<div class="msg" role="status"><span class="mt">${t}</span></div>`}render(){const t=this._s,e=this.mode,i="synced"===t.status;if(this.cur=i?function(t,e){let i=0,s=t.length-1,a=-1;for(;i<=s;){const r=i+s>>1;t[r].t<=e?(a=r,i=r+1):s=r-1}return a}(t.lines,this.position()+this.offset()):-1,"saver"===e)return this.renderSaver();let s;switch(t.status){case"loading":s=this.msg(Hs);break;case"none":s=this.msg(Os);break;case"error":s=this.msg(Ds);break;case"idle":case"off":s="overlay"===e?B:this.msg(Ns);break;default:{const e=this.seekable();s=I`<div class="sc ${i?"synced":"plain"} ${e?"seekable":""}" @scroll=${this.onScroll} @wheel=${this.onUserScroll} @touchmove=${this.onUserScroll} @keydown=${this.onUserScroll}>
           <div class="pad"></div><div class="col">
           ${t.lines.map((t,e)=>I`<p class="ln ${e===this.cur?"cur":e<this.cur?"past":""} ${e===this._press?"press":""} ${e===this._flash?"flash":""} ${t.text?"":"gap"}"
@@ -1084,12 +1096,17 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .nw.sl-open .art { z-index: 5; }
     .art-btns { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 8px; }
     /* #42: ≥48px at 1x; on zoomed big screens (--_z > 1) the same 40px floor as before (54px at 1920x1080) */
-    .ab { width: max(40px, calc(48px / var(--_z, 1))); height: max(40px, calc(48px / var(--_z, 1))); border-radius: 50%; display: grid; place-items: center; background: var(--_surface-solid); color: var(--_fg);
+    .ab { width: max(40px, calc(48px / var(--_z, 1))); height: max(40px, calc(48px / var(--_z, 1))); border-radius: 50%; display: grid; place-items: center;
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
+      color: var(--_fg);
       border: 1px solid var(--_surface-border); transition: background 150ms, color 150ms; }
     .ab .i { width: 24px; height: 24px; }
     .art .sleep-strip { position: absolute; z-index: 2; top: calc(18px + max(40px, calc(48px / var(--_z, 1)))); right: 10px; left: 10px; margin: 0; justify-content: flex-end; }
-    .art .sleep-strip .sp { background: var(--_surface-solid); border-color: var(--_surface-border); }
-    .art .sleep-strip .sp.on { background: var(--_surface-solid); }
+    .art .sleep-strip .sp { background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
+      border-color: var(--_surface-border); }
+    .art .sleep-strip .sp.on { background: var(--ha-card-background, var(--card-background-color, var(--_bg))); }
     /* on = HA's icon-button 'selected' colour (--primary-color), as the media browser's favourite button */
     .ab.on { color: var(--_active); border-color: var(--_active); }
     .ab:active { transform: scale(.94); }
@@ -1097,7 +1114,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     /* no picture: media-control's no-image look: the player icon in the on-primary colour */
     .art .ph { position: absolute; inset: 0; display: grid; place-items: center; background: var(--_chip-sel); }
     .art .ph .i { width: 30%; height: 30%; color: var(--_inactive); }
-    /* Cover overlay buttons sit on the picture: an HA icon button (no shadow, theme icon colour) on the opaque theme surface, so the icon stays readable on any cover */
+    /* Cover overlay buttons sit on the picture: an HA icon button (no shadow, theme icon colour) on the ha-card surface, so the icon stays readable on any cover */
     .art .sleep-strip .sp { color: var(--_fg); }
     .art .sleep-strip .sp.on { color: var(--_active); border-color: var(--_active); }
     .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: 10px;
@@ -1114,7 +1131,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
       --_prov-bg: var(--ha-assist-chip-container-color, transparent);
       --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
       color: var(--_fg); }
-    /* Theme surfaces (speakers panel, up next, More speakers): an opaque HA card surface with theme text and the theme's primary colour */
+    /* Theme surfaces (volume panel, up next, More speakers): theme text and the theme's primary colour */
     .info .panel, .info .vmore {
       --_active: var(--primary-color, #03a9f4);
       --_on-accent: var(--text-primary-color, #fff);
@@ -1174,9 +1191,17 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .upn .pv { flex: none; }
     .upn .more { margin-left: auto; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); flex: none; }
     .vol { container: vol / inline-size; padding: 6px 14px; display: flex; flex-direction: column; }
+    /* the volume panel sits directly on the HA card surface: no second fill */
+    .vol.panel { background: transparent; }
+    /* the Up next panel sits directly on the HA card surface: no second fill */
+    .upn.panel { background: transparent; }
     .volw { position: relative; display: flex; flex-direction: column; min-height: 0; }
+    /* More speakers floats over the fading speaker list: use ha-card's fill + backdrop-filter (not a transparent hole, not --_surface-solid) so the label stays readable. */
     .vmore { display: none; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 2; align-items: center; gap: 4px;
-      padding: 4px 12px; min-height: 30px; border-radius: 999px; border: 1px solid var(--_surface-border); background: var(--_surface-solid); color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
+      padding: 4px 12px; min-height: 30px; border-radius: 999px; border: 1px solid var(--_surface-border);
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
+      color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
     .vmore .i { width: 12px; height: 12px; }
     .volw.more-b .vmore { display: inline-flex; }
     .volw.over .vol { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
