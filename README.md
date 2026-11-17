@@ -60,8 +60,8 @@ The Screensaver is the same in both themes: black, with white text. Only its fon
 
 ### Marketplace (custom repository)
 
-1. **Settings → Marketplace** → ⋮ → **Custom repositories** → `https://github.com/randybell/ha-jukebox-kiosk`, category **Integration**.
-2. Install **Jukebox Kiosk**, then restart Home Assistant. New versions show up under **Settings → Updates**.
+1. Go to **Settings → Marketplace** and select **Add from link** in the upper-right corner. Enter `https://github.com/randybell/ha-jukebox-kiosk` (or `randybell/ha-jukebox-kiosk`) and select **Add**. The Marketplace works out the type by itself. Adding a custom repository needs a GitHub connection, and the Marketplace asks you to connect one if you haven't yet.
+2. Open **Jukebox Kiosk** in the list and select **Install**, then **Install** again in the dialog. If Home Assistant asks for a restart (a repair under **Settings → System → Repairs**), restart it. New versions show up under **Settings → Updates**.
 3. **Settings → Devices & services → Add integration → Jukebox Kiosk**, then choose your Music Assistant entry.
 4. Add `type: custom:jukebox-card` to a dashboard (see [Configuration](#configuration)).
 
