@@ -157,6 +157,7 @@ export class QueueModel {
   private async act(service: QueueAction | string, id: string, optimistic: (items: QueueItem[], i: number) => { items: QueueItem[]; current: number } | void,
     send?: () => Promise<unknown>) {
     const hass = this.hass; if (!hass) return;
+    if (!this.entity) return;
     const i = this.snap.items.findIndex((x) => x.queue_item_id === id);
     const prev = { items: this.snap.items, current: this.snap.current };
     if (i >= 0) {
@@ -165,7 +166,6 @@ export class QueueModel {
       if (r) this.set({ items: r.items, current: r.current });
     }
     try {
-      if (!this.entity) return;
       if (send) await send();
       else if (this.backend) await this.backend.queueAction(this.entity, service as QueueAction, id, this.snap.queueId);
       else throw new BackendError('config', 'no backend');

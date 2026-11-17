@@ -95,5 +95,15 @@ check('S12 targetsOf with no entity does not invent media_player.everywhere',
 const q = new Q.QueueModel();
 check('S13 QueueModel starts with no player', q.entity === '' && !q.configForRemove.entity, J({ entity: q.entity, cfg: q.configForRemove }));
 
+// #106 review: with no player, a queue action leaves the list alone (no optimistic change that never gets sent)
+{
+  const qn = new Q.QueueModel(); qn.hass = { states: {}, callService: async () => { throw new Error('no call expected'); } };
+  qn.snap = { items: [{ queue_item_id: 'a' }, { queue_item_id: 'b' }, { queue_item_id: 'c' }], current: 0, loading: false, error: '', at: 0 };
+  const before = JSON.stringify(qn.snap.items);
+  let seen = 0; qn.subscribe(() => seen++); seen = 0;
+  await qn.down('b');
+  check('S14 no player: a queue move changes nothing on screen', JSON.stringify(qn.snap.items) === before && seen === 0, J({ items: qn.snap.items, seen }));
+}
+
 console.log(`\nstub-config.unit: ${total - failures}/${total} passed`);
 process.exit(failures ? 1 : 0);
