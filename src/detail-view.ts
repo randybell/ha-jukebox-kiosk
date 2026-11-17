@@ -437,9 +437,10 @@ export class JbDetail extends LitElement {
     .row.sr .ra-b span { display: none; }
     .row.sr .du { display: block; } /* no empty trailing grid column, so the buttons end at the list's right edge like the header */
     .row.sr.nor .ra { padding-right: var(--_abw, 48px); }
-    /* sticky inside .list.albums only: it leaves with the Albums section; opaque and padded out to the panel edges so no album peeks above or beside it */
+    /* sticky inside .list.albums only: it leaves with the Albums section; padded out to the panel edges. ha-card surface so rows stay hidden in opaque themes and may blur behind it in a translucent one */
     .ahd { position: sticky; top: -16px; z-index: 2; display: var(--_ra-display, flex); justify-content: flex-end; margin: 0 -16px 2px; padding: 6px 16px;
-      background: var(--_surface-solid); }
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none); }
     .ahd span { width: var(--_abw, 48px); flex: none; text-align: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); color: var(--_muted); }
     .nav { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .back { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px 0 12px; border-radius: 999px; background: var(--_chip-bg);

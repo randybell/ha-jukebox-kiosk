@@ -957,9 +957,15 @@ export class JbBrowse extends LitElement {
     /* Playlist artwork (including lettering near its lower edge) must not sit behind a provider badge. */
     .tile[data-type="playlist"] .tw .pv { position: static; display: block; margin-top: 6px; max-width: 100%; }
     .tile[data-type="playlist"] b { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
-    .tw .open { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--_surface-solid); color: var(--_fg); }
+    .tw .open { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
+      color: var(--_fg); }
     .tw .open .i { width: 20px; height: 20px; }
-    .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--_surface-solid); color: var(--_muted); }
+    .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
+      color: var(--_muted); }
     .tw .tfav.on { color: var(--_active); }
     .tw .tfav .i { width: 20px; height: 20px; }
     .mo.fav.on { color: var(--_active); }
