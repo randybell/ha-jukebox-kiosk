@@ -1,4 +1,4 @@
-# Jukebox Kiosk (`ha-jukebox-kiosk`) 0.8.1
+# Jukebox Kiosk (`ha-jukebox-kiosk`)
 
 A touchscreen Jukebox music player for Home Assistant
 
