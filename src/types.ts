@@ -83,12 +83,9 @@ export interface JukeboxCardConfig {
   browse_limit?: number;
   /** Upcoming queue items fetched. Default 200. */
   queue_limit?: number;
-  accent?: 'mono' | 'fixed' | 'art';
   /** Results per media type from 2 characters. 1-character queries always use 5. */
   limit?: number;
   default_tab?: TabId;
-  /** Base URL for the bundled fonts, or false to use system fonts. */
-  font_base?: string | false;
   /** Card height. Default 100dvh (panel view). */
   height?: string;
   /** UI scale. 'auto' (default) zooms the whole card up on big screens (1920x1080 → 1.35) so it isn't sparse; a number forces it; 1 disables. */

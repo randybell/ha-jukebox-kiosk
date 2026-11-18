@@ -333,9 +333,9 @@ export class JbLyrics extends LitElement {
     :host(:not([mode=saver])) { height: 100%; }
     /* Overlay sits on the dark art shade: contrast text, like HA media-control over art (not theme body text). */
     :host([mode=overlay]) {
-      --_fg: var(--_art-fg, #ffffff);
-      --_muted: color-mix(in srgb, var(--_art-fg, #ffffff) 72%, transparent);
-      --_inactive: color-mix(in srgb, var(--_art-fg, #ffffff) 55%, transparent);
+      --_fg: #ffffff;
+      --_muted: color-mix(in srgb, #ffffff 72%, transparent);
+      --_inactive: color-mix(in srgb, #ffffff 55%, transparent);
       color: var(--_fg);
     }
     .ly { position: relative; height: 100%; min-height: 0; display: flex; flex-direction: column; }
@@ -361,7 +361,7 @@ export class JbLyrics extends LitElement {
     .st-loading .mt { animation: breathe 1.8s ease-in-out infinite; }
     @keyframes breathe { 50% { opacity: .45 } }
     .chip { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; color: var(--_muted);
-      padding: 4px 8px; border-radius: 999px; border: 1px solid var(--_surface-border); background: var(--_art-chip-bg, var(--_chip-bg)); white-space: nowrap; }
+      padding: 4px 8px; border-radius: 999px; border: 1px solid var(--_surface-border); background: var(--_chip-bg); white-space: nowrap; }
     .chip.fl { position: absolute; top: 10px; left: 10px; z-index: 2; }
     /* toast: ha-toast styling */
     .toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; padding: 8px 14px; border-radius: var(--ha-border-radius-sm, 4px);

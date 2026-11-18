@@ -1,7 +1,6 @@
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
-import { ensureFonts } from './fonts';
 import './search-view';
 import './now-view';
 import './browse-view';
@@ -194,7 +193,7 @@ export class JukeboxCard extends LitElement {
     validateSpeakers(config);
     const first = !this._config;
     this._base = {
-      accent: 'mono', limit: 8,
+      limit: 8,
       screensaver_minutes: 10, ...config, _favs: this.favs, _stationGuard: this.stationGuard,
     };
     this._config = this.effective();
@@ -211,7 +210,6 @@ export class JukeboxCard extends LitElement {
     this.queue.readsBuffer = () => !!this._config && canJumpQueue(this._config, this.hass?.user);
     this.queue.entity = this._config.entity!;
     this.queue.limitAfter = this._config.queue_limit ?? 200;
-    ensureFonts(this._config.font_base);
     this.armIdle();
   }
   /**

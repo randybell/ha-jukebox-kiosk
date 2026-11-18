@@ -5,7 +5,7 @@ import { providerLabel } from './providers';
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem, RoomConfig } from './types';
 
 /* ---------------- small helpers shared by every view ---------------- */
-/** Generated gradients: the screensaver's backdrop only (it is exempt from theming). Everything else shows the theme-coloured placeholder (.ar / .art). */
+/** Generated gradients: the screensaver's no-art background only (it is exempt from theming). Everything else shows the theme-coloured placeholder (.ar / .art). */
 export const ART = [
   'linear-gradient(135deg,#ff2e7e,#ff9a3d)', 'linear-gradient(135deg,#3b2cff,#00d4c4)', 'linear-gradient(135deg,#ffd23f,#ff4f8b)',
   'linear-gradient(135deg,#00b37e,#1e3cff)', 'linear-gradient(135deg,#c42fd8,#ffd23f)', 'linear-gradient(135deg,#ff7a3d,#7a2cff)',
