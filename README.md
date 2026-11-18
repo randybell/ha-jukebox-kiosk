@@ -49,7 +49,7 @@ The Screensaver is the same in both themes: black, with white text. Only its fon
 
 ## Requirements
 
-- **Home Assistant 2026.10.0** or newer.
+- **Home Assistant 2026.11.0** or newer.
 - **[Music Assistant](https://music-assistant.io)** 2.10 or newer, and the official **Music Assistant** integration (`music_assistant`) set up in Home Assistant. Jukebox Kiosk uses that integration's connection, so it has no server URL or token of its own.
 - **A Music Assistant player** to play to. Group players such as `media_player.everywhere` work too.
 - mass_queue is **not** used. The card no longer knows it; you can uninstall it.
