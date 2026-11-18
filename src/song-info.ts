@@ -4,6 +4,8 @@
  * streamdetails); nothing is fetched. Empty lines are left out. Approved by Randy via Kiosk PM, Nov 9 2026 3:50 PM CT.
  */
 import { fmtDur } from './shared';
+import { formatDateShort } from './datetime';
+import type { HomeAssistant } from './types';
 import { stationInfo } from './radio-fav';
 
 export interface InfoLine { k: string; label: string; v: string }
@@ -20,13 +22,14 @@ function peopleNames(list: unknown): string {
   return typeof list === 'string' ? list.trim() : '';
 }
 
-/** Short date like "Nov 9, 2026" from MA's metadata.release_date (ISO string or Date). */
-function fmtDate(d: unknown): string {
+/** Short date like "Nov 9, 2026" from MA's metadata.release_date (ISO string or Date). #108: in HA's profile language and
+ *  time zone, as HA's own formatDateShort ("9. Nov. 2026" in German); US English only when there is no hass. */
+function fmtDate(d: unknown, hass?: HomeAssistant): string {
   if (d == null || d === '') return '';
   const t = d instanceof Date ? d : new Date(String(d));
   if (Number.isNaN(+t)) return '';
   try {
-    return t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return formatDateShort(t, hass, 'en-US');
   } catch {
     return '';
   }
@@ -62,7 +65,7 @@ function linesOf(rows: Array<[string, string, string]>): InfoLine[] {
   return rows.filter(([, , v]) => v).map(([k, label, v]) => ({ k, label, v }));
 }
 
-export function songInfo(src: any): InfoLine[] {
+export function songInfo(src: any, hass?: HomeAssistant): InfoLine[] {
   const m: any = src?.media_item ?? src ?? {};
   const type = String(m.media_type ?? src?.media_type ?? '');
   const dur = Number(m.duration ?? src?.duration) || 0;
@@ -73,7 +76,7 @@ export function songInfo(src: any): InfoLine[] {
     // Show, Episode, Published, Length, Left, Source, Quality
     const show = String(m.podcast?.name ?? '').trim();
     const ep = Number(m.position);
-    const published = fmtDate(m.metadata?.release_date ?? src?.release_date);
+    const published = fmtDate(m.metadata?.release_date ?? src?.release_date, hass);
     return linesOf([
       ['show', 'Show', show],
       ['episode', 'Episode', ep > 0 ? String(ep) : ''],
@@ -90,7 +93,7 @@ export function songInfo(src: any): InfoLine[] {
     const author = peopleNames(m.authors);
     const narrator = peopleNames(m.narrators);
     const publisher = String(m.publisher ?? '').trim();
-    const published = fmtDate(m.metadata?.release_date ?? src?.release_date);
+    const published = fmtDate(m.metadata?.release_date ?? src?.release_date, hass);
     return linesOf([
       ['author', 'Author', author],
       ['narrator', 'Narrator', narrator],

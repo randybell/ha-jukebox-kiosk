@@ -289,7 +289,7 @@ export class JbDetail extends LitElement {
     const ask = (k: 'replace' | 'radio') => { this.closeMenu(); this.press.release(); this._confirm = { kind: k, item: it, run: () => this.play(it, pt, 'replace', k === 'radio') }; };
     const actions = mediaActions((enq) => this.play(it, pt, enq), undefined, ask, canRadio(type, it), false, hideStartRadio(type, it));
     this.press.held = key; this.requestUpdate();
-    const info = INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it) : undefined;
+    const info = INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it, this.hass) : undefined;
     fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, type) || providerLabel(it.uri), actions, info, close: () => this.press.release() });
   }
   /** 0.7.10: press-and-hold on an artist page Albums row (not its buttons) opens the menu 5 pop-up. */

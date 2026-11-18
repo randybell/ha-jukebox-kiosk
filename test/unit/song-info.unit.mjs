@@ -100,6 +100,19 @@ const song = {
     && vals(wrapped).left === '8:00' && vals(wrapped).published === 'Jan 2, 2025', J(vals(wrapped)));
 }
 
+// #108: the Published date follows HA's profile language (and HA's time zone), not always US English
+{
+  const ep = { media_type: 'podcast_episode', name: 'Ep', uri: 'library://podcast_episode/1', position: 1, metadata: { release_date: '2026-11-01' } };
+  const hassOf = (language) => ({ states: {}, language, locale: { language, time_format: 'language', time_zone: 'server' }, config: { time_zone: 'UTC' } });
+  const want = (lang) => new Intl.DateTimeFormat(lang, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date('2026-11-01'));
+  const de = vals(S.songInfo(ep, hassOf('de'))).published, fr = vals(S.songInfo(ep, hassOf('fr'))).published, en = vals(S.songInfo(ep, hassOf('en-US'))).published;
+  check('#108 German profile: German date', de === want('de') && de !== 'Nov 1, 2026', de);
+  check('#108 French profile: French date', fr === want('fr') && fr !== 'Nov 1, 2026', fr);
+  check('#108 US English profile: same date as before', en === 'Nov 1, 2026', en);
+  const zoned = vals(S.songInfo({ ...ep, metadata: { release_date: '2026-11-01T03:00:00Z' } }, { ...hassOf('en-US'), config: { time_zone: 'America/Chicago' } })).published;
+  check('#108 HA time zone is used (server zone Chicago: 03:00 UTC is the day before)', zoned === 'Oct 31, 2026', zoned);
+}
+
 check('INFO_TYPES still lists track, podcast_episode, audiobook', J(S.INFO_TYPES) === J(['track', 'podcast_episode', 'audiobook']));
 
 console.log(`\n${total - failures}/${total} song-info checks passed`);
