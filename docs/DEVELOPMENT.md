@@ -123,7 +123,7 @@ docker run --rm -v "$PWD/custom_components:/github/workspace/custom_components" 
 
 ## Repository, releases and the Marketplace
 
-- `hacs.json`: `{"name": "Jukebox Kiosk", "homeassistant": "2026.10.0"}`, category **integration**.
+- `hacs.json`: `{"name": "Jukebox Kiosk", "homeassistant": "2026.11.0"}`, category **integration**.
 - The built card **is committed** in `custom_components/jukebox_kiosk/www/` (bundle, notices). The Marketplace (Settings → Marketplace) installs an integration from the tagged source, so the bundle has to be in the tree. `.github/workflows/release.yaml` runs on a `v*` tag: it checks that the tag matches `package.json` and `manifest.json`, runs pytest, the typecheck and the card unit tests, rebuilds, **fails if the committed bundle or notices differ from the rebuild**, runs the browser e2e and fit suites in Chrome (`browser-actions/setup-chrome`), then attaches `jukebox_kiosk.zip` to a GitHub release.
   - To release: bump `version` in `package.json` (and `package-lock.json`), `custom_components/jukebox_kiosk/manifest.json` and `VERSION` in `src/jukebox-card.ts`, run `npm run build`, commit, then `git tag -a v0.7.3 -m 'Jukebox Kiosk 0.7.3' && git push origin v0.7.3` (push only that tag).
 - `.github/workflows/hassfest.yaml` and `hacs.yaml` validate the integration on every push and nightly.
