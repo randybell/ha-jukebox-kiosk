@@ -851,7 +851,7 @@ export class JukeboxCard extends LitElement {
       0% { transform: translate(0, 0) } 25% { transform: translate(calc(70cqw - 100%), 18cqh) } 50% { transform: translate(28cqw, calc(64cqh - 100%)) }
       75% { transform: translate(calc(78cqw - 100%), 4cqh) } 100% { transform: translate(6cqw, calc(60cqh - 100%)) } }
     .amb { container-type: size; }
-    .sv-clock { font-family: var(--_font-display); font-weight: 800; font-size: clamp(72px, 16cqw, 200px); line-height: .95; letter-spacing: -.03em; font-variant-numeric: tabular-nums; text-shadow: 0 4px 40px #0008; }
+    .sv-clock { font-family: var(--_font-display); font-weight: 800; font-size: calc(clamp(72px, 16cqw, 200px) * .9); line-height: .95; letter-spacing: -.03em; font-variant-numeric: tabular-nums; text-shadow: 0 4px 40px #0008; }
     .sv-date { font-size: clamp(16px, 2.4cqw, 26px); color: #ffffffc0; font-weight: 600; }
     .sv-np { display: flex; align-items: center; gap: 14px; margin-top: 18px; max-width: min(1100px, 80cqw); }
     .sv-np span { display: flex; flex-direction: column; min-width: 0; }
@@ -864,7 +864,7 @@ export class JukeboxCard extends LitElement {
     .rm .sv-drift, .rm .sv-bg { animation: none; } .rm .sv-drift { animation: hop 600s step-end infinite; }
     .rm { --_ly-slide: 0ms; } /* inherited into jb-lyrics: the screensaver lyrics move without sliding */
     @keyframes hop { 0% { transform: translate(0, 0) } 10% { transform: translate(calc(70cqw - 100%), 18cqh) } 20% { transform: translate(28cqw, calc(64cqh - 100%)) } 30% { transform: translate(calc(78cqw - 100%), 4cqh) } 40% { transform: translate(6cqw, calc(60cqh - 100%)) } 50% { transform: translate(calc(50cqw - 50%), 30cqh) } 60% { transform: translate(calc(74cqw - 100%), calc(66cqh - 100%)) } 70% { transform: translate(12cqw, 10cqh) } 80% { transform: translate(calc(60cqw - 100%), calc(40cqh - 50%)) } 90% { transform: translate(20cqw, calc(66cqh - 100%)) } 100% { transform: translate(0, 0) } }
-    .sv-drift.has-ly .sv-clock { font-size: clamp(56px, 10cqw, 140px); }
+    .sv-drift.has-ly .sv-clock { font-size: calc(clamp(56px, 10cqw, 140px) * .9); } /* #38: the clock 10% smaller (landscape) */
     .sv-ly { margin-top: 18px; width: min(820px, 72cqw); }
     .sv-lys { margin-top: 14px; font-size: clamp(12px, 1.1cqw, 15px); font-weight: 600; letter-spacing: .04em; color: #ffffff6b; text-shadow: 0 1px 8px #000a; white-space: nowrap; }
     /* Portrait (0.8.2, #38): what is playing leads and the clock steps back. Container-based (the shared view's own box is taller
