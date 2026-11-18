@@ -83,24 +83,24 @@ export class JbNow extends LitElement {
       if (this._sleepExpires && remainFromExpires(this._sleepExpires) <= 0) this.onSleepExpired();
     }, 1000);
   }
-  /** 0.7.9 #59: the speaker list scrolls inside its own area when it doesn't fit; mark the edges so the "More speakers" hint and fades show */
+  /** 0.7.9 #59: the speaker list scrolls inside its own area when it doesn't fit (0.8.8: only the rooms scroll, the lead row stays fixed); mark the edges so the "More speakers" hint and fades show */
   private _volEl?: HTMLElement;
   private _volRo?: ResizeObserver;
   private volEdges = () => {
-    const v = this._volEl, w = v?.parentElement; if (!v || !w) return;
+    const v = this._volEl, w = v?.closest('.volw'); if (!v || !w) return;
     const over = v.scrollHeight - v.clientHeight > 1;
     w.classList.toggle('over', over);
     w.classList.toggle('more-b', over && v.scrollTop + v.clientHeight < v.scrollHeight - 1);
     w.classList.toggle('more-t', over && v.scrollTop > 1);
   };
   protected updated() {
-    const v = this.renderRoot.querySelector('.vol') as HTMLElement | null;
+    const v = this.renderRoot.querySelector('.rooms') as HTMLElement | null;
     if (v && v !== this._volEl) {
       this._volEl?.removeEventListener('scroll', this.volEdges);
       this._volRo?.disconnect();
       this._volEl = v;
       v.addEventListener('scroll', this.volEdges, { passive: true });
-      if (typeof ResizeObserver !== 'undefined') { this._volRo = new ResizeObserver(this.volEdges); this._volRo.observe(v); const rm = v.querySelector('.rooms'); if (rm) this._volRo.observe(rm); }
+      if (typeof ResizeObserver !== 'undefined') { this._volRo = new ResizeObserver(this.volEdges); this._volRo.observe(v); const panel = v.closest('.vol'); if (panel) this._volRo.observe(panel); }
     }
     this.volEdges();
   }
@@ -506,7 +506,7 @@ export class JbNow extends LitElement {
             ${rooms.length ? html`<div class="rooms">${rooms.map((r) => this.volRow(r.entity, r.name, false, this.spk?.inline(r.entity)))}</div>` : nothing}
           </div>
           <button class="vmore" tabindex="-1" aria-label="More speakers below" @pointerdown=${noFocus}
-            @click=${() => { const v = this.renderRoot.querySelector('.vol') as HTMLElement | null; v?.scrollBy({ top: Math.max(40, v.clientHeight * 0.75), behavior: 'smooth' }); }}>${icon('chev', 'i xs')}More speakers</button>
+            @click=${() => { const v = this.renderRoot.querySelector('.rooms') as HTMLElement | null; v?.scrollBy({ top: Math.max(40, v.clientHeight * 0.75), behavior: 'smooth' }); }}>${icon('chev', 'i xs')}More speakers</button>
         </div>
       </div>
       ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
@@ -635,12 +635,14 @@ export class JbNow extends LitElement {
       color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
     .vmore .i { width: 12px; height: 12px; }
     .volw.more-b .vmore { display: inline-flex; }
-    .volw.over .vol { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-    .volw.over .vol::-webkit-scrollbar { display: none; }
-    .volw.more-b .vol { -webkit-mask-image: linear-gradient(#000 calc(100% - 44px), #0000); mask-image: linear-gradient(#000 calc(100% - 44px), #0000); }
-    .volw.more-t.more-b .vol { -webkit-mask-image: linear-gradient(#0000, #000 24px, #000 calc(100% - 44px), #0000); mask-image: linear-gradient(#0000, #000 24px, #000 calc(100% - 44px), #0000); }
-    .volw.more-t:not(.more-b) .vol { -webkit-mask-image: linear-gradient(#0000, #000 24px); mask-image: linear-gradient(#0000, #000 24px); }
-    .rooms { display: flex; flex-direction: column; border-top: 1px solid var(--_divider); }
+    .volw.over .rooms { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+    .volw.over .rooms::-webkit-scrollbar { display: none; }
+    .volw.more-b .rooms { -webkit-mask-image: linear-gradient(#000 calc(100% - 44px), #0000); mask-image: linear-gradient(#000 calc(100% - 44px), #0000); }
+    .volw.more-t.more-b .rooms { -webkit-mask-image: linear-gradient(#0000, #000 24px, #000 calc(100% - 44px), #0000); mask-image: linear-gradient(#0000, #000 24px, #000 calc(100% - 44px), #0000); }
+    .volw.more-t:not(.more-b) .rooms { -webkit-mask-image: linear-gradient(#0000, #000 24px); mask-image: linear-gradient(#0000, #000 24px); }
+    .rooms { min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--_divider); }
+    /* the lead speaker row stays fixed; only the rooms scroll (0.7.9 #59 scroll area moved from .vol to .rooms). No second surface: the card shows through as before. */
+    .vr.main, .rooms > .vr { flex-shrink: 0; }
     .vr { display: grid; grid-template-columns: 30px minmax(80px, 30%) minmax(0, 1fr) 34px; align-items: center; gap: 8px; min-height: 46px; }
     .vm { width: 34px; height: 34px; display: grid; place-items: center; color: var(--_active); margin-left: -6px; border-radius: 50%; }
     .vm .i { width: 20px; height: 20px; }

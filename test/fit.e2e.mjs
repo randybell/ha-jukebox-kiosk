@@ -387,7 +387,7 @@ writeFileSync(OUT + 'results.json', JSON.stringify({ at: new Date().toString(), 
     await open(pg, `&tab=now&overlay=0${q}&cfg=${encodeURIComponent(JSON.stringify({ rooms: R.slice(0, n) }))}`);
     await sleep(500);
     const m = await pg.evaluate(async () => {
-      const c = __card.shadowRoot, r = c.querySelector('jb-now').shadowRoot, v = r.querySelector('.vol'), w = r.querySelector('.volw');
+      const c = __card.shadowRoot, r = c.querySelector('jb-now').shadowRoot, v = r.querySelector('.vol'), w = r.querySelector('.volw'), rooms = r.querySelector('.rooms');
       const tabsTop = c.querySelector('nav.tabs').getBoundingClientRect().top, card = __card.getBoundingClientRect();
       const vb = () => v.getBoundingClientRect();
       const rows = [...v.querySelectorAll('.vr')], out = [];
@@ -396,8 +396,8 @@ writeFileSync(OUT + 'results.json', JSON.stringify({ at: new Date().toString(), 
         const b = row.getBoundingClientRect(), box = vb();
         out.push({ name: row.querySelector('.vn')?.textContent.trim().slice(0, 14), full: b.top >= box.top - 0.5 && b.bottom <= box.bottom + 0.5 && b.bottom <= tabsTop + 0.5 && b.height > 20 });
       }
-      v.scrollTop = 0; await new Promise((res) => setTimeout(res, 120));
-      const over = v.scrollHeight - v.clientHeight > 1;
+      rooms.scrollTop = 0; await new Promise((res) => setTimeout(res, 120));
+      const over = rooms.scrollHeight - rooms.clientHeight > 1;
       return { card: [Math.round(card.width), Math.round(card.height)], tabsTop: Math.round(tabsTop), listBottom: Math.round(vb().bottom), over, hint: over ? getComputedStyle(r.querySelector('.vmore')).display !== 'none' : null, rows: out, n: rows.length };
     });
     check(`${tag}: the speaker list ends above the bottom bar`, m.listBottom <= m.tabsTop + 0.5, JSON.stringify(m));
