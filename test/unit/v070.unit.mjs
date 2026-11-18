@@ -68,6 +68,17 @@ check('R2 defaultCountry: card option, else HA country, 2 letters only',
   && R.defaultCountry({ radio_country: 'usa' }) === '' && R.defaultCountry({}) === '');
 check('R3 countryPath / countryName', R.countryPath(' GB ') === 'radiobrowser://category/country/gb' && R.countryName('jp') === 'Japan' && R.countryName('zz').length > 0);
 {
+  // Radio Browser paths come from the instance_id in the provider list (#136)
+  const prov = (id, domain, name = id) => ({ id, domain, name });
+  check('R3a rbRoot: the Radio Browser instance id builds the root (radiobrowser--abcd)', R.rbRoot([prov('spotify', 'spotify'), prov('radiobrowser--abcd', 'radiobrowser', 'Radio Browser')]) === 'radiobrowser--abcd://');
+  check('R3b rbRoot: no list / no Radio Browser instance keeps radiobrowser://', R.rbRoot() === 'radiobrowser://' && R.rbRoot([]) === 'radiobrowser://' && R.rbRoot([prov('tunein--x', 'tunein')]) === 'radiobrowser://');
+  check('R3c rbRoot: with two instances the bare radiobrowser one wins, else the first', R.rbRoot([prov('radiobrowser--zz', 'radiobrowser'), prov('radiobrowser', 'radiobrowser')]) === 'radiobrowser://' && R.rbRoot([prov('radiobrowser--b', 'radiobrowser'), prov('radiobrowser--a', 'radiobrowser')]) === 'radiobrowser--b://');
+  const root = R.rbRoot([prov('radiobrowser--abcd', 'radiobrowser')]);
+  check('R3d modePath / countryPath use the instance root', R.modePath('popular', root) === 'radiobrowser--abcd://popularity/popular' && R.modePath('country', root) === 'radiobrowser--abcd://category/country'
+    && R.modePath('language', root) === 'radiobrowser--abcd://category/language' && R.modePath('tag', root) === 'radiobrowser--abcd://category/tag' && R.countryPath(' DE ', root) === 'radiobrowser--abcd://category/country/de');
+  check('R3e the defaults are unchanged without a root', R.modePath('popular') === 'radiobrowser://popularity/popular' && R.countryPath('de') === 'radiobrowser://category/country/de');
+}
+{
   const path = 'radiobrowser://category/country';
   const l = R.cleanListing([
     { media_type: 'folder', name: '..', path: 'radiobrowser://category' },

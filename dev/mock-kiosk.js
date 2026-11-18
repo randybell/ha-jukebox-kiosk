@@ -1,7 +1,7 @@
 import { createV07 } from './mock-v07.js';
 // Mock of the jukebox_kiosk integration's WebSocket API (custom_components/jukebox_kiosk/websocket_api.py) for the dev
 // harness (on unless ?kiosk=0) adds hass.config.components ['music_assistant', 'jukebox_kiosk'], hass.callWS and hass.connection.
-// lyrlat=<ms>, lyrfail=perm|err: lyrics lookups (logged in __lyricsLog) are slow / fail.
+// norbi=1: no Radio Browser provider in search_providers. lyrlat=<ms>, lyrfail=perm|err: lyrics lookups (logged in __lyricsLog) are slow / fail.
 // kcaps=<json> overrides capability flags (e.g. {"queue_edit":false,"lyrics":false}); kfail=<type> makes that message type
 // throw. Every message is logged in window.__ws ({type, ...}). Placeholder ids only.
 //   jukebox_kiosk/capabilities, /ma {command,args} (music/favorites/* need kcaps library_write, like the library class), /queue_items, /item_tracks,
@@ -119,7 +119,7 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
       case 'capabilities': return { version: '0.6.0', ma_entry_id: '01MUSICASSISTANT0000000000', ma_connected: true, guest: false, classes: ['library', 'playback', 'queue', 'read', 'speakers'], commands: [], todo_verify: [], features };
       case 'ma': return maCmd(String(msg.command), msg.args ?? {});
       // like websocket_api.search_providers(): available music/plugin providers with the search feature, by name
-      case 'search_providers': return { providers: DEMO_PROVIDERS.filter((p) => ['music', 'plugin'].includes(p.type) && p.available && p.supported_features.includes('search'))
+      case 'search_providers': return { providers: DEMO_PROVIDERS.filter((p) => ['music', 'plugin'].includes(p.type) && p.available && p.supported_features.includes('search') && !(params.get('norbi') === '1' && p.domain === 'radiobrowser'))
         .map((p) => ({ instance_id: p.instance_id, domain: p.domain, name: p.name })).sort((a, b) => a.name.localeCompare(b.name)) };
       case 'queue_items': {
         const ent = msg.entity_id, Q = QS[ent];

@@ -27,6 +27,7 @@ const regionName = (cc) => { try { return new Intl.DisplayNames(['en'], { type: 
 const cap = (s) => s.replace(/^./, (c) => c.toUpperCase());
 
 /** 0.7.2: MA music/browse <instance_id>:// for the demo providers (Apple Music has folders; TuneIn has none: the card shows "Type to search") */
+const RB_INSTANCE = 'radiobrowser--demo0004';
 function providerBrowse(id, sub) {
   const dom = id.split('--')[0];
   if (dom === 'tunein') return [];
@@ -46,9 +47,11 @@ export function createV07({ params, catalog, sleep }) {
   function browse(path) {
     if (params.get('rbfail') === '1') throw new Error('mock: Radio Browser unavailable');
     if (EMPTY) return path === 'radiobrowser://' ? [] : [up(path)];
-    const pm = /^([a-z_]+--demo\d{4}):\/\/(.*)$/.exec(path);
+    // the Radio Browser provider instance of the demo list (radiobrowser--demo0004) is browsed like radiobrowser://; paths keep the instance id
+    const rbi = path.startsWith(`${RB_INSTANCE}://`);
+    const pm = rbi ? null : /^([a-z_]+--demo\d{4}):\/\/(.*)$/.exec(path);
     if (pm) return providerBrowse(pm[1], pm[2]);
-    const P = 'radiobrowser://';
+    const P = rbi ? `${RB_INSTANCE}://` : 'radiobrowser://';
     if (path === P) return [folder('Popularity', `${P}popularity`), folder('Category', `${P}category`)];
     if (path === `${P}popularity`) return [up(path), folder('Popular', `${P}popularity/popular`), folder('Votes', `${P}popularity/votes`)];
     if (path === `${P}category`) return [up(path), ...['country', 'language', 'tag'].map((c) => folder(cap(c), `${P}category/${c}`))];
@@ -56,7 +59,7 @@ export function createV07({ params, catalog, sleep }) {
     if (path === `${P}category/country`) return [up(path), ...COUNTRIES.map((cc) => folder(regionName(cc), `${path}/${cc}`))];
     if (path === `${P}category/language`) return [up(path), ...LANGUAGES.map((l) => folder(cap(l), `${path}/${l}`))];
     if (path === `${P}category/tag`) return [up(path), ...TAGS.map((t) => folder(t, `${path}/${t}`))];
-    const m = /^radiobrowser:\/\/category\/(country|language|tag)\/([^/]+)$/.exec(path);
+    const m = new RegExp(`^${P.replace(/[-/.]/g, '\\$&')}category/(country|language|tag)/([^/]+)$`).exec(path);
     if (m) {
       const label = m[1] === 'country' ? m[2].toUpperCase() : cap(decodeURIComponent(m[2]));
       return [up(path), ...Array.from({ length: m[2] === 'xx' ? 0 : 18 }, (_, i) => station(path, i, label))];

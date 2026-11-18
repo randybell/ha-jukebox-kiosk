@@ -1,4 +1,5 @@
 import { normItem } from './shared';
+import type { SearchSource } from './search-sources';
 import type { JukeboxCardConfig, MaItem, RadioBrowseMode, HomeAssistant } from './types';
 
 /**
@@ -8,17 +9,26 @@ import type { JukeboxCardConfig, MaItem, RadioBrowseMode, HomeAssistant } from '
  *   radiobrowser://category/language                folders      -> .../language/<x> stations
  *   radiobrowser://category/tag                     100 folders  -> .../tag/<tag> stations
  * Every non-root listing starts with a ".." folder (filtered out here).
+ * The root is the provider's own id: the Radio Browser instance_id from Music Assistant's provider list (e.g. radiobrowser--abcd);
+ * with no such instance the plain domain `radiobrowser://` is tried, as before.
  */
-export const RB_ROOT = 'radiobrowser://';
+export const RB_DOMAIN = 'radiobrowser';
+export const RB_ROOT = `${RB_DOMAIN}://`;
+/** Browse root for the Radio Browser instance in the provider list (the instance named exactly `radiobrowser` first, else the first by name); RB_ROOT when there is none. */
+export function rbRoot(providers: readonly SearchSource[] = []): string {
+  const rb = providers.filter((p) => p.domain === RB_DOMAIN && p.id);
+  const pick = rb.find((p) => p.id === RB_DOMAIN) ?? rb[0];
+  return pick ? `${pick.id}://` : RB_ROOT;
+}
 export const RADIO_MODES: RadioBrowseMode[] = ['popular', 'country', 'language', 'tag'];
 export const MODE_LABEL: Record<RadioBrowseMode, string> = { popular: 'Popular', country: 'Country', language: 'Language', tag: 'Tag' };
-export const MODE_PATH: Record<RadioBrowseMode, string> = {
-  popular: `${RB_ROOT}popularity/popular`,
-  country: `${RB_ROOT}category/country`,
-  language: `${RB_ROOT}category/language`,
-  tag: `${RB_ROOT}category/tag`,
-};
-export const countryPath = (cc: string) => `${MODE_PATH.country}/${encodeURIComponent(cc.trim().toLowerCase())}`;
+export const modePath = (mode: RadioBrowseMode, root = RB_ROOT): string => ({
+  popular: `${root}popularity/popular`,
+  country: `${root}category/country`,
+  language: `${root}category/language`,
+  tag: `${root}category/tag`,
+})[mode];
+export const countryPath = (cc: string, root = RB_ROOT) => `${modePath('country', root)}/${encodeURIComponent(cc.trim().toLowerCase())}`;
 
 /** Modes the config turns on, in config order (true = all four). [] = off. */
 export function radioModes(c: Pick<JukeboxCardConfig, 'radio_browse'>): RadioBrowseMode[] {

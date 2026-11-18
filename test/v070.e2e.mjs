@@ -124,7 +124,7 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   await tap(p, `${BR}.querySelector('.modes .fc[data-rmode="popular"]')`);
   await wait(p, `${BR}.querySelectorAll('.grid.radio .tile').length === 24`);
   check('R9 listings are cached (24 h): Popular again makes no MA call', (await maOf(p, 'music/browse')).length === nb, `${nb} → ${(await maOf(p, 'music/browse')).length}`);
-  check('R10 cache in localStorage under jukebox-card:rb:v1:', await ev(p, `Object.keys(localStorage).some((k) => k === 'jukebox-card:rb:v1:radiobrowser://popularity/popular')`));
+  check('R10 cache in localStorage under jukebox-card:rb:v1:', await ev(p, `Object.keys(localStorage).some((k) => k === 'jukebox-card:rb:v1:radiobrowser--demo0004://popularity/popular')`));
   await tap(p, `${BR}.querySelector('.modes .fc[data-rmode="library"]')`);
   await wait(p, `${BR}.querySelector('.fc.sort')`);
   check('R11 My stations returns to the library list with Favorites + sort', await ev(p, `!!${BR}.querySelector('.fc[data-cat="favorites"]')`));
@@ -138,7 +138,7 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('R12 Radio Browser down, no cached copy → error + Retry', await ev(p, `!!${BR}.querySelector('[data-action="rb-retry"]')`));
   await p.close();
   const q = await open('&tab=browse&lhome=0', { radio_browse: true });
-  await q.evaluate(() => localStorage.setItem('jukebox-card:rb:v1:radiobrowser://popularity/popular', JSON.stringify({ t: 1, d: { folders: [], stations: [{ media_type: 'radio', uri: 'radiobrowser://radio/00000000-0000-0000-0000-000000000001', name: 'Saved Placeholder FM' }] } })));
+  await q.evaluate(() => localStorage.setItem('jukebox-card:rb:v1:radiobrowser--demo0004://popularity/popular', JSON.stringify({ t: 1, d: { folders: [], stations: [{ media_type: 'radio', uri: 'radiobrowser://radio/00000000-0000-0000-0000-000000000001', name: 'Saved Placeholder FM' }] } })));
   await q.goto(q.url().replace('&tab=browse&lhome=0', '&tab=browse&lhome=0&rbfail=1').replace('fresh=1', 'fresh=0'));
   await q.waitForFunction('window.__ready === true');
   await tap(q, `${BR}.querySelector('.cats .fc[data-cat="radio"]')`);

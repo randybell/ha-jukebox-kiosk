@@ -3,6 +3,7 @@ import { tokens, base } from './styles';
 import { songInfo, INFO_TYPES } from './song-info';
 import { icon } from './icons';
 import { providerLabel } from './providers';
+import { parseSearchProviders } from './search-sources';
 import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, swallowNextClick, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl,
   playMedia, playMessage, normItem, drillable, canRadio, isRadio, hideStartRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
@@ -14,7 +15,7 @@ export { fromQueueTrack, queueTracks, mergePage, QUEUE_PAGE_MIN, QUEUE_PAGE_MAX 
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem, RadioBrowseMode } from './types';
 import { defineElement } from './define';
 import { removeFromQueue } from './queue-row-remove';
-import { radioModes, defaultCountry, countryName, countryPath, MODE_PATH, MODE_LABEL, rbList, type RbListing, type RbFolder } from './radio-browse';
+import { radioModes, defaultCountry, countryName, countryPath, modePath, rbRoot, RB_ROOT, MODE_LABEL, rbList, type RbListing, type RbFolder } from './radio-browse';
 import {
   discoverWanted, DEFAULT_ROWS, parseRows, pickRows, parseItems, resumeFraction, memGet, memPut, memClear, ROWS_TTL_MS, ITEMS_TTL_MS, DISCOVER_CONCURRENCY,
   type DiscoverRow,
@@ -120,6 +121,10 @@ export class JbBrowse extends LitElement {
   /** folders entered inside the current mode (Country › United States) */
   private _rtrail: RbFolder[] = [];
   private _rb: RbState | null = null;
+  /** Radio Browser browse root from MA's provider list (e.g. radiobrowser--abcd://); null until the list has loaded */
+  private _rbRoot: string | null = null;
+  /** the server refused the instance-id path (a guest may only browse `radiobrowser://`): use the plain domain path from now on */
+  private _rbPlain = false;
   // ---- v0.7 Discover ----
   private _disc: { rows: DiscoverRow[]; loading: boolean; error: string; key: string } | null = null;
   private _ditems: Record<string, RowState> = {};
@@ -356,25 +361,60 @@ export class JbBrowse extends LitElement {
   }
 
   // ---------- v0.7 radio "Stations by…" ----------
-  private rbBase() { return this._rmode === 'library' ? '' : MODE_PATH[this._rmode]; }
+  private rbBase() { return this._rmode === 'library' ? '' : modePath(this._rmode, this._rbRoot ?? RB_ROOT); }
   private rbPath() { return this._rtrail.length ? this._rtrail[this._rtrail.length - 1].path : this.rbBase(); }
+  /** The Radio Browser root: built from the instance_id in the provider list the card already loads (kiosk search_providers).
+   *  No list or no Radio Browser instance: the plain `radiobrowser://` (the error text then stays as it was). A failed list load is retried next time. */
+  private async resolveRbRoot(): Promise<string> {
+    if (this._rbRoot) return this._rbRoot;
+    const be = this.be;
+    let root = RB_ROOT, known = true;
+    if (be?.ext?.searchProviders && be.searchProviders) {
+      try { root = rbRoot(parseSearchProviders(await be.searchProviders())); }
+      catch (e) { console.warn('[jukebox-card] radio provider lookup failed', e); known = false; }
+    }
+    if (known) this._rbRoot = root;
+    return root;
+  }
+  /** music/browse with the instance-id root; if the server refuses it, once more with `radiobrowser://` (what the card always sent before) */
+  private rbSend = async (cmd: string, data: Record<string, unknown>): Promise<any> => {
+    const be = this.be!, root = this._rbRoot, path = String(data.path ?? '');
+    if (cmd !== 'music/browse' || !root || root === RB_ROOT || !path.startsWith(root)) return be.send(cmd, data);
+    const plain = { ...data, path: RB_ROOT + path.slice(root.length) };
+    if (this._rbPlain) return be.send(cmd, plain);
+    try { return await be.send(cmd, data); }
+    catch (e) {
+      const r = await be.send(cmd, plain).catch(() => { throw e; });
+      this._rbPlain = true;
+      return r;
+    }
+  };
   setRMode(m: RMode) {
     this._rmode = m; this._stack = []; this._menu = null; this._rb = null; this._rtrail = [];
+    this.renderRoot.querySelector('.scroll')?.scrollTo({ top: 0 });
+    if (m === 'library') { this.ensure(); return; }
+    void this.startRb(m);
+  }
+  private async startRb(m: RMode) {
+    const root = await this.resolveRbRoot();
+    if (this._rmode !== m || this._rtrail.length) return;
     if (m === 'country') {
       const cc = defaultCountry(this.config, this.hass);
-      if (cc) this._rtrail = [{ name: countryName(cc, this.hass?.language || 'en'), path: countryPath(cc) }];
+      if (cc) this._rtrail = [{ name: countryName(cc, this.hass?.language || 'en'), path: countryPath(cc, root) }];
     }
-    if (m === 'library') this.ensure(); else this.loadRb();
-    this.renderRoot.querySelector('.scroll')?.scrollTo({ top: 0 });
+    this.loadRb();
   }
   private openFolder(f: RbFolder) { this._rtrail = [...this._rtrail, f]; this._rb = null; this.loadRb(); this.renderRoot.querySelector('.scroll')?.scrollTo({ top: 0 }); }
   private rbUp() { this._rtrail = this._rtrail.slice(0, -1); this._rb = null; this.loadRb(); }
   async loadRb() {
-    const be = this.be, path = this.rbPath();
-    if (!be || !path) return;
+    const be = this.be;
+    if (!be) return;
+    if (!this._rtrail.length) await this.resolveRbRoot();
+    const path = this.rbPath();
+    if (!path || this._rmode === 'library') return;
     this._rb = { path, loading: true, error: '', stale: false };
     try {
-      const r = await rbList((c, d) => be.send(c, d), path);
+      const r = await rbList(this.rbSend, path);
       if (this._rb?.path !== path) return;
       this._rb = { path, data: r.data, loading: false, error: '', stale: r.stale };
       if (r.stale) this.toast("Couldn't refresh the stations, showing a saved list.");
