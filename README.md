@@ -73,7 +73,7 @@ Copy `custom_components/jukebox_kiosk/` (from the repository or the `jukebox_kio
 
 ### Coming from the old Jukebox Card plugin (0.5.x)
 
-The integration finds dashboard resources that still point at `/hacsfiles/ha-jukebox-kiosk-card/` (or `/local/community/ha-jukebox-kiosk-card/`, where Home Assistant 2026.11's Marketplace serves plugins) and removes them, so the card doesn't load twice. It then raises a Repairs issue that asks you to remove the old **Jukebox Card** plugin under **Settings → Marketplace**. The issue stays, also across restarts, until the old plugin files are gone. YAML-mode resources can't be edited automatically; the Repairs issue lists the line to delete. Card configs keep working as they are. `mass_queue_entry_id` is ignored unless you set `backend: mass_queue`.
+The integration finds dashboard resources that point at the old card file, `/hacsfiles/ha-jukebox-kiosk-card/jukebox-card.js` (or `/local/community/ha-jukebox-kiosk-card/jukebox-card.js`, where Home Assistant 2026.11's Marketplace serves plugins), and removes them, so the card doesn't load twice. Since 0.8.8 only that exact file counts (a `?…` ending such as `?hacstag=…` is fine); other resources, even ones with a similar name, are left alone. It then raises a Repairs issue that asks you to remove the old **Jukebox Card** plugin under **Settings → Marketplace**. The issue stays, also across restarts, until the old plugin files are gone. YAML-mode resources can't be edited automatically; the Repairs issue lists the line to delete. Card configs keep working as they are. `mass_queue_entry_id` is ignored unless you set `backend: mass_queue`.
 
 ## Backends
 
@@ -217,6 +217,7 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 - **Volume:**
   - **The player's own slider** (the top one, named after your player, for example Everywhere) sends `volume_set` to `entity`.
   - **Each room** sends `volume_set {volume_level}` to **that room's entity only**.
+  - **Many rooms.** When the rooms don't fit, only the room sliders scroll; since 0.8.8 the player's own slider stays in place at the top. The **More speakers** button scrolls the rooms down.
   - Slide sideways to change the volume: the slider waits for a short sideways movement before the number follows your finger. A tap, a stray touch or scrolling up and down does not change it. This applies to Now Playing and the Speakers panel; the seek bar is unchanged.
   - While you drag, the card sends at most one call every 200 ms, and always sends the final value on release.
   - Tapping a speaker icon sends `volume_mute {is_volume_muted}` to that entity.
@@ -328,7 +329,8 @@ Before 0.8.0 (old look), Library track rows:
 
 - **Start.** After `screensaver_minutes` with no touches or keys, a full-screen overlay appears: the current art with a slow Ken Burns zoom, and a big clock, date and the current track, all drifting slowly (240 s loop) to avoid burn-in.
 - **Reduced motion.** No zoom and no drift; the clock block jumps to a new spot every 60 s instead.
-- **Portrait.** Since 0.8.2, in portrait the track (title and artist) is bigger and the clock is smaller, so what is playing leads; the date is a little bigger and a long title may take two lines. Landscape is unchanged.
+- **Portrait.** Since 0.8.2, in portrait the track (title and artist) is bigger and the clock is smaller, so what is playing leads; the date is a little bigger and a long title may take two lines.
+- **Landscape clock.** Since 0.8.8 the clock in landscape is 10% smaller than before, with or without lyrics on the screensaver. Portrait is unchanged.
 - **Wake.** A tap wakes it. The tap is swallowed, so it never presses whatever is underneath, and the overlay fades out over 350 ms.
 
 ### How search behaves
@@ -405,8 +407,8 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 
 | key | default | |
 |---|---|---|
-| `entity` | *(required)* | Player for transport, its own volume slider, the queue and every `play_media`. A new card fills it in with the first Music Assistant player. Missing, or not a media player: the card shows "Specify an entity from within the media_player domain". Since 0.8.6 there is no default; before that it was `media_player.everywhere` |
-| `rooms` | `[]` | `[{name, entity, icon?}]`, or bare entity ids (the name then comes from `friendly_name`). Each room gets its own volume slider |
+| `entity` | *(required)* | Player for transport, its own volume slider, the queue and every `play_media`. Since 0.8.8 the editor's picker lists only Music Assistant players. A new card fills it in with the first Music Assistant player. Missing, or not a media player: the card shows "Specify an entity from within the media_player domain". Since 0.8.6 there is no default; before that it was `media_player.everywhere` |
+| `rooms` | `[]` | `[{name, entity, icon?}]`, or bare entity ids (the name then comes from `friendly_name`). Each room gets its own volume slider. Since 0.8.8 the editor's picker lists only Music Assistant players |
 | `screensaver_minutes` | `10` (0–1440) | Idle minutes before the screensaver. `0` turns it off. The editor offers Off, 1, 5, 10, 15, 30, 60 and Custom; any 0–1440 value from YAML still loads |
 | `browse_limit` | `60` (1–500) | Items per Browse page (infinite scroll pages by `offset`) |
 | `queue_limit` | `200` (1–1000) | Upcoming items requested from `jukebox_kiosk/queue_items` (`limit_after`); out-of-range values are clamped |
@@ -427,7 +429,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 | `lyrics_seek` | `true` | Long-press (0.55 s) a synced line to seek there. Never on radio |
 | `lyrics_offset_ms` | `500` (−5000–5000) | Shift for synced lyrics; positive shows lines sooner |
 | `speaker_mode` | `fixed` | `fixed`: always play on `entity`; the Speakers panel is a volume mixer and a 0.4 config makes exactly the same calls. `dynamic`: pick where to play, group, move and use Music Assistant's group presets. See [Speakers](#speakers-050) |
-| `targets` | all MA players | `dynamic` only: `[{entity, name?, members?}]` or entity ids the card may play on |
+| `targets` | all MA players | `dynamic` only: `[{entity, name?, members?}]` or entity ids the card may play on. Since 0.8.8 the editor's picker lists only Music Assistant players |
 | `grouping` | `admins` | Who may group, move, pick the target and use Play Now, Play Next and Remove on the queue: `admins`, `everyone` or `nobody`. Anyone else still sees those three labels, greyed. **A UI lock, not security** |
 | `grouping_users` | `[]` | Extra users (name or user id) treated like admins for the above |
 | `guest_access` | `volume` | Everyone else in the Speakers panel: `volume` or `none` (read only) |
@@ -471,7 +473,7 @@ Not in 0.7.x: joining a speaker to a dynamic group so playback resumes on it, an
 - **The card says "Specify an entity from within the media_player domain".** The card has no player, or the one in `entity` is not a media player. Open the card's settings and pick one under **Player**, or add `entity:` with your player's id to the YAML. Since 0.8.6 the card no longer plays on `media_player.everywhere` by itself.
 - **The card says "Entity not available:" and a player id.** The player in `entity` is not in Home Assistant (renamed or removed). Pick another one under **Player**. This is Home Assistant's own warning, so it shows in your Home Assistant language.
 - **The card says "Custom element doesn't exist: jukebox-card".** Make sure Jukebox Kiosk is set up (not only installed), then reload the browser. Fully Kiosk may need **Clear cache**.
-- **The card loads twice, or shows the old version.** An old `/hacsfiles/ha-jukebox-kiosk-card/` (or `/local/community/ha-jukebox-kiosk-card/`) resource is still there. See the Repairs issue, or delete it under **Settings → Dashboards → Resources**.
+- **The card loads twice, or shows the old version.** An old `/hacsfiles/ha-jukebox-kiosk-card/jukebox-card.js` (or `/local/community/ha-jukebox-kiosk-card/jukebox-card.js`) resource is still there. See the Repairs issue, or delete it under **Settings → Dashboards → Resources**.
 - **Play Next, Play Now or Remove are greyed, or the heart or grouping is missing, for one user.** Greyed queue actions mean that person may not change the queue (`grouping`, or `queue_play` left off). A missing heart means no `library` class (see [Permissions](#permissions)).
 - **Lyrics say "Lyrics unavailable".** Music Assistant has no lyrics provider enabled, or the user lacks `read`. Music Assistant won't fetch lyrics for library tracks, so the card asks for the provider copy of the track.
 - **No album art.** The card never loads the player's absolute `entity_picture` (mixed content on https). It uses `entity_picture_local`, then a relative `entity_picture`, then an https queue image.

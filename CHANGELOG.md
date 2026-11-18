@@ -4,6 +4,14 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.8.8 — 2026-11-18
+
+- In the card editor, the Player, Rooms and speaker pickers list only Music Assistant players, so you can't pick a player the jukebox can't use.
+- On Now Playing, when there are more rooms than fit, the top volume slider for your player stays in place and only the room sliders scroll.
+- In landscape, the screensaver clock is 10% smaller. Portrait is unchanged.
+- In the card picker, the card is now called "Jukebox Kiosk", with the description "A touchscreen Jukebox music player for Home Assistant".
+- The cleanup of the old Jukebox Card plugin now removes only the old card file itself. Other dashboard resources are left alone, even ones with a similar name.
+
 ## 0.8.7 — 2026-11-17
 
 - Jukebox Kiosk now needs Home Assistant 2026.11.0 or newer, the version that brought the Marketplace.
