@@ -1,4 +1,5 @@
 import { html, css, nothing, type ReactiveController, type ReactiveControllerHost } from 'lit';
+import { keyed } from 'lit/directives/keyed.js';
 import { icon } from './icons';
 import { providerLabel } from './providers';
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem, RoomConfig } from './types';
@@ -22,12 +23,14 @@ export function swallowNextClick() {
   window.setTimeout(off, 5000);
 }
 
-/** Image URLs the card will load: https, data:image and same-origin relative paths. Plain http (mixed content on an
- *  https dashboard, and usually a LAN address) and protocol-relative URLs are dropped. */
+/** Image URLs the card will load: https, data:image and same-origin relative paths, and plain http only when the
+ *  dashboard itself is plain http (#147: e.g. MA's http://<lan-ip>:8095/imageproxy art). On an https dashboard plain http
+ *  is mixed content and is dropped. Protocol-relative URLs are always dropped. */
 export function safeImage(u: unknown): string {
   if (typeof u !== 'string') return '';
   const s = u.trim();
   if (/^https:\/\//i.test(s) || /^data:image\//i.test(s)) return s;
+  if (/^http:\/\//i.test(s) && typeof location !== 'undefined' && location.protocol === 'http:') return s;
   if (s.startsWith('/') && !s.startsWith('//')) return s;
   return '';
 }
@@ -47,22 +50,74 @@ export function normItem<T extends MaItem>(it: T): T {
 }
 
 /**
- * Art for the now-playing player (Now Playing, backdrop, screensaver).
+ * Art sources for the now-playing player (Now Playing, full screen, screensaver), best first (#147):
  * 1. entity_picture_local (HA's relative /api/media_player_proxy/... path, works through Nabu Casa / https)
  * 2. entity_picture only when it is relative; an absolute URL (MA's http://<lan-ip>:8095/imageproxy...) is never used
- * 3. the current queue item's image when it is https
- * 4. '' (the caller shows its placeholder)
+ * 3. the current queue item's image (when safeImage allows it and it belongs to the song that is on)
+ * An empty list: the caller shows its placeholder.
  */
-export function playerArt(attrs: Record<string, any> | undefined, cur?: { media_image?: string; media_content_id?: string } | null): string {
+export function playerArtSources(attrs: Record<string, any> | undefined, cur?: { media_image?: string; media_content_id?: string } | null): string[] {
   const a = attrs ?? {};
   const rel = (u: unknown) => (typeof u === 'string' && u.startsWith('/') && !u.startsWith('//') ? u : '');
-  const local = rel(a.entity_picture_local) || rel(a.entity_picture);
-  if (local) return local;
+  const out: string[] = [];
+  const add = (u: string) => { if (u && !out.includes(u)) out.push(u); };
+  add(rel(a.entity_picture_local));
+  add(rel(a.entity_picture));
   if (cur && (!cur.media_content_id || !a.media_content_id || cur.media_content_id === a.media_content_id)) {
     const q = safeImage(cur.media_image);
-    if (q && !q.startsWith('/')) return q;
+    if (q && !q.startsWith('/')) add(q);
   }
-  return '';
+  return out;
+}
+/** The best now-playing art source, ignoring load failures ('' = placeholder). */
+export function playerArt(attrs: Record<string, any> | undefined, cur?: { media_image?: string; media_content_id?: string } | null): string {
+  return playerArtSources(attrs, cur)[0] ?? '';
+}
+
+/**
+ * #147: now-playing art load results, per player, for the song that is on now. Each source is tried at most once per
+ * song: a source that failed is skipped (the next one is used, then the placeholder) until the song changes, and a
+ * re-render or hass update never tries it again. No timers, no retry loop. A new song starts with a clean record.
+ */
+type ArtLog = { song: string; failed: Set<string>; loaded: Set<string>; probing: Set<string> };
+const artLogs = new Map<string, ArtLog>();
+/** The song a load result belongs to: the media_content_id plus the title (a radio stream keeps its id across songs). */
+export const songKey = (attrs: Record<string, any> | undefined) => `${attrs?.media_content_id ?? ''}\u0001${attrs?.media_title ?? ''}`;
+function artLog(player: string, song: string): ArtLog {
+  let l = artLogs.get(player);
+  if (!l || l.song !== song) { l = { song, failed: new Set(), loaded: new Set(), probing: new Set() }; artLogs.set(player, l); }
+  return l;
+}
+/** The now-playing art to show for this player's current song: the first source that has not failed ('' = placeholder). */
+export function nowArt(player: string, attrs: Record<string, any> | undefined, cur?: { media_image?: string; media_content_id?: string } | null): string {
+  const l = artLog(player, songKey(attrs));
+  return playerArtSources(attrs, cur).find((u) => !l.failed.has(u)) ?? '';
+}
+/** An <img> (or probe) for `song` failed to load `src`. Results for a song that is no longer on are ignored. */
+export function artFailed(player: string, song: string, src: string) {
+  const l = artLogs.get(player);
+  if (l && l.song === song) { l.failed.add(src); l.loaded.delete(src); }
+}
+export function artLoaded(player: string, song: string, src: string) {
+  const l = artLogs.get(player);
+  if (l && l.song === song && !l.failed.has(src)) l.loaded.add(src);
+}
+/**
+ * For art painted as a CSS background (no error event): true once `src` is known to load for this song. Otherwise it
+ * loads it once with an Image (only if no load of it is known or under way for this song) and calls `changed` when
+ * it finishes, so the caller re-renders (and moves on to the next source if it failed).
+ */
+export function artReady(player: string, song: string, src: string, changed: () => void): boolean {
+  const l = artLog(player, song);
+  if (l.loaded.has(src)) return true;
+  if (l.failed.has(src) || l.probing.has(src) || typeof Image === 'undefined') return false;
+  l.probing.add(src);
+  const im = new Image();
+  const done = (ok: boolean) => { im.onload = im.onerror = null; l.probing.delete(src); if (ok) artLoaded(player, song, src); else artFailed(player, song, src); changed(); };
+  im.onload = () => done(true);
+  im.onerror = () => done(false);
+  im.src = src;
+  return false;
 }
 export const artistNames = (it: MaItem) =>
   it.artists?.length ? it.artists.map((a: any) => (typeof a === 'string' ? a : a.name)).join(', ')
@@ -78,7 +133,8 @@ export const fmtTime = (s: number) => fmtDur(s) || '0:00';
 export function artTpl(it: { name: string } & Partial<MaItem>, cls: string) {
   const src = imageOf(it as MaItem);
   return html`<span class="ar ${cls}">${src
-    ? html`<img src=${src} alt="" loading="lazy" draggable="false" @error=${(e: Event) => { (e.target as HTMLImageElement).style.display = 'none'; }} />`
+    // #147: keyed on src, so a picture that failed (hidden) is never reused for another row's or item's picture: a new src gets a fresh <img>
+    ? keyed(src, html`<img src=${src} alt="" loading="lazy" draggable="false" @error=${(e: Event) => { (e.target as HTMLImageElement).style.display = 'none'; }} />`)
     : nothing}</span>`;
 }
 export function provTpl(uri?: string, provider?: string, mediaType?: string) {

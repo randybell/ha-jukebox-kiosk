@@ -1,9 +1,10 @@
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
+import { keyed } from 'lit/directives/keyed.js';
 import { tokens, base } from './styles';
 import { icon } from './icons';
 import { providerLabel } from './providers';
 import { combinedOn, libraryTabLabel } from './library-home';
-import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, status, playerArt } from './shared';
+import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, status, nowArt, songKey, artLoaded, artFailed } from './shared';
 import { throttle } from './slider';
 import { sendVolume } from './vol-send';
 import './slider';
@@ -424,7 +425,9 @@ export class JbNow extends LitElement {
     const title = a.media_title as string | undefined;
     const idle = !e || !title || ['off', 'idle', 'unavailable', 'standby'].includes(e.state);
     const cur = this._snap && this._snap.current >= 0 ? this._snap.items[this._snap.current] : undefined;
-    const pic = playerArt(a, cur);
+    // #147: the first art source that has not failed for this song (proxy copy, then the queue picture), else the disc
+    const song = songKey(a), pid = this.eid;
+    const pic = nowArt(pid, a, cur);
     const prov = providerLabel(a.media_content_id);
     const playing = this.isPlaying();
     const shuffle = this.flag('shuffle', !!a.shuffle);
@@ -450,7 +453,8 @@ export class JbNow extends LitElement {
     const slx = this._sleepOpen ? html`<div class="slx" data-action="sleep-close" @pointerdown=${this.sleepAway}></div>` : nothing;
     return html`<div class="nw ${idle ? 'idle' : ''} ${this._sleepOpen ? 'sl-open' : ''}" data-state=${e?.state ?? 'unknown'}>${slx}
       <div class="art ${showLyr && this._overlay ? 'lyr-on' : ''}">
-        ${pic ? html`<img src=${pic} alt="" draggable="false" @error=${(ev: Event) => ((ev.target as HTMLElement).style.display = 'none')} />`
+        ${pic ? keyed(pic, html`<img src=${pic} alt="" draggable="false" @load=${() => artLoaded(pid, song, pic)}
+            @error=${() => { artFailed(pid, song, pic); this.requestUpdate(); }} />`)
           : html`<span class="ph">${icon('disc')}</span>`}
         ${showLyr && this._overlay ? html`<jb-lyrics class="ovl" mode="overlay" @jukebox-lyrics-tap=${() => { this._overlay = false; writeOverlay(false); }} .hass=${this.hass} .config=${this.config} .store=${this.lyrics}
           ?active=${this.active}></jb-lyrics>` : nothing}

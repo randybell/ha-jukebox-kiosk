@@ -10,7 +10,7 @@ import './editor';
 import './lyrics/lyrics-view';
 import { LyricsStore, type LyricsStatus } from './lyrics/store';
 import { QueueModel } from './queue-model';
-import { roomsOf, playerArt, ART, hash, isRadioUri } from './shared';
+import { roomsOf, nowArt, songKey, artReady, ART, hash, isRadioUri } from './shared';
 import './speakers-view';
 import './station-sheet';
 import './station-confirm';
@@ -464,10 +464,12 @@ export class JukeboxCard extends LitElement {
   protected updated() {
     if (!this._spkEl) { const el = this.renderRoot.querySelector('jb-speakers') as HTMLElement | null; if (el) this._spkEl = el; }
   }
-  /** Now-playing art for the screensaver (see playerArt: never an absolute entity_picture). */
+  /** Now-playing art for the screensaver and full screen (see playerArtSources: never an absolute entity_picture;
+   *  #147: a source that failed for this song is skipped, then the queue picture, then '' for the no-art look). */
   private art() {
-    const ent = this._config?.entity ? this.hass?.states[this._config.entity] : undefined;
-    return playerArt(ent?.attributes, this.queue.currentItem);
+    const id = this._config?.entity ?? '';
+    const ent = id ? this.hass?.states[id] : undefined;
+    return nowArt(id, ent?.attributes, this.queue.currentItem);
   }
   /** Large-screen scale: the layout is designed around ~1280x800; on bigger panels zoom it so art/text grow instead of spreading thin. */
   private _scale = 1;
@@ -702,6 +704,9 @@ export class JukeboxCard extends LitElement {
     const at = ent?.attributes ?? {};
     const playing = ent?.state === 'playing' || ent?.state === 'paused';
     const pic = playing ? this.art() : undefined;
+    // #147: the background has no error event: the art is loaded once per song first (until then the plain background
+    // shows, as while any picture loads); a failure re-renders with the next source, or the no-art look when none is left.
+    const picOk = !!pic && artReady(c.entity ?? '', songKey(at), pic, () => this.requestUpdate());
     const lang = this.hass?.locale?.language || this.hass?.language || undefined;
     const ls = this.lyrics.state.status;
     const lyrOn = playing && c.show_lyrics !== false && c.screensaver_lyrics !== false;
@@ -716,7 +721,7 @@ export class JukeboxCard extends LitElement {
     return html`<div class="amb ${use} ${state}" role="button" aria-label="Close" data-use=${use}
         @pointerdown=${(e: Event) => this.ambClose(e, use)} @pointerup=${swallow} @click=${swallow}>
       ${playing && title ? pic
-        ? html`<div class="sv-bg" style=${`background-image:url("${pic.replace(/"/g, '%22')}")`}></div>`
+        ? html`<div class="sv-bg" style=${picOk ? `background-image:url("${pic.replace(/"/g, '%22')}")` : ''}></div>`
         : html`<div class="sv-bg noart" style=${`background:${ART[hash(String(title)) % ART.length]}`}></div>` : nothing}
       <div class="sv-drift ${lyr ? 'has-ly' : ''}">
         <div class="sv-clock">${this.timeStr()}</div>
