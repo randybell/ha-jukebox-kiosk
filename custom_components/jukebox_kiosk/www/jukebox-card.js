@@ -68,7 +68,8 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     --_font-display: var(--ha-font-family-heading, var(--ha-card-header-font-family, var(--ha-font-family-body, Roboto, Noto, sans-serif)));
     /* smallest tap target for any button (Material / HA touch target): buttons may shrink to fit, never below this */
     --_touch-min: 48px;
-    --_pad: clamp(14px, 3vw, 36px);
+    /* side padding follows the card's own width (container units), not the window: a half-width card gets half-width padding */
+    --_pad: clamp(var(--ha-space-3, 12px), 3cqw, var(--ha-space-9, 36px));
     --_radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
     --_radius-s: var(--ha-border-radius-md, 8px);
   }
