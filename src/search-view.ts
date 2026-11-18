@@ -857,7 +857,7 @@ export class JbSearch extends LitElement {
     .lcorner { display: flex; gap: var(--ha-space-2, 8px); flex: none; }
     .cn { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: var(--ha-border-radius-xl, 16px);
       color: var(--_muted); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
-    .cn .i { width: 22px; height: 22px; } .cn small { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .02em; white-space: nowrap; }
+    .cn .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); } .cn small { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .02em; white-space: nowrap; }
     .cn.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     /* Compact sources control; its choices open as a row under the control (no overlay). */
     .qrow .srcs.srcc { display: flex; flex: none; flex-wrap: nowrap; margin-top: 0; overflow: visible; }
@@ -892,7 +892,7 @@ export class JbSearch extends LitElement {
     .caret { display: inline-block; flex: none; width: 3px; height: 30px; margin-left: var(--ha-space-1, 4px); background: var(--_fg); border-radius: 2px; animation: blink 1.06s steps(1) infinite; }
     @keyframes blink { 0%, 55% { opacity: 1 } 56%, 100% { opacity: 0 } }
     .qx { width: 44px; height: 44px; flex: none; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center; color: var(--_inactive); background: var(--_chip-bg); }
-    .qx .i { width: 22px; height: 22px; }
+    .qx .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     /* loading hairline: 2px white at ~60% under the query text, no blank flash */
     .hair { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; overflow: hidden; opacity: 0; transition: opacity 120ms; pointer-events: none; }
     .hair::before { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -40%; background: var(--_active); animation: hair 900ms ease-in-out infinite; }
@@ -928,7 +928,7 @@ export class JbSearch extends LitElement {
     .lsec { display: flex; align-items: center; gap: var(--ha-space-2, 8px); margin: var(--ha-space-1, 4px) 0 2px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .1em; text-transform: uppercase; color: var(--_inactive); }
     .lsec[data-sec="providers"] { margin-top: var(--ha-space-3, 12px); padding-top: var(--ha-space-2, 8px); border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .ar.gen { display: grid; place-items: center; background: var(--_chip-sel); color: var(--_fg); box-shadow: 0 0 0 var(--ha-border-width-sm, 1px) var(--_surface-border); }
-    .ar.gen .i { width: 22px; height: 22px; }
+    .ar.gen .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     .ra.go { width: 48px; height: 48px; display: grid; place-items: center; color: var(--_inactive); }
     /* Labeled search actions need their own height and enough width for an unbroken touch label. */
     .row { min-height: 68px; }

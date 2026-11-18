@@ -973,7 +973,7 @@ export class JbBrowse extends LitElement {
     .lt { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: var(--ha-space-1, 4px); min-height: 180px; padding: var(--ha-space-6, 24px) var(--ha-space-6, 24px);
       border-radius: var(--ha-border-radius-3xl, 24px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); text-align: left; cursor: pointer; }
     .lt:active { background: var(--_chip-sel); }
-    .lti { flex: 1; display: flex; align-items: flex-start; } .lti svg { width: 52px; height: 52px; fill: var(--_active); }
+    .lti { flex: 1; display: flex; align-items: flex-start; } .lti svg { width: calc(var(--_icon) * 52 / 24); height: calc(var(--_icon) * 52 / 24); fill: var(--_active); }
     .ltl { font-family: var(--_font-display, inherit); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); }
     .lts { font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); }
     .lhead { align-items: center; gap: var(--ha-space-4, 16px); overflow: hidden; }
@@ -993,13 +993,13 @@ export class JbBrowse extends LitElement {
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg); }
-    .tw .open .i { width: 20px; height: 20px; }
+    .tw .open .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
     .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_muted); }
     .tw .tfav.on { color: var(--_active); }
-    .tw .tfav .i { width: 20px; height: 20px; }
+    .tw .tfav .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
     .mo.fav.on { color: var(--_active); }
     .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto auto; }
     .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
@@ -1021,7 +1021,7 @@ export class JbBrowse extends LitElement {
     .mo { width: 40px; height: 40px; display: grid; place-items: center; color: var(--_inactive); }
     .dv { flex: 1; min-height: 0; }
     .sec { display: flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .08em; text-transform: uppercase; color: var(--_muted); margin: 2px 0 calc(-1 * var(--ha-space-1, 4px)); }
-    .sec .i { width: 14px; height: 14px; color: var(--_active); }
+    .sec .i { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); color: var(--_active); }
     .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-md, 8px); border: var(--ha-border-width-sm, 1px) dashed var(--_divider); }
     /* v0.7 radio "Stations by…" */
     .modes { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; margin-top: calc(-1 * var(--ha-space-1, 4px)); }
@@ -1055,7 +1055,7 @@ export class JbBrowse extends LitElement {
       .scroll { padding: var(--ha-space-2, 8px); }
       .grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--ha-space-3, 12px) var(--ha-space-2, 8px); }
       .home { grid-template-columns: 1fr 1fr; gap: var(--ha-space-3, 12px); } .lt { min-height: 132px; padding: var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); }
-      .lti svg { width: 38px; height: 38px; } .ltl { font-size: var(--ha-font-size-xl, 20px); } .lts { font-size: var(--ha-font-size-m, 14px); } .lt-title { font-size: var(--ha-font-size-l, 16px); }
+      .lti svg { width: calc(var(--_icon) * 38 / 24); height: calc(var(--_icon) * 38 / 24); } .ltl { font-size: var(--ha-font-size-xl, 20px); } .lts { font-size: var(--ha-font-size-m, 14px); } .lt-title { font-size: var(--ha-font-size-l, 16px); }
       .tw .pv { font-size: var(--ha-font-size-xs, 10px); left: 5px; bottom: 5px; }
       .row { grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: var(--ha-space-2, 8px); } .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto auto; } .row .pv { display: none; } .row .du { font-size: var(--ha-font-size-s, 12px); } .th { width: 40px; height: 40px; }
     }

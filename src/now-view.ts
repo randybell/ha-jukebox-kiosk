@@ -536,7 +536,7 @@ export class JbNow extends LitElement {
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background 150ms, color 150ms; }
-    .ab .i { width: 24px; height: 24px; }
+    .ab .i { width: var(--_icon); height: var(--_icon); }
     .art .sleep-strip { position: absolute; z-index: 2; top: calc(18px + max(40px, calc(48px / var(--_z, 1)))); right: 10px; left: 10px; margin: 0; justify-content: flex-end; }
     .art .sleep-strip .sp { background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
@@ -602,10 +602,10 @@ export class JbNow extends LitElement {
     .tp:has(.tb:nth-child(5):last-child) { grid-template-columns: repeat(5, 1fr); }
     .tp:has(.tb.fv) { grid-template-columns: repeat(7, 1fr); } .tp:has(.tb.fv) .tb.sh { grid-column: 2; } /* #42: empty first slot keeps Play/Pause centered with the heart */
     .tb { position: relative; width: 56px; height: 56px; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center; color: var(--_active); }
-    .tb .i { width: 30px; height: 30px; }
-    .tb.sh, .tb.rp, .tb.sl { color: var(--_inactive); } .tb.sh .i, .tb.rp .i, .tb.sl .i { width: 24px; height: 24px; }
+    .tb .i { width: calc(var(--_icon) * 30 / 24); height: calc(var(--_icon) * 30 / 24); }
+    .tb.sh, .tb.rp, .tb.sl { color: var(--_inactive); } .tb.sh .i, .tb.rp .i, .tb.sl .i { width: var(--_icon); height: var(--_icon); }
     .tb.sh.on, .tb.rp.on, .tb.fv.on, .tb.sl.on { color: var(--_active); }
-    .tb.fv { color: var(--_inactive); } .tb.fv .i { width: 26px; height: 26px; }
+    .tb.fv { color: var(--_inactive); } .tb.fv .i { width: calc(var(--_icon) * 26 / 24); height: calc(var(--_icon) * 26 / 24); }
     .sleep-strip { display: flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; margin: -2px 0 2px; }
     .sleep-strip .sp { height: 34px; min-width: 44px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
       background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
@@ -613,11 +613,11 @@ export class JbNow extends LitElement {
     .sleep-strip .sp:active { transform: scale(.96); }
     .sleep-cd { letter-spacing: .04em; font-variant-numeric: tabular-nums; }
     .sleep-strip .sp.sleep-cd { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-3, 12px); }
-    .sleep-strip .sp.sleep-cd .i { width: 14px; height: 14px; }
+    .sleep-strip .sp.sleep-cd .i { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); }
     .tb .dot { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
     .tb.pp { width: 80px; height: 80px; background: var(--_active); color: var(--_on-accent); }
-    .tb.pp .i { width: 44px; height: 44px; }
-    .tb.pr, .tb.nx { width: 72px; height: 72px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
+    .tb.pp .i { width: calc(var(--_icon) * 44 / 24); height: calc(var(--_icon) * 44 / 24); }
+    .tb.pr, .tb.nx { width: 72px; height: 72px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
     .tb:active { transform: scale(.94); }
     .tb:disabled { color: var(--_disabled); }
     .tb.pp:disabled { background: color-mix(in srgb, var(--_disabled-fill) 20%, transparent); }
@@ -638,7 +638,7 @@ export class JbNow extends LitElement {
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
-    .vmore .i { width: 12px; height: 12px; }
+    .vmore .i { width: calc(var(--_icon) * 12 / 24); height: calc(var(--_icon) * 12 / 24); }
     .volw.more-b .vmore { display: inline-flex; }
     .volw.over .rooms { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
     .volw.over .rooms::-webkit-scrollbar { display: none; }
@@ -650,8 +650,8 @@ export class JbNow extends LitElement {
     .vr.main, .rooms > .vr { flex-shrink: 0; }
     .vr { display: grid; grid-template-columns: 30px minmax(80px, 30%) minmax(0, 1fr) 34px; align-items: center; gap: var(--ha-space-2, 8px); min-height: 46px; }
     .vm { width: 34px; height: 34px; display: grid; place-items: center; color: var(--_active); margin-left: -6px; border-radius: var(--ha-border-radius-circle, 50%); }
-    .vm .i { width: 20px; height: 20px; }
-    .vr.room .vm { color: var(--_inactive); } .vr.room .vm .i { width: 18px; height: 18px; }
+    .vm .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
+    .vr.room .vm { color: var(--_inactive); } .vr.room .vm .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .vr.muted .vm { color: var(--_active); }
     .vn { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vr.main .vn { font-weight: var(--ha-font-weight-bold, 700); }
@@ -666,7 +666,7 @@ export class JbNow extends LitElement {
     .spkb:active { background: var(--_chip-sel); }
     .ra { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); background: var(--_chip-bg); justify-self: end; }
     .ra span { display: none; }
-    .ra .i { width: 18px; height: 18px; }
+    .ra .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .ra.add { background: var(--_active); border-color: transparent; color: var(--_on-accent); }
     .ra.drop { color: var(--_fg); }
     .ra[aria-disabled="true"], .ra:disabled { color: var(--_disabled); }
@@ -698,11 +698,11 @@ export class JbNow extends LitElement {
       .ti { font-size: clamp(var(--ha-font-size-3xl, 28px), 3.4cqw, var(--ha-font-size-5xl, 40px)); }
       .vs { --_slider-h: 6px; --_slider-knob: 20px; --_slider-hit: 36px; }
       .tb.pp { width: 74px; height: 74px; }
-      .tb.pr, .tb.nx { width: 64px; height: 64px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; }
+      .tb.pr, .tb.nx { width: 64px; height: 64px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
     }
     @container np (orientation: landscape) and (max-height: 560px) {
       .upn { display: none; } .vr { min-height: 38px; } .tb.pp { width: 70px; height: 70px; } .tb { width: 48px; height: 48px; }
-      .tb.pr, .tb.nx { width: 60px; height: 60px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; }
+      .tb.pr, .tb.nx { width: 60px; height: 60px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
     }
     /* phone */
     @container np (max-width: 520px) {
@@ -714,11 +714,11 @@ export class JbNow extends LitElement {
       .sub { font-size: var(--ha-font-size-l, 16px); }
       .prog { grid-template-columns: 40px minmax(0, 1fr) 40px; }
       .tb { width: 48px; height: 48px; } .tb.pp { width: 70px; height: 70px; }
-      .tb.pr, .tb.nx { width: 58px; height: 58px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; }
+      .tb.pr, .tb.nx { width: 58px; height: 58px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
       .tp:has(.tb.fv) .tb { width: 40px; height: 40px; } .tp:has(.tb.fv) .tb.pp { width: 60px; height: 60px; }
-      .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: 48px; height: 48px; } .tp:has(.tb.fv) .tb.pr .i, .tp:has(.tb.fv) .tb.nx .i { width: 34px; height: 34px; }
-      .tp:has(.tb.fv) .tb .i { width: 22px; height: 22px; } .tp:has(.tb.fv) .tb.pp .i { width: 32px; height: 32px; }
-      .tp:has(.tb.fv) .tb.sh .i, .tp:has(.tb.fv) .tb.rp .i, .tp:has(.tb.fv) .tb.sl .i { width: 20px; height: 20px; }
+      .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: 48px; height: 48px; } .tp:has(.tb.fv) .tb.pr .i, .tp:has(.tb.fv) .tb.nx .i { width: calc(var(--_icon) * 34 / 24); height: calc(var(--_icon) * 34 / 24); }
+      .tp:has(.tb.fv) .tb .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); } .tp:has(.tb.fv) .tb.pp .i { width: calc(var(--_icon) * 32 / 24); height: calc(var(--_icon) * 32 / 24); }
+      .tp:has(.tb.fv) .tb.sh .i, .tp:has(.tb.fv) .tb.rp .i, .tp:has(.tb.fv) .tb.sl .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
       .sleep-strip .sp { height: 32px; padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-s, 12px); }
       /* phone: the sleep choices stay on one row on the artwork (≥ 40px tall) */
       .art .sleep-strip { flex-wrap: nowrap; gap: var(--ha-space-1, 4px); }

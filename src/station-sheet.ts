@@ -141,9 +141,9 @@ export class JbStation extends LitElement {
     .acts { display: flex; gap: var(--ha-space-3, 12px); align-items: center; }
     .play { flex: 1; height: 60px; display: inline-flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent);
       font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); }
-    .play .i { width: 28px; height: 28px; } .play:active { transform: scale(.98); }
+    .play .i { width: calc(var(--_icon) * 28 / 24); height: calc(var(--_icon) * 28 / 24); } .play:active { transform: scale(.98); }
     .fav { width: 60px; height: 60px; flex: none; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
-    .fav .i { width: 28px; height: 28px; } .fav.on { color: var(--_active); border-color: currentColor; } .fav:disabled { color: var(--_disabled); }
+    .fav .i { width: calc(var(--_icon) * 28 / 24); height: calc(var(--_icon) * 28 / 24); } .fav.on { color: var(--_active); border-color: currentColor; } .fav:disabled { color: var(--_disabled); }
     .note { margin: -6px 0 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; }
     .toast.solo { z-index: 3; bottom: 96px; pointer-events: auto; }
     /* tablet / desktop: a centred dialog */

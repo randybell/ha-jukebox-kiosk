@@ -408,7 +408,7 @@ export const mediaStyles = css`
   .mh { font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase; color: var(--_inactive); padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px) var(--ha-space-2, 8px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mi { display: flex; align-items: center; gap: var(--ha-space-3, 12px); width: 100%; height: 46px; padding: 0 var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-md, 8px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_fg); text-align: left; }
   .mi:active { background: var(--_chip-sel); }
-  .mi .i { width: 22px; height: 22px; }
+  .mi .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
   .mi.cancel { color: var(--_inactive); border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); border-radius: 0 0 var(--ha-border-radius-md, 8px) var(--ha-border-radius-md, 8px); margin-top: var(--ha-space-1, 4px); }
   .menu.sheet { left: 0; right: 0; bottom: 0; width: auto; border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px) calc(var(--ha-space-4, 16px) + env(safe-area-inset-bottom)); max-height: min(100%, var(--_popup-max-h)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
   .menu.sheet .mh { display: flex; align-items: center; gap: var(--ha-space-3, 12px); text-transform: none; letter-spacing: 0; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-bottom: var(--ha-border-width-sm, 1px) solid var(--_divider); margin-bottom: var(--ha-space-2, 8px); }
@@ -440,7 +440,7 @@ export const mediaStyles = css`
   /* hold progress: a fill that grows over HOLD_MS on a row / tile held for its pop-up */
   .row.hp, .tile.hp { background-image: linear-gradient(var(--_chip-sel), var(--_chip-sel)); background-repeat: no-repeat; background-size: 0% 100%; animation: jb-hold-r ${HOLD_MS}ms linear forwards; }
   @keyframes jb-hold-r { to { background-size: 100% 100%; } }
-  .ra-b .i { width: 24px; height: 24px; }
+  .ra-b .i { width: var(--_icon); height: var(--_icon); }
   /* hearts (0.6.2 radio, v0.7 every row): one more column */
   .ra-b.fav { flex: none; color: var(--_inactive); }
   .ra-b.fav.on { color: var(--_active); }
@@ -452,7 +452,7 @@ export const mediaStyles = css`
     .ar.th { width: 40px; height: 40px; }
     .ra { gap: var(--ha-space-1, 4px); }
     .ra-b { min-width: 44px; min-height: 44px; }
-    .ra-b .i { width: 18px; height: 18px; }
+    .ra-b .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: var(--ha-space-2, 8px); }
     .row.hasfav .ra-b { width: 40px; }
   }
@@ -467,7 +467,7 @@ export const mediaStyles = css`
   .cbtn { display: inline-flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); min-width: 112px; height: 48px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
     font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
   .cbtn.ok { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
-  .cbtn .i { width: 22px; height: 22px; }
+  .cbtn .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
   /* the speakers and up-next panels on Now Playing: an opaque HA card surface (theme text on theme surface, never on the art shade) */
   .panel { border-radius: var(--_radius); background: var(--_surface-solid); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_card-shadow); }
   .eyebrow { font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; }

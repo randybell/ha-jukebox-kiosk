@@ -50,6 +50,8 @@ export const tokens = css`
     --_card-border-color: var(--ha-card-border-color, var(--divider-color, var(--_surface-border)));
     --_font-body: var(--ha-font-family-body, Roboto, Noto, sans-serif);
     --_font-display: var(--ha-font-family-heading, var(--ha-card-header-font-family, var(--ha-font-family-body, Roboto, Noto, sans-serif)));
+    /* #114 icons follow HA's icon size (--mdc-icon-size, 24 px by default); other icon sizes are multiples of it */
+    --_icon: var(--mdc-icon-size, 24px);
     /* #113 one look for things you can't tap (HA ha-control-button / ha-icon-button: --disabled-text-color on text and icons, --disabled-color on fills)
        and one for things that are quiet but still tappable (HA's secondary opacity) */
     --_disabled: var(--disabled-text-color, #bdbdbd);
@@ -72,6 +74,6 @@ export const base = css`
   }
   button:focus { outline: none; }
   button:focus-visible { outline: var(--ha-border-width-md, 2px) solid var(--_active); outline-offset: 2px; }
-  .i { width: 24px; height: 24px; fill: currentColor; flex: none; display: block; }
-  .i.xs { width: 16px; height: 16px; }
+  .i { width: var(--_icon); height: var(--_icon); fill: currentColor; flex: none; display: block; }
+  .i.xs { width: calc(var(--_icon) * 16 / 24); height: calc(var(--_icon) * 16 / 24); }
 `;
