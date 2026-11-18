@@ -101,3 +101,36 @@ async def test_marketplace_local_community_path(hass: HomeAssistant) -> None:
     hass.data["lovelace"] = SimpleNamespace(resource_mode="storage", resources=res)
     assert await frontend.async_cleanup_legacy_resources(hass) == 1
     assert res.deleted == ["m1"]
+
+
+async def test_cleanup_matches_only_our_exact_old_file(hass: HomeAssistant) -> None:
+    """Only the old card's own file goes; another project's resource (even a lookalike path) stays."""
+    ours = [
+        {"id": "o1", "url": "/hacsfiles/ha-jukebox-kiosk-card/jukebox-card.js", "type": "module"},
+        {"id": "o2", "url": "/hacsfiles/ha-jukebox-kiosk-card/jukebox-card.js?hacstag=123", "type": "module"},
+        {"id": "o3", "url": "/local/community/ha-jukebox-kiosk-card/jukebox-card.js?hacstag=9", "type": "module"},
+        {"id": "o4", "url": "http://ha.local:8123/hacsfiles/ha-jukebox-kiosk-card/jukebox-card.js?v=1", "type": "module"},
+    ]
+    lookalikes = [
+        {"id": "x1", "url": "/hacsfiles/ha-jukebox-card/jukebox-card.js", "type": "module"},
+        {"id": "x2", "url": "/local/community/ha-jukebox-card/jukebox-card.js", "type": "module"},
+        {"id": "x3", "url": "/hacsfiles/ha-jukebox-kiosk-card-fork/jukebox-card.js", "type": "module"},
+        {"id": "x4", "url": "/hacsfiles/ha-jukebox-kiosk-card/other-card.js", "type": "module"},
+        {"id": "x5", "url": "/hacsfiles/someone/ha-jukebox-kiosk-card/jukebox-card.js", "type": "module"},
+        {"id": "x6", "url": "/hacsfiles/other-card/jukebox-card.js?next=/hacsfiles/ha-jukebox-kiosk-card/jukebox-card.js", "type": "module"},
+        {"id": "x7", "url": "/local/ha-jukebox-kiosk-card/jukebox-card.js", "type": "module"},
+    ]
+    res = FakeResources(ours + lookalikes)
+    hass.data["lovelace"] = SimpleNamespace(resource_mode="storage", resources=res)
+    assert await frontend.async_cleanup_legacy_resources(hass) == 4
+    assert sorted(res.deleted) == ["o1", "o2", "o3", "o4"]
+    assert sorted(i["id"] for i in res.items) == sorted(i["id"] for i in lookalikes)
+
+
+def test_is_legacy_exact_path() -> None:
+    assert frontend._is_legacy("/hacsfiles/ha-jukebox-kiosk-card/jukebox-card.js")
+    assert frontend._is_legacy("/local/community/ha-jukebox-kiosk-card/jukebox-card.js?hacstag=1#x")
+    assert not frontend._is_legacy("/hacsfiles/ha-jukebox-card/jukebox-card.js")
+    assert not frontend._is_legacy("/hacsfiles/ha-jukebox-kiosk-card/")
+    assert not frontend._is_legacy("/hacsfiles/ha-jukebox-kiosk-card/jukebox-card.js.map")
+    assert not frontend._is_legacy("")
