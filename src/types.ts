@@ -11,10 +11,11 @@ export interface ServiceCallResponse<T = any> {
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
   user?: { id?: string; name?: string; is_admin?: boolean };
-  locale?: { language?: string };
+  /** the user's profile: language, 12/24-hour setting ('language' | 'system' | '12' | '24'), time zone ('local' | 'server') */
+  locale?: { language?: string; time_format?: string; time_zone?: string; date_format?: string };
   language?: string;
   /** loaded integrations (backend: auto looks for jukebox_kiosk) */
-  config?: { components?: string[]; country?: string | null; language?: string };
+  config?: { components?: string[]; country?: string | null; language?: string; time_zone?: string };
   /** entity registry display entries (every user can read them) */
   entities?: Record<string, { entity_id?: string; device_id?: string | null; platform?: string; translation_key?: string | null }>;
   callWS?<T = any>(msg: Record<string, unknown>): Promise<T>;

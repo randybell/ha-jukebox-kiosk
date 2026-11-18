@@ -21,6 +21,7 @@ import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, liveCount, membe
 const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { firstMusicAssistantPlayer } from './ma-player';
+import { formatTime, formatDateWeekdayDay } from './datetime';
 import { pickBackend, createBackend, type MaBackend } from './backend';
 import { defineElement } from './define';
 import { libraryTabLabel, combinedOn } from './library-home';
@@ -689,9 +690,9 @@ export class JukeboxCard extends LitElement {
     return true;
   }
 
+  /** #107: HA's own time format (profile language, 12/24-hour setting, time zone). */
   private timeStr() {
-    const lang = this.hass?.locale?.language || this.hass?.language || undefined;
-    try { return this._now.toLocaleTimeString(lang, { hour: 'numeric', minute: '2-digit' }); }
+    try { return formatTime(this._now, this.hass); }
     catch { return this._now.toLocaleTimeString(); }
   }
 
@@ -707,14 +708,13 @@ export class JukeboxCard extends LitElement {
     // #147: the background has no error event: the art is loaded once per song first (until then the plain background
     // shows, as while any picture loads); a failure re-renders with the next source, or the no-art look when none is left.
     const picOk = !!pic && artReady(c.entity ?? '', songKey(at), pic, () => this.requestUpdate());
-    const lang = this.hass?.locale?.language || this.hass?.language || undefined;
     const ls = this.lyrics.state.status;
     const lyrOn = playing && c.show_lyrics !== false && c.screensaver_lyrics !== false;
     const lyr = lyrOn && (ls === 'synced' || ls === 'plain');
     // No lyrics to show: a small, quiet status line instead, inside the drifting block so it moves with the burn-in shift.
     const status = lyrOn ? SAVER_LYRICS_STATUS[ls] : undefined;
     let date = '';
-    try { date = this._now.toLocaleDateString(lang, { weekday: 'long', month: 'long', day: 'numeric' }); } catch { /* */ }
+    try { date = formatDateWeekdayDay(this._now, this.hass); } catch { /* */ }
     const state = use === 'saver' ? this._saver : this._stageOut ? 'waking' : 'on';
     const title = playing ? at.media_title : undefined;
     const swallow = (e: Event) => { e.preventDefault(); e.stopPropagation(); };
