@@ -240,6 +240,7 @@ export class JukeboxCardEditor extends LitElement {
       if (Number.isFinite(n)) v.lyrics_offset_ms = Math.max(-5000, Math.min(5000, n)); else delete v.lyrics_offset_ms;
     }
     delete v.coerce_repeat_one; // the option is gone (#139): an old YAML value is ignored and not written back
+    delete v.show_action_icons; // the option is gone (#85): an old YAML value is ignored and not written back
     return v as JukeboxCardConfig;
   }
   private changed(e: CustomEvent) {

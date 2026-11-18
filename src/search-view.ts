@@ -6,7 +6,7 @@ import { providerLabel } from './providers';
 import { SearchEngine } from './search-engine';
 import {
   imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, swallowNextClick, menuPos, menuTpl,
-  playMedia, playMessage, drillable, canRadio, isRadio, hideStartRadio, rowActsTpl, foldedActions, mediaActions, SEARCH_ACTS, searchRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  playMedia, playMessage, drillable, canRadio, isRadio, hideStartRadio, mediaActions, searchRadio, confirmTpl, type MenuAction, type MenuPos, type ConfirmState,
   maCall,
 } from './shared';
 import './detail-view';
@@ -558,20 +558,6 @@ export class JbSearch extends LitElement {
     if (type === 'track' && el && !isRadio(it)) { swallowNextClick(); this.rowMenu(it, g, el); return; }
     this._sel = this._sel === it.uri ? '' : it.uri;
   }
-  /** 0.7.9 #35: Add to queue and Play Next act at once; Play Now and Start radio ask first. Radio Play Now replaces immediately. */
-  private rowAct(it: MaItem, g: GroupKey, a: RowAct | 'more', el: HTMLElement) {
-    const type = this.mediaType(it, g);
-    const ask = (k: RowAct) => {
-      this.closeMenu();
-      if (k === 'next' || k === 'add') { this.play(it, g, k); return; }
-      if (k === 'remove') { void this.removeRow(it, g); return; }
-      // radio stations: Play Now replaces the queue right away (no confirm, no next/add)
-      if ((type === 'radio' || isRadio(it)) && k === 'replace') { this.play(it, g, 'replace'); return; }
-      this._confirm = { kind: k, item: it, run: () => this.play(it, g, 'replace', k === 'radio') };
-    };
-    if (a === 'more') this.showMenu(it, g, el.closest('.row') as HTMLElement, foldedActions(searchRadio(type, it), ask));
-    else ask(a);
-  }
   /** 0.7.10: press-and-hold on a result row (not its buttons) opens the menu 5 pop-up: Open, Add to queue, Play next, Play now, Start radio. */
   private rowMenu(it: MaItem, g: GroupKey, el: HTMLElement) {
     if (g === 'genres') { this.tap(it, g); return; }
@@ -666,7 +652,7 @@ export class JbSearch extends LitElement {
     return artistNames(it);
   }
 
-  /** One result row: art, title, subtitle (provider badge + artist / type), duration, and the row icons. */
+  /** One result row: art, title, subtitle (provider badge + artist / type), duration. */
   private row(it: MaItem, g: GroupKey) {
     const type = this.mediaType(it, g);
     const drill = drillable(type, this.config);
@@ -681,7 +667,7 @@ export class JbSearch extends LitElement {
         <small>${provTpl(it.uri, it.provider, it.media_type)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, g)}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
       ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, g)) : nothing}
-      ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : rowActsTpl(it, searchRadio(type, it), (a, el) => this.rowAct(it, g, a, el), SEARCH_ACTS, true, isRadio(it))}
+      ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : nothing}
     </div>`;
   }
 

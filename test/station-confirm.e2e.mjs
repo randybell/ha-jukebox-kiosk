@@ -47,7 +47,8 @@ async function searchStation(q) {
   const row = `${SV}.shadowRoot.querySelector('.row[data-uri="${uri}"]')`;
   await ev(p, `${row}.scrollIntoView({ block: 'center' })`); await sleep(80);
   await clearPlays(p);
-  const play = () => tap(p, `${row}.querySelector('[data-act=replace]')`).then(() => sleep(300));
+  // the row has no Play button (#85): a tap opens the station sheet, whose Play is the same action
+  const play = async () => { if (!(await ev(p, `!!${ST}.shadowRoot.querySelector('[data-action=play]')?.getBoundingClientRect().width`))) await tap(p, `${row}.querySelector('.rt')`); await wait(p, `!!${ST}.shadowRoot.querySelector('[data-action=play]')`); await tap(p, `${ST}.shadowRoot.querySelector('[data-action=play]')`); await sleep(300); };
   return { p, uri, play };
 }
 {
@@ -111,7 +112,8 @@ async function searchStation(q) {
   await ev(p, `${SV}.setQuery('mockingbird')`);
   await wait(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].some((r) => r.dataset.group === 'tracks')`); await sleep(150);
   await clearPlays(p);
-  await tap(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].find((r) => r.dataset.group === 'tracks').querySelector('[data-act=replace]')`); await sleep(300);
+  await tap(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].find((r) => r.dataset.group === 'tracks').querySelector('.rt')`); await sleep(300); // a tap opens the song's pop-up
+  await tap(p, `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot.querySelector('.it[data-action=replace]')`); await sleep(300);
   check('SC11 songs are unchanged: no station confirm', !(await dlg(p)), J(await dlg(p)));
   await p.close();
 }

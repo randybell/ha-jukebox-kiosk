@@ -353,59 +353,14 @@ const RA: Record<RowAct, { icon: string; title: string; label: (n: string) => st
   replace: { icon: 'play', title: QUEUE_ACTION_LABELS.replace, label: (n) => `Play ${n} now` },
   radio: { icon: 'tower', title: 'Start radio', label: (n) => `Start radio from ${n}` },
 };
-/** Every queueing surface uses the same three visible labels, in this order.
- *  Radio stations: only Play Now (replace). No Play Next, add-to-queue, Remove, or Start radio. */
-/** 0.7.9 #35b: `mix` (search rows): Start radio is a fourth labeled button in More's slot, and there is no More. */
-/* 0.7.10 hold-to-fire for row buttons: one pointer at a time. A quick tap does nothing; HOLD_MS of holding fires; moving > 10 px, leaving the
- * button or scrolling cancels. While holding, the button shows a fill and its whole row is highlighted. Enter/Space (a click with detail 0) still fires. */
-let hb: { el: HTMLElement; row: HTMLElement | null; x: number; y: number; timer: number; off: () => void } | undefined;
-function holdEnd() { if (!hb) return; window.clearTimeout(hb.timer); hb.el.classList.remove('hp'); hb.row?.classList.remove('held', 'hp'); hb.off(); hb = undefined; }
-function holdStart(e: PointerEvent, fire: (el: HTMLElement) => void) {
-  e.preventDefault(); e.stopPropagation();
-  if (e.pointerType === 'mouse' && e.button !== 0) return;
-  holdEnd();
-  const el = e.currentTarget as HTMLElement, row = el.closest('.row') as HTMLElement | null;
-  // cancel only when a scroller under the button really moved (a late, no-op scroll event is ignored)
-  const sc: [Element, number, number][] = [];
-  for (let a: Element | null = el.parentElement; a; a = a.parentElement || ((a.getRootNode() as ShadowRoot).host ?? null)) if (a.scrollHeight > a.clientHeight || a.scrollWidth > a.clientWidth) sc.push([a, a.scrollTop, a.scrollLeft]);
-  const onScroll = () => { if (sc.some(([a, t, l]) => Math.abs(a.scrollTop - t) > 2 || Math.abs(a.scrollLeft - l) > 2)) holdEnd(); };
-  window.addEventListener('scroll', onScroll, true);
-  const timer = window.setTimeout(() => { const t = hb; holdEnd(); if (t) { swallowNextClick(); fire(t.el); } }, HOLD_MS);
-  hb = { el, row, x: e.clientX, y: e.clientY, timer, off: () => window.removeEventListener('scroll', onScroll, true) };
-  el.classList.add('hp'); row?.classList.add('held', 'hp');
-}
-const holdMove = (e: PointerEvent) => { if (hb && Math.hypot(e.clientX - hb.x, e.clientY - hb.y) > 10) holdEnd(); };
-const holdStop = (e: PointerEvent) => { e.stopPropagation(); holdEnd(); };
-export function rowActsTpl(it: MaItem, seedRadio: boolean, run: (a: RowAct | 'more', el: HTMLElement) => void, queueActs: readonly RowAct[] = QUEUE_ACTIONS, mix = false, hold = false) {
-  const station = isRadio(it);
-  const acts: RowAct[] = station ? ['replace'] : [...queueActs, ...(seedRadio ? ['radio' as const] : [])];
-  // 0.7.9 #35: a live station's only action reads "Play" (it replaces the queue, behind the #37 confirm)
-  const title = (a: RowAct) => (station ? 'Play' : RA[a].title), aria = (a: RowAct) => (station ? `Play ${it.name}` : RA[a].label(it.name));
-  const b = (a: RowAct) => hold
-    ? html`<button class="ra-b hold" data-act=${a} tabindex="-1" title=${title(a)} aria-label=${aria(a)}
-      @pointerdown=${(e: PointerEvent) => holdStart(e, (el) => run(a, el))} @pointermove=${holdMove} @pointerup=${holdStop} @pointercancel=${holdStop} @pointerleave=${holdStop}
-      @contextmenu=${(e: Event) => e.preventDefault()}
-      @click=${(e: MouseEvent) => { e.stopPropagation(); if (e.detail === 0) run(a, e.currentTarget as HTMLElement); }}>${icon(RA[a].icon)}<span>${title(a)}</span></button>`
-    : html`<button class="ra-b ${a === 'radio' && !mix ? 'x2' : ''}" data-act=${a} tabindex="-1" title=${title(a)}
-    aria-label=${aria(a)} @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(a, e.currentTarget as HTMLElement); }}>${icon(RA[a].icon)}<span>${title(a)}</span></button>`;
-  return html`<div class="ra" data-n=${acts.length}>${acts.map(b)}${!station && seedRadio && !mix ? html`<button class="ra-b ra-more" data-act="more" tabindex="-1" title="More"
-    aria-label="More actions for ${it.name}" @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run('more', e.currentTarget as HTMLElement); }}>${icon('more')}<span>More</span></button>` : nothing}</div>`;
-}
 /** One labeled queue button for the Queue tab's exact queue-row handlers. */
 export function queueActTpl(a: (typeof QUEUE_ACTIONS)[number], name: string, action: string, run: () => void, dis = false) {
   return html`<button class="ra-b" data-act=${a} data-action=${action} tabindex="-1" title=${RA[a].title} aria-label=${RA[a].label(name)} ?disabled=${dis}
     @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(); }}>${icon(RA[a].icon)}<span>${RA[a].title}</span></button>`;
 }
-/** 0.7.9 #35: search results (0.7.10: also the artist page's Albums rows; each screen keeps its own Start radio rule): Add to queue, Play next, Play now (+ Start radio); no Remove. Stations: Play only. */
-export const SEARCH_ACTS = ['add', 'next', 'replace'] as const;
 /** Start radio (MA 2.10: a seed for its radio / endless mix): tracks, artists, albums and playlists. Not podcasts,
  *  episodes or audiobooks (MA seeds radio from songs only), not stations. */
 export const searchRadio = (type: string, it: MaItem) => canRadio(type, it) || (type === 'playlist' && !isRadio(it));
-/** Very narrow rows keep Start radio in an overflow sheet, not the queue labels. */
-export function foldedActions(radio: boolean, ask: (a: RowAct) => void): MenuAction[] {
-  return [...(radio ? [{ id: 'radio', icon: 'tower', label: 'Start radio…', run: () => ask('radio') }] : [])];
-}
-
 /* ---------------- confirmation before anything that clears the shared queue ---------------- */
 export type ConfirmKind = 'replace' | 'radio' | 'play' | 'shuffle' | 'jump' | 'station';
 export interface ConfirmState { kind: ConfirmKind; item: MaItem; run: () => void }
@@ -488,20 +443,14 @@ export const mediaStyles = css`
   .du:empty { display: none; }
   .rt small .du2 { display: none; flex: none; font-variant-numeric: tabular-nums; }
   .ra { display: flex; flex: none; }
-  /* 0.7.14 (#80): show_action_icons: false sets --_ra-display: none on the card; the row buttons (not the genre arrow .ra.go) go and free the space */
-  .row .ra:not(.go), .qr .ra { display: var(--_ra-display, flex); }
+  /* Queue rows keep their buttons hidden, as they have been by default since 0.7.20; only a style on the card (--_ra-display) shows them */
+  .qr .ra { display: var(--_ra-display, none); }
   .ra-b { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; color: var(--_fg); }
   .ra-b:active { background: var(--_chip-sel); }
-  /* 0.7.10 hold progress: a fill that grows over HOLD_MS on the held button (and on a row / tile held for its pop-up) */
-  .ra-b.hold { touch-action: pan-y; -webkit-touch-callout: none; }
-  .ra-b.hold:active { background: none; }
-  .ra-b.hp { box-shadow: inset 0 0 0 2px var(--_active); background: radial-gradient(circle, var(--_chip-sel) 0 70%, transparent 71%) center / 0% 0% no-repeat;
-    animation: jb-hold-b ${HOLD_MS}ms linear forwards; }
+  /* hold progress: a fill that grows over HOLD_MS on a row / tile held for its pop-up */
   .row.hp, .tile.hp { background-image: linear-gradient(var(--_chip-sel), var(--_chip-sel)); background-repeat: no-repeat; background-size: 0% 100%; animation: jb-hold-r ${HOLD_MS}ms linear forwards; }
-  @keyframes jb-hold-b { to { background-size: 150% 150%; } }
   @keyframes jb-hold-r { to { background-size: 100% 100%; } }
   .ra-b .i { width: 24px; height: 24px; }
-  .ra-more { display: none; }
   /* hearts (0.6.2 radio, v0.7 every row): one more column */
   .ra-b.fav { flex: none; color: var(--_inactive); }
   .ra-b.fav.on { color: var(--_active); }
@@ -526,10 +475,6 @@ export const mediaStyles = css`
     .row.hasfav { grid-template-rows: auto auto auto; }
     .row.hasfav .ra { grid-column: 1 / -1; grid-row: 3; }
     .row .fav { display: none; }
-  }
-  @container rows (max-width: 720px) {
-    .ra-b.x2 { display: none; }
-    .ra-more { display: grid; }
   }
   .confirm { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 24px)); padding: 18px;
     border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); max-height: min(100%, var(--_popup-max-h)); display: flex; flex-direction: column; gap: 12px; overflow: auto; }

@@ -87,7 +87,7 @@ for (const [name, sel] of [['ARTIST-PAGE', 'artist'], ['ALBUM-PAGE', 'album'], [
     const p = await newPage(`&tab=browse&cfg=${encodeURIComponent(J({ library_categories: ['playlist', 'artist', 'album', 'track'] }))}`);
     const qb = await center(p, `${SV}.querySelector('.qbar')`); await p.touchscreen.tap(qb.x, qb.y); await sleep(300);
     await typeOnScreen(p, `${SV}.querySelector('jb-keyboard')`, 'EAGLES');
-    await wait(p, `${SV}.querySelector('.row .ra-b[data-act="add"]')`);
+    await wait(p, `${SV}.querySelector('.row')`);
     if (sel !== 'playlist') {
       await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => /^\\s*${sel}s\\s*$/i.test(x.textContent))?.click()`); await sleep(600);
     }

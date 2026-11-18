@@ -1,8 +1,8 @@
 // 0.7.20: card options library_view (rows | tiles, default rows) and library_columns (2..6, default 3, tiles only) for the TOP level of every Library section
-// (Playlists, Artists, Tracks, Genres, Radio, Albums, Podcasts, Audiobooks), no circles at the top tier, track tiles with no action buttons, and
-// show_action_icons now off by default (YAML true still shows the buttons). Pages you open (artist / album / playlist) stay rows (their own
-// layout, not library_view); their track-row buttons now follow show_action_icons (hidden by default). Library search results, the Queue and
-// the Library home tiles are not changed. Genres only exist in the separate-tabs layout (the combined tab has no Genres button).
+// (Playlists, Artists, Tracks, Genres, Radio, Albums, Podcasts, Audiobooks), no circles at the top tier, track tiles with no action buttons.
+// #85: song-row action buttons and show_action_icons are gone; an old YAML value is ignored and the rows stay without buttons. Pages you open
+// (artist / album / playlist) stay rows (their own layout, not library_view). Library search results also have no row buttons. The Queue stays
+// hidden by default. Genres only exist in the separate-tabs layout (the combined tab has no Genres button).
 // 1024x600, touch tap / hold / swipe, mouse click / press-and-hold, physical Esc. Usage: node test/library-view.e2e.mjs (own dev server). SHOTS=<dir> also writes screenshots.
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -163,7 +163,7 @@ for (const cat of ['podcast', 'audiobook']) for (const kind of ['touch', 'mouse'
 }
 
 // ============ 5. track tile: no action buttons, ever; heart/badge only ============
-for (const [tag, cfg] of [['default', {}], ['show_action_icons: true', { show_action_icons: true }]]) {
+for (const [tag, cfg] of [['default', {}], ['old show_action_icons: true', { show_action_icons: true }]]) {
   const s = await open({ library_view: 'tiles', ...cfg }); await section(s, 'track');
   const b = await ev(s.p, `(() => { const r = ${s.BR}; return { tiles: r.querySelectorAll('.tile[data-type="track"]').length, buttons: r.querySelectorAll('.tile .ra, .tile .ra-b, .tile button:not(.tfav):not(.open)').length }; })()`);
   check(`track tiles (${tag}): no action buttons on any tile`, b.tiles > 0 && b.buttons === 0, J(b));
@@ -183,15 +183,15 @@ for (const view of ['rows', 'tiles']) {
   await s.p.close();
 }
 
-// ============ 7. drill-down pages, Library search, library_home: layout unchanged; track-row buttons follow show_action_icons (default off) ============
+// ============ 7. drill-down pages, Library search, library_home: layout unchanged; track-row buttons stay gone ============
 for (const view of ['rows', 'tiles']) {
-  // artist page: same header (circle art there is the page's own, unchanged); track-row buttons hidden by default
+  // artist page: same header (circle art there is the page's own, unchanged); track-row buttons gone
   const s = await open({ library_view: view }); await section(s, 'artist');
   const c = await center(s.p, targetOf(s, 'artist', view)); await tapAt(s.p, 'mouse', c); await wait(s.p, `${s.BR}.querySelector('jb-detail')?.shadowRoot?.querySelector('.dart')`); await sleep(600);
   const d = await ev(s.p, `(() => { const r = ${s.BR}.querySelector('jb-detail').shadowRoot; const a = r.querySelector('.dart');
     return { dartCirc: a?.classList.contains('circ'), rows: r.querySelectorAll('.row').length, tiles: r.querySelectorAll('.tile').length, libs: r.querySelectorAll('.lib').length,
       trackBtns: [...r.querySelectorAll('.row[data-type="track"] .ra-b')].filter((b) => b.getBoundingClientRect().width > 0).length }; })()`);
-  check(`${view}: artist page unchanged (its own circle art kept, rows, no Library layout classes, track-row buttons hidden by default: ${d.trackBtns})`, d.dartCirc === true && d.rows > 0 && d.libs === 0 && d.trackBtns === 0, J(d));
+  check(`${view}: artist page unchanged (its own circle art kept, rows, no Library layout classes, track-row buttons gone: ${d.trackBtns})`, d.dartCirc === true && d.rows > 0 && d.libs === 0 && d.trackBtns === 0, J(d));
   await shot(s.p, `artist-page-from-${view}`);
   await s.p.close();
   // album page
@@ -199,14 +199,14 @@ for (const view of ['rows', 'tiles']) {
   const c2 = await center(a.p, targetOf(a, 'album', view)); await tapAt(a.p, 'mouse', c2); await wait(a.p, `${a.BR}.querySelector('jb-detail')?.shadowRoot?.querySelector('.row[data-type="track"]')`); await sleep(500);
   const d2 = await ev(a.p, `(() => { const r = ${a.BR}.querySelector('jb-detail').shadowRoot; return { rows: r.querySelectorAll('.row[data-type="track"]').length, libs: r.querySelectorAll('.lib').length,
     btns: [...r.querySelectorAll('.row[data-type="track"] .ra-b')].filter((b) => b.getBoundingClientRect().width > 0).length }; })()`);
-  check(`${view}: album page unchanged (track rows, no Library layout classes, buttons hidden by default: ${d2.btns})`, d2.rows > 0 && d2.libs === 0 && d2.btns === 0, J(d2));
+  check(`${view}: album page unchanged (track rows, no Library layout classes, buttons gone: ${d2.btns})`, d2.rows > 0 && d2.libs === 0 && d2.btns === 0, J(d2));
   await a.p.close();
   // playlist page
   const l = await open({ library_view: view }); await section(l, 'playlist');
   const c3 = await center(l.p, targetOf(l, 'playlist', view)); await tapAt(l.p, 'mouse', c3); await wait(l.p, `${l.BR}.querySelector('jb-detail')?.shadowRoot?.querySelector('.row[data-type="track"]')`); await sleep(500);
   const d3 = await ev(l.p, `(() => { const r = ${l.BR}.querySelector('jb-detail').shadowRoot; return { rows: r.querySelectorAll('.row[data-type="track"]').length, libs: r.querySelectorAll('.lib').length,
     btns: [...r.querySelectorAll('.row[data-type="track"] .ra-b')].filter((b) => b.getBoundingClientRect().width > 0).length }; })()`);
-  check(`${view}: playlist page unchanged (track rows, no Library layout classes, buttons hidden by default: ${d3.btns})`, d3.rows > 0 && d3.libs === 0 && d3.btns === 0, J(d3));
+  check(`${view}: playlist page unchanged (track rows, no Library layout classes, buttons gone: ${d3.btns})`, d3.rows > 0 && d3.libs === 0 && d3.btns === 0, J(d3));
   await l.p.close();
   // Library search results: rows, artists keep their circle, no Library layout classes
   const q = await open({ library_view: view });
@@ -229,25 +229,25 @@ for (const view of ['rows', 'tiles']) {
   check(`Library home tiles are the same with rows and tiles (${sigs[0]})`, sigs[0] === sigs[1] && JSON.parse(sigs[0]).length >= 4, J(sigs));
 }
 
-// ============ 8. show_action_icons: default off; YAML true shows the buttons ============
-const BTN = `(r) => [...r.querySelectorAll('.ra-b')].filter((b) => { const x = b.getBoundingClientRect(); return x.width > 0 && x.height > 0 && getComputedStyle(b).visibility !== 'hidden'; }).length`;
-for (const [tag, cfg, want] of [['missing (default off)', {}, false], ['false', { show_action_icons: false }, false], ['true (YAML)', { show_action_icons: true }, true]]) {
+// ============ 8. show_action_icons is gone: rows never show the old buttons, even when an old config still sets it ============
+const BTN = `(r) => [...r.querySelectorAll('.ra-b')].filter((b) => { const x = b.getBoundingClientRect(); return x.width > 0 && x.height > 0 && getComputedStyle(b).visibility !== 'hidden' && getComputedStyle(b).display !== 'none'; }).length`;
+for (const [tag, cfg] of [['missing', {}], ['false', { show_action_icons: false }], ['old true (YAML)', { show_action_icons: true }]]) {
   const s = await open({ library_view: 'rows', ...cfg }); await section(s, 'track');
   const n = await ev(s.p, `(${BTN})(${s.BR})`);
-  check(`show_action_icons ${tag}: Library Tracks rows ${want ? 'show' : 'have no'} action buttons (${n})`, want ? n > 0 : n === 0, String(n));
+  check(`show_action_icons ${tag}: Library Tracks rows have no action buttons (${n})`, n === 0, String(n));
   await s.p.close();
   const q = await browser.newPage(); await hermetic(q); await q.setViewport({ width: 1024, height: 600, hasTouch: true });
   await q.goto(`${BASE}?fresh=1&latency=20&legacy=0&kiosk=1&tab=queue&qbuf=0&admin=1&cfg=${encodeURIComponent(J(cfg))}`); await q.waitForFunction('window.__ready === true'); await sleep(900);
   await wait(q, `__card.shadowRoot.querySelector('jb-queue').shadowRoot.querySelectorAll('.qr').length > 4`);
   const nq = await ev(q, `(${BTN})(__card.shadowRoot.querySelector('jb-queue').shadowRoot)`);
-  check(`show_action_icons ${tag}: Queue rows ${want ? 'show' : 'have no'} action buttons (${nq})`, want ? nq > 0 : nq === 0, String(nq));
+  check(`show_action_icons ${tag}: Queue rows stay hidden (${nq})`, nq === 0, String(nq));
   await q.close();
 }
 {
-  // the card accepts true / false / missing, and still refuses a non-boolean
+  // the card accepts true / false / missing / a junk value (the old key is ignored)
   const p = await browser.newPage(); await hermetic(p); await p.goto(`${BASE}?fresh=1`); await p.waitForFunction('window.__ready === true'); await sleep(500);
   const r = await ev(p, `(() => { const out = {}; for (const v of [false, true, undefined, 'no']) { try { const el = document.createElement('jukebox-card'); el.setConfig({ type: 'custom:jukebox-card', entity: 'media_player.everywhere', ...(v === undefined ? {} : { show_action_icons: v }) }); out[String(v)] = 'ok'; } catch (e) { out[String(v)] = e.message; } } return out; })()`);
-  check('card still accepts true, false and missing show_action_icons and refuses "no"', r.true === 'ok' && r.false === 'ok' && r.undefined === 'ok' && /show_action_icons must be true or false/.test(r.no), J(r));
+  check('card accepts true, false, missing and a junk show_action_icons without errors', r.true === 'ok' && r.false === 'ok' && r.undefined === 'ok' && r.no === 'ok', J(r));
   // library_view / library_columns never stop the card from loading, whatever is typed
   const r2 = await ev(p, `(() => { const out = {}; for (const [k, v] of [['library_view', 'tiles'], ['library_view', 'rows'], ['library_view', 'grid'], ['library_view', 5], ['library_columns', 4], ['library_columns', 99], ['library_columns', 'abc'], ['library_columns', null]]) { try { const el = document.createElement('jukebox-card'); el.setConfig({ type: 'custom:jukebox-card', entity: 'media_player.everywhere', [k]: v }); out[k + '=' + v] = 'ok'; } catch (e) { out[k + '=' + v] = e.message; } } return out; })()`);
   check('library_view / library_columns: odd values never stop the card loading', Object.values(r2).every((x) => x === 'ok'), J(r2));

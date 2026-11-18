@@ -6,8 +6,8 @@ import { providerLabel } from './providers';
 import { parseSearchProviders } from './search-sources';
 import { pageAll } from './page-all';
 import {
-  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, swallowNextClick, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl,
-  playMedia, playMessage, normItem, drillable, canRadio, isRadio, hideStartRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, swallowNextClick, menuPos, menuTpl, mediaActions, tapActions,
+  playMedia, playMessage, normItem, drillable, canRadio, isRadio, hideStartRadio, confirmTpl, type MenuAction, type MenuPos, type ConfirmState,
   maCall,
 } from './shared';
 import './detail-view';
@@ -786,17 +786,6 @@ export class JbBrowse extends LitElement {
   private row(it: MaItem, n?: number) {
     const p = this.press.handlers(it.uri, { it, type: 'track' });
     const fav = !!heartType(this.config, 'track', it);
-    const act = (a: RowAct | 'more', el: HTMLElement) => {
-      const ask = (k: RowAct) => {
-        this._menu = null;
-        if (k === 'next' || k === 'add') { void this.play(it, 'track', k); return; }
-        if (k === 'remove') { void this.removeRow(it, 'track'); return; }
-        this._confirm = { kind: k, item: it, run: () => this.play(it, 'track', 'replace', k === 'radio') };
-      };
-      if (a !== 'more') { ask(a); return; }
-      // 0.7.13 (issue #78): More opens the same pop-up as a hold on this row, not the old small menu
-      this.openMenu(it, 'track', el.closest('.row') as HTMLElement);
-    };
     return html`<div class="row ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type="track"
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
@@ -804,7 +793,6 @@ export class JbBrowse extends LitElement {
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b><small>${this.sub(it, 'track')}</small></div>
       ${provTpl(it.uri, it.provider)}<span class="du">${fmtDur(it.duration)}</span>
       ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, 'track'), 'mo fav') : nothing}
-      ${rowActsTpl(it, canRadio('track', it), act)}
     </div>`;
   }
 
@@ -1014,7 +1002,6 @@ export class JbBrowse extends LitElement {
     .tw .tfav .i { width: 20px; height: 20px; }
     .mo.fav.on { color: var(--_active); }
     .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto auto; }
-    .row .ra { flex: none; } .row .ra-b { flex-shrink: 0; }
     .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
     .tile.artist b { text-align: center; }
     /* 0.7.20 Library tiles: library_columns fixed columns (2 to 6) instead of as many 150px ones as fit */

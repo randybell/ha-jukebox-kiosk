@@ -1,8 +1,6 @@
-// 0.7.14 (#80) added the card editor's "Show Action Icons" switch. 0.7.20 (Randy: "disable action buttons ... hide the option in the config"):
-// the option stays in YAML (show_action_icons, default OFF, true shows the row buttons) but the SWITCH IS GONE from the card setup screen.
-// Checks: no field/label for it anywhere in the editor; the other Display toggles are untouched and still in order; a YAML show_action_icons: true
-// (or false) survives any edit made in the editor; the card still refuses a non-boolean value.
-// Usage: node test/editor-action-icons.e2e.mjs (starts its own dev server). SHOTS=<dir> also writes a screenshot.
+// (#85) The song-row action buttons and the card option show_action_icons are gone. The card editor must not show anything for it,
+// and a card whose YAML still has it (true or false) must not get it written back when the editor saves. A junk value is ignored.
+// Usage: node test/editor-no-action-icons.e2e.mjs (starts its own dev server).
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
 import { devRoot } from './serve.mjs';
@@ -35,19 +33,17 @@ for (const [tag, cfg] of [['missing', base], ['true in YAML', { ...base, show_ac
   await ev(p, `__changes.length = 0`);
   await ev(p, `(() => { const i = ${F}.querySelector('[data-name=screensaver_lyrics] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
   const last = (await ev(p, `__changes`)).at(-1) ?? {};
-  const had = 'show_action_icons' in cfg;
-  check(`show_action_icons ${tag}: an editor edit keeps it as YAML had it (${had ? cfg.show_action_icons : 'absent'}) and adds nothing else`,
-    (had ? last.show_action_icons === cfg.show_action_icons : !('show_action_icons' in last)) && last.screensaver_lyrics === false && !('coerce_repeat_one' in last), J(last));
+  check(`show_action_icons ${tag}: an editor edit does not save it back`,
+    !('show_action_icons' in last) && last.screensaver_lyrics === false && !('coerce_repeat_one' in last), J(last));
   if (tag === 'missing' && process.env.SHOTS) await p.screenshot({ path: `${process.env.SHOTS}/0720-editor-display.png` });
   await p.close();
 }
 {
-  // the card itself: a non-boolean value is still refused like the other on/off options
   const p = await browser.newPage(); await hermetic(p); await p.goto(`${ROOT}index.html?fresh=1`); await p.waitForFunction('window.__ready === true'); await sleep(500);
   const r = await ev(p, `(() => { const out = {}; for (const v of [false, true, undefined, 'no', 0]) { try { const el = document.createElement('jukebox-card'); el.setConfig({ type: 'custom:jukebox-card', entity: 'media_player.everywhere', ...(v === undefined ? {} : { show_action_icons: v }) }); out[String(v)] = 'ok'; } catch (e) { out[String(v)] = e.message; } } return out; })()`);
-  check('card accepts true, false and missing; refuses "no" and 0', r.true === 'ok' && r.false === 'ok' && r.undefined === 'ok' && /show_action_icons must be true or false/.test(r.no) && /show_action_icons must be true or false/.test(r['0']), J(r));
+  check('card accepts true, false, missing and junk show_action_icons without errors', r.true === 'ok' && r.false === 'ok' && r.undefined === 'ok' && r.no === 'ok' && r['0'] === 'ok', J(r));
   await p.close();
 }
 await browser.close();
-console.log(`\n${total - failures}/${total} editor-action-icons checks passed`);
+console.log(`\n${total - failures}/${total} editor no-action-icons checks passed`);
 process.exit(failures ? 1 : 0);

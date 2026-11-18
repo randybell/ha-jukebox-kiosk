@@ -31,7 +31,8 @@ try {
     await p.goto(`${BASE}?fresh=1&latency=20&kiosk=1&tab=browse`); await p.waitForFunction('window.__ready === true');
     await p.evaluate(() => __card.shadowRoot.querySelector('jb-search').setQuery('MO'));
     await p.waitForFunction(() => __card.shadowRoot.querySelector('jb-search').shadowRoot.querySelectorAll('.grp .row').length > 0);
-    const search = await labelGeometry(p, 'jb-search'); check(`${tag} Search labels single-line and contained in rows`, search.ok, search);
+    const search = await p.evaluate(() => { const r = __card.shadowRoot.querySelector('jb-search').shadowRoot; return { rows: r.querySelectorAll('.grp .row').length, buttons: r.querySelectorAll('.grp .row .ra-b').length }; });
+    check(`${tag} Search rows carry no play or queue buttons`, search.rows > 0 && search.buttons === 0, search);
     await p.evaluate(() => __card.shadowRoot.querySelector('[data-tab=queue]').click());
     await p.waitForFunction(() => __card.shadowRoot.querySelector('jb-queue').shadowRoot.querySelectorAll('.qr.next').length > 3);
     const queue = await labelGeometry(p, 'jb-queue', true); check(`${tag} Queue labels >=14px, touch-sized, single-line and contained`, queue.ok, queue);

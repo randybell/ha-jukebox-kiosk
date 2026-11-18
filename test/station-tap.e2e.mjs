@@ -72,7 +72,7 @@ for (const [tag, idle] of [['[queue has songs]', ''], ['[queue empty]', '&idle=1
     }
     await p.close();
   }
-  // ---- Search: station row and its Play button ----
+  // ---- Search: station row (no Play button on the row any more) ----
   {
     const p = await open(`&layout=separate&kiosk=1&tab=search&radio=1&stations=fake${idle}`);
     const SV = `__card.shadowRoot.querySelector('jb-search')`;
@@ -80,7 +80,7 @@ for (const [tag, idle] of [['[queue has songs]', ''], ['[queue empty]', '&idle=1
     await p.waitForFunction((s) => [...eval(s).shadowRoot.querySelectorAll('.row')].some((r) => r.dataset.group === 'radio'), {}, SV); await sleep(200);
     const row = `[...${SV}.shadowRoot.querySelectorAll('.row')].find((r) => r.dataset.group === 'radio')`;
     await quick(p, tag, 'Search station row', `${row}.querySelector('.rt')`, true);
-    await quick(p, tag, 'Search station row Play button', `${row}.querySelector('[data-act="replace"]')`, false);
+    check(`${tag} Search station row has no Play button (#85)`, (await ev(p, `${row}.querySelectorAll('.ra-b:not(.fav)').length`)) === 0);
     await p.close();
   }
   // 0.7.11: the genre page (and its station rows) was removed; its checks went with it

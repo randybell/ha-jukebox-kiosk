@@ -173,7 +173,12 @@ const confirmOf = () => page.evaluate((r) => { const c = eval(r).querySelector('
 // bring a result into view (the results list scrolls under the black footer) before a real pointer tap
 async function see(expr) { await page.evaluate((e) => eval(e)?.scrollIntoView({ block: 'center' }), expr); await sleep(120); }
 async function clickEl0(expr) { await see(expr); const r = await rectOf(page, expr); if (!r || !r.w) throw new Error('not visible: ' + expr); if (r.hold) await holdAt(page, r); else await page.mouse.click(r.x, r.y); await sleep(150); }
-const rowIcon = (row, act) => `${row}.querySelector('.ra-b[data-act="${act}"]')`;
+// #85: rows have no inline buttons; a press-and-hold on a row opens its pop-up, and `act` is that pop-up's action
+async function sheetAct(row, act) {
+  await see(row); const r0 = await rectOf(page, `${row}.querySelector('.rt')`);
+  await holdAt(page, r0); await sleep(250);
+  await clickEl0(`${HSX}.querySelector('.it[data-action="${act}"]')`);
+}
 // layout: every result group is a list of rows; 4 distinct icons, 48 px targets, rows ≥ 56 px
 const lay = await page.evaluate((r) => {
   const root = eval(r);
@@ -187,14 +192,8 @@ const lay = await page.evaluate((r) => {
   };
 }, SVR);
 check('4a every result group renders as a list of rows (no tiles)', lay.tiles === 0 && lay.groups.length >= 3 && lay.groups.every(([, n]) => n > 0), JSON.stringify(lay.groups));
-// 0.7.9 #35: search results: Add to queue, Play Next, Play Now (+ Start radio), no Remove
-check('4b track row: visible Add to queue / Play Next / Play Now labels in fixed order, no Remove; Start radio stays labeled inline or in More; rows ≥ 56 px',
-  lay.icons.filter((i) => ['add', 'next', 'replace', 'remove'].includes(i.act)).map((i) => i.act).join() === 'add,next,replace' && lay.icons.filter((i) => ['add', 'next', 'replace'].includes(i.act)).map((i) => i.title).join() === 'Add to queue,Play Next,Play Now' && lay.icons.every((i) => i.h >= 44 && i.label && i.title) && lay.minRow >= 56,
-  `minRow=${lay.minRow} ` + lay.icons.map((i) => `${i.act}:${i.w}x${i.h} "${i.label}"`).join(' | '));
-check('4b2 visible queue action wording is identical, not icon-only', await page.evaluate((r) => {
-  const labels = [...eval(r).querySelectorAll('.grp.tracks .row')].map((row) => [...row.querySelectorAll('.ra-b[data-act]')].filter((b) => b.getBoundingClientRect().width).map((b) => b.querySelector('span')?.textContent));
-  return labels.length > 0 && labels.every((x) => x.slice(0, 3).join() === 'Add to queue,Play Next,Play Now');
-}, SVR));
+// #85: search rows carry no inline play or queue buttons; rows are still ≥ 56 px
+check('4b track row: no inline play or queue buttons; rows ≥ 56 px', lay.icons.length === 0 && lay.minRow >= 56, `minRow=${lay.minRow} buttons=${lay.icons.length}`);
 // row tap on a track: 0.7.13 (issue 78) it opens the same pop-up as a hold (it used to only highlight the row); nothing plays, no old menu
 await see(firstRow);
 let r = await rectOf(page, `${firstRow}.querySelector('.rt')`);
@@ -210,10 +209,10 @@ s = await state(page);
 const sh4 = await page.evaluate((h) => !!eval(h).querySelector('.sh'), HSX);
 check('4d long-press on a row does not play; (0.7.10) it opens the large row sheet', s.playCalls.length === 0 && sh4, `sheet=${sh4}`);
 await page.keyboard.press('Escape'); await sleep(120);
-await clickEl0(rowIcon(firstRow, 'add'));
+await sheetAct(firstRow, 'add');
 s = await state(page);
 check('4e Add to queue adds at the end (enqueue add) right away; there is no Remove in search results', s.playCalls.length === 1 && s.playCalls[0].data.enqueue === 'add' && !(await page.evaluate((e) => !!eval(e).querySelector('.ra-b[data-act="remove"]'), firstRow)), JSON.stringify(s.playCalls.map((c) => c.data)));
-await clickEl0(rowIcon(firstRow, 'replace'));
+await sheetAct(firstRow, 'replace');
 let cf = await confirmOf();
 s = await state(page);
 check('4f Replace queue opens a confirmation and sends nothing yet', cf?.kind === 'replace' && cf.role === 'alertdialog' && /Replace the current queue\?/.test(cf.text) && /clears what's playing for everyone/.test(cf.text) && s.playCalls.length === 1, JSON.stringify(cf));
@@ -221,20 +220,20 @@ await page.screenshot({ path: SHOTS + 'v032/replace-confirm-1280x800.png' });
 await clickEl0(`${SVR}.querySelector('.confirm [data-action="cancel"]')`);
 s = await state(page);
 check('4g Cancel closes the confirmation and sends nothing', !(await confirmOf()) && s.playCalls.length === 1, `plays=${s.playCalls.length}`);
-await clickEl0(rowIcon(firstRow, 'replace'));
+await sheetAct(firstRow, 'replace');
 await clickEl0(`${SVR}.querySelector('.confirm [data-action="confirm"]')`);
 s = await state(page);
 check('4h Replace → confirm sends enqueue replace', s.playCalls.length === 2 && s.playCalls[1].data.enqueue === 'replace' && !s.playCalls[1].data.radio_mode, JSON.stringify(s.playCalls[1]?.data));
-await clickEl0(rowIcon(firstRow, 'radio')); // 0.7.9 #35b: Start radio is a visible button on search rows (no More)
+await sheetAct(firstRow, 'radio');
 cf = await confirmOf();
 const beforeRadio = (await state(page)).playCalls.length;
 check('4i Start radio opens a radio-worded confirmation, nothing sent yet', cf?.kind === 'radio' && /Start radio from/.test(cf.text) && /replaces the current queue for everyone/.test(cf.text) && beforeRadio === 2, JSON.stringify(cf));
 await clickEl0(`${SVR}.querySelector('.confirm [data-action="cancel"]')`);
 check('4j Start radio → Cancel sends nothing', (await state(page)).playCalls.length === 2);
-await clickEl0(rowIcon(firstRow, 'radio')); // 0.7.9 #35b: Start radio is a visible button on search rows (no More)
+await sheetAct(firstRow, 'radio');
 await page.keyboard.press('Escape'); await sleep(80);
 check('4k Escape closes the confirmation without sending', !(await confirmOf()) && (await state(page)).playCalls.length === 2 && (await state(page)).query === 'MOCK');
-await clickEl0(rowIcon(firstRow, 'radio')); // 0.7.9 #35b: Start radio is a visible button on search rows (no More)
+await sheetAct(firstRow, 'radio');
 await clickEl0(`${SVR}.querySelector('.confirm [data-action="confirm"]')`);
 s = await state(page);
 // tap an artist row → detail view, never play_media
@@ -248,9 +247,9 @@ const DET = `${H.sv}.shadowRoot.querySelector('jb-detail')`;
 const det4 = await page.evaluate((d) => { const el = eval(d); const x = el?.shadowRoot.querySelector('.detail'); return x ? { uri: x.dataset.uri, type: x.dataset.type, rows: x.querySelectorAll('.list.tracks .row').length } : null; }, DET);
 check('4l Search: tap artist does not call play_media', (await state(page)).playCalls.length === before4, `plays ${before4} → ${(await state(page)).playCalls.length}`);
 check('4m Search: tap artist opens its detail (top tracks)', det4 && det4.uri === artistUri && det4.type === 'artist' && det4.rows > 0, JSON.stringify(det4));
-check('4m2 Search artist detail: visible Play Next / Play Now / Remove labels', await page.evaluate((d) => {
+check('4m2 Search artist detail: track rows carry no inline play or queue buttons', await page.evaluate((d) => {
   const rows = [...eval(d).shadowRoot.querySelectorAll('.list.tracks .row')];
-  return rows.length > 0 && rows.every((r) => [...r.querySelectorAll('.ra-b[data-act]')].filter((b) => b.getBoundingClientRect().width && ['next', 'replace', 'remove'].includes(b.dataset.act)).map((b) => b.querySelector('span')?.textContent).join() === 'Play Next,Play Now,Remove');
+  return rows.length > 0 && rows.every((r) => r.querySelectorAll('.ra-b').length === 0);
 }, DET));
 await clickEl0(`${DET}.shadowRoot.querySelector('[data-action="back"]')`);
 check('4n Back returns to the results', !(await page.evaluate((d) => !!eval(d), DET)) && (await state(page)).rows > 0);
@@ -307,16 +306,17 @@ const ph = await page.evaluate((r) => {
   const root = eval(r);
   return [...root.querySelectorAll('.grp .row')].map((row) => {
     const rr = row.getBoundingClientRect();
-    const bs = [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width).map((b) => b.getBoundingClientRect());
     const t = row.querySelector('.rt b');
-    return { h: rr.height, n: bs.length, min: Math.min(...bs.map((b) => Math.min(b.width, b.height))), inside: bs.every((b) => b.left >= rr.left - 0.5 && b.right <= rr.right + 0.5 && Math.abs(b.top - bs[0].top) < 1), right: rr.right, vw: innerWidth, trunc: t.scrollWidth > t.clientWidth, tw: t.clientWidth };
+    return { h: rr.height, n: row.querySelectorAll('.ra-b').length, right: rr.right, vw: innerWidth, trunc: t.scrollWidth > t.clientWidth, tw: t.clientWidth };
   });
 }, `${H.sv}.shadowRoot`);
-check('7a 390 px: every row keeps its icons ≥ 44 px on one line inside the row (no clipping / wrapping)', ph.length > 0 && ph.every((x) => x.n >= 3 && x.min >= 44 && x.inside && x.right <= x.vw && x.h >= 56), JSON.stringify(ph.slice(0, 3)));
-check('7b 390 px: long titles truncate instead of pushing the icons', ph.some((x) => x.trunc) && ph.every((x) => x.tw > 60), ph.map((x) => x.tw).join(','));
+check('7a 390 px: every row has no inline buttons, stays inside the screen and is ≥ 56 px tall', ph.length > 0 && ph.every((x) => x.n === 0 && x.right <= x.vw && x.h >= 56), JSON.stringify(ph.slice(0, 3)));
+check('7b 390 px: long titles truncate', ph.some((x) => x.trunc) && ph.every((x) => x.tw > 60), ph.map((x) => x.tw).join(','));
 await page.evaluate((e) => eval(e).scrollIntoView({ block: 'center' }), `${H.sv}.shadowRoot.querySelector('.grp.tracks .row')`); await sleep(150);
-r = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.grp.tracks .row .ra-b[data-act="replace"]')`);
-await holdAt(page, r, true); await sleep(150);
+r = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.grp.tracks .row .rt')`);
+await holdAt(page, r, true); await sleep(250); // a touch hold opens the row's pop-up; its Play now asks first
+r = await rectOf(page, `${HSX}.querySelector('.it[data-action="replace"]')`);
+await page.touchscreen.tap(r.x, r.y); await sleep(250);
 await page.screenshot({ path: SHOTS + 'replace-confirm-390x844.png' });
 s = await state(page);
 const cf7 = await page.evaluate((r) => eval(r).querySelector('.confirm')?.dataset.kind, `${H.sv}.shadowRoot`);
@@ -565,9 +565,9 @@ const setView = (v) => page.evaluate((x) => __card.setConfig({ ...__card._config
 await setView('rows');
 await clickEl(page, `${BV}.querySelector('[data-cat="track"]')`);
 await page.waitForFunction((b) => eval(b).querySelectorAll('.list .row[data-type="track"]').length > 0, {}, BV);
-check('12h1 Library songs: visible Play Next / Play Now / Remove labels (no icon-only row actions)', await page.evaluate((b) => {
+check('12h1 Library songs: rows carry no inline play or queue buttons', await page.evaluate((b) => {
   const rows = [...eval(b).querySelectorAll('.list .row[data-type="track"]')];
-  return rows.length > 0 && rows.every((r) => [...r.querySelectorAll('.ra-b[data-act]')].filter((x) => x.getBoundingClientRect().width).filter((x) => ['next', 'replace', 'remove'].includes(x.dataset.act)).map((x) => x.querySelector('span')?.textContent).join() === 'Play Next,Play Now,Remove');
+  return rows.length > 0 && rows.every((r) => r.querySelectorAll('.ra-b').length === 0);
 }, BV));
 await setView('tiles');
 await clickEl(page, `${BV}.querySelector('[data-cat="playlist"]')`);
@@ -577,9 +577,9 @@ const BD = `${BV}.querySelector('jb-detail')?.shadowRoot`;
 let b1 = await qcall(async () => { const r = await rectOf(page, `${tile0} .ta, ${tile0}`); await page.mouse.click(r.x - r.w / 4, r.y - r.h / 4); await sleep(250); });
 const bdet = await page.evaluate((d) => { const x = eval(d)?.querySelector('.detail'); return x ? { uri: x.dataset.uri, type: x.dataset.type, rows: x.querySelectorAll('.list.tracks .row').length } : null; }, BD);
 check('12d Browse: tap a playlist tile does not call play_media', !b1.some((c) => c.s === 'play_media'), b1.map((c) => `${c.d}.${c.s}`).join(','));
-check('12h2 Library playlist detail: visible Play Next / Play Now / Remove labels', await page.evaluate((d) => {
+check('12h2 Library playlist detail: track rows carry no inline play or queue buttons', await page.evaluate((d) => {
   const rows = [...eval(d)?.querySelectorAll('.list.tracks .row') ?? []];
-  return rows.length > 0 && rows.every((r) => [...r.querySelectorAll('.ra-b[data-act]')].filter((b) => b.getBoundingClientRect().width && ['next', 'replace', 'remove'].includes(b.dataset.act)).map((b) => b.querySelector('span')?.textContent).join() === 'Play Next,Play Now,Remove');
+  return rows.length > 0 && rows.every((r) => r.querySelectorAll('.ra-b').length === 0);
 }, BD));
 check('12i Browse: tap opens the playlist detail (jukebox_kiosk/item_tracks page 1)', bdet && bdet.uri === t0uri && bdet.type === 'playlist' && bdet.rows > 0 && (await wsSince(page)).some((m) => m.type === 'item_tracks' && m.page === 1 && m.uri === t0uri), JSON.stringify(bdet));
 await clickEl(page, `${BD}.querySelector('[data-action="back"]')`);
@@ -625,8 +625,9 @@ check('12h tap a track row in the detail → opens the pop-up (jb-hold-sheet), n
 await page.keyboard.press('Escape'); await sleep(400);
 const after12h = await page.evaluate((d, h) => ({ sheet: !!eval(h).querySelector('.sh'), held: eval(d).querySelector('.list.tracks .row').classList.contains('held') }), BD, HSX);
 check('12h Esc closes the pop-up and clears the row highlight', !after12h.sheet && !after12h.held, JSON.stringify(after12h));
-b4 = await qcall(() => clickEl(page, `${BD}.querySelector('.list.tracks .row .ra-b[data-act="next"]')`));
-check('12k detail row Play next icon → play_media track enqueue next', b4.length === 1 && b4[0].data.media_type === 'track' && b4[0].data.enqueue === 'next' && tgt(b4[0]) === EV, JSON.stringify(b4[0]?.data));
+await clickEl(page, `${BD}.querySelector('.list.tracks .row .rt')`); await sleep(250);
+b4 = await qcall(() => clickEl(page, `${HSX}.querySelector('.it[data-action="next"]')`));
+check('12k detail row pop-up Play next → play_media track enqueue next', b4.length === 1 && b4[0].data.media_type === 'track' && b4[0].data.enqueue === 'next' && tgt(b4[0]) === EV, JSON.stringify(b4[0]?.data));
 
 // ---------- 13. real sample + radio hidden in Search ----------
 await open(page, '&latency=20&real=1');
@@ -691,11 +692,13 @@ await sleep(700);
 s = await page.evaluate(() => { const a = __card.shadowRoot.querySelector('ha-card').getBoundingClientRect(); return { scale: __card.dataset.scale, h: a.height, w: a.width, bottom: a.bottom }; });
 check('15j 1920x1080 → scale 1.35, card exactly fills the viewport', s.scale === '1.35' && Math.abs(s.h - 1080) < 2 && Math.abs(s.w - 1920) < 2, JSON.stringify(s));
 await see(firstRow);
-r = await rectOf(page, `${firstRow}.querySelector('.ra-b[data-act="replace"]')`);
-await holdAt(page, r); await sleep(150);
+r = await rectOf(page, `${firstRow}.querySelector('.rt')`);
+await holdAt(page, r); await sleep(250); // the row's pop-up (its Play now asks first)
+r = await rectOf(page, `${HSX}.querySelector('.it[data-action="replace"]')`);
+await page.mouse.click(r.x, r.y); await sleep(250);
 const mr = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.confirm')`);
 const mb = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.confirm [data-action="confirm"]')`);
-check('15k 1920x1080: a zoomed row icon is hit by a real click; the confirmation is centred and on screen', r.w >= 60 && mr && Math.abs(mr.x - 960) < 4 && mr.y - mr.h / 2 > 0 && mr.y + mr.h / 2 < 1080 && Math.abs(mr.y - 540) < 60 && mb.h >= 60 && (await state(page)).playCalls.length === 0, `btn ${JSON.stringify(r)} confirm ${JSON.stringify(mr)}`);
+check('15k 1920x1080: a zoomed pop-up action is hit by a real click; the confirmation is centred and on screen', r.w >= 60 && mr && Math.abs(mr.x - 960) < 4 && mr.y - mr.h / 2 > 0 && mr.y + mr.h / 2 < 1080 && Math.abs(mr.y - 540) < 60 && mb.h >= 60 && (await state(page)).playCalls.length === 0, `btn ${JSON.stringify(r)} confirm ${JSON.stringify(mr)}`);
 await page.keyboard.press('Escape');
 
 // =================== 0.3.1: live API shapes (queue window, player art, radio) ===================
@@ -851,7 +854,8 @@ await page.keyboard.press('Escape');
   const tapEl = async (expr, touch = false) => { await pg.evaluate((e) => eval(e)?.scrollIntoView({ block: 'nearest' }), expr); await sleep(60); const r = await rectOf(pg, expr); if (!r || !r.w) throw new Error('not visible: ' + expr); if (r.hold) await holdAt(pg, r, touch); else if (touch) await pg.touchscreen.tap(r.x, r.y); else await pg.mouse.click(r.x, r.y, { delay: 40 }); await sleep(200); };
   const searchRow = (g, name) => `[...${SV}.shadowRoot.querySelectorAll('.grp.${g} .row')].find((e) => e.querySelector('b')?.textContent === ${JSON.stringify(name)})`;
   const searchTile = (g, name) => `${searchRow(g, name)}?.querySelector('.rt')`; // the row body (not its icons)
-  const icon = (row, a) => `${row}?.querySelector('.ra-b[data-act="${a}"]')`;
+  // #85: rows have no inline buttons; a press-and-hold on the row opens its pop-up, whose actions are the same
+  const viaSheet = async (row, a, touch = false) => { await pg.evaluate((e) => eval(e)?.scrollIntoView({ block: 'center' }), row); await sleep(150); const r = await rectOf(pg, `${row}.querySelector('.rt')`); await holdAt(pg, r, touch); await sleep(250); await tapEl(`${HSX}.querySelector('.it[data-action="${a}"]')`, touch); };
   const confirmKind = (root) => pg.evaluate((r) => eval(r)?.querySelector('.confirm')?.dataset.kind ?? null, root);
   const SVR = `${SV}.shadowRoot`;
   const detBtn = (a) => `${SD}.querySelector('.da [data-action="${a}"]')`;
@@ -915,19 +919,19 @@ await page.keyboard.press('Escape');
   const after17k = await pg.evaluate((h, e) => ({ sheet: !!eval(h).querySelector('.sh'), held: eval(e).classList.contains('held') }), HSX, row0);
   check('17k2 physical Esc closes the pop-up and clears the row highlight', !after17k.sheet && !after17k.held, JSON.stringify(after17k));
   const seen = [];
-  for (const a of ['next']) { cs = await act(() => tapEl(icon(row0, a))); seen.push(plays(cs).map((c) => `${c.data.media_type}:${c.data.enqueue}:${c.data.media_id === row0uri}`).join()); }
-  cs = await act(() => tapEl(icon(row0, 'replace')));
+  for (const a of ['next']) { cs = await act(() => viaSheet(row0, a)); seen.push(plays(cs).map((c) => `${c.data.media_type}:${c.data.enqueue}:${c.data.media_id === row0uri}`).join()); }
+  cs = await act(() => viaSheet(row0, 'replace'));
   const kRep = (await det()).confirm; seen.push(`pre:${cs.length}`);
   await pg.screenshot({ path: V32 + 'detail-replace-confirm-1280x800.png' });
   cs = await act(() => confirm()); seen.push(plays(cs).map((c) => `${c.data.media_type}:${c.data.enqueue}:${!!c.data.radio_mode}`).join());
-  cs = await act(async () => { if (await pg.evaluate((e) => !!eval(e)?.getBoundingClientRect().width, icon(row0, 'radio'))) await tapEl(icon(row0, 'radio')); else { await tapEl(icon(row0, 'more')); await tapEl(`${SD}.querySelector('.menu .mi[data-action="radio"]')`); } }); seen.push(`pre:${cs.length}`);
+  cs = await act(() => viaSheet(row0, 'radio')); seen.push(`pre:${cs.length}`);
   cs = await act(() => confirm()); seen.push(plays(cs).map((c) => `${c.data.media_type}:${c.data.enqueue}:${!!c.data.radio_mode}`).join());
-  check('17l detail track icons → Play Next at once; Play Now + radio only after confirm', kRep === 'replace' && seen.join('|') === 'track:next:true|pre:0|track:replace:false|pre:0|track:replace:true', seen.join('|'));
+  check('17l detail track pop-up → Play Next at once; Play Now + radio only after confirm', kRep === 'replace' && seen.join('|') === 'track:next:true|pre:0|track:replace:false|pre:0|track:replace:true', seen.join('|'));
   cs = await act(async () => { await tapEl(detBtn('play')); await confirm(false); });
   check('17l2 header Play → Cancel sends nothing', cs.length === 0 && !(await det()).confirm, cs.map((c) => c.s).join());
   // album row icons in an artist: queue the album without opening it
-  cs = await act(() => tapEl(icon(albumRow('Chicago X'), 'next')));
-  check('17l3 artist album row Play next → play_media album enqueue next, stays on the artist', plays(cs).length === 1 && plays(cs)[0].data.media_type === 'album' && plays(cs)[0].data.enqueue === 'next' && (await det()).type === 'artist', JSON.stringify(plays(cs)[0]?.data));
+  cs = await act(() => viaSheet(albumRow('Chicago X'), 'next'));
+  check('17l3 artist album row pop-up Play next → play_media album enqueue next, stays on the artist', plays(cs).length === 1 && plays(cs)[0].data.media_type === 'album' && plays(cs)[0].data.enqueue === 'next' && (await det()).type === 'artist', JSON.stringify(plays(cs)[0]?.data));
   await pg.screenshot({ path: V32 + 'artist-detail-rows-1280x800.png' });
 
   // 17m: back to the results restores their scroll; a playlist row opens its detail
@@ -951,7 +955,7 @@ await page.keyboard.press('Escape');
   await open(pg, '&latency=400&playlat=400');
   await typeQ('CHICAGO');
   await tapEl(searchTile('albums', 'Chicago X')); await waitDet();
-  cs = await act(async () => { const r = await rectOf(pg, icon(`${SD}.querySelector('.list.tracks .row')`, 'next')); await pg.mouse.click(r.x, r.y); await sleep(60); await pg.mouse.click(r.x, r.y); }, 900);
+  cs = await act(async () => { const rw = await rectOf(pg, `${SD}.querySelector('.list.tracks .row .rt')`); await holdAt(pg, rw); await sleep(250); const r = await rectOf(pg, `${HSX}.querySelector('.it[data-action="next"]')`); await pg.mouse.click(r.x, r.y); await sleep(60); await pg.mouse.click(r.x, r.y); }, 900);
   check('17q double tap on Play Next (slow MA) → a single play_media', plays(cs).length === 1, plays(cs).map((c) => c.data.enqueue).join());
 
   // 17r: stale race — slow album, Back, other album: the slow reply must not land in the wrong view
@@ -1010,17 +1014,12 @@ await page.keyboard.press('Escape');
   const stName = await pg.evaluate(() => __card.shadowRoot.querySelector('jb-station').shadowRoot.querySelector('.nm')?.textContent.trim() ?? '');
   check('17y Search: tap a station row → nothing played, no menu; the station sheet opens (name trimmed of tabs)', plays(cs).length === 0 && menu.length === 0 && stName === 'WXRT Chicago 93.1 FM', JSON.stringify({ menu, stName }));
   await tapEl(`__card.shadowRoot.querySelector('jb-station').shadowRoot.querySelector('[data-action="close"]')`);
-  check('17y2 (0.7.9 #35) radio rows: only Play (replace); podcasts add+next+replace; playlists/artists/albums/tracks add+next+replace+radio; no Remove',
-    radioIcons.radio.every((x) => x === 'replace') && radioIcons.podcasts.every((x) => x === 'add+next+replace')
-    && ['playlists', 'artists', 'albums', 'tracks'].every((g) => radioIcons[g].length && radioIcons[g].every((x) => x === 'add+next+replace+radio')), JSON.stringify(radioIcons));
-  // 0.7.9 #35b: no search row has a More button; a podcast row's three buttons sit together at the row's end (no empty slot)
-  const geo35b = await pg.evaluate((sv) => { const r = eval(sv).shadowRoot; const pod = r.querySelector('.grp.podcasts .row'), tr = r.querySelector('.grp.tracks .row');
-    const end = (row) => { const bs = [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width); return { n: bs.length, right: Math.round(row.getBoundingClientRect().right - bs[bs.length - 1].getBoundingClientRect().right), gaps: bs.slice(1).map((b, i) => Math.round(b.getBoundingClientRect().left - bs[i].getBoundingClientRect().right)) }; };
-    return { more: r.querySelectorAll('.row .ra-more').length, pod: end(pod), tr: end(tr) }; }, SV);
-  check('17y3 (0.7.9 #35b) search rows: no More; podcast row ends flush like a song row (3 buttons, same gaps, no empty slot)', geo35b.more === 0 && geo35b.pod.n === 3 && geo35b.tr.n === 4
-    && Math.abs(geo35b.pod.right - geo35b.tr.right) <= 1 && geo35b.pod.gaps.every((g) => g <= Math.max(...geo35b.tr.gaps) + 1), JSON.stringify(geo35b));
+  check('17y2 no search row (radio, podcasts, playlists, artists, albums, tracks) has inline play or queue buttons (#85)',
+    Object.values(radioIcons).every((g) => g.length && g.every((x) => x === '')), JSON.stringify(radioIcons));
+  const geo35b = await pg.evaluate((sv) => eval(sv).shadowRoot.querySelectorAll('.row .ra-b, .row .ra-more').length, SV);
+  check('17y3 search rows: no buttons at the end of any row', geo35b === 0, String(geo35b));
   // 0.7.9 #37: the queue has songs, so the station asks first ("This will replace your queue"); Replace plays it
-  cs = await act(() => tapEl(icon(stRow, 'replace')));
+  cs = await act(async () => { await tapEl(`${stRow}.querySelector('.rt')`); await tapEl(`__card.shadowRoot.querySelector('jb-station').shadowRoot.querySelector('[data-action="play"]')`); }); // the row opens the station sheet; its Play asks first
   const stAsk = plays(cs).length === 0 && await pg.evaluate(() => !!__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('.confirm[data-kind=station]'));
   check('17z0 station Play asks first when the queue has songs, nothing played yet', stAsk);
   cs = await act(() => tapEl(`__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('[data-action="confirm"]')`));
@@ -1034,8 +1033,8 @@ await page.keyboard.press('Escape');
   check('17za podcast → episodes detail via jukebox_kiosk/item_tracks, no play', plays(cs).length === 0 && d.type === 'podcast' && d.tracks.length === 4 && (await pg.evaluate(() => structuredClone(window.__ws))).some((m) => m.type === 'item_tracks' && /podcast/.test(m.uri)), JSON.stringify(d));
   const epIcons = await pg.evaluate((dd) => [...eval(dd).querySelectorAll('.list.tracks .row')].map((r) => [...r.querySelectorAll('.ra-b:not(.ra-more)')].map((b) => b.dataset.act).join('+')), SD);
   const podRadio = await pg.evaluate((dd) => !!eval(dd).querySelector('.da [data-action="radio"]'), SD);
-  check('17za2 podcast detail: episodes have no Start radio icon, header has no Start radio', epIcons.length === 4 && epIcons.every((x) => x === 'next+replace+remove') && !podRadio, JSON.stringify(epIcons));
-  cs = await act(async () => { await tapEl(icon(`${SD}.querySelector('.list.tracks .row')`, 'replace')); await confirm(); });
+  check('17za2 podcast detail: episodes have no inline buttons, header has no Start radio', epIcons.length === 4 && epIcons.every((x) => x === '') && !podRadio, JSON.stringify(epIcons));
+  cs = await act(async () => { await viaSheet(`${SD}.querySelector('.list.tracks .row')`, 'replace'); await confirm(); });
   check('17zb episode Replace → confirm → play_media with the episode uri and no media_type (MA infers it)', plays(cs).length === 1 && /podcast_episode/.test(plays(cs)[0].data.media_id) && !('media_type' in plays(cs)[0].data), JSON.stringify(plays(cs)[0]?.data));
 
   // 17zc-ze: phone portrait, touch
@@ -1049,9 +1048,8 @@ await page.keyboard.press('Escape');
     return { minH: Math.min(...btns.map((b) => b.height)), inside: btns.every((b) => b.left >= 0 && b.right <= innerWidth + 0.5), over: r.querySelector('.scroll').scrollWidth - r.querySelector('.scroll').clientWidth }; }, SD);
   check('17zc 390x844 touch: artist tap opens the detail, no play; buttons ≥ 40px tall and on screen, no sideways scroll', plays(cs).length === 0 && d.type === 'artist' && fit.minH >= 40 && fit.inside && fit.over <= 1, JSON.stringify(fit));
   await pg.screenshot({ path: V32 + 'search-artist-detail-390x844.png' });
-  const phRows = await pg.evaluate((dd) => [...eval(dd).querySelectorAll('.detail .row')].map((row) => { const rr = row.getBoundingClientRect(); const bs = [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width).map((b) => b.getBoundingClientRect());
-    return { n: bs.length, min: Math.min(...bs.map((b) => Math.min(b.width, b.height))), inside: bs.every((b) => b.right <= rr.right + 0.5 && b.right <= innerWidth && Math.abs(b.top - bs[0].top) < 1), h: rr.height }; }), SD);
-  check('17zd 390x844 detail rows: 4 icons ≥ 44 px, one line, inside the screen; rows ≥ 56 px', phRows.length > 5 && phRows.every((x) => x.n === 4 && x.min >= 44 && x.inside && x.h >= 56), JSON.stringify(phRows.slice(0, 2)));
+  const phRows = await pg.evaluate((dd) => [...eval(dd).querySelectorAll('.detail .row')].map((row) => ({ n: row.querySelectorAll('.ra-b').length, right: row.getBoundingClientRect().right, h: row.getBoundingClientRect().height })), SD);
+  check('17zd 390x844 detail rows: no inline buttons, inside the screen; rows ≥ 56 px', phRows.length > 5 && phRows.every((x) => x.n === 0 && x.right <= 390.5 && x.h >= 56), JSON.stringify(phRows.slice(0, 2)));
   cs = await act(async () => { await tapEl(`${SD}.querySelector('.list.tracks .row .rt')`, true); }, 400);
   const sheetZd = await pg.evaluate((h) => !!eval(h).querySelector('.sh'), HSX);
   const csZd = await act(async () => { await tapEl(`${HSX}.querySelector('.it[data-action="radio"]')`, true); }, 300);
@@ -1061,7 +1059,7 @@ await page.keyboard.press('Escape');
   cs = await act(() => tapEl(`${SD}.querySelector('.confirm [data-action="cancel"]')`, true));
   check('17zd3 390x844 touch: Cancel sends nothing', cs.length === 0 && !(await det()).confirm);
   await tapEl(`${SD}.querySelector('[data-action="back"]')`, true);
-  await tapEl(icon(searchRow('tracks', '25 or 6 to 4'), 'replace'), true);
+  await viaSheet(searchRow('tracks', '25 or 6 to 4'), 'replace', true);
   await pg.screenshot({ path: V32 + 'replace-confirm-390x844.png' });
   await tapEl(`${SVR}.querySelector('.confirm [data-action="cancel"]')`, true);
   // Browse: album detail on the phone + 1280
@@ -1074,7 +1072,7 @@ await page.keyboard.press('Escape');
     const bd = await pg.evaluate((b) => eval(b).querySelector('jb-detail')?.shadowRoot.querySelectorAll('.list.tracks .row').length ?? 0, BV);
     if (vp.width === 390) check('17ze Browse 390x844: tap album → detail with tracks, no play', plays(cs).length === 0 && bd === 4, `rows=${bd}`);
     await pg.screenshot({ path: V32 + `browse-album-detail-${vp.width}x${vp.height}.png` });
-    await tapEl(`${BV}.querySelector('jb-detail').shadowRoot.querySelector('.list.tracks .row .ra-b[data-act="replace"]')`, vp.hasTouch);
+    await viaSheet(`${BV}.querySelector('jb-detail').shadowRoot.querySelector('.list.tracks .row')`, 'replace', vp.hasTouch);
     await pg.screenshot({ path: V32 + `browse-detail-replace-confirm-${vp.width}x${vp.height}.png` });
     await tapEl(`${BV}.querySelector('jb-detail').shadowRoot.querySelector('.confirm [data-action="cancel"]')`, vp.hasTouch);
   }
@@ -1086,15 +1084,13 @@ await page.keyboard.press('Escape');
   for (const c of 'CHICAGO') { const kr = await rectOf(pg, keyExpr(keyIdFor(c))); await pg.touchscreen.tap(kr.x, kr.y); await sleep(30); }
   await waitShown(pg, 'CHICAGO'); await sleep(150);
   const tr = searchRow('tracks', '25 or 6 to 4');
-  const narrow = await pg.evaluate((e) => { const row = eval(e); return [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width).map((b) => `${b.dataset.act}:${Math.round(b.getBoundingClientRect().width)}`).join(); }, tr);
-  // 0.7.9 #35b: no More on search rows; Start radio is the fourth visible button, labels on one line
-  const nMenu = await pg.evaluate((e) => { const row = eval(e), rr = row.getBoundingClientRect(); return [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width).every((b) => { const r = b.getBoundingClientRect(), sp = b.querySelector('span'); return r.left >= rr.left - 1 && r.right <= rr.right + 1 && sp && sp.getClientRects().length === 1; }) ? 'fits' : 'overflow'; }, tr);
+  const narrow = await pg.evaluate((e) => eval(e).querySelectorAll('.ra-b').length, tr);
   await pg.screenshot({ path: V32 + 'narrow-search-320x640.png' });
-  cs = await act(() => tapEl(icon(tr, 'radio'), true));
+  cs = await act(() => viaSheet(tr, 'radio', true));
   const nKind = await confirmKind(SVR);
   const cs5 = await act(() => tapEl(`${SVR}.querySelector('.confirm [data-action="confirm"]')`, true));
-  check('17zg 320 px (0.7.9 #35b): labeled Add to queue / Play Next / Play Now / Start radio visible and inside the row, no More; Start radio → confirmation → radio_mode + replace', narrow.split(',').map((x) => x.split(':')[0]).join() === 'add,next,replace,radio' && nMenu === 'fits' && plays(cs).length === 0 && nKind === 'radio'
-    && plays(cs5).length === 1 && plays(cs5)[0].data.radio_mode === true && plays(cs5)[0].data.enqueue === 'replace', `${narrow} menu=${nMenu} kind=${nKind} ${JSON.stringify(plays(cs5)[0]?.data)}`);
+  check('17zg 320 px: a search row has no inline buttons; its pop-up Start radio → confirmation → radio_mode + replace', narrow === 0 && plays(cs).length === 0 && nKind === 'radio'
+    && plays(cs5).length === 1 && plays(cs5)[0].data.radio_mode === true && plays(cs5)[0].data.enqueue === 'replace', `${narrow} kind=${nKind} ${JSON.stringify(plays(cs5)[0]?.data)}`);
   // every play_media this run used a valid HA media_type (the mock rejects anything else)
   const bad = (await all()).filter((c) => c.s === 'play_media' && !['artist', 'album', 'audiobook', 'folder', 'playlist', 'podcast', 'track', 'radio', undefined].includes(c.data.media_type));
   check('17zf play_media media_type always valid (or omitted)', bad.length === 0, JSON.stringify(bad));

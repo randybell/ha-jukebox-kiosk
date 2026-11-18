@@ -5,8 +5,8 @@ import { providerLabel } from './providers';
 import { songInfo, INFO_TYPES } from './song-info';
 import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl,
-  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, mediaActions, hideStartRadio, swallowNextClick, SEARCH_ACTS, confirmTpl, drillable,
-  type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, mediaActions, hideStartRadio, swallowNextClick, confirmTpl, drillable,
+  type MenuAction, type MenuPos, type ConfirmState,
   maCall,
 } from './shared';
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem } from './types';
@@ -137,7 +137,6 @@ export async function loadDetail(hass: HomeAssistant, config: JukeboxCardConfig,
  * its menus and its toast. Emits `jb-nav` {op:'push', item, type} | {op:'back'} for the host's back stack.
  */
 /** 0.7.10: the artist page's Albums column header names (only here; buttons elsewhere keep their own titles). */
-const ALBUM_HEAD = { add: 'Add to queue', next: 'Play next', replace: 'Play now', radio: 'Start radio' } as const;
 
 export class JbDetail extends LitElement {
   static properties = {
@@ -267,22 +266,7 @@ export class JbDetail extends LitElement {
     if (type !== 'track' && type !== 'podcast_episode' && drillable(type, this.config)) { this.press.release(); fire(this, 'jb-nav', { op: 'push', item: it, type }); return; }
     this._sel = this._sel === key ? '' : key;
   }
-  /** Play Next and Remove act at once; Play Now and Start radio ask first. Radio Play Now replaces immediately. */
-  private rowAct(it: MaItem, type: string, a: RowAct | 'more', el: HTMLElement) {
-    const ask = (k: RowAct) => {
-      this.closeMenu();
-      if (k === 'next' || k === 'add') { this.play(it, type, k); return; }
-      if (k === 'remove') { void this.removeRow(it, type); return; }
-      if ((type === 'radio' || isRadio(it)) && k === 'replace') { this.play(it, type, 'replace'); return; }
-      this._confirm = { kind: k, item: it, run: () => this.play(it, type, 'replace', k === 'radio') };
-    };
-    if (a !== 'more') { ask(a); return; }
-    const actions = foldedActions(canRadio(type, it), ask);
-    this._menu = { item: it, type, pos: menuPos(this.root(), el.closest('.row') as HTMLElement, actions.length), actions };
-  }
-
-  /** 0.7.20: a track / episode row here opens the same pop-up (jb-hold-sheet) as Library Tracks, on a tap or a hold (action buttons are off
-   *  everywhere, so the pop-up is how to act on one track). Stations and every other row type keep their old tap. */
+  /** A track / episode row here opens the same pop-up (jb-hold-sheet) as Library Tracks, on a tap or a hold. Stations and every other row type keep their old tap. */
   private isSong(it: MaItem, type: string) { return (type === 'track' || type === 'podcast_episode') && !isRadio(it); }
   private songMenu(it: MaItem, type: string, key: string) {
     const pt = it.media_type === 'podcast_episode' ? '' : type;
@@ -292,7 +276,7 @@ export class JbDetail extends LitElement {
     const info = INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it, this.hass) : undefined;
     fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, type) || providerLabel(it.uri), actions, info, close: () => this.press.release() });
   }
-  /** 0.7.10: press-and-hold on an artist page Albums row (not its buttons) opens the menu 5 pop-up. */
+  /** Press-and-hold on an artist page Albums row opens the item pop-up. */
   private albumMenu(it: MaItem, key: string, el: HTMLElement) {
     const ask = (k: 'replace' | 'radio') => { this.closeMenu(); this._confirm = { kind: k, item: it, run: () => this.play(it, 'album', 'replace', k === 'radio') }; };
     const open = () => { this.closeMenu(); this.tap(it, 'album', key); };
@@ -313,12 +297,7 @@ export class JbDetail extends LitElement {
     await this.hearts.toggle(it, t); // the outcome shows in the card's top-right status chip
   }
   private heart(it: MaItem, type: string) { return heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type)); }
-  /** Album row inside an artist: tap opens the album; the #35 search-row buttons (Add to queue, Play next, Play now, Start radio) act on the whole album. */
-  /** 0.7.10: one header naming the album rows' icon columns (sentence case, header only); Start radio only when some album offers it. */
-  private albumHead(albums: MaItem[]) {
-    const cols = [...SEARCH_ACTS.map((a) => ALBUM_HEAD[a]), ...(albums.some((x) => canRadio('album', x)) ? [ALBUM_HEAD.radio] : [])];
-    return html`<div class="ahd" aria-hidden="true">${cols.map((c) => html`<span>${c}</span>`)}</div>`;
-  }
+  /** Album row inside an artist: tap opens the album; a hold opens the album's pop-up. */
   private albumRow(it: MaItem, radioCol = false) {
     const key = 'al|' + it.uri;
     const p = this.press.handlers(key, { it, type: 'album', key });
@@ -331,7 +310,6 @@ export class JbDetail extends LitElement {
         <small>${provTpl(it.uri, it.provider, 'album')}<span class="st">${['Album', (it as any).year].filter(Boolean).join(' · ')}</span></small></div>
       <span class="du"></span>
       ${fav ? this.heart(it, 'album') : nothing}
-      ${rowActsTpl(it, canRadio('album', it), (a, el) => this.rowAct(it, 'album', a, el), SEARCH_ACTS, true, false)}
     </div>`;
   }
   private row(it: MaItem, n?: number, i = 0) {
@@ -347,7 +325,6 @@ export class JbDetail extends LitElement {
         <small>${provTpl(it.uri, it.provider)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, 'track')}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
       ${fav ? this.heart(it, type) : nothing}
-      ${rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, type, a, el))}
     </div>`;
   }
   /** "9 tracks · 43 min" (a "+" while more playlist pages are pending). */
@@ -403,7 +380,7 @@ export class JbDetail extends LitElement {
             <button class="sbtn retry" data-action="retry" tabindex="-1" @pointerdown=${noFocus} @click=${() => { e.data = undefined; this.load(e); this.requestUpdate(); }}>Retry</button></div>` : nothing}
           ${d.note ? html`<div class="note src" data-src=${d.src}>${d.note}</div>` : nothing}
           ${type === 'artist' && !d.loading ? html`<h3 class="eyebrow">Albums</h3>${d.albums.length
-            ? html`<div class="list albums">${this.albumHead(d.albums)}${d.albums.map((a) => this.albumRow(a, d.albums.some((x) => canRadio('album', x))))}</div>`
+            ? html`<div class="list albums">${d.albums.map((a) => this.albumRow(a, d.albums.some((x) => canRadio('album', x))))}</div>`
             : html`<div class="empty noalbums"><span>No albums found.</span></div>`}` : nothing}
           ${d.tracks.length ? html`<h3 class="eyebrow">${tracksTitle}${d.src === 'search' ? html` <em>matched by search</em>` : nothing}</h3>
             <div class="list tracks">${d.tracks.map((t, i) => this.row(t, type === 'album' && d.src === 'kiosk' ? i + 1 : undefined, i))}</div>
@@ -427,21 +404,6 @@ export class JbDetail extends LitElement {
     /* the list sits directly on the HA card surface: no second fill */
     .scroll.panel { background: transparent; }
     .detail { display: flex; flex-direction: column; gap: 14px; }
-    /* Station-only actions: keep Play Now on one line and fully inside its row. */
-    .row[data-type="radio"] { min-height: 68px; }
-    .row[data-type="radio"] .ra-b[data-act="replace"] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-      width: auto; min-width: 72px; height: auto; min-height: 56px; padding: 6px; font-size: var(--ha-font-size-m, 14px); line-height: var(--ha-line-height-condensed, 1.2); }
-    .row[data-type="radio"] .ra-b[data-act="replace"] span { white-space: nowrap; }
-    /* 0.7.10: the artist page's Albums rows: icon-only Add to queue / Play next / Play now (/ Start radio) buttons (48px, #42),
-       named once by a sticky column header above the list (labels sit exactly over their button column) */
-    .row.sr .ra-b span { display: none; }
-    .row.sr .du { display: block; } /* no empty trailing grid column, so the buttons end at the list's right edge like the header */
-    .row.sr.nor .ra { padding-right: var(--_abw, 48px); }
-    /* sticky inside .list.albums only: it leaves with the Albums section; padded out to the panel edges. ha-card surface so rows stay hidden in opaque themes and may blur behind it in a translucent one */
-    .ahd { position: sticky; top: -16px; z-index: 2; display: var(--_ra-display, flex); justify-content: flex-end; margin: 0 -16px 2px; padding: 6px 16px;
-      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
-      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none); }
-    .ahd span { width: var(--_abw, 48px); flex: none; text-align: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); color: var(--_muted); }
     .nav { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .back { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px 0 12px; border-radius: 999px; background: var(--_chip-bg);
       border: 1px solid var(--_surface-border); color: var(--_fg); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
@@ -472,7 +434,7 @@ export class JbDetail extends LitElement {
     .more-t { align-self: center; min-width: 220px; justify-content: center; }
     .empty { padding: 14px; }
     @container np (max-width: 520px) {
-      .scroll { padding: 10px; } .ahd { top: -10px; margin: 0 -10px 2px; padding: 6px 10px; }
+      .scroll { padding: 10px; }
       .dh { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; } .dart { width: 96px; height: 96px; }
       .dt h2 { font-size: var(--ha-font-size-xl, 20px); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       .da { grid-column: 1 / -1; }

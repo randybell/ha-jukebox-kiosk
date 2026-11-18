@@ -436,15 +436,8 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('S11 sheet heart off on a provider result → item_by_uri lookup, then remove_item with the library id; heart off',
     m.map((x) => x.command).join() === 'music/item_by_uri,music/favorites/remove_item' && /^\d+$/.test(String(m[1].args.library_item_id)) && (await sheet(p)).fav === 'false', J(m));
   await ev(p, `__card.shadowRoot.querySelector('jb-station').dispatchEvent(new CustomEvent('jukebox-station-close', { bubbles: true, composed: true }))`); await sleep(150);
-  // Radio rows: Play Next and Remove are hidden; Play Now replaces immediately (no confirm, no next/add)
-  const acts = await ev(p, `[...${row}.querySelectorAll('.ra-b:not(.fav)')].map((b) => b.dataset.act)`);
-  check('S12a radio row actions: only Play (replace), no Play Next / Remove', J(acts) === J(['replace']), J(acts));
-  await tap(p, `${row}.querySelector('[data-act=replace]')`); await sleep(300);
-  const asked12 = (await plays(p)).length === 0;
-  await ev(p, `__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('[data-action=confirm]')?.click()`); await sleep(300); // 0.7.9 #37: the queue has songs → Replace
-  const pa = await plays(p);
-  check('S12b radio Play → (0.7.9: station confirm, Replace) enqueue replace, no sheet, no other confirm', asked12 && pa.length === 1 && pa[0].enqueue === 'replace' && pa[0].media_id === st
-    && pa[0].media_type === 'radio' && !(await sheet(p)) && !(await ev(p, `!!${SV}.shadowRoot.querySelector('.confirm')`)), J(pa));
+  // Radio rows carry no inline buttons (#85); the station sheet above is the way to play one
+  check('S12 radio row: no inline play or queue buttons', (await ev(p, `${row}.querySelectorAll('.ra-b:not(.fav)').length`)) === 0);
   await p.close();
 }
 // ---------------- 10. v0.7 hearts: every row, tile and page (library class), one shared store, no confirmation ----------------

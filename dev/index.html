@@ -36,9 +36,9 @@
     if (params.has('overlay')) localStorage.setItem('jukebox-card:lyrics-overlay:v1', params.get('overlay') === '1' ? '1' : '0');
     // cfg=<json>: extra card options (e.g. {"lyrics_tab":false}), merged last
     const extra = params.get('cfg') ? JSON.parse(params.get('cfg')) : {};
-    // legacy=0: nothing added, the card's own 0.7.20 defaults (Library rows, row action buttons off). Without it the harness keeps the 0.7.14 look
-    // (Library tiles, action buttons on) so the older tests that were written against it still test what they were written for.
-    const legacy = params.get('legacy') === '0' ? {} : { library_view: 'tiles', show_action_icons: true };
+    // legacy=0: nothing added, the card's own 0.7.20 defaults (Library rows). Without it the harness keeps the 0.7.14 look
+    // (Library tiles, Queue row buttons shown through the card's --_ra-display style) so the older tests that were written against it still test what they were written for.
+    const legacy = params.get('legacy') === '0' ? {} : { library_view: 'tiles' };
     // spk=dyn: 0.5 dynamic speakers (targets Everywhere / Indoor / Outdoor; presets come from MA's dynamic-group defaults); target=<entity> presets the remembered group
     if (params.get('fresh') === '1') localStorage.removeItem('jukebox-card:target:v1');
     if (params.get('target')) localStorage.setItem('jukebox-card:target:v1', params.get('target'));
@@ -73,6 +73,7 @@
       ...legacy,
       ...extra,
     });
+    if (params.get('legacy') !== '0') card.style.setProperty('--_ra-display', 'flex'); // the older queue tests need the Queue row buttons visible
     card.hass = hass;
     const ha = params.get('ha');
     if (ha) {

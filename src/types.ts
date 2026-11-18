@@ -163,8 +163,6 @@ export interface JukeboxCardConfig {
   leader_drop?: 'allow' | 'block'; // default 'allow' (0.6.3)
   /** 0.6.4: true brings back the centred confirm dialogs for drop / last room / takeovers. Default false: status chip only. */
   confirm_drop?: boolean;
-  /** 0.7.14 (#80): false hides the row action buttons (Add to queue, Play Next, Play Now, Remove, Start radio, More, the Queue row buttons) on every list row. 0.7.20: the default is now false (off) and the card setup screen no longer shows the switch; `true` in YAML still shows them. Taps and holds still open the pop-ups. */
-  show_action_icons?: boolean;
   /** @internal the Music Assistant config entry the card uses (what the integration reports, else an admin lookup) */
   _maEntry?: string;
   /** @internal the card's Music Assistant backend (set by the card, shared with every view) */

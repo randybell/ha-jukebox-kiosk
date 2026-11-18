@@ -87,29 +87,7 @@ check('A6 tapActions non-radio still play/next/remove', J(ids(S.tapActions(play,
 check('A7 mediaActions non-station never drops next when seedRadio false',
   J(ids(S.mediaActions(play, undefined, ask, false, false))) === J(['add', 'next', 'replace', 'radio']) && S.mediaActions(play, undefined, ask, false, false)[3].disabled === true); // 0.7.12: Start radio grayed, not hidden
 
-function actsFromTpl(it, seed) {
-  const tpl = S.rowActsTpl(it, seed, () => {});
-  const found = [];
-  const walk = (v) => {
-    if (!v) return;
-    if (Array.isArray(v)) { v.forEach(walk); return; }
-    if (v.strings && v.values) {
-      for (let i = 0; i < v.strings.length; i++) {
-        if (String(v.strings[i]).includes('data-act=') && typeof v.values[i] === 'string') found.push(v.values[i]);
-      }
-      v.values.forEach(walk);
-    }
-  };
-  walk(tpl);
-  return found;
-}
-check('R1 rowActsTpl radio → only replace', J(actsFromTpl(station, false)) === J(['replace']), J(actsFromTpl(station, true)));
-const tSeed = actsFromTpl(track, true);
-check('R2 rowActsTpl track+seed includes next/replace/remove/radio (more may appear)',
-  ['next','replace','remove','radio'].every((x) => tSeed.includes(x)) && !tSeed.includes('play'), J(tSeed));
-check('R3 rowActsTpl album no seed → next,replace,remove', J(actsFromTpl(album, false)) === J(['next', 'replace', 'remove']));
-check('R4 rowActsTpl playlist unchanged', J(actsFromTpl(playlist, false)) === J(['next', 'replace', 'remove']));
-check('R5 rowActsTpl radio ignores seedRadio (no Start radio / more)', J(actsFromTpl(station, true)) === J(['replace']));
+check('R1 rowActsTpl is gone (#85): no inline row-action helper remains', typeof S.rowActsTpl === 'undefined');
 
 console.log(`\nradio-replace.unit: ${total - failures}/${total} passed`);
 process.exit(failures ? 1 : 0);

@@ -99,11 +99,9 @@ for (const layout of Object.keys(LAYOUTS)) for (const fav of [false, true]) for 
   await sleep(350);
   check(`${tag}: Play next in the pop-up enqueues next and closes the pop-up`, J(await plays(p)) === '["next"]' && !(await sheetOpen(p)), J(await plays(p)));
 
-  // ---- the row's own buttons are untouched: Play Next still fires right away, with no pop-up ----
+  // ---- the row has no inline buttons of its own any more (#85): its pop-up is the way to play ----
   await clear(p);
-  const b = await center(p, `${rowExpr}.querySelector('.ra-b[data-act="next"]')`);
-  await tapAt(p, kind, b); await sleep(350);
-  check(`${tag}: the row's own Play Next button still fires directly and opens no pop-up`, J(await plays(p)) === '["next"]' && !(await sheetOpen(p)), J(await plays(p)));
+  check(`${tag}: the row carries no play or queue buttons`, (await ev(p, `${rowExpr}.querySelectorAll('.ra-b').length`)) === 0);
 
   // ---- a swipe / drag starting on a song row opens nothing ----
   await clear(p);

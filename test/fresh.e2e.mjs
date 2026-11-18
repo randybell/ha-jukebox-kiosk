@@ -62,11 +62,15 @@ async function tap(p, expr) {
   check('F5b the Library lists: music_assistant.get_library carries the same entry', lib.length > 0 && lib.every((e) => e === MA_ENTRY), J(lib));
   // play a song (replace asks first when the queue has songs)
   const n1 = await ev(p, `window.__calls.length`);
-  await tap(p, `${SV}.shadowRoot.querySelector('.grp .row .ra-b[data-act="replace"]')`);
+  // a hold on a row opens its pop-up (the row has no buttons any more)
+  const rc = await ev(p, `(() => { const b = ${SV}.shadowRoot.querySelector('.grp .row .rt').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+  await p.mouse.move(rc.x, rc.y); await p.mouse.down(); await sleep(700); await p.mouse.up(); await sleep(250);
+  await wait(p, `!!__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot.querySelector('.it[data-action="replace"]')`);
+  await tap(p, `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot.querySelector('.it[data-action="replace"]')`);
   if (await ev(p, `!!${SV}.shadowRoot.querySelector('.confirm [data-action="confirm"]')`)) await tap(p, `${SV}.shadowRoot.querySelector('.confirm [data-action="confirm"]')`);
   await sleep(400);
   const pm = await ev(p, `window.__calls.slice(${n1}).filter((c) => c.service === 'play_media').map((c) => ({ e: c.target?.entity_id ?? c.data.entity_id, id: c.data.media_id, q: c.data.enqueue }))`);
-  check('F6 it plays: Play on a search result → media_player.play_media on the chosen player', pm.length === 1 && pm[0].e === EV && pm[0].q === 'replace', J(pm));
+  check('F6 it plays: Play now in a search result pop-up → media_player.play_media on the chosen player', pm.length === 1 && pm[0].e === EV && pm[0].q === 'replace', J(pm));
   // the queue lists through the integration
   await tap(p, `__card.shadowRoot.querySelector('.tab[data-tab="queue"]')`);
   const q = await wait(p, `${QV}.querySelectorAll('.qr').length > 3`);
