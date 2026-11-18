@@ -31,11 +31,7 @@ for (const vp of [
   await p.waitForFunction('window.__ready === true');
   await p.waitForFunction(`${SV}.querySelectorAll('.lcats .lc').length >= 5`, { timeout: 10000 });
   await p.waitForFunction(`${BR}.querySelectorAll('.tile[data-type=playlist]').length > 0`, { timeout: 10000 });
-  // Prefer waiting for the recently-played strip when the build has it; otherwise settle.
-  await Promise.race([
-    p.waitForFunction(`${BR}.querySelectorAll('[data-recent-row] [data-recent]').length >= 1`, { timeout: 4000 }).catch(() => null),
-    sleep(900),
-  ]);
+  await sleep(900);
   await sleep(400);
   const f = `${OUT}library-empty-search-${tag}.png`;
   await p.screenshot({ path: f });
