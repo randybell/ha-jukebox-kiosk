@@ -3,7 +3,7 @@ import { tokens, base } from './styles';
 import { icon } from './icons';
 import { mediaStyles, noFocus, roomsOf, fire } from './shared';
 import { throttle } from './slider';
-import { sendVolume } from './vol-send';
+import { sendVolume, sendMute } from './vol-send';
 import './slider';
 import type { HomeAssistant, JukeboxCardConfig, PresetConfig } from './types';
 import { SpeakerError, timeouts, type SpeakerStore } from './speakers/ma';
@@ -231,7 +231,7 @@ export class JbSpeakers extends LitElement {
   private toggleMute(id: string) {
     const v = !this.mutedOf(id);
     this.mute.set(id, { v, t: Date.now() }); this.requestUpdate();
-    void this.callVol(id, 'volume_mute', { is_volume_muted: v });
+    void sendMute(this.hass, id, v).catch(() => this.fail('That did not work. Check the speaker.'));
   }
 
   /* ---------------- grouping ---------------- */

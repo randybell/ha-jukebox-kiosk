@@ -6,7 +6,7 @@ import { providerLabel } from './providers';
 import { combinedOn, libraryTabLabel } from './library-home';
 import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, status, nowArt, songKey, artLoaded, artFailed } from './shared';
 import { throttle } from './slider';
-import { sendVolume } from './vol-send';
+import { sendVolume, sendMute } from './vol-send';
 import './slider';
 import './lyrics/lyrics-view';
 import type { LyricsStore } from './lyrics/store';
@@ -387,7 +387,7 @@ export class JbNow extends LitElement {
   private toggleMute(id: string) {
     const v = !this.mutedOf(id);
     this.mute.set(id, { v, t: Date.now() }); this.requestUpdate();
-    this.call('media_player', 'volume_mute', { is_volume_muted: v }, id);
+    sendMute(this.hass, id, v).catch((err) => { console.warn('[jukebox-card] media_player.volume_mute failed', err); this.toast('That did not work. Check the player.'); });
   }
 
   // ---------- render ----------
