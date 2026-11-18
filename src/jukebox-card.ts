@@ -42,6 +42,12 @@ const TARGET_KEY = 'jukebox-card:target:v1';
 const bool = (v: unknown) => v === undefined || typeof v === 'boolean';
 const num = (v: unknown, lo: number, hi: number) => v === undefined || (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi);
 /** Screensaver status line for lyrics states that have nothing to show (shown only when screensaver lyrics are on). */
+/**
+ * #120 screen-size numbers for the `scale: auto` option (types.ts `scale`). The card is laid out for a DESIGN_W x DESIGN_H box; on a screen at
+ * least SCALE_FROM times that box (both ways) the whole card is zoomed up, in SCALE_STEP steps, never past SCALE_MAX. `scale: <number>` skips this.
+ */
+const DESIGN_W = 1420, DESIGN_H = 800;
+const SCALE_FROM = 1.15, SCALE_MAX = 1.8, SCALE_STEP = 0.05;
 /** Fit-to-panel: never shorter than this (px). Below it the card keeps this height and the page scrolls, as a regular card would. */
 const FIT_MIN = 320;
 /** Short-viewport compaction thresholds for the fitted card height (px). */
@@ -470,7 +476,7 @@ export class JukeboxCard extends LitElement {
     const w = this.clientWidth, h = this.clientHeight;
     let z = 1;
     if (typeof c.scale === 'number' && c.scale > 0) z = c.scale;
-    else if (w && h) { const auto = Math.min(w / 1420, h / 800); z = auto >= 1.15 ? Math.min(1.8, Math.round(auto * 20) / 20) : 1; }
+    else if (w && h) { const auto = Math.min(w / DESIGN_W, h / DESIGN_H); z = auto >= SCALE_FROM ? Math.min(SCALE_MAX, Math.round(auto / SCALE_STEP) / Math.round(1 / SCALE_STEP)) : 1; }
     if (z === this._scale) return;
     this._scale = z;
     this.style.setProperty('--_z', String(z));
