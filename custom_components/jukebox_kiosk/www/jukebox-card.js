@@ -1104,44 +1104,13 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     /* Cover overlay buttons sit on the picture: an HA icon button (no shadow, theme icon colour) on the ha-card surface, so the icon stays readable on any cover */
     .art .sleep-strip .sp { color: var(--_fg); }
     .art .sleep-strip .sp.on { color: var(--_active); border-color: var(--_active); }
-    .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-2, 8px);
-      --_fg: var(--primary-text-color, #212121);
-      --_muted: var(--secondary-text-color, #727272);
-      --_inactive: var(--secondary-text-color, var(--disabled-text-color));
-      --_track: var(--disabled-color, var(--divider-color));
-      --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
-      --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
-      --_chip-bg: var(--ha-assist-chip-container-color, transparent);
-      --_chip-sel: var(--ha-filter-chip-selected-container-color, color-mix(in srgb, var(--primary-text-color, #212121) 15%, transparent));
-      --_surface-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-      --_prov-fg: var(--primary-text-color, #212121);
-      --_prov-bg: var(--ha-assist-chip-container-color, transparent);
-      --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-      color: var(--_fg); }
-    /* Theme surfaces (volume panel, up next, More speakers): theme text and the theme's primary colour */
-    .info .panel, .info .vmore {
-      --_active: var(--primary-color, #03a9f4);
-      --_on-accent: var(--text-primary-color, #fff);
-      --_fg: var(--primary-text-color, #212121);
-      --_muted: var(--secondary-text-color, #727272);
-      --_inactive: var(--secondary-text-color, var(--state-inactive-color, var(--disabled-text-color)));
-      --_track: var(--disabled-color, var(--divider-color));
-      --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
-      --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
-      --_chip-bg: var(--ha-assist-chip-container-color, transparent);
-      --_chip-sel: var(--ha-filter-chip-selected-container-color, color-mix(in srgb, var(--primary-text-color, #212121) 15%, transparent));
-      --_surface-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-      --_prov-fg: var(--primary-text-color, #212121);
-      --_prov-bg: var(--ha-assist-chip-container-color, transparent);
-      --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-      color: var(--_fg);
-    }
+    .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); color: var(--_fg); }
     .badges { display: flex; align-items: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; }
     .pv.big { font-size: var(--ha-font-size-s, 12px); padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); }
     .where { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
       padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-sel); border: var(--ha-border-width-sm, 1px) solid var(--_hairline); color: var(--_muted); }
     .ti { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-3xl, 28px), 4.6cqw, var(--ha-font-size-5xl, 40px)); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: -.01em;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: none; }
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .sub { font-size: clamp(var(--ha-font-size-m, 14px), 1.8cqw, var(--ha-font-size-xl, 20px)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: calc(-1 * var(--ha-space-1, 4px)); }
     .prog { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
     .prog .tr { text-align: right; }
