@@ -4,6 +4,12 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.8.7 — 2026-11-17
+
+- Jukebox Kiosk now needs Home Assistant 2026.11.0 or newer, the version that brought the Marketplace.
+- The three notices in Settings → System → Repairs that ask you to remove the old Jukebox Card plugin now send you to Settings → Marketplace. They used to say HACS, which Home Assistant 2026.11 no longer has.
+- The card itself is unchanged.
+
 ## 0.8.6 — 2026-11-17
 
 - The card no longer falls back to the "Everywhere" player on its own. Playing, shuffle, the queue, lyrics, the speakers panel and the player's own volume slider all use the player you picked in the card's settings. Each room's slider still controls that room.
