@@ -10,8 +10,14 @@ let total = 0, failures = 0;
 const check = (name, ok, info = '') => { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); };
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 
-async function open(query = '') {
+async function open(query = '', at50 = false) {
   const p = await browser.newPage(); await hermetic(p);
+  // a mocked clock: the page's Date reads hh:mm:50 at load, so the next minute boundary is ~10 s away
+  if (at50) await p.evaluateOnNewDocument(() => {
+    const Real = Date, base = Real.now(), off = Math.floor(base / 60000) * 60000 + 50000 - base;
+    class MockDate extends Real { constructor(...a) { if (a.length) super(...a); else super(Real.now() + off); } static now() { return Real.now() + off; } }
+    window.Date = MockDate;
+  });
   await p.emulateTimezone('America/Chicago');
   await p.setViewport({ width: 1024, height: 600, deviceScaleFactor: 1, hasTouch: true });
   p.errs = []; p.on('pageerror', (e) => p.errs.push(e.message));
@@ -50,6 +56,27 @@ const scene = (p, locale) => p.evaluate(async (locale) => {
   const r = await scene(p, { language: 'en-US', time_format: '24', time_zone: 'server' });
   check('C6 screensaver clock: 24-hour and HA\'s server zone', r.sv === r.want, JSON.stringify(r));
   check('C7 no page errors', p.errs.length === 0, JSON.stringify(p.errs));
+  await p.close();
+}
+
+// #107: the clock changes exactly on the minute (mocked Date at hh:mm:50 when the card loads), top bar and screensaver
+for (const [where, q, sel] of [['top bar', '', '.clock'], ['screensaver', '&saver=0.1', '.sv-clock']]) {
+  const p = await open(q, true);
+  const r = await p.evaluate(async (sel) => {
+    const c = window.__card;
+    const fmt = () => new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hourCycle: 'h12', timeZone: 'America/Chicago' }).format(new Date());
+    const show = () => c.shadowRoot.querySelector(sel)?.textContent.trim();
+    // wait for the boundary, then 400 ms into the new minute
+    while (new Date().getSeconds() !== 0) await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 400));
+    return { shown: show(), want: fmt(), at: new Date().toISOString().slice(14, 23) };
+  }, sel);
+  check(`C8 ${where} clock shows the new minute 0.4 s after the boundary`, r.shown === r.want, JSON.stringify(r));
+  if (where === 'top bar') {
+    const d = await p.evaluate(async () => { const c = window.__card, parent = c.parentNode, next = c.nextSibling; c.remove(); const gone = c._clockStop === undefined; parent.insertBefore(c, next); await c.updateComplete; return { gone, back: typeof c._clockStop === 'function' }; });
+    check('C9 removing the card stops its minute timer; adding it back starts one', d.gone && d.back, JSON.stringify(d));
+  }
+  check(`C10 ${where}: no page errors`, p.errs.length === 0, JSON.stringify(p.errs));
   await p.close();
 }
 await browser.close();

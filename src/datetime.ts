@@ -59,3 +59,27 @@ export function formatDateWeekdayDay(d: Date, hass: HomeAssistant | undefined): 
 export function formatDateShort(d: Date, hass: HomeAssistant | undefined, fallbackLang?: string, dateOnly = false): string {
   return fmt(hass, { year: 'numeric', month: 'short', day: 'numeric' }, haLanguage(hass) ?? fallbackLang, dateOnly ? 'UTC' : undefined).format(d);
 }
+
+/**
+ * #107: calls `tick` at every minute boundary (a setTimeout for the ms left in this minute, rescheduled after each tick,
+ * so the clock never runs up to 15 s late). A timer that fires a little early just waits out the rest of the minute.
+ * Returns stop(), which clears the pending timer.
+ */
+export function startMinuteClock(
+  tick: (now: Date) => void,
+  t: { now: () => number; setTimeout: (fn: () => void, ms: number) => any; clearTimeout: (id: any) => void } =
+    { now: () => Date.now(), setTimeout: (fn, ms) => window.setTimeout(fn, ms), clearTimeout: (id) => window.clearTimeout(id) },
+): () => void {
+  let id: any;
+  let last = Math.floor(t.now() / 60000);
+  let stopped = false;
+  const arm = () => { id = t.setTimeout(fire, 60000 - (t.now() % 60000)); };
+  const fire = () => {
+    if (stopped) return;
+    const m = Math.floor(t.now() / 60000);
+    if (m !== last) { last = m; tick(new Date(t.now())); }
+    arm();
+  };
+  arm();
+  return () => { stopped = true; t.clearTimeout(id); };
+}

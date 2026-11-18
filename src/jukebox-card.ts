@@ -20,7 +20,7 @@ import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, liveCount, membe
 const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { firstMusicAssistantPlayer } from './ma-player';
-import { formatTime, formatDateWeekdayDay } from './datetime';
+import { formatTime, formatDateWeekdayDay, startMinuteClock } from './datetime';
 import { pickBackend, createBackend, type MaBackend } from './backend';
 import { defineElement } from './define';
 import { libraryTabLabel, combinedOn } from './library-home';
@@ -93,7 +93,7 @@ export class JukeboxCard extends LitElement {
   private _config!: JukeboxCardConfig;
   private _tab: TabId = 'now';
   private _now = new Date();
-  private _clock?: number;
+  private _clockStop?: () => void;
   private _qcount = 0;
   /** current queue item's (https) image, the art fallback when the player has no relative entity_picture(_local) */
   private _qart = '';
@@ -322,7 +322,9 @@ export class JukeboxCard extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this._clock = window.setInterval(() => (this._now = new Date()), 15000);
+    // #107: the clock (top bar and screensaver) updates exactly on each minute boundary
+    this._clockStop?.(); this._now = new Date();
+    this._clockStop = startMinuteClock((now) => (this._now = now));
     // Belt and braces: if anything editable ever takes focus inside the card, drop it so no OS keyboard opens.
     this.renderRoot?.addEventListener?.('focusin', this.onFocusIn as EventListener);
     this._lunsub ??= this.lyrics.subscribe((st) => { if (st.status !== this._lstatus) { this._lstatus = st.status; this.requestUpdate(); } });
@@ -370,7 +372,7 @@ export class JukeboxCard extends LitElement {
     this._vunsub?.(); this._vunsub = undefined;
     this._conn?.removeEventListener?.('ready', this.onConnReady); this._conn?.removeEventListener?.('disconnected', this.onConnDown); this._conn = undefined;
     super.disconnectedCallback();
-    window.clearInterval(this._clock); window.clearTimeout(this._idleTimer);
+    this._clockStop?.(); this._clockStop = undefined; window.clearTimeout(this._idleTimer);
     this._qunsub?.();
     this._sunsub?.(); this._sunsub = undefined; window.clearTimeout(this._lostTimer);
     this._lunsub?.(); this._lunsub = undefined;
