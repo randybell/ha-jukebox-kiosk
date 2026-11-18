@@ -3,6 +3,8 @@
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
 import { devIndex } from './serve.mjs';
+import { hooksBuild } from './hooks-build.mjs';
+hooksBuild(); // #143: this test sets the window.__jb* timeouts
 
 const BASE = await devIndex();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -33,7 +35,7 @@ async function open(query = '', vp = { width: 1280, height: 800 }, timeouts = FA
   await hermetic(page);
   await page.setViewport({ deviceScaleFactor: 1, ...vp });
   await page.evaluateOnNewDocument((t, u) => { window.__jbSpeakerTimeouts = t; window.__jbUndoMs = u; }, timeouts, undoMs);
-  await page.goto(`${BASE}?fresh=1&latency=30${/[?&]gap=/.test(query) ? '' : '&gap=500'}${query.includes('tab=') ? '' : '&tab=now'}${query}`);
+  await page.goto(`${BASE}?hooks=1&fresh=1&latency=30${/[?&]gap=/.test(query) ? '' : '&gap=500'}${query.includes('tab=') ? '' : '&tab=now'}${query}`);
   await page.waitForFunction('window.__ready === true');
   await sleep(150);
   return page;

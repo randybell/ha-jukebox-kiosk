@@ -26,6 +26,7 @@ import { AskHold } from './speakers/ask-hold';
 interface Ask { title: string; sub?: string; lines: string[]; ok: string; danger?: boolean; resolve: (ok: boolean) => void }
 export type { InlineRoomState as InlineRoom } from './speakers/model';
 import type { InlineRoomState as InlineRoom } from './speakers/model';
+import { TEST_HOOKS } from './test-hooks';
 interface Undo { label: string; run: () => Promise<void> }
 /** the top-right status chip: info (auto-hides ~4 s), busy (until replaced), error, ask (an action button + dismiss) */
 type ChipKind = 'info' | 'busy' | 'error' | 'ask';
@@ -37,7 +38,7 @@ const CHIP_MS = 4000;
 const ERROR_MS = 6000;
 const ASK_MS = 6000;
 const BUSY_MS = 15000;
-const ms = (k: string, d: number) => Number((window as any)[k] ?? d);
+const ms = (k: string, d: number) => (TEST_HOOKS ? Number((window as any)[k] ?? d) : d);
 const chipMs = (kind: ChipKind, undo: boolean) => kind === 'busy' ? BUSY_MS : kind === 'error' ? ms('__jbErrorMs', ERROR_MS) : kind === 'ask' ? ms('__jbAskMs', ASK_MS)
   : undo ? ms('__jbUndoMs', UNDO_MS) : ms('__jbChipMs', CHIP_MS);
 const HOLD_MS = 4000;

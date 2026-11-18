@@ -4,6 +4,8 @@
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
 import { devIndex } from './serve.mjs';
+import { hooksBuild } from './hooks-build.mjs';
+hooksBuild(); // #143: this test sets window.__jbUndoMs
 
 const BASE = await devIndex();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -26,7 +28,7 @@ async function open(query = '', vp = { width: 1280, height: 800 }) {
   page.on('pageerror', (e) => pageErrors.push(e.message));
   await page.setViewport({ deviceScaleFactor: 1, ...vp });
   await page.evaluateOnNewDocument(() => { window.__jbUndoMs = 8000; });
-  await page.goto(`${BASE}?layout=separate&fresh=1&latency=30&gap=500&kiosk=1${query.includes('tab=') ? '' : '&tab=now'}${query}`);
+  await page.goto(`${BASE}?hooks=1&layout=separate&fresh=1&latency=30&gap=500&kiosk=1${query.includes('tab=') ? '' : '&tab=now'}${query}`);
   await page.waitForFunction('window.__ready === true');
   await sleep(150);
   return page;

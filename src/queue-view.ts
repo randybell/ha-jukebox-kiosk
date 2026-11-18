@@ -22,6 +22,7 @@ const AP_MODE: Record<AutoplayMode, { label: string; desc: string }> = {
 interface ApSheet { opts?: AutoplayOptions; view: 'modes' | 'playlists'; busy: string; error: string }
 const AP_HOLD_MS = 500;
 import { defineElement } from './define';
+import { TEST_HOOKS } from './test-hooks';
 
 const asArt = (q: QueueItem) => ({ name: q.media_title || '?', image: q.media_image });
 
@@ -163,7 +164,7 @@ export class JbQueue extends LitElement {
     if (!r) return;
     if (this.caps && !this.caps.undo) { this.run(this.queue!.removeRow(it.queue_item_id), `Removed ${it.media_title}`); return; }
     window.clearTimeout(this._undoTimer); this._toast = ''; this._undo = r;
-    this._undoTimer = window.setTimeout(() => (this._undo = null), Number((window as any).__jbQueueUndoMs ?? 5000));
+    this._undoTimer = window.setTimeout(() => (this._undo = null), TEST_HOOKS ? Number((window as any).__jbQueueUndoMs ?? 5000) : 5000);
     try { await this.queue!.removeRow(it.queue_item_id); } catch (e) {
       if (this._undo === r) { window.clearTimeout(this._undoTimer); this._undo = null; }
       this.toast(e instanceof QueueBusy ? e.message : `Couldn't remove ${it.media_title}`);
