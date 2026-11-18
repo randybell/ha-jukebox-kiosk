@@ -597,7 +597,7 @@ export class JbSpeakers extends LitElement {
       display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 14px; border-radius: var(--ha-border-radius-sm, 4px); pointer-events: auto;
       /* ha-toast styling: neutral loud fill, on-neutral text */
       --_fg: var(--ha-color-on-neutral-loud); --_muted: var(--ha-color-on-neutral-loud);
-      background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); border: 0; box-shadow: var(--ha-box-shadow-l, none); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2);
+      background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); border: 0; box-shadow: var(--wa-shadow-l, var(--ha-box-shadow-l, none)); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2);
       animation: stin 160ms ease both; }
     .st.info, .st.busy { padding-right: 14px; } .st.info:has(.ca), .st.busy:has(.ca) { padding-right: 4px; }
     .st .ct { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 0; }

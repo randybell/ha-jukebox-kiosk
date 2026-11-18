@@ -82,6 +82,12 @@ export const base = css`
   }
   button:focus { outline: none; }
   button:focus-visible { outline: var(--ha-border-width-md, 2px) solid var(--_active); outline-offset: 2px; }
+  /* #119 the one toast look (HA's ha-toast: neutral loud fill, on-neutral text, small radius, the dialog shadow token), centred above the bottom
+     edge by --_toast-bottom (a view that has something at the bottom, such as Undo or a sheet, raises it) */
+  .toast { position: absolute; left: 50%; bottom: var(--_toast-bottom, var(--ha-space-4, 16px)); transform: translateX(-50%); z-index: 8;
+    max-width: calc(100% - 2 * var(--ha-space-4, 16px)); padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-sm, 4px);
+    background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); box-shadow: var(--wa-shadow-l, var(--ha-box-shadow-l, none));
+    font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
   .i { width: var(--_icon); height: var(--_icon); fill: currentColor; flex: none; display: block; }
   .i.xs { width: calc(var(--_icon) * 16 / 24); height: calc(var(--_icon) * 16 / 24); }
 `;

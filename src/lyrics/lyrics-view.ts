@@ -363,9 +363,8 @@ export class JbLyrics extends LitElement {
     .chip { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; color: var(--_muted);
       padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); white-space: nowrap; }
     .chip.fl { position: absolute; top: 10px; left: 10px; z-index: 2; }
-    /* toast: ha-toast styling */
-    .toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-sm, 4px);
-      background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; box-shadow: var(--ha-box-shadow-l, none); }
+    /* toast: the shared look from styles.ts (base); the screensaver keeps its own pill below */
+    .toast { z-index: 3; }
     /* the screensaver is exempt from theming: its lyrics keep exactly the 0.8.0 look */
     :host([mode=saver]) { --_chip-sel: color-mix(in srgb, var(--primary-text-color, #212121) 14%, transparent); --_surface-border: var(--divider-color, rgba(0, 0, 0, 0.12)); }
     :host([mode=saver]) .chip { background: rgba(0, 0, 0, 0.32); }

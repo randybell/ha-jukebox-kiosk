@@ -429,11 +429,11 @@ export class JbQueue extends LitElement {
     .qkbd { grid-area: kb; align-self: end; --kh: 42px; --kgap: 6px; --kfs: var(--ha-font-size-2xl, 24px); }
     .qres { grid-area: res; }
     .qr.sr { grid-template-columns: 22px 44px minmax(0, 1fr); cursor: default; }
-    .undo { position: absolute; left: 50%; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); bottom: 14px; z-index: 5; display: flex; align-items: center; gap: 12px;
-      padding: 8px 8px 8px 18px; border-radius: var(--ha-border-radius-sm, 4px); background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); box-shadow: var(--ha-box-shadow-l, none); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); } /* ha-toast */
+    .undo { position: absolute; left: 50%; transform: translateX(-50%); width: min(520px, calc(100% - 2 * var(--ha-space-4, 16px))); bottom: var(--ha-space-4, 16px); z-index: 5; display: flex; align-items: center; gap: 12px;
+      padding: 8px 8px 8px 18px; border-radius: var(--ha-border-radius-sm, 4px); background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); box-shadow: var(--wa-shadow-l, var(--ha-box-shadow-l, none)); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); } /* ha-toast */
     .undo span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ub { height: 44px; padding: 0 20px; border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
-    .undo ~ .toast { bottom: 76px; }
+    .undo ~ .toast { --_toast-bottom: 76px; }
     .end { text-align: center; color: var(--_inactive); font-size: var(--ha-font-size-m, 14px); padding: 16px; }
     @container np (max-width: 520px) {
       .qx { padding: 12px 12px 10px; } h2 { font-size: var(--ha-font-size-2xl, 24px); }

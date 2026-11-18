@@ -145,7 +145,7 @@ export class JbStation extends LitElement {
     .fav { width: 60px; height: 60px; flex: none; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
     .fav .i { width: calc(var(--_icon) * 28 / 24); height: calc(var(--_icon) * 28 / 24); } .fav.on { color: var(--_active); border-color: currentColor; } .fav:disabled { color: var(--_disabled); }
     .note { margin: -6px 0 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; }
-    .toast.solo { z-index: 3; bottom: 96px; pointer-events: auto; }
+    .toast.solo { z-index: 3; --_toast-bottom: 96px; pointer-events: auto; }
     /* tablet / desktop: a centred dialog */
     @container st (min-width: 700px) {
       .sheet { left: 50%; top: 50%; bottom: auto; transform: translate(-50%, -50%); width: min(560px, 90cqw); border-radius: var(--_dialog-radius); padding: var(--ha-space-6, 24px) var(--ha-space-6, 24px) var(--ha-space-5, 20px); }

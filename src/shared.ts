@@ -400,8 +400,7 @@ export const mediaStyles = css`
   .pv { display: inline-block; width: max-content; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .04em; text-transform: uppercase;
     padding: 2px var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); color: var(--_prov-fg); border: var(--ha-border-width-sm, 1px) solid var(--_prov-border); background: var(--_prov-bg); white-space: nowrap; }
   /* toast: ha-toast's own styling (neutral loud fill, on-neutral text, small radius, HA shadow) */
-  .toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: calc(100% - 24px); padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-sm, 4px);
-    background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: var(--ha-box-shadow-l, none); z-index: 8; pointer-events: none; }
+  /* .toast: one shared look in styles.ts (base) */
   .scrim { position: absolute; inset: -200px; z-index: 6; }
   .scrim.dim { background: var(--_scrim); -webkit-backdrop-filter: var(--_scrim-filter); backdrop-filter: var(--_scrim-filter); }
   .menu { position: absolute; z-index: 7; width: min(220px, 90cqi); padding: var(--ha-space-2, 8px); border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); max-height: var(--_popup-max-h); overflow: auto; }
