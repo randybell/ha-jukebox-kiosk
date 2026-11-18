@@ -361,7 +361,7 @@ export class JbLyrics extends LitElement {
     .st-loading .mt { animation: breathe 1.8s ease-in-out infinite; }
     @keyframes breathe { 50% { opacity: .45 } }
     .chip { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; color: var(--_muted);
-      padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); border: 1px solid var(--_surface-border); background: var(--_chip-bg); white-space: nowrap; }
+      padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); white-space: nowrap; }
     .chip.fl { position: absolute; top: 10px; left: 10px; z-index: 2; }
     /* toast: ha-toast styling */
     .toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-sm, 4px);

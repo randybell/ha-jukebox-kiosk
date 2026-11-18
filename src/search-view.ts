@@ -836,7 +836,7 @@ export class JbSearch extends LitElement {
     /* 0.7.2 source buttons: always visible under the search box, Black Frame chips, touch-sized; wrap when there are many */
     .srcs { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); margin-top: var(--ha-space-2, 8px); min-width: 0; }
     .srcs .fc.src { height: auto; min-height: 44px; padding: 0 var(--ha-space-4, 16px); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
-      background: transparent; color: var(--_fg); border: 1.5px solid var(--_surface-border); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      background: transparent; color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .srcs .fc.src.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     /* phones: one horizontally scrolling row so the buttons never push the results off screen */
     @container np (max-width: 600px) { .srcs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .srcs::-webkit-scrollbar { display: none; } .srcs .fc.src { flex: none; } }
@@ -850,19 +850,19 @@ export class JbSearch extends LitElement {
     .lcrow .lcats { flex: 1; min-width: 0; margin-bottom: 0; }
     .lcats .fc.lc { flex: 1 1 auto; min-width: 68px; height: auto; min-height: 62px; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-xl, 16px); display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .03em; text-transform: uppercase;
-      color: var(--_muted); background: var(--_chip-bg); border: 1.5px solid var(--_surface-border); transition: background 120ms, color 120ms; }
+      color: var(--_muted); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background 120ms, color 120ms; }
     .lc .lci { width: 26px; height: 26px; flex: none; }
     .lc .lcl { white-space: nowrap; }
     .lcats .fc.lc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .lcorner { display: flex; gap: var(--ha-space-2, 8px); flex: none; }
     .cn { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: var(--ha-border-radius-xl, 16px);
-      color: var(--_muted); background: var(--_chip-bg); border: 1.5px solid var(--_surface-border); }
+      color: var(--_muted); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
     .cn .i { width: 22px; height: 22px; } .cn small { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .02em; white-space: nowrap; }
     .cn.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     /* Compact sources control; its choices open as a row under the control (no overlay). */
     .qrow .srcs.srcc { display: flex; flex: none; flex-wrap: nowrap; margin-top: 0; overflow: visible; }
     .srct { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-width: 0; max-width: 168px; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-xl, 16px); font: inherit; font-size: var(--ha-font-size-s, 12px);
-      font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .03em; text-transform: uppercase; color: var(--_fg); background: var(--_chip-bg); border: 1.5px solid var(--_surface-border); cursor: pointer; }
+      font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .03em; text-transform: uppercase; color: var(--_fg); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); cursor: pointer; }
     .srct .sts { display: none; }
     .srct .stl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .srct .sti { width: 22px; height: 22px; flex: none; } .srct .stc { width: 20px; height: 20px; flex: none; margin-left: -2px; }
@@ -899,7 +899,7 @@ export class JbSearch extends LitElement {
     .hair.on { opacity: 1; }
     @keyframes hair { from { left: -40% } to { left: 100% } }
     .qmeta { display: flex; align-items: center; gap: var(--ha-space-2, 8px); margin: var(--ha-space-2, 8px) var(--ha-space-1, 4px) 0; font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); box-shadow: 0 0 0 3px var(--_chip-sel); flex: none; }
+    .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); box-shadow: 0 0 0 var(--ha-border-width-lg, 3px) var(--_chip-sel); flex: none; }
     .live.busy { animation: pulse 800ms ease-in-out infinite alternate; }
     @keyframes pulse { from { opacity: 1 } to { opacity: .35 } }
     .recents { display: flex; align-items: center; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; white-space: nowrap; min-width: 0; min-height: 0;
@@ -907,11 +907,11 @@ export class JbSearch extends LitElement {
     .recents::-webkit-scrollbar { display: none; }
     .recents:empty { display: none; }
     .rl { display: flex; align-items: center; gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .08em; text-transform: uppercase; color: var(--_inactive); flex: none; }
-    .chip { flex: none; height: 36px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_fg); background: var(--_chip-bg); border: 1px solid var(--_surface-border); }
+    .chip { flex: none; height: 36px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_fg); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
     .res { position: relative; min-height: 0; display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); min-width: 0; container: res / inline-size; }
     .filters { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; flex: none; }
     .filters::-webkit-scrollbar { display: none; }
-    .fc { flex: none; height: 34px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_inactive); border: 1px solid var(--_surface-border); }
+    .fc { flex: none; height: 34px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_inactive); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
     .fc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     /* v0.7 category chips: count after the label, empty categories dimmed but still tappable */
     .fc em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); margin-left: var(--ha-space-2, 8px); opacity: .7; font-variant-numeric: tabular-nums; }
@@ -926,15 +926,15 @@ export class JbSearch extends LitElement {
     .fc.clr { height: 44px; padding: 0 var(--ha-space-4, 16px); font-size: var(--ha-font-size-m, 14px); color: var(--_fg); border-color: var(--_surface-border); }
     .empty .fc.clr { margin-top: var(--ha-space-4, 16px); }
     .lsec { display: flex; align-items: center; gap: var(--ha-space-2, 8px); margin: var(--ha-space-1, 4px) 0 2px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .1em; text-transform: uppercase; color: var(--_inactive); }
-    .lsec[data-sec="providers"] { margin-top: var(--ha-space-3, 12px); padding-top: var(--ha-space-2, 8px); border-top: 1px solid var(--_divider); }
-    .ar.gen { display: grid; place-items: center; background: var(--_chip-sel); color: var(--_fg); box-shadow: 0 0 0 1px var(--_surface-border); }
+    .lsec[data-sec="providers"] { margin-top: var(--ha-space-3, 12px); padding-top: var(--ha-space-2, 8px); border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
+    .ar.gen { display: grid; place-items: center; background: var(--_chip-sel); color: var(--_fg); box-shadow: 0 0 0 var(--ha-border-width-sm, 1px) var(--_surface-border); }
     .ar.gen .i { width: 22px; height: 22px; }
     .ra.go { width: 48px; height: 48px; display: grid; place-items: center; color: var(--_inactive); }
     /* Labeled search actions need their own height and enough width for an unbroken touch label. */
     .row { min-height: 68px; }
 
     .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: var(--ha-space-4, 16px);
-      padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px) var(--ha-space-6, 24px); border-radius: var(--_radius); background: transparent; border: 1px solid var(--_surface-border);
+      padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px) var(--ha-space-6, 24px); border-radius: var(--_radius); background: transparent; border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     .dv { flex: 1; min-height: 0; }

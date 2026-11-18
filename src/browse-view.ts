@@ -926,7 +926,7 @@ export class JbBrowse extends LitElement {
     .cats { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
     .cats::-webkit-scrollbar { display: none; }
     .fc { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 42px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
-      color: var(--_inactive); border: 1px solid var(--_surface-border); background: var(--_chip-bg); white-space: nowrap; }
+      color: var(--_inactive); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); white-space: nowrap; }
     .fc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .fc.tog { padding: 0 var(--ha-space-4, 16px); font-size: var(--ha-font-size-m, 14px); }
     /* v0.7 Library filters: chips (same as Search), the filter box and the on-screen keyboard under the grid */
@@ -938,7 +938,7 @@ export class JbBrowse extends LitElement {
     .sc .scx { width: 28px; height: 28px; padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-circle, 50%); background: var(--_chip-bg); flex: none; }
     .fc.clr { height: 44px; padding: 0 var(--ha-space-4, 16px); font-size: var(--ha-font-size-m, 14px); color: var(--_fg); border-color: var(--_surface-border); }
     .empty .fc.clr { margin-top: var(--ha-space-4, 16px); }
-    .lfq { display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: 52px; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); border: 1px solid var(--_surface-border);
+    .lfq { display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: 52px; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       background: var(--_input-bg); color: var(--_input-ink); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); min-width: 0; }
     .lfq .lfv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .lfq .lfv.ph { color: var(--_input-label); font-weight: var(--ha-font-weight-medium, 500); }
@@ -971,7 +971,7 @@ export class JbBrowse extends LitElement {
     /* v0.7 Library home */
     .home { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--ha-space-4, 16px); }
     .lt { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: var(--ha-space-1, 4px); min-height: 180px; padding: var(--ha-space-6, 24px) var(--ha-space-6, 24px);
-      border-radius: var(--ha-border-radius-3xl, 24px); border: 1px solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); text-align: left; cursor: pointer; }
+      border-radius: var(--ha-border-radius-3xl, 24px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); text-align: left; cursor: pointer; }
     .lt:active { background: var(--_chip-sel); }
     .lti { flex: 1; display: flex; align-items: flex-start; } .lti svg { width: 52px; height: 52px; fill: var(--_active); }
     .ltl { font-family: var(--_font-display, inherit); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); }
@@ -980,7 +980,7 @@ export class JbBrowse extends LitElement {
     .lt-title { font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ha-space-4, 16px) var(--ha-space-4, 16px); }
     .tile { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; border-radius: var(--ha-border-radius-lg, 12px); padding: var(--ha-space-1, 4px); cursor: pointer; }
-    .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 1.5px var(--_active); }
+    .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .tw { position: relative; }
     .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--ha-border-radius-md, 8px); }
     .big.circ { border-radius: var(--ha-border-radius-circle, 50%); }
@@ -1010,8 +1010,8 @@ export class JbBrowse extends LitElement {
     .tile small { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .list { display: flex; flex-direction: column; }
     .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto auto; align-items: center; gap: var(--ha-space-3, 12px); min-height: 58px; padding: 0 var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-md, 8px); cursor: pointer; }
-    .row + .row { border-top: 1px solid var(--_divider); }
-    .row.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 1.5px var(--_active); }
+    .row + .row { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
+    .row.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .row .n { text-align: center; color: var(--_inactive); font-size: var(--ha-font-size-m, 14px); font-variant-numeric: tabular-nums; }
     .rt { min-width: 0; display: flex; flex-direction: column; }
     .rt b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1022,7 +1022,7 @@ export class JbBrowse extends LitElement {
     .dv { flex: 1; min-height: 0; }
     .sec { display: flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .08em; text-transform: uppercase; color: var(--_muted); margin: 2px 0 calc(-1 * var(--ha-space-1, 4px)); }
     .sec .i { width: 14px; height: 14px; color: var(--_active); }
-    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-md, 8px); border: 1px dashed var(--_divider); }
+    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-md, 8px); border: var(--ha-border-width-sm, 1px) dashed var(--_divider); }
     /* v0.7 radio "Stations by…" */
     .modes { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; margin-top: calc(-1 * var(--ha-space-1, 4px)); }
     .modes::-webkit-scrollbar { display: none; }

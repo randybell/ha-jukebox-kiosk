@@ -800,11 +800,11 @@ export class JukeboxCard extends LitElement {
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
     .top { display: flex; align-items: center; gap: var(--ha-space-4, 16px); padding: var(--ha-space-3, 12px) var(--_pad) var(--ha-space-3, 12px); min-height: 60px; position: relative; z-index: 2;
-      background: transparent; border-bottom: 1px solid var(--_hairline); }
+      background: transparent; border-bottom: var(--ha-border-width-sm, 1px) solid var(--_hairline); }
     .brand { display: flex; align-items: center; gap: var(--ha-space-2, 8px); font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-xl, 20px); }
     .brand-i { width: 28px; height: 28px; color: var(--_active); }
     .pill { white-space: nowrap; display: flex; align-items: center; gap: var(--ha-space-2, 8px); padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
-      border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
     .pill b { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .pill .pl { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); margin-right: -2px; }
     .pill .pc { width: 14px; height: 14px; opacity: .7; margin-left: -2px; }
@@ -871,9 +871,9 @@ export class JukeboxCard extends LitElement {
        dividers, the active segment using the theme primary. Only colour/transform transitions (no layout, no blur). */
     .tabs { display: grid; grid-template-columns: repeat(var(--tabs, 4), minmax(0, 1fr)); gap: var(--ha-space-1, 4px);
       padding: var(--ha-space-3, 12px) calc(var(--_pad) + var(--ha-space-1, 4px)) calc(var(--ha-space-3, 12px) + env(safe-area-inset-bottom)); background: transparent;
-      border-top: 1px solid var(--_hairline); position: relative; z-index: 2; }
+      border-top: var(--ha-border-width-sm, 1px) solid var(--_hairline); position: relative; z-index: 2; }
     .tabs::before { content: ""; position: absolute; top: 7px; left: var(--_pad); right: var(--_pad); bottom: calc(9px + env(safe-area-inset-bottom));
-      border-radius: var(--ha-border-radius-xl, 16px); background: var(--_chip-bg); border: 1px solid var(--_surface-border); pointer-events: none; }
+      border-radius: var(--ha-border-radius-xl, 16px); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); pointer-events: none; }
     .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--ha-space-1, 4px); min-width: 0; min-height: 58px;
       padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-xl, 16px); background: transparent; border: 0;
       color: var(--_muted); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: .01em; position: relative;
@@ -886,7 +886,7 @@ export class JukeboxCard extends LitElement {
     .tab:active { transform: scale(.97); background: var(--_chip-sel); color: var(--_fg); }
     /* selected tab: HA sidebar pattern: --sidebar-selected-icon-color text/icon on a tint of that colour at --dark-divider-opacity */
     .tab.active, .tab.active:hover, .tab.active:active { background: color-mix(in srgb, var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)) calc(var(--dark-divider-opacity, 0.12) * 100%), transparent); color: var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)); }
-    .tab:focus-visible { outline: 2px solid var(--_active); outline-offset: 3px; }
+    .tab:focus-visible { outline: var(--ha-border-width-md, 2px) solid var(--_active); outline-offset: 3px; }
     .tab .badge { top: 4px; left: calc(50% + 6px); }
     /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole.
        0.7.12 fluid: gate and breakpoints follow the card's jbapp width, not the window. */

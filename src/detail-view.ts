@@ -395,7 +395,7 @@ export class JbDetail extends LitElement {
     .detail { display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); }
     .nav { display: flex; align-items: center; gap: var(--ha-space-3, 12px); min-width: 0; }
     .back { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px) 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
-      border: 1px solid var(--_surface-border); color: var(--_fg); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
     .back .i { width: 22px; height: 22px; }
     .trail { min-width: 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .dh { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--ha-space-4, 16px); align-items: center; }
@@ -412,11 +412,11 @@ export class JbDetail extends LitElement {
     .sbtn.hfav.on { color: var(--_active); border-color: currentColor; }
     .pbtn, .sbtn { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 46px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-weight: var(--ha-font-weight-bold, 700); }
     .pbtn { background: var(--_active); color: var(--_on-accent); }
-    .sbtn { border: 1px solid var(--_surface-border); color: var(--_fg); }
+    .sbtn { border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
     .pbtn .i, .sbtn .i { width: 22px; height: 22px; }
     .sbtn.scope { border-color: var(--_active); color: var(--_active); max-width: 100%; }
     .sbtn.scope span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-md, 8px); border: 1px dashed var(--_divider); }
+    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-md, 8px); border: var(--ha-border-width-sm, 1px) dashed var(--_divider); }
     .note.err { color: var(--_fg); display: flex; align-items: center; justify-content: space-between; gap: var(--ha-space-3, 12px); flex-wrap: wrap; }
     .note .retry { height: 38px; }
     h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); } h3 em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; text-transform: none; color: var(--_inactive); margin-left: var(--ha-space-2, 8px); }

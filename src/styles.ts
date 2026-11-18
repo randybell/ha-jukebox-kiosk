@@ -24,7 +24,7 @@ export const tokens = css`
     --_prov-fg: var(--primary-text-color, #212121);
     --_prov-bg: var(--ha-assist-chip-container-color, transparent);
     --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-    --_thumb-ring: 0 0 0 4px color-mix(in srgb, var(--primary-color, #03a9f4) calc(var(--dark-divider-opacity, 0.12) * 100%), transparent);
+    --_thumb-ring: 0 0 0 calc(2 * var(--ha-border-width-md, 2px)) color-mix(in srgb, var(--primary-color, #03a9f4) calc(var(--dark-divider-opacity, 0.12) * 100%), transparent);
     /* chips, keys, pills (ha-assist-chip / ha-filter-chip): idle = no fill with an outline; selected or pressed = text colour at 15% */
     --_chip-bg: var(--ha-assist-chip-container-color, transparent);
     --_chip-sel: var(--ha-filter-chip-selected-container-color, color-mix(in srgb, var(--primary-text-color, #212121) 15%, transparent));
@@ -66,7 +66,7 @@ export const base = css`
     -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   }
   button:focus { outline: none; }
-  button:focus-visible { outline: 2px solid var(--_active); outline-offset: 2px; }
+  button:focus-visible { outline: var(--ha-border-width-md, 2px) solid var(--_active); outline-offset: 2px; }
   .i { width: 24px; height: 24px; fill: currentColor; flex: none; display: block; }
   .i.xs { width: 16px; height: 16px; }
 `;

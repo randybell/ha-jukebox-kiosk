@@ -392,13 +392,13 @@ export const mediaStyles = css`
     background: var(--_active); color: var(--_on-accent); font: inherit; font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; }
   .cls:active { transform: scale(.96); background: var(--_chip-sel); }
   /* no picture: media-control's no-image look, a flat --primary-color block */
-  .ar { position: relative; display: block; flex: none; overflow: hidden; background: var(--primary-color, #03a9f4); box-shadow: 0 0 0 1px var(--_hairline); }
+  .ar { position: relative; display: block; flex: none; overflow: hidden; background: var(--primary-color, #03a9f4); box-shadow: 0 0 0 var(--ha-border-width-sm, 1px) var(--_hairline); }
   .ar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .circ { width: 64px; height: 64px; border-radius: var(--ha-border-radius-circle, 50%); }
   .sq { width: 100px; height: 100px; border-radius: var(--ha-border-radius-md, 8px); }
   .th { width: 44px; height: 44px; border-radius: var(--ha-border-radius-md, 8px); }
   .pv { display: inline-block; width: max-content; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .04em; text-transform: uppercase;
-    padding: 2px var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); color: var(--_prov-fg); border: 1px solid var(--_prov-border); background: var(--_prov-bg); white-space: nowrap; }
+    padding: 2px var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); color: var(--_prov-fg); border: var(--ha-border-width-sm, 1px) solid var(--_prov-border); background: var(--_prov-bg); white-space: nowrap; }
   /* toast: ha-toast's own styling (neutral loud fill, on-neutral text, small radius, HA shadow) */
   .toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: calc(100% - 24px); padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-sm, 4px);
     background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: var(--ha-box-shadow-l, none); z-index: 8; pointer-events: none; }
@@ -409,9 +409,9 @@ export const mediaStyles = css`
   .mi { display: flex; align-items: center; gap: var(--ha-space-3, 12px); width: 100%; height: 46px; padding: 0 var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-md, 8px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_fg); text-align: left; }
   .mi:active { background: var(--_chip-sel); }
   .mi .i { width: 22px; height: 22px; }
-  .mi.cancel { color: var(--_inactive); border-top: 1px solid var(--_divider); border-radius: 0 0 var(--ha-border-radius-md, 8px) var(--ha-border-radius-md, 8px); margin-top: var(--ha-space-1, 4px); }
+  .mi.cancel { color: var(--_inactive); border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); border-radius: 0 0 var(--ha-border-radius-md, 8px) var(--ha-border-radius-md, 8px); margin-top: var(--ha-space-1, 4px); }
   .menu.sheet { left: 0; right: 0; bottom: 0; width: auto; border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px) calc(var(--ha-space-4, 16px) + env(safe-area-inset-bottom)); max-height: min(100%, var(--_popup-max-h)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-  .menu.sheet .mh { display: flex; align-items: center; gap: var(--ha-space-3, 12px); text-transform: none; letter-spacing: 0; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-bottom: 1px solid var(--_divider); margin-bottom: var(--ha-space-2, 8px); }
+  .menu.sheet .mh { display: flex; align-items: center; gap: var(--ha-space-3, 12px); text-transform: none; letter-spacing: 0; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-bottom: var(--ha-border-width-sm, 1px) solid var(--_divider); margin-bottom: var(--ha-space-2, 8px); }
   .menu.sheet .mh span { display: flex; flex-direction: column; min-width: 0; }
   .menu.sheet .mh b { color: var(--_fg); font-size: var(--ha-font-size-l, 16px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .menu.sheet .mh small { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -421,8 +421,8 @@ export const mediaStyles = css`
   .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; align-items: center; column-gap: var(--ha-space-3, 12px); min-height: 60px; padding: var(--ha-space-1, 4px) 0 var(--ha-space-1, 4px) var(--ha-space-1, 4px);
     border-radius: var(--ha-border-radius-md, 8px); user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
   .row.drill { cursor: pointer; }
-  .row + .row { border-top: 1px solid var(--_divider); }
-  .row.held, .row.sel { background: var(--_chip-sel); box-shadow: inset 0 0 0 1.5px var(--_active); }
+  .row + .row { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
+  .row.held, .row.sel { background: var(--_chip-sel); box-shadow: inset 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
   .row .n { text-align: center; color: var(--_inactive); font-size: var(--ha-font-size-m, 14px); font-variant-numeric: tabular-nums; }
   .ar.th.circ { border-radius: var(--ha-border-radius-circle, 50%); }
   .rt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -465,7 +465,7 @@ export const mediaStyles = css`
   .confirm p { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); }
   .cf-a { display: flex; gap: var(--ha-space-2, 8px); justify-content: flex-end; }
   .cbtn { display: inline-flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); min-width: 112px; height: 48px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
-    font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); border: 1px solid var(--_surface-border); }
+    font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
   .cbtn.ok { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
   .cbtn .i { width: 22px; height: 22px; }
   /* the speakers and up-next panels on Now Playing: an opaque HA card surface (theme text on theme surface, never on the art shade) */

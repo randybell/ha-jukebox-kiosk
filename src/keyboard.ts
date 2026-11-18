@@ -160,7 +160,7 @@ export class JbKeyboard extends LitElement {
       .k.clr { grid-column: span 7; }
       .k {
         height: var(--kh, 60px); display: grid; place-items: center; border-radius: var(--ha-border-radius-lg, 12px);
-        font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: 1px solid var(--_surface-border);
+        font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
         user-select: none; -webkit-user-select: none; transition: transform 60ms, background 60ms;
       }
       /* The backspace icon grows with the key labels (26px at the 24px default), so it stays in proportion. */
