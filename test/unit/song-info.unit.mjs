@@ -4,6 +4,20 @@ import { rollup } from 'rollup';
 import typescript from '@rollup/plugin-typescript';
 import resolve from '@rollup/plugin-node-resolve';
 import { mkdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+// #108: every check runs twice, in a negative-offset zone (America/Chicago) and in UTC, so a date that shifts a day shows up.
+if (!process.env.JB_SONGINFO_TZ_RUN) {
+  let bad = 0;
+  for (const tz of ['America/Chicago', 'UTC']) {
+    console.log(`--- TZ=${tz}`);
+    const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], { stdio: 'inherit', env: { ...process.env, TZ: tz, JB_SONGINFO_TZ_RUN: '1' } });
+    if (r.status !== 0) bad++;
+  }
+  console.log(`\nsong-info: ${2 - bad}/2 time-zone runs passed`);
+  process.exit(bad ? 1 : 0);
+}
 
 const OUT = new URL('../tmp/unit-song-info/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
@@ -111,6 +125,16 @@ const song = {
   check('#108 US English profile: same date as before', en === 'Nov 1, 2026', en);
   const zoned = vals(S.songInfo({ ...ep, metadata: { release_date: '2026-11-01T03:00:00Z' } }, { ...hassOf('en-US'), config: { time_zone: 'America/Chicago' } })).published;
   check('#108 HA time zone is used (server zone Chicago: 03:00 UTC is the day before)', zoned === 'Oct 31, 2026', zoned);
+}
+
+// #108: date-only values show the date as written, in any zone (HA's zone here: America/Chicago, UTC-6)
+{
+  const chi = { states: {}, language: 'en-US', locale: { language: 'en-US', time_format: 'language', time_zone: 'server' }, config: { time_zone: 'America/Chicago' } };
+  const pub = (rd) => vals(S.songInfo({ media_type: 'podcast_episode', name: 'Ep', uri: 'library://podcast_episode/2', position: 1, metadata: { release_date: rd } }, chi)).published;
+  check('#108 YYYY-MM-DD in a UTC-6 zone: Nov 1, 2026 (not Oct 31)', pub('2026-11-01') === 'Nov 1, 2026', pub('2026-11-01'));
+  check('#108 YYYY-MM in a UTC-6 zone: Nov 1, 2026', pub('2026-11') === 'Nov 1, 2026', pub('2026-11'));
+  check('#108 YYYY in a UTC-6 zone: Jan 1, 2026 (not Dec 31, 2025)', pub('2026') === 'Jan 1, 2026', pub('2026'));
+  check('#108 a value with a time keeps HA\'s zone (03:00 UTC is Oct 31 in Chicago)', pub('2026-11-01T03:00:00Z') === 'Oct 31, 2026', pub('2026-11-01T03:00:00Z'));
 }
 
 check('INFO_TYPES still lists track, podcast_episode, audiobook', J(S.INFO_TYPES) === J(['track', 'podcast_episode', 'audiobook']));

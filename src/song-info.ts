@@ -26,10 +26,12 @@ function peopleNames(list: unknown): string {
  *  time zone, as HA's own formatDateShort ("9. Nov. 2026" in German); US English only when there is no hass. */
 function fmtDate(d: unknown, hass?: HomeAssistant): string {
   if (d == null || d === '') return '';
-  const t = d instanceof Date ? d : new Date(String(d));
+  // #108: date-only values (YYYY-MM-DD, YYYY-MM, YYYY) are parsed as UTC midnight: show that calendar date in any time zone
+  const dateOnly = typeof d === 'string' && /^\s*\d{4}(-\d{2}(-\d{2})?)?\s*$/.test(d);
+  const t = d instanceof Date ? d : new Date(String(d).trim());
   if (Number.isNaN(+t)) return '';
   try {
-    return formatDateShort(t, hass, 'en-US');
+    return formatDateShort(t, hass, 'en-US', dateOnly);
   } catch {
     return '';
   }

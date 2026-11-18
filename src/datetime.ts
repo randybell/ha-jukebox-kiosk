@@ -38,8 +38,8 @@ export function resolveTimeZone(hass: HomeAssistant | undefined): string | undef
 export const haLanguage = (hass: HomeAssistant | undefined) => hass?.locale?.language || hass?.language || undefined;
 
 /** A formatter with HA's language and time zone; an unknown language or zone falls back to the browser's. */
-function fmt(hass: HomeAssistant | undefined, opts: Intl.DateTimeFormatOptions, lang = haLanguage(hass)): Intl.DateTimeFormat {
-  const timeZone = resolveTimeZone(hass);
+function fmt(hass: HomeAssistant | undefined, opts: Intl.DateTimeFormatOptions, lang = haLanguage(hass), zone?: string): Intl.DateTimeFormat {
+  const timeZone = zone ?? resolveTimeZone(hass);
   for (const [l, tz] of [[lang, timeZone], [lang, undefined], [undefined, timeZone], [undefined, undefined]] as const) {
     try { return new Intl.DateTimeFormat(l, { ...opts, ...(tz ? { timeZone: tz } : {}) }); } catch { /* try the next */ }
   }
@@ -54,7 +54,8 @@ export function formatTime(d: Date, hass: HomeAssistant | undefined): string {
 export function formatDateWeekdayDay(d: Date, hass: HomeAssistant | undefined): string {
   return fmt(hass, { weekday: 'long', month: 'long', day: 'numeric' }).format(d);
 }
-/** HA's formatDateShort: "Aug 10, 2021". `fallbackLang` is used only when hass has no language. */
-export function formatDateShort(d: Date, hass: HomeAssistant | undefined, fallbackLang?: string): string {
-  return fmt(hass, { year: 'numeric', month: 'short', day: 'numeric' }, haLanguage(hass) ?? fallbackLang).format(d);
+/** HA's formatDateShort: "Aug 10, 2021". `fallbackLang` is used only when hass has no language.
+ *  #108: a date-only value (`d` is UTC midnight of that calendar date) is shown as written, with no time-zone shift. */
+export function formatDateShort(d: Date, hass: HomeAssistant | undefined, fallbackLang?: string, dateOnly = false): string {
+  return fmt(hass, { year: 'numeric', month: 'short', day: 'numeric' }, haLanguage(hass) ?? fallbackLang, dateOnly ? 'UTC' : undefined).format(d);
 }
