@@ -68,7 +68,9 @@ for (const [name, sel] of [['now playing', `${QV}.querySelector('.qr.now .rt')`]
   ['song 2', `${QV}.querySelectorAll('.qr.next')[1].querySelector('.rt')`], ['middle song', `${QV}.querySelectorAll('.qr.next')[5].querySelector('.rt')`]]) {
   await press(p, sel, 700);
   const got = await ids(p), off = await offOf(); grayed[name] = off;
-  const vis = await ev(p, `[...${HS}.querySelectorAll('.it[aria-disabled="true"]')].every((b) => +getComputedStyle(b).opacity < 0.5)`);
+  // #113: grayed = HA's disabled text colour (--disabled-text-color through --_disabled), not an ad-hoc opacity
+  const vis = await ev(p, `(() => { const r = ${HS}; const t = document.createElement('span'); t.style.color = 'var(--_disabled)'; r.appendChild(t); const want = getComputedStyle(t).color; t.remove();
+    return [...r.querySelectorAll('.it[aria-disabled="true"]')].every((b) => getComputedStyle(b).color === want && +getComputedStyle(b).opacity === 1); })()`);
   check(`0.7.12 ${name}: all six choices in order; unusable ones grayed`, J(got) === J(want) && vis, J({ got, off }));
   if (false) await p.screenshot({ path: `${process.env.SHOTS}/queue-popup-${name === 'song 1' ? 'song1' : name === 'song 2' ? 'song2' : 'middle'}-1024x600.png` });
   for (const id of off) {

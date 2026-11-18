@@ -597,7 +597,7 @@ export class JbNow extends LitElement {
     .tl::after, .vv::after { content: attr(data-v); }
     .ps { --_slider-h: 4px; --_slider-knob: 14px; --_slider-hit: 34px; }
     .vs { --_slider-h: 7px; --_slider-knob: 22px; --_slider-hit: 40px; }
-    .prog.nodur .ps { opacity: .5; }
+    .prog.nodur .ps { --ha-slider-indicator-color: var(--_disabled); --ha-slider-thumb-color: var(--_disabled); }
     .tp { display: grid; grid-template-columns: repeat(6, 1fr); align-items: center; justify-items: center; margin: 2px 0; }
     .tp:has(.tb:nth-child(5):last-child) { grid-template-columns: repeat(5, 1fr); }
     .tp:has(.tb.fv) { grid-template-columns: repeat(7, 1fr); } .tp:has(.tb.fv) .tb.sh { grid-column: 2; } /* #42: empty first slot keeps Play/Pause centered with the heart */
@@ -619,7 +619,8 @@ export class JbNow extends LitElement {
     .tb.pp .i { width: 44px; height: 44px; }
     .tb.pr, .tb.nx { width: 72px; height: 72px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
     .tb:active { transform: scale(.94); }
-    .tb:disabled { opacity: .3; }
+    .tb:disabled { color: var(--_disabled); }
+    .tb.pp:disabled { background: color-mix(in srgb, var(--_disabled-fill) 20%, transparent); }
     .upn { display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px); text-align: left; min-width: 0; width: 100%; }
     .upn .eyebrow { font-size: var(--ha-font-size-xs, 10px); flex: none; }
     .upn b { font-size: var(--ha-font-size-m, 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -656,7 +657,7 @@ export class JbNow extends LitElement {
     .vr.main .vn { font-weight: var(--ha-font-weight-bold, 700); }
     .vn i { font-style: normal; font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
     .vv { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); text-align: right; font-variant-numeric: tabular-nums; }
-    .vr.off { opacity: .5; }
+    .vr.off .vn, .vr.off .vv, .vr.off .vm, .vm:disabled { color: var(--_disabled); }
     /* 0.6.3 speaker controls: a trailing column for Speakers (main row) and Drop/Add (rooms) */
     .vol.acts .vr.main { grid-template-columns: 30px minmax(0, max-content) minmax(0, 1fr) 34px auto; }
     .vol.acts .rooms .vr { grid-template-columns: 30px minmax(70px, 28%) minmax(0, 1fr) 34px 36px; }
@@ -668,14 +669,13 @@ export class JbNow extends LitElement {
     .ra .i { width: 18px; height: 18px; }
     .ra.add { background: var(--_active); border-color: transparent; color: var(--_on-accent); }
     .ra.drop { color: var(--_fg); }
-    .ra[aria-disabled="true"] { opacity: .45; }
-    .ra.add[aria-disabled="true"] { background: var(--_chip-bg); color: var(--_muted); }
-    .ra:disabled { opacity: .5; }
-    .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: .5; }
+    .ra[aria-disabled="true"], .ra:disabled { color: var(--_disabled); }
+    .ra.add[aria-disabled="true"], .ra.add:disabled { background: var(--_chip-bg); border-color: var(--_surface-border); color: var(--_disabled); }
+    .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: var(--_dim); }
     .vr.pending .ra { animation: jb-pulse 1s ease-in-out infinite; }
     @keyframes jb-pulse { 50% { opacity: .35; } }
     .vn .else { display: block; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .vr.muted .vs { opacity: .45; }
+    .vr.muted .vs { opacity: var(--_dim); }
     @container vol (min-width: 600px) {
       .rooms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--ha-space-5, 20px); padding-top: var(--ha-space-2, 8px); }
       .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 30px; grid-template-areas: "m n n" "s s v"; row-gap: 0; min-height: 0; padding-bottom: var(--ha-space-1, 4px); }

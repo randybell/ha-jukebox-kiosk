@@ -915,7 +915,7 @@ export class JbSearch extends LitElement {
     .fc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     /* v0.7 category chips: count after the label, empty categories dimmed but still tappable */
     .fc em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); margin-left: var(--ha-space-2, 8px); opacity: .7; font-variant-numeric: tabular-nums; }
-    .fc.zero:not(.on) { opacity: .45; }
+    .fc.zero:not(.on) { opacity: var(--_dim); }
     /* v0.7 search filters: scope chips under the query, Clear filters, library-first section labels */
     .scope { display: flex; align-items: center; gap: var(--ha-space-2, 8px); margin-top: var(--ha-space-2, 8px); min-width: 0; flex-wrap: wrap; }
     .sc { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; max-width: 100%; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);

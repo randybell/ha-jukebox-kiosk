@@ -66,6 +66,11 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     --_card-border-color: var(--ha-card-border-color, var(--divider-color, var(--_surface-border)));
     --_font-body: var(--ha-font-family-body, Roboto, Noto, sans-serif);
     --_font-display: var(--ha-font-family-heading, var(--ha-card-header-font-family, var(--ha-font-family-body, Roboto, Noto, sans-serif)));
+    /* #113 one look for things you can't tap (HA ha-control-button / ha-icon-button: --disabled-text-color on text and icons, --disabled-color on fills)
+       and one for things that are quiet but still tappable (HA's secondary opacity) */
+    --_disabled: var(--disabled-text-color, #bdbdbd);
+    --_disabled-fill: var(--disabled-color, #bdbdbd);
+    --_dim: var(--dark-secondary-opacity, 0.54);
     /* smallest tap target for any button (Material / HA touch target): buttons may shrink to fit, never below this */
     --_touch-min: 48px;
     /* side padding follows the card's own width (container units), not the window: a half-width card gets half-width padding */
@@ -778,7 +783,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .fc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     /* v0.7 category chips: count after the label, empty categories dimmed but still tappable */
     .fc em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); margin-left: var(--ha-space-2, 8px); opacity: .7; font-variant-numeric: tabular-nums; }
-    .fc.zero:not(.on) { opacity: .45; }
+    .fc.zero:not(.on) { opacity: var(--_dim); }
     /* v0.7 search filters: scope chips under the query, Clear filters, library-first section labels */
     .scope { display: flex; align-items: center; gap: var(--ha-space-2, 8px); margin-top: var(--ha-space-2, 8px); min-width: 0; flex-wrap: wrap; }
     .sc { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; max-width: 100%; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
@@ -892,7 +897,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
   `],qe("jb-search",ys);class xs extends ot{constructor(){super(...arguments),this.value=0,this.disabled=!1,this.label="",this._drag=!1,this._v=0,this.slop=0,this._x0=0,this._y0=0,this._armed=!1,this.down=t=>{if(!(this.disabled||"mouse"===t.pointerType&&0!==t.button)){t.preventDefault(),this._rect=this.getBoundingClientRect(),this._pid=t.pointerId,this._x0=t.clientX,this._y0=t.clientY,this._armed=!0;try{this.setPointerCapture(t.pointerId)}catch{}this.slop>0||(this._drag=!0,this._v=this.at(t),this.emit("jb-input"))}},this.move=t=>{if(t.pointerId===this._pid){if(!this._drag){if(!this._armed)return;const e=Math.abs(t.clientX-this._x0),i=Math.abs(t.clientY-this._y0);if(!(e>=this.slop&&e>i))return void(i>=this.slop&&this.disarm());this._drag=!0}t.preventDefault(),this._v=this.at(t),this.emit("jb-input")}},this.up=t=>{t.pointerId===this._pid&&(this._drag?(this._v=this.at(t),this._drag=!1,this._armed=!1,this._rect=void 0,this.value=this._v,this.emit("jb-change")):this.disarm())},this.cancel=()=>{this._armed=!1,this._drag&&(this._drag=!1,this.value=this._v,this.emit("jb-change"))}}get dragging(){return this._drag}shown(){return Math.max(0,Math.min(1,this._drag?this._v:this.value||0))}at(t){const e=this._rect??this.getBoundingClientRect();return Math.max(0,Math.min(1,(t.clientX-e.left)/Math.max(1,e.width)))}emit(t){this.dispatchEvent(new CustomEvent(t,{detail:{value:Math.round(100*this._v)/100},bubbles:!0,composed:!0}))}disarm(){this._armed=!1,this._rect=void 0;try{void 0!==this._pid&&this.releasePointerCapture(this._pid)}catch{}}connectedCallback(){super.connectedCallback(),this.addEventListener("pointerdown",this.down),this.addEventListener("pointermove",this.move),this.addEventListener("pointerup",this.up),this.addEventListener("pointercancel",this.cancel),this.addEventListener("lostpointercapture",this.cancel),this.setAttribute("role","slider")}updated(){this.setAttribute("aria-valuenow",String(Math.round(100*this.shown()))),this.setAttribute("aria-label",this.label)}render(){const t=100*this.shown();return I`<div class="t"><div class="f" style="width:${t}%"></div></div><div class="k ${this._drag?"on":""}" style="left:${t}%"></div>`}}function ws(t,e){let i,s,a,r=0;const o=()=>{r=Date.now(),i=void 0;const e=s;s=void 0,a=e,t(...e)},n=(...t)=>{s=t;const a=e-(Date.now()-r);a<=0?(window.clearTimeout(i),o()):i||(i=window.setTimeout(o,a))};return n.flush=(...t)=>{window.clearTimeout(i),i=void 0,!s&&a&&t.length===a.length&&t.every((t,e)=>t===a[e])||(s=t,o())},n.cancel=()=>{window.clearTimeout(i),i=void 0,s=void 0},n}xs.properties={value:{type:Number},slop:{type:Number,reflect:!0},disabled:{type:Boolean,reflect:!0},label:{},_drag:{state:!0},_v:{state:!0}},xs.styles=r`
     :host { position: relative; display: block; height: var(--_slider-hit, 36px); touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
     :host([slop]:not([slop="0"])) { touch-action: pan-y; } /* #63: a vertical swipe on a volume slider scrolls the page */
-    :host([disabled]) { opacity: .35; cursor: default; }
+    :host([disabled]) { cursor: default; --ha-slider-indicator-color: var(--_disabled); --ha-slider-thumb-color: var(--_disabled); }
     /* ha-slider colours (HA 2026 frontend ha-slider.ts): track, fill, thumb. Fall back to the card tokens (--_track / --_active) which already point at --disabled-color and --primary-color. */
     .t { position: absolute; left: 0; right: 0; top: 50%; height: var(--_slider-h, 6px); transform: translateY(-50%); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--ha-slider-track-color, var(--_track)); overflow: hidden; }
     .f { position: absolute; inset: 0 auto 0 0; background: var(--ha-slider-indicator-color, var(--_active)); border-radius: var(--ha-border-radius-pill, 9999px); }
@@ -1131,7 +1136,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .tl::after, .vv::after { content: attr(data-v); }
     .ps { --_slider-h: 4px; --_slider-knob: 14px; --_slider-hit: 34px; }
     .vs { --_slider-h: 7px; --_slider-knob: 22px; --_slider-hit: 40px; }
-    .prog.nodur .ps { opacity: .5; }
+    .prog.nodur .ps { --ha-slider-indicator-color: var(--_disabled); --ha-slider-thumb-color: var(--_disabled); }
     .tp { display: grid; grid-template-columns: repeat(6, 1fr); align-items: center; justify-items: center; margin: 2px 0; }
     .tp:has(.tb:nth-child(5):last-child) { grid-template-columns: repeat(5, 1fr); }
     .tp:has(.tb.fv) { grid-template-columns: repeat(7, 1fr); } .tp:has(.tb.fv) .tb.sh { grid-column: 2; } /* #42: empty first slot keeps Play/Pause centered with the heart */
@@ -1153,7 +1158,8 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .tb.pp .i { width: 44px; height: 44px; }
     .tb.pr, .tb.nx { width: 72px; height: 72px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
     .tb:active { transform: scale(.94); }
-    .tb:disabled { opacity: .3; }
+    .tb:disabled { color: var(--_disabled); }
+    .tb.pp:disabled { background: color-mix(in srgb, var(--_disabled-fill) 20%, transparent); }
     .upn { display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px); text-align: left; min-width: 0; width: 100%; }
     .upn .eyebrow { font-size: var(--ha-font-size-xs, 10px); flex: none; }
     .upn b { font-size: var(--ha-font-size-m, 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -1190,7 +1196,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .vr.main .vn { font-weight: var(--ha-font-weight-bold, 700); }
     .vn i { font-style: normal; font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
     .vv { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); text-align: right; font-variant-numeric: tabular-nums; }
-    .vr.off { opacity: .5; }
+    .vr.off .vn, .vr.off .vv, .vr.off .vm, .vm:disabled { color: var(--_disabled); }
     /* 0.6.3 speaker controls: a trailing column for Speakers (main row) and Drop/Add (rooms) */
     .vol.acts .vr.main { grid-template-columns: 30px minmax(0, max-content) minmax(0, 1fr) 34px auto; }
     .vol.acts .rooms .vr { grid-template-columns: 30px minmax(70px, 28%) minmax(0, 1fr) 34px 36px; }
@@ -1202,14 +1208,13 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .ra .i { width: 18px; height: 18px; }
     .ra.add { background: var(--_active); border-color: transparent; color: var(--_on-accent); }
     .ra.drop { color: var(--_fg); }
-    .ra[aria-disabled="true"] { opacity: .45; }
-    .ra.add[aria-disabled="true"] { background: var(--_chip-bg); color: var(--_muted); }
-    .ra:disabled { opacity: .5; }
-    .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: .5; }
+    .ra[aria-disabled="true"], .ra:disabled { color: var(--_disabled); }
+    .ra.add[aria-disabled="true"], .ra.add:disabled { background: var(--_chip-bg); border-color: var(--_surface-border); color: var(--_disabled); }
+    .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: var(--_dim); }
     .vr.pending .ra { animation: jb-pulse 1s ease-in-out infinite; }
     @keyframes jb-pulse { 50% { opacity: .35; } }
     .vn .else { display: block; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .vr.muted .vs { opacity: .45; }
+    .vr.muted .vs { opacity: var(--_dim); }
     @container vol (min-width: 600px) {
       .rooms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--ha-space-5, 20px); padding-top: var(--ha-space-2, 8px); }
       .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 30px; grid-template-areas: "m n n" "s s v"; row-gap: 0; min-height: 0; padding-bottom: var(--ha-space-1, 4px); }
@@ -1613,7 +1618,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
       font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); }
     .play .i { width: 28px; height: 28px; } .play:active { transform: scale(.98); }
     .fav { width: 60px; height: 60px; flex: none; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
-    .fav .i { width: 28px; height: 28px; } .fav.on { color: var(--_active); border-color: currentColor; } .fav:disabled { opacity: .6; }
+    .fav .i { width: 28px; height: 28px; } .fav.on { color: var(--_active); border-color: currentColor; } .fav:disabled { color: var(--_disabled); }
     .note { margin: -6px 0 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; }
     .toast.solo { z-index: 3; bottom: 96px; pointer-events: auto; }
     /* tablet / desktop: a centred dialog */
@@ -1656,7 +1661,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
       background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font-size: max(var(--ha-font-size-m, 14px), calc(var(--ha-font-size-xl, 20px) * var(--_hs-s, 1))); font-weight: var(--ha-font-weight-bold, 700); text-align: left; flex: none; }
     .it:active { background: var(--_chip-sel); }
     .it .i { width: max(var(--ha-space-6, 24px), calc(30px * var(--_hs-s, 1))); height: max(var(--ha-space-6, 24px), calc(30px * var(--_hs-s, 1))); flex: none; }
-    .it.off { opacity: .35; cursor: default; }
+    .it.off { color: var(--_disabled); cursor: default; }
     .it.off:active { background: var(--_chip-bg); }
     .meta { margin: calc(var(--ha-space-1, 4px) * var(--_hs-s, 1)) calc(var(--ha-space-1, 4px) * var(--_hs-s, 1)) 0; display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--ha-space-4, 16px) * var(--_hs-s, 1)) calc(var(--ha-space-6, 24px) * var(--_hs-s, 1)); flex: none; }
     .f { display: flex; flex-direction: column; gap: calc(2px * var(--_hs-s, 1)); min-width: 0; }

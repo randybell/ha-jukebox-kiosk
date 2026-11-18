@@ -179,7 +179,7 @@ export class JbHoldSheet extends LitElement {
       background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font-size: max(var(--ha-font-size-m, 14px), calc(var(--ha-font-size-xl, 20px) * var(--_hs-s, 1))); font-weight: var(--ha-font-weight-bold, 700); text-align: left; flex: none; }
     .it:active { background: var(--_chip-sel); }
     .it .i { width: max(var(--ha-space-6, 24px), calc(30px * var(--_hs-s, 1))); height: max(var(--ha-space-6, 24px), calc(30px * var(--_hs-s, 1))); flex: none; }
-    .it.off { opacity: .35; cursor: default; }
+    .it.off { color: var(--_disabled); cursor: default; }
     .it.off:active { background: var(--_chip-bg); }
     .meta { margin: calc(var(--ha-space-1, 4px) * var(--_hs-s, 1)) calc(var(--ha-space-1, 4px) * var(--_hs-s, 1)) 0; display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--ha-space-4, 16px) * var(--_hs-s, 1)) calc(var(--ha-space-6, 24px) * var(--_hs-s, 1)); flex: none; }
     .f { display: flex; flex-direction: column; gap: calc(2px * var(--_hs-s, 1)); min-width: 0; }

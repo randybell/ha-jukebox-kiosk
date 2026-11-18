@@ -50,6 +50,11 @@ export const tokens = css`
     --_card-border-color: var(--ha-card-border-color, var(--divider-color, var(--_surface-border)));
     --_font-body: var(--ha-font-family-body, Roboto, Noto, sans-serif);
     --_font-display: var(--ha-font-family-heading, var(--ha-card-header-font-family, var(--ha-font-family-body, Roboto, Noto, sans-serif)));
+    /* #113 one look for things you can't tap (HA ha-control-button / ha-icon-button: --disabled-text-color on text and icons, --disabled-color on fills)
+       and one for things that are quiet but still tappable (HA's secondary opacity) */
+    --_disabled: var(--disabled-text-color, #bdbdbd);
+    --_disabled-fill: var(--disabled-color, #bdbdbd);
+    --_dim: var(--dark-secondary-opacity, 0.54);
     /* smallest tap target for any button (Material / HA touch target): buttons may shrink to fit, never below this */
     --_touch-min: 48px;
     /* side padding follows the card's own width (container units), not the window: a half-width card gets half-width padding */

@@ -78,7 +78,7 @@ export class JbSlider extends LitElement {
   static styles = css`
     :host { position: relative; display: block; height: var(--_slider-hit, 36px); touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
     :host([slop]:not([slop="0"])) { touch-action: pan-y; } /* #63: a vertical swipe on a volume slider scrolls the page */
-    :host([disabled]) { opacity: .35; cursor: default; }
+    :host([disabled]) { cursor: default; --ha-slider-indicator-color: var(--_disabled); --ha-slider-thumb-color: var(--_disabled); }
     /* ha-slider colours (HA 2026 frontend ha-slider.ts): track, fill, thumb. Fall back to the card tokens (--_track / --_active) which already point at --disabled-color and --primary-color. */
     .t { position: absolute; left: 0; right: 0; top: 50%; height: var(--_slider-h, 6px); transform: translateY(-50%); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--ha-slider-track-color, var(--_track)); overflow: hidden; }
     .f { position: absolute; inset: 0 auto 0 0; background: var(--ha-slider-indicator-color, var(--_active)); border-radius: var(--ha-border-radius-pill, 9999px); }
