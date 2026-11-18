@@ -4,6 +4,7 @@ import { songInfo, INFO_TYPES } from './song-info';
 import { icon } from './icons';
 import { providerLabel } from './providers';
 import { parseSearchProviders } from './search-sources';
+import { pageAll } from './page-all';
 import {
   mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, swallowNextClick, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl,
   playMedia, playMessage, normItem, drillable, canRadio, isRadio, hideStartRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
@@ -68,6 +69,8 @@ const SORTS = [
 const RADIO_SORTS = [{ id: 'play_count_desc', label: 'Popular' }, ...SORTS];
 /** v0.7 Library filters: an artist scope lists that artist's albums and tracks only. */
 const LART_CATS = ['album', 'track'];
+/** artist filter: library albums / tracks are read 100 at a time, at most 10 pages (1000) each, and the filter's pool keeps that many */
+const LART_PAGE = 100, LART_MAX_PAGES = 10;
 const sortsFor = (type: string) => (type === 'radio' ? RADIO_SORTS : type === 'genre' ? SORTS.slice(0, 2) : SORTS);
 /** MA genre sort keys (music/genres/library_items) for the card's sorts */
 const GENRE_ORDER: Record<string, string> = { name: 'sort_name', timestamp_added_desc: 'timestamp_added_desc' };
@@ -139,7 +142,7 @@ export class JbBrowse extends LitElement {
   /** artist scope ("Artist: JJ Grey"): Albums / Tracks show only this artist's library items */
   private _lart: MaItem | null = null;
   private _lpool: { key: string; pool?: ScopePool; error: string } | null = null;
-  private lpools = new PoolCache();
+  private lpools = new PoolCache(undefined, undefined, undefined, { albums: LART_MAX_PAGES * LART_PAGE, tracks: LART_MAX_PAGES * LART_PAGE });
   private _lqTimer?: number;
   /** Tap never plays: artists / albums / playlists (and podcasts with the Jukebox Kiosk integration) open their detail, everything else a sheet. */
   private hearts = new FavController(this);
@@ -625,7 +628,8 @@ export class JbBrowse extends LitElement {
     if (this._lpool?.key === a.uri) return;
     this._lpool = { key: a.uri, error: '' };
     const hass = this.hass, cfg = this.config;
-    const lib = (type: string) => this.lib({ media_type: type, search: a.name, limit: 100, offset: 0, order_by: 'name' }).then(libraryItems).catch(() => [] as MaItem[]);
+    // every page (100 at a time, up to LART_MAX_PAGES), not just the first 100
+    const lib = (type: string) => pageAll((offset, limit) => this.lib({ media_type: type, search: a.name, limit, offset, order_by: 'name' }).then(libraryItems), LART_PAGE, LART_MAX_PAGES);
     this.lpools.get(a.uri, () => Promise.all([
       loadDetail(hass, cfg, a, 'artist'), lib('album'), lib('track'),
     ]).then(([d, al, tr]) => {
