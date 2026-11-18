@@ -387,47 +387,47 @@ export class JbDetail extends LitElement {
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     .dx { position: relative; height: 100%; display: flex; flex-direction: column; min-height: 0; }
-    .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; touch-action: pan-y;
-      padding-bottom: calc(16px + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
+    .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: var(--ha-space-4, 16px); touch-action: pan-y;
+      padding-bottom: calc(var(--ha-space-4, 16px) + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
     .scroll::-webkit-scrollbar { display: none; }
     /* the list sits directly on the HA card surface: no second fill */
     .scroll.panel { background: transparent; }
-    .detail { display: flex; flex-direction: column; gap: 14px; }
-    .nav { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .back { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px 0 12px; border-radius: 999px; background: var(--_chip-bg);
+    .detail { display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); }
+    .nav { display: flex; align-items: center; gap: var(--ha-space-3, 12px); min-width: 0; }
+    .back { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px) 0 var(--ha-space-3, 12px); border-radius: 999px; background: var(--_chip-bg);
       border: 1px solid var(--_surface-border); color: var(--_fg); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
     .back .i { width: 22px; height: 22px; }
     .trail { min-width: 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .dh { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; }
+    .dh { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--ha-space-4, 16px); align-items: center; }
     .dart { width: 150px; height: 150px; border-radius: 12px; }
     .dart.circ { border-radius: 50%; }
     .th.circ { border-radius: 50%; }
-    .dt { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .dt { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
     .dt .eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
     .dt h2 { font-family: var(--_font-display); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dt small { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); }
     .meta { font-size: var(--ha-font-size-m, 14px) !important; font-variant-numeric: tabular-nums; }
-    .da { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .da { display: flex; gap: var(--ha-space-2, 8px); flex-wrap: wrap; margin-top: var(--ha-space-2, 8px); }
     .sbtn.hfav { padding: 0; aspect-ratio: 1; justify-content: center; color: var(--_inactive); }
     .sbtn.hfav.on { color: var(--_active); border-color: currentColor; }
-    .pbtn, .sbtn { display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border-radius: 999px; font-weight: var(--ha-font-weight-bold, 700); }
+    .pbtn, .sbtn { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 46px; padding: 0 var(--ha-space-4, 16px); border-radius: 999px; font-weight: var(--ha-font-weight-bold, 700); }
     .pbtn { background: var(--_active); color: var(--_on-accent); }
     .sbtn { border: 1px solid var(--_surface-border); color: var(--_fg); }
     .pbtn .i, .sbtn .i { width: 22px; height: 22px; }
     .sbtn.scope { border-color: var(--_active); color: var(--_active); max-width: 100%; }
     .sbtn.scope span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--_divider); }
-    .note.err { color: var(--_fg); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: 10px; border: 1px dashed var(--_divider); }
+    .note.err { color: var(--_fg); display: flex; align-items: center; justify-content: space-between; gap: var(--ha-space-3, 12px); flex-wrap: wrap; }
     .note .retry { height: 38px; }
-    h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); } h3 em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; text-transform: none; color: var(--_inactive); margin-left: 6px; }
+    h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); } h3 em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; text-transform: none; color: var(--_inactive); margin-left: var(--ha-space-2, 8px); }
     .more-t { align-self: center; min-width: 220px; justify-content: center; }
-    .empty { padding: 14px; }
+    .empty { padding: var(--ha-space-4, 16px); }
     @container np (max-width: 520px) {
       .scroll { padding: 10px; }
-      .dh { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; } .dart { width: 96px; height: 96px; }
+      .dh { grid-template-columns: 96px minmax(0, 1fr); gap: var(--ha-space-3, 12px); } .dart { width: 96px; height: 96px; }
       .dt h2 { font-size: var(--ha-font-size-xl, 20px); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       .da { grid-column: 1 / -1; }
-      .pbtn, .sbtn { height: 42px; padding: 0 14px; font-size: var(--ha-font-size-m, 14px); }
+      .pbtn, .sbtn { height: 42px; padding: 0 var(--ha-space-4, 16px); font-size: var(--ha-font-size-m, 14px); }
       .row .pv { display: none; }
     }
   `];

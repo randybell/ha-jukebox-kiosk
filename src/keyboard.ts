@@ -139,18 +139,18 @@ export class JbKeyboard extends LitElement {
     css`
       :host { display: block; min-width: 0; }
       .kb {
-        container: kb / inline-size; min-width: 0; padding: 6px 10px 10px; border-radius: var(--_radius);
+        container: kb / inline-size; min-width: 0; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px) var(--ha-space-2, 8px); border-radius: var(--_radius);
         /* HA input fill (ha-textfield); the keys on it are plain HA chips */
         background: var(--_input-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_card-shadow);
         user-select: none; -webkit-user-select: none; touch-action: manipulation;
       }
       .kb-handle {
-        display: var(--_kb-handle-display, flex); align-items: center; justify-content: center; gap: 6px;
+        display: var(--_kb-handle-display, flex); align-items: center; justify-content: center; gap: var(--ha-space-2, 8px);
         width: 100%; height: var(--_kb-handle-h, 28px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_inactive); position: relative;
       }
-      .kb-handle i { position: absolute; top: 3px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--_divider); }
+      .kb-handle i { position: absolute; top: 3px; left: 50%; width: 40px; height: 4px; margin-left: calc(-1 * var(--ha-space-5, 20px)); border-radius: 2px; background: var(--_divider); }
       .kb-handle span { display: var(--_kb-handle-label, inline); }
-      .keys { display: grid; grid-template-columns: repeat(28, minmax(0, 1fr)); gap: var(--kgap, 8px); }
+      .keys { display: grid; grid-template-columns: repeat(28, minmax(0, 1fr)); gap: var(--kgap, var(--ha-space-2, 8px)); }
       /* Four grid tracks make one letter key (the gap between tracks is the same as between keys, so a letter is as wide as before).
          The bottom row is a little re-balanced in the same units: 123 and backspace a bit wider than a letter key, Space still the
          widest, Clear the smallest. Narrow: 5 + 11 + 5 + 7 = 28 tracks (7 letter keys). Wide (below): 10 + 14 + 10 + 6 = 40 (10 letter keys). */

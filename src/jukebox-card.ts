@@ -799,16 +799,16 @@ export class JukeboxCard extends LitElement {
       color: var(--_fg);
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
-    .top { display: flex; align-items: center; gap: 14px; padding: 12px var(--_pad) 12px; min-height: 60px; position: relative; z-index: 2;
+    .top { display: flex; align-items: center; gap: var(--ha-space-4, 16px); padding: var(--ha-space-3, 12px) var(--_pad) var(--ha-space-3, 12px); min-height: 60px; position: relative; z-index: 2;
       background: transparent; border-bottom: 1px solid var(--_hairline); }
-    .brand { display: flex; align-items: center; gap: 10px; font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-xl, 20px); }
+    .brand { display: flex; align-items: center; gap: var(--ha-space-2, 8px); font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-xl, 20px); }
     .brand-i { width: 28px; height: 28px; color: var(--_active); }
-    .pill { white-space: nowrap; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: var(--_chip-bg);
+    .pill { white-space: nowrap; display: flex; align-items: center; gap: var(--ha-space-2, 8px); padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: 999px; background: var(--_chip-bg);
       border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
     .pill b { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .pill .pl { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); margin-right: -2px; }
     .pill .pc { width: 14px; height: 14px; opacity: .7; margin-left: -2px; }
-    .lost { margin-left: 10px; font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .lost { margin-left: var(--ha-space-2, 8px); font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: var(--_chip-sel); }
     .spacer { flex: 1; }
     .clock { white-space: nowrap; font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
@@ -816,7 +816,7 @@ export class JukeboxCard extends LitElement {
     /* Now Playing, Library, Search, Queue and the detail pages are plain HA card surfaces: ha-card paints the one surface (album art is a background on the screensaver only). */
     .view { position: absolute; inset: 0; z-index: 1; }
     .view[hidden] { display: none; }
-    .badge { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--_active);
+    .badge { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 var(--ha-space-2, 8px); border-radius: 10px; background: var(--_active);
       color: var(--_on-accent); font-style: normal; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); display: grid; place-items: center; font-variant-numeric: tabular-nums; }
     /* Screensaver / Stage: restored to e322336 look (fixed black canvas and white type). Theme rules do not apply here.
        color: #fff is set so the clock and title stay white now that the parent card uses theme body text. */
@@ -829,17 +829,17 @@ export class JukeboxCard extends LitElement {
     .sv-bg::after { content: ""; position: absolute; inset: 0; background: radial-gradient(90% 90% at 50% 50%, #0000 40%, #000a 100%), linear-gradient(#0000004d, #00000080); }
     .sv-bg.noart { inset: -10%; filter: blur(60px) saturate(1.2); opacity: .7; }
     @keyframes kb { from { transform: scale(1) translate(0, 0) } to { transform: scale(1.08) translate(-2%, 1.5%) } }
-    .sv-drift { position: absolute; left: 8%; top: 12%; display: flex; flex-direction: column; gap: 6px; animation: drift 240s ease-in-out infinite alternate; }
+    .sv-drift { position: absolute; left: 8%; top: 12%; display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); animation: drift 240s ease-in-out infinite alternate; }
     @keyframes drift {
       0% { transform: translate(0, 0) } 25% { transform: translate(calc(70cqw - 100%), 18cqh) } 50% { transform: translate(28cqw, calc(64cqh - 100%)) }
       75% { transform: translate(calc(78cqw - 100%), 4cqh) } 100% { transform: translate(6cqw, calc(60cqh - 100%)) } }
     .amb { container-type: size; }
     .sv-clock { font-family: var(--_font-display); font-weight: 800; font-size: calc(clamp(72px, 16cqw, 200px) * .9); line-height: .95; letter-spacing: -.03em; font-variant-numeric: tabular-nums; text-shadow: 0 4px 40px #0008; }
     .sv-date { font-size: clamp(16px, 2.4cqw, 26px); color: #ffffffc0; font-weight: 600; }
-    .sv-np { display: flex; align-items: center; gap: 14px; margin-top: 18px; max-width: min(1100px, 80cqw); }
+    .sv-np { display: flex; align-items: center; gap: var(--ha-space-4, 16px); margin-top: var(--ha-space-4, 16px); max-width: min(1100px, 80cqw); }
     .sv-np span { display: flex; flex-direction: column; min-width: 0; }
     .sv-np b { font-family: var(--_font-display); font-size: clamp(26px, 4.2cqw, 60px); font-weight: 800; line-height: 1.12; text-shadow: 0 2px 24px #000a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sv-np small { font-size: clamp(17px, 2.4cqw, 32px); margin-top: 4px; text-shadow: 0 2px 16px #000a; color: #ffffffa8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sv-np small { font-size: clamp(17px, 2.4cqw, 32px); margin-top: var(--ha-space-1, 4px); text-shadow: 0 2px 16px #000a; color: #ffffffa8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sv-hint { position: absolute; bottom: 22px; left: 0; right: 0; text-align: center; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: #ffffff55; }
     /* reduced motion: no drift and no Ken Burns. The text block still jumps (no animation) to one of 10 spots every 60 s, so a
        static screen can't burn in. The .rm class mirrors the media query so the dev harness/tests can force it. */
@@ -848,8 +848,8 @@ export class JukeboxCard extends LitElement {
     .rm { --_ly-slide: 0ms; } /* inherited into jb-lyrics: the screensaver lyrics move without sliding */
     @keyframes hop { 0% { transform: translate(0, 0) } 10% { transform: translate(calc(70cqw - 100%), 18cqh) } 20% { transform: translate(28cqw, calc(64cqh - 100%)) } 30% { transform: translate(calc(78cqw - 100%), 4cqh) } 40% { transform: translate(6cqw, calc(60cqh - 100%)) } 50% { transform: translate(calc(50cqw - 50%), 30cqh) } 60% { transform: translate(calc(74cqw - 100%), calc(66cqh - 100%)) } 70% { transform: translate(12cqw, 10cqh) } 80% { transform: translate(calc(60cqw - 100%), calc(40cqh - 50%)) } 90% { transform: translate(20cqw, calc(66cqh - 100%)) } 100% { transform: translate(0, 0) } }
     .sv-drift.has-ly .sv-clock { font-size: calc(clamp(56px, 10cqw, 140px) * .9); } /* #38: the clock 10% smaller (landscape) */
-    .sv-ly { margin-top: 18px; width: min(820px, 72cqw); }
-    .sv-lys { margin-top: 14px; font-size: clamp(12px, 1.1cqw, 15px); font-weight: 600; letter-spacing: .04em; color: #ffffff6b; text-shadow: 0 1px 8px #000a; white-space: nowrap; }
+    .sv-ly { margin-top: var(--ha-space-4, 16px); width: min(820px, 72cqw); }
+    .sv-lys { margin-top: var(--ha-space-4, 16px); font-size: clamp(12px, 1.1cqw, 15px); font-weight: 600; letter-spacing: .04em; color: #ffffff6b; text-shadow: 0 1px 8px #000a; white-space: nowrap; }
     /* Portrait (0.8.2, #38): what is playing leads and the clock steps back. Container-based (the shared view's own box is taller
        than wide), never a phone or device size, so landscape keeps every rule above exactly. Sizes come from HA's type scale
        (5xl is its top step; the big clock is a whole multiple of it) and grow fluidly with the screen width between those steps,
@@ -869,13 +869,13 @@ export class JukeboxCard extends LitElement {
     .amb.stage { z-index: 45; }
     /* Tab bar (0.5.0, segmented): one rounded translucent track on the theme footer, equal segments with hairline
        dividers, the active segment using the theme primary. Only colour/transform transitions (no layout, no blur). */
-    .tabs { display: grid; grid-template-columns: repeat(var(--tabs, 4), minmax(0, 1fr)); gap: 4px;
-      padding: 11px calc(var(--_pad) + 4px) calc(13px + env(safe-area-inset-bottom)); background: transparent;
+    .tabs { display: grid; grid-template-columns: repeat(var(--tabs, 4), minmax(0, 1fr)); gap: var(--ha-space-1, 4px);
+      padding: var(--ha-space-3, 12px) calc(var(--_pad) + var(--ha-space-1, 4px)) calc(var(--ha-space-3, 12px) + env(safe-area-inset-bottom)); background: transparent;
       border-top: 1px solid var(--_hairline); position: relative; z-index: 2; }
     .tabs::before { content: ""; position: absolute; top: 7px; left: var(--_pad); right: var(--_pad); bottom: calc(9px + env(safe-area-inset-bottom));
       border-radius: 18px; background: var(--_chip-bg); border: 1px solid var(--_surface-border); pointer-events: none; }
-    .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 58px;
-      padding: 3px; border-radius: 14px; background: transparent; border: 0;
+    .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--ha-space-1, 4px); min-width: 0; min-height: 58px;
+      padding: var(--ha-space-1, 4px); border-radius: 14px; background: transparent; border: 0;
       color: var(--_muted); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: .01em; position: relative;
       transition: background-color 120ms ease, color 120ms ease, transform 120ms ease; }
     .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -891,31 +891,31 @@ export class JukeboxCard extends LitElement {
     /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole.
        0.7.12 fluid: gate and breakpoints follow the card's jbapp width, not the window. */
     @container jbapp (min-width: 641px) {
-      @container jbapp (max-width: 600px) { .pill b, .brand span { display: none; } .top { gap: 10px; } }
+      @container jbapp (max-width: 600px) { .pill b, .brand span { display: none; } .top { gap: var(--ha-space-2, 8px); } }
     }
     @container jbapp (max-width: 960px) { .pill b { display: none; } }
     @container jbapp (max-width: 800px) { .pill .pl { display: none; } }
     @container jbapp (max-width: 640px) {
-      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .clock { font-size: var(--ha-font-size-l, 16px); } .top { min-height: 52px; padding-top: 10px; padding-bottom: 10px; }
-      .tabs { gap: 2px; padding-left: calc(var(--_pad) + 3px); padding-right: calc(var(--_pad) + 3px); }
+      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .clock { font-size: var(--ha-font-size-l, 16px); } .top { min-height: 52px; padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px); }
+      .tabs { gap: 2px; padding-left: calc(var(--_pad) + var(--ha-space-1, 4px)); padding-right: calc(var(--_pad) + var(--ha-space-1, 4px)); }
       .tab { font-size: var(--ha-font-size-s, 12px); letter-spacing: 0; } .tab .i { width: 26px; height: 26px; }
       .tab span { white-space: normal; text-align: center; line-height: var(--ha-line-height-condensed, 1.2); }
     }
     /* short panels (fitted height < 700 / < 560 px): tighter header and tab bar so the middle keeps the room */
-    :host([data-fit]) .top { min-height: 50px; padding-top: 7px; padding-bottom: 7px; }
+    :host([data-fit]) .top { min-height: 50px; padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px); }
     :host([data-fit]) .brand { font-size: var(--ha-font-size-xl, 20px); } :host([data-fit]) .brand-i { width: 24px; height: 24px; } :host([data-fit]) .clock { font-size: var(--ha-font-size-xl, 20px); }
-    :host([data-fit]) .pill { padding: 5px 12px; font-size: var(--ha-font-size-m, 14px); }
-    :host([data-fit]) .tabs { gap: 3px; padding: 7px calc(var(--_pad) + 3px) calc(8px + env(safe-area-inset-bottom)); }
+    :host([data-fit]) .pill { padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
+    :host([data-fit]) .tabs { gap: var(--ha-space-1, 4px); padding: var(--ha-space-2, 8px) calc(var(--_pad) + var(--ha-space-1, 4px)) calc(var(--ha-space-2, 8px) + env(safe-area-inset-bottom)); }
     :host([data-fit]) .tabs::before { top: 4px; bottom: calc(5px + env(safe-area-inset-bottom)); border-radius: 15px; }
-    :host([data-fit]) .tab { min-height: 50px; padding: 3px; gap: 3px; font-size: var(--ha-font-size-m, 14px); border-radius: 12px; } :host([data-fit]) .tab .i { width: 24px; height: 24px; }
+    :host([data-fit]) .tab { min-height: 50px; padding: var(--ha-space-1, 4px); gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-m, 14px); border-radius: 12px; } :host([data-fit]) .tab .i { width: 24px; height: 24px; }
     :host([data-fit]) .tab + .tab::before { left: -2px; }
-    :host([data-fit=tiny]) .top { min-height: 44px; padding-top: 5px; padding-bottom: 5px; }
+    :host([data-fit=tiny]) .top { min-height: 44px; padding-top: var(--ha-space-1, 4px); padding-bottom: var(--ha-space-1, 4px); }
     /* tiny (< 560 px): one row, icon + small label side by side (icons only on narrow screens) */
-    :host([data-fit=tiny]) .tabs { padding: 6px calc(var(--_pad) + 3px) calc(6px + env(safe-area-inset-bottom)); }
+    :host([data-fit=tiny]) .tabs { padding: var(--ha-space-2, 8px) calc(var(--_pad) + var(--ha-space-1, 4px)) calc(var(--ha-space-2, 8px) + env(safe-area-inset-bottom)); }
     :host([data-fit=tiny]) .tabs::before { top: 3px; bottom: calc(3px + env(safe-area-inset-bottom)); border-radius: 14px; }
-    :host([data-fit=tiny]) .tab { flex-direction: row; gap: 8px; min-height: 44px; font-size: var(--ha-font-size-m, 14px); border-radius: 11px; }
+    :host([data-fit=tiny]) .tab { flex-direction: row; gap: var(--ha-space-2, 8px); min-height: 44px; font-size: var(--ha-font-size-m, 14px); border-radius: 11px; }
     :host([data-fit=tiny]) .tab .i { width: 22px; height: 22px; }
-    :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 5px; font-size: var(--ha-font-size-xs, 10px); flex: none; }
+    :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 var(--ha-space-1, 4px); font-size: var(--ha-font-size-xs, 10px); flex: none; }
     @container jbapp (max-width: 640px) { :host([data-fit=tiny]) .tab span { display: none; } }
   `];
 }
