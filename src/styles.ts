@@ -50,6 +50,8 @@ export const tokens = css`
     --_card-border-color: var(--ha-card-border-color, var(--divider-color, var(--_surface-border)));
     --_font-body: var(--ha-font-family-body, Roboto, Noto, sans-serif);
     --_font-display: var(--ha-font-family-heading, var(--ha-card-header-font-family, var(--ha-font-family-body, Roboto, Noto, sans-serif)));
+    /* smallest tap target for any button (Material / HA touch target): buttons may shrink to fit, never below this */
+    --_touch-min: 48px;
     --_pad: clamp(14px, 3vw, 36px);
     --_radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
     --_radius-s: var(--ha-border-radius-md, 8px);

@@ -74,6 +74,9 @@ export class JbHoldSheet extends LitElement {
       bandBot = tabsEl.getBoundingClientRect().top - cr.top - 8;
       avail = Math.max(0, bandBot - bandTop);
     }
+    // never taller than the ceiling every other pop-up uses (min(100%, --_popup-max-h), measured from the .pmh probe)
+    const shared = (this.renderRoot.querySelector('.pmh') as HTMLElement | null)?.offsetHeight ?? 0;
+    if (shared > 0) avail = Math.min(avail, shared);
     this.style.paddingTop = '';
     this.style.paddingBottom = '';
 
@@ -104,7 +107,15 @@ export class JbHoldSheet extends LitElement {
     if (n >= max) JbHoldSheet.queueRefH = packed;
     const refH = JbHoldSheet.queueRefH ?? fromParts;
 
-    const s = refH > avail && avail > 0 ? avail / refH : 1;
+    let s = refH > avail && avail > 0 ? avail / refH : 1;
+    // Buttons never go below the touch minimum (CSS clamps them with max()). When the plain scale would take them below it, only the
+    // rest of the sheet (art, text, gaps, padding) shrinks further so the 7-button reference still fits; below half size the sheet scrolls.
+    const touch = parseFloat(getComputedStyle(sh).getPropertyValue('--_touch-min')) || 48;
+    const nRef = max + 1;
+    if (avail > 0 && btnH * s < touch) {
+      const rest = refH - nRef * btnH;
+      s = Math.min(touch / btnH, Math.max(0.5, rest > 0 ? (avail - nRef * touch) / rest : 1));
+    }
 
     if (cancel) cancel.style.marginTop = '';
     sh.style.setProperty('--_hs-s', String(s));
@@ -136,7 +147,7 @@ export class JbHoldSheet extends LitElement {
         <div class="sh info" role="dialog" aria-modal="true" aria-label="${s.item.name} details">${hd}
           <dl class="meta">${s.info.map((l) => html`<div class="f" data-field=${l.k}><dt>${l.label}</dt><dd>${l.v}</dd></div>`)}</dl>
           <button class="it cancel" data-action="back" tabindex="-1" @pointerdown=${noFocus} @click=${() => { this._info = false; }}>${icon('back')}<span>Back</span></button>
-        </div>`;
+        </div><div class="pmh" aria-hidden="true"></div>`;
     }
     const more: MenuAction[] = s.info ? [{ id: 'more', icon: 'more', label: 'More Info', disabled: !hasMoreInfo(s.info), run: () => {} }] : [];
     return html`<div class="bk" data-action="backdrop" @click=${() => this.close()}></div>
@@ -145,12 +156,14 @@ export class JbHoldSheet extends LitElement {
         <div class="its" role="menu">${[...s.actions, ...more].map((a) => html`<button class="it ${a.disabled ? 'off' : ''}" data-action=${a.id} role="menuitem" tabindex="-1" aria-disabled=${a.disabled ? 'true' : 'false'} @pointerdown=${noFocus}
           @click=${() => this.pick(a)}>${icon(a.icon)}<span>${a.label}</span></button>`)}</div>
         <button class="it cancel" data-action="cancel" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.close()}>${icon('close')}<span>Cancel</span></button>
-      </div>`;
+      </div><div class="pmh" aria-hidden="true"></div>`;
   }
   static styles = [tokens, base, mediaStyles, css`
     /* Host fills its parent (main.np, same placement as the other hold pop-ups); fit() caps height to the band between the bars. */
     :host { position: absolute; inset: 0; z-index: 45; display: none; box-sizing: border-box; font-family: var(--_font-body); color: var(--_fg); container-type: size; }
     :host([open]) { display: grid; place-items: center; }
+    /* probe for the shared pop-up ceiling (read by fit()) */
+    .pmh { position: absolute; top: 0; left: 0; width: 0; height: min(100%, var(--_popup-max-h)); visibility: hidden; pointer-events: none; }
     .bk { position: absolute; inset: 0; background: var(--_scrim); -webkit-backdrop-filter: var(--_scrim-filter); backdrop-filter: var(--_scrim-filter); }
     .sh { position: relative; width: min(520px, calc(100% - 32px)); max-height: min(100%, var(--_popup-max-h)); box-sizing: border-box;
       padding: calc(16px * var(--_hs-s, 1)) calc(18px * var(--_hs-s, 1)) calc(18px * var(--_hs-s, 1));
@@ -162,10 +175,10 @@ export class JbHoldSheet extends LitElement {
     .hd b { font-size: calc(var(--ha-font-size-2xl, 24px) * var(--_hs-s, 1)); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .hd small { font-size: calc(var(--ha-font-size-l, 16px) * var(--_hs-s, 1)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .its { display: flex; flex-direction: column; gap: calc(6px * var(--_hs-s, 1)); flex: none; }
-    .it { display: flex; align-items: center; gap: calc(16px * var(--_hs-s, 1)); width: 100%; min-height: calc(64px * var(--_hs-s, 1)); padding: 0 calc(20px * var(--_hs-s, 1)); box-sizing: border-box; border-radius: calc(14px * var(--_hs-s, 1));
-      background: var(--_chip-bg); border: 1px solid var(--_surface-border); color: var(--_fg); font-size: calc(var(--ha-font-size-xl, 20px) * var(--_hs-s, 1)); font-weight: var(--ha-font-weight-bold, 700); text-align: left; flex: none; }
+    .it { display: flex; align-items: center; gap: calc(16px * var(--_hs-s, 1)); width: 100%; min-height: max(var(--_touch-min), calc(64px * var(--_hs-s, 1))); padding: 0 calc(20px * var(--_hs-s, 1)); box-sizing: border-box; border-radius: calc(14px * var(--_hs-s, 1));
+      background: var(--_chip-bg); border: 1px solid var(--_surface-border); color: var(--_fg); font-size: max(var(--ha-font-size-m, 14px), calc(var(--ha-font-size-xl, 20px) * var(--_hs-s, 1))); font-weight: var(--ha-font-weight-bold, 700); text-align: left; flex: none; }
     .it:active { background: var(--_chip-sel); }
-    .it .i { width: calc(30px * var(--_hs-s, 1)); height: calc(30px * var(--_hs-s, 1)); flex: none; }
+    .it .i { width: max(var(--ha-space-6, 24px), calc(30px * var(--_hs-s, 1))); height: max(var(--ha-space-6, 24px), calc(30px * var(--_hs-s, 1))); flex: none; }
     .it.off { opacity: .35; cursor: default; }
     .it.off:active { background: var(--_chip-bg); }
     .meta { margin: calc(4px * var(--_hs-s, 1)) calc(4px * var(--_hs-s, 1)) 0; display: grid; grid-template-columns: 1fr 1fr; gap: calc(14px * var(--_hs-s, 1)) calc(24px * var(--_hs-s, 1)); flex: none; }
