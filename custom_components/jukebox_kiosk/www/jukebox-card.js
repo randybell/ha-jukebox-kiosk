@@ -1896,4 +1896,4 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     :host([data-fit=tiny]) .tab .i { width: 22px; height: 22px; }
     :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 5px; font-size: var(--ha-font-size-xs, 10px); flex: none; }
     @container jbapp (max-width: 640px) { :host([data-fit=tiny]) .tab span { display: none; } }
-  `],ke("jukebox-card",Ar),window.customCards=window.customCards||[],window.customCards.some(t=>"jukebox-card"===t.type)||window.customCards.push({type:"jukebox-card",name:"Jukebox",description:"Kiosk jukebox for Music Assistant: Now Playing, Browse, Search and Queue",preview:!1}),console.info(`%c JUKEBOX-CARD %c ${xr} `,"font-weight:700","");export{Ar as JukeboxCard,xr as VERSION};
+  `],ke("jukebox-card",Ar),window.customCards=window.customCards||[],window.customCards.some(t=>"jukebox-card"===t.type)||window.customCards.push({type:"jukebox-card",name:"Jukebox Kiosk",description:"A touchscreen Jukebox music player for Home Assistant",preview:!1}),console.info(`%c JUKEBOX-CARD %c ${xr} `,"font-weight:700","");export{Ar as JukeboxCard,xr as VERSION};

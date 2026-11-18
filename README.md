@@ -1,8 +1,10 @@
 # Jukebox Kiosk (`ha-jukebox-kiosk`) 0.8.1
 
+A touchscreen Jukebox music player for Home Assistant
+
 > This README covers the integration and the card bundled in it. Since 0.7.9 the card works only through the Jukebox Kiosk integration (or, with fewer features, the official Music Assistant integration); mass_queue support is gone.
 
-Jukebox Kiosk is a Home Assistant integration that ships the **Jukebox Card**, a Lovelace card for a Home Assistant + Music Assistant jukebox kiosk. It also gives the card its own WebSocket API to Music Assistant.
+Jukebox Kiosk is a Home Assistant integration that ships the **Jukebox Kiosk** card, a Lovelace card for a Home Assistant + Music Assistant jukebox kiosk. It also gives the card its own WebSocket API to Music Assistant.
 
 - **One install.** Setting up the integration serves the card from `/jukebox_kiosk_static/jukebox-card.js` and loads it on every dashboard. You don't add a resource, and there are no font files to install.
 - **Its own Music Assistant API.** The integration borrows the connection the official Music Assistant integration already holds and exposes it as `jukebox_kiosk/*` WebSocket commands. It forwards only an allowlist of Music Assistant commands, and every one is checked against the calling Home Assistant user (see [Permissions](#permissions)).

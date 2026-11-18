@@ -940,6 +940,6 @@ defineElement('jukebox-card', JukeboxCard);
 
 (window as any).customCards = (window as any).customCards || [];
 if (!(window as any).customCards.some((c: any) => c.type === 'jukebox-card'))
-  (window as any).customCards.push({ type: 'jukebox-card', name: 'Jukebox', description: 'Kiosk jukebox for Music Assistant: Now Playing, Browse, Search and Queue', preview: false });
+  (window as any).customCards.push({ type: 'jukebox-card', name: 'Jukebox Kiosk', description: 'A touchscreen Jukebox music player for Home Assistant', preview: false });
 // eslint-disable-next-line no-console
 console.info(`%c JUKEBOX-CARD %c ${VERSION} `, 'font-weight:700', '');
