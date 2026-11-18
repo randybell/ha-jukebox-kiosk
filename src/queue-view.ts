@@ -412,8 +412,8 @@ export class JbQueue extends LitElement {
     .rt small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .qr.now { background: var(--_active); color: var(--_on-accent); border-top-color: transparent; }
     .qr.now + .qr, h3 + .qr { border-top-color: transparent; }
-    .qr.now .rt small { color: rgba(var(--rgb-text-primary-color, 255,255,255), .7); } /* a tint of the on-primary text colour */
-    .qr.now .pv { color: var(--_on-accent); border-color: rgba(var(--rgb-text-primary-color, 255,255,255), .4); background: rgba(var(--rgb-text-primary-color, 255,255,255), .12); }
+    .qr.now .rt small { color: color-mix(in srgb, var(--_on-accent) 70%, transparent); } /* a tint of the on-primary text colour */
+    .qr.now .pv { color: var(--_on-accent); border-color: color-mix(in srgb, var(--_on-accent) 40%, transparent); background: color-mix(in srgb, var(--_on-accent) 12%, transparent); }
     .qr.past { opacity: .45; }
     .qr.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 1.5px var(--_active); }
     .qsearch { align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;

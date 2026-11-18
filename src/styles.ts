@@ -24,10 +24,10 @@ export const tokens = css`
     --_prov-fg: var(--primary-text-color, #212121);
     --_prov-bg: var(--ha-assist-chip-container-color, transparent);
     --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-    --_thumb-ring: 0 0 0 4px rgba(var(--rgb-primary-color, 3, 169, 244), var(--dark-divider-opacity, 0.12));
+    --_thumb-ring: 0 0 0 4px color-mix(in srgb, var(--primary-color, #03a9f4) calc(var(--dark-divider-opacity, 0.12) * 100%), transparent);
     /* chips, keys, pills (ha-assist-chip / ha-filter-chip): idle = no fill with an outline; selected or pressed = text colour at 15% */
     --_chip-bg: var(--ha-assist-chip-container-color, transparent);
-    --_chip-sel: var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15));
+    --_chip-sel: var(--ha-filter-chip-selected-container-color, color-mix(in srgb, var(--primary-text-color, #212121) 15%, transparent));
     /* text inputs (ha-textfield): HA input fill and ink */
     --_input-bg: var(--input-fill-color, rgb(245, 245, 245));
     --_input-ink: var(--input-ink-color, var(--primary-text-color, #212121));

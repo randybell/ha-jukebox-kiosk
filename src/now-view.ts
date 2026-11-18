@@ -560,7 +560,7 @@ export class JbNow extends LitElement {
       --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
       --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
       --_chip-bg: var(--ha-assist-chip-container-color, transparent);
-      --_chip-sel: var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15));
+      --_chip-sel: var(--ha-filter-chip-selected-container-color, color-mix(in srgb, var(--primary-text-color, #212121) 15%, transparent));
       --_surface-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
       --_prov-fg: var(--primary-text-color, #212121);
       --_prov-bg: var(--ha-assist-chip-container-color, transparent);
@@ -577,7 +577,7 @@ export class JbNow extends LitElement {
       --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
       --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
       --_chip-bg: var(--ha-assist-chip-container-color, transparent);
-      --_chip-sel: var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15));
+      --_chip-sel: var(--ha-filter-chip-selected-container-color, color-mix(in srgb, var(--primary-text-color, #212121) 15%, transparent));
       --_surface-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
       --_prov-fg: var(--primary-text-color, #212121);
       --_prov-bg: var(--ha-assist-chip-container-color, transparent);

@@ -367,7 +367,7 @@ export class JbLyrics extends LitElement {
     .toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; padding: 8px 14px; border-radius: var(--ha-border-radius-sm, 4px);
       background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; box-shadow: var(--ha-box-shadow-l, none); }
     /* the screensaver is exempt from theming: its lyrics keep exactly the 0.8.0 look */
-    :host([mode=saver]) { --_chip-sel: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.14); --_surface-border: var(--divider-color, rgba(0, 0, 0, 0.12)); }
+    :host([mode=saver]) { --_chip-sel: color-mix(in srgb, var(--primary-text-color, #212121) 14%, transparent); --_surface-border: var(--divider-color, rgba(0, 0, 0, 0.12)); }
     :host([mode=saver]) .chip { background: rgba(0, 0, 0, 0.32); }
     :host([mode=saver]) .toast { border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); box-shadow: var(--ha-card-box-shadow, 0 6px 24px rgba(0,0,0,.3)); }
 

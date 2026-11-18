@@ -40,10 +40,10 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     --_prov-fg: var(--primary-text-color, #212121);
     --_prov-bg: var(--ha-assist-chip-container-color, transparent);
     --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-    --_thumb-ring: 0 0 0 4px rgba(var(--rgb-primary-color, 3, 169, 244), var(--dark-divider-opacity, 0.12));
+    --_thumb-ring: 0 0 0 4px color-mix(in srgb, var(--primary-color, #03a9f4) calc(var(--dark-divider-opacity, 0.12) * 100%), transparent);
     /* chips, keys, pills (ha-assist-chip / ha-filter-chip): idle = no fill with an outline; selected or pressed = text colour at 15% */
     --_chip-bg: var(--ha-assist-chip-container-color, transparent);
-    --_chip-sel: var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15));
+    --_chip-sel: var(--ha-filter-chip-selected-container-color, color-mix(in srgb, var(--primary-text-color, #212121) 15%, transparent));
     /* text inputs (ha-textfield): HA input fill and ink */
     --_input-bg: var(--input-fill-color, rgb(245, 245, 245));
     --_input-ink: var(--input-ink-color, var(--primary-text-color, #212121));
@@ -947,7 +947,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; padding: 8px 14px; border-radius: var(--ha-border-radius-sm, 4px);
       background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; box-shadow: var(--ha-box-shadow-l, none); }
     /* the screensaver is exempt from theming: its lyrics keep exactly the 0.8.0 look */
-    :host([mode=saver]) { --_chip-sel: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.14); --_surface-border: var(--divider-color, rgba(0, 0, 0, 0.12)); }
+    :host([mode=saver]) { --_chip-sel: color-mix(in srgb, var(--primary-text-color, #212121) 14%, transparent); --_surface-border: var(--divider-color, rgba(0, 0, 0, 0.12)); }
     :host([mode=saver]) .chip { background: rgba(0, 0, 0, 0.32); }
     :host([mode=saver]) .toast { border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); box-shadow: var(--ha-card-box-shadow, 0 6px 24px rgba(0,0,0,.3)); }
 
@@ -1091,7 +1091,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
       --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
       --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
       --_chip-bg: var(--ha-assist-chip-container-color, transparent);
-      --_chip-sel: var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15));
+      --_chip-sel: var(--ha-filter-chip-selected-container-color, color-mix(in srgb, var(--primary-text-color, #212121) 15%, transparent));
       --_surface-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
       --_prov-fg: var(--primary-text-color, #212121);
       --_prov-bg: var(--ha-assist-chip-container-color, transparent);
@@ -1108,7 +1108,7 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
       --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
       --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
       --_chip-bg: var(--ha-assist-chip-container-color, transparent);
-      --_chip-sel: var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15));
+      --_chip-sel: var(--ha-filter-chip-selected-container-color, color-mix(in srgb, var(--primary-text-color, #212121) 15%, transparent));
       --_surface-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
       --_prov-fg: var(--primary-text-color, #212121);
       --_prov-bg: var(--ha-assist-chip-container-color, transparent);
@@ -1385,8 +1385,8 @@ const w=globalThis,k=t=>t,$=w.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .rt small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .qr.now { background: var(--_active); color: var(--_on-accent); border-top-color: transparent; }
     .qr.now + .qr, h3 + .qr { border-top-color: transparent; }
-    .qr.now .rt small { color: rgba(var(--rgb-text-primary-color, 255,255,255), .7); } /* a tint of the on-primary text colour */
-    .qr.now .pv { color: var(--_on-accent); border-color: rgba(var(--rgb-text-primary-color, 255,255,255), .4); background: rgba(var(--rgb-text-primary-color, 255,255,255), .12); }
+    .qr.now .rt small { color: color-mix(in srgb, var(--_on-accent) 70%, transparent); } /* a tint of the on-primary text colour */
+    .qr.now .pv { color: var(--_on-accent); border-color: color-mix(in srgb, var(--_on-accent) 40%, transparent); background: color-mix(in srgb, var(--_on-accent) 12%, transparent); }
     .qr.past { opacity: .45; }
     .qr.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 1.5px var(--_active); }
     .qsearch { align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
