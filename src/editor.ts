@@ -48,12 +48,15 @@ export function startTabOptions(c: Partial<JukeboxCardConfig> = {}) {
   ];
 }
 const sel = (options: Array<{ value: string; label: string }>) => ({ select: { options, mode: 'dropdown' } });
+/** HA's entity picker limited to Music Assistant players: the same rule as ma-player.ts (entity registry platform
+ *  music_assistant); HA's selector `integration` filter checks exactly that (frontend src/data/selector.ts filterSelectorEntities). */
+const maPlayers = (multiple = false) => ({ entity: { filter: { domain: 'media_player', integration: 'music_assistant' }, ...(multiple ? { multiple: true } : {}) } });
 
 export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
   const choose = c.speaker_mode === 'dynamic';
   return [
-    { name: 'entity', selector: { entity: { domain: 'media_player' } } },
-    { name: 'rooms', selector: { entity: { domain: 'media_player', multiple: true } } },
+    { name: 'entity', selector: maPlayers() },
+    { name: 'rooms', selector: maPlayers(true) },
     {
       type: 'expandable', name: 'display', title: 'Display', icon: 'mdi:monitor', flatten: true, expanded: true,
       schema: [
@@ -70,7 +73,7 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
           { value: 'fixed', label: 'Volume only: always play on the chosen player' },
           { value: 'dynamic', label: 'Choose speakers: pick, group and drop speakers from the card' }]) },
         ...(choose ? [
-          { name: 'targets', selector: { entity: { domain: 'media_player', multiple: true } } },
+          { name: 'targets', selector: maPlayers(true) },
           { name: 'grouping', selector: sel([{ value: 'admins', label: 'Admins' }, { value: 'everyone', label: 'Everyone' }, { value: 'nobody', label: 'Nobody' }]) },
           { name: 'grouping_users', selector: { text: {} } },
           { name: 'guest_access', selector: sel([{ value: 'volume', label: 'Can change the volume and mute' }, { value: 'none', label: 'Can only look' }]) },
