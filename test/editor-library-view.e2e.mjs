@@ -63,16 +63,16 @@ const setNum = async (p, name, value) => { await ev(p, `(() => { const i = ${F}.
   const v = await ev(p, `({ view: ${F}.querySelector('[data-name=library_view] select').value, cols: ${F}.querySelector('[data-name=library_columns] input').value })`);
   check('YAML library_view: tiles + library_columns: 4 load as Tiles / 4', v.view === 'tiles' && v.cols === '4', J(v));
   await ev(p, `__changes.length = 0`);
-  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=coerce_repeat_one] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
+  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=screensaver_lyrics] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
   const c = await lastChange(p);
-  check('an unrelated edit keeps both YAML values', c.library_view === 'tiles' && c.library_columns === 4 && c.coerce_repeat_one === false, J(c));
+  check('an unrelated edit keeps both YAML values', c.library_view === 'tiles' && c.library_columns === 4 && c.screensaver_lyrics === false, J(c));
   await p.close();
 }
 {
   // an unrelated edit on a fresh config does not write the shown defaults (rows, 3)
   const p = await open(base);
   await ev(p, `__changes.length = 0`);
-  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=coerce_repeat_one] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
+  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=screensaver_lyrics] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
   const c = await lastChange(p);
   check('an unrelated edit does not write library_view / library_columns', !('library_view' in c) && !('library_columns' in c), J(c));
   await p.close();
@@ -89,10 +89,28 @@ const setNum = async (p, name, value) => { await ev(p, `(() => { const i = ${F}.
   const text = await ev(p, `__editor.shadowRoot.textContent`);
   check('large_buttons in a saved config: the editor loads with no field and no "Large buttons" text', !names.includes('large_buttons') && !/large buttons/i.test(text), J(names));
   await ev(p, `__changes.length = 0`);
-  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=coerce_repeat_one] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
+  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=screensaver_lyrics] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
   const c = await lastChange(p);
-  check('large_buttons in a saved config: an editor edit still works', c.coerce_repeat_one === false && c.entity === 'media_player.everywhere', J(c));
+  check('large_buttons in a saved config: an editor edit still works', c.screensaver_lyrics === false && c.entity === 'media_player.everywhere', J(c));
   check('large_buttons in a saved config: no errors or console warnings', msgs.length === 0, J(msgs));
+  await p.close();
+}
+{
+  // #139: the "Turn repeat one back into repeat all" option is gone. A saved config that still has
+  // coerce_repeat_one loads without errors or console warnings, the editor shows no field for it, and an edit does not write it back.
+  const msgs = [];
+  const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width: 900, height: 1500, deviceScaleFactor: 1 });
+  p.on('pageerror', (e) => msgs.push('pageerror: ' + e.message)); p.on('console', (m) => { if (['warning', 'warn', 'error'].includes(m.type())) msgs.push(m.type() + ': ' + m.text()); });
+  await p.goto(`${ROOT}editor.html?fresh=1&cfg=${encodeURIComponent(J({ ...base, coerce_repeat_one: false }))}`);
+  await p.waitForFunction('window.__editor && __editor.shadowRoot && __editor.shadowRoot.querySelector("ha-form")', { timeout: 8000 }); await sleep(600);
+  const names = await ev(p, `[...${F}.querySelectorAll('[data-name]')].map((e) => e.dataset.name)`);
+  const text = await ev(p, `__editor.shadowRoot.textContent`);
+  check('coerce_repeat_one in a saved config: the editor loads with no field and no "repeat one" text', !names.includes('coerce_repeat_one') && !/repeat one/i.test(text), J(names));
+  await ev(p, `__changes.length = 0`);
+  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=screensaver_lyrics] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
+  const c = await lastChange(p);
+  check('coerce_repeat_one in a saved config: an editor edit does not write it back', !('coerce_repeat_one' in c) && c.screensaver_lyrics === false && c.entity === 'media_player.everywhere', J(c));
+  check('coerce_repeat_one in a saved config: no errors or console warnings', msgs.length === 0, J(msgs));
   await p.close();
 }
 await browser.close();

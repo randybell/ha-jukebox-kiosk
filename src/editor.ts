@@ -63,7 +63,6 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
         { name: 'default_tab', selector: sel(startTabOptions(c)) },
         { name: 'screensaver_minutes', selector: { select: { options: saverOptions(c.screensaver_minutes), mode: 'dropdown', custom_value: true } } },
         { name: 'screensaver_lyrics', selector: { boolean: {} } },
-        { name: 'coerce_repeat_one', selector: { boolean: {} } },
       ],
     },
     {
@@ -132,7 +131,6 @@ export const LABELS: Record<string, string> = {
   default_tab: 'Start tab',
   screensaver_minutes: 'Screensaver after (pick, or type minutes up to 1440)',
   screensaver_lyrics: 'Lyrics on the screensaver',
-  coerce_repeat_one: 'Turn "repeat one" back into repeat all (the card only offers off and all)',
   speaker_mode: 'Speakers panel',
   targets: 'Groups to play on (empty = every speaker group)',
   grouping: 'Who may change speakers',
@@ -167,7 +165,6 @@ export const SHOWN_DEFAULTS = {
   default_tab: 'now',
   show_lyrics: true, screensaver_lyrics: true, lyrics_seek: true,
   radio_favorites_only: false, library_home: false, library_view: DEFAULT_LIBRARY_VIEW, library_columns: DEFAULT_LIBRARY_COLUMNS, library_layout: 'combined', search_sources: true, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
-  coerce_repeat_one: true,
 };
 const roomEntity = (r: RoomConfig | string) => (typeof r === 'string' ? r : r.entity);
 
@@ -242,6 +239,7 @@ export class JukeboxCardEditor extends LitElement {
       const n = Math.round(Number(v.lyrics_offset_ms));
       if (Number.isFinite(n)) v.lyrics_offset_ms = Math.max(-5000, Math.min(5000, n)); else delete v.lyrics_offset_ms;
     }
+    delete v.coerce_repeat_one; // the option is gone (#139): an old YAML value is ignored and not written back
     return v as JukeboxCardConfig;
   }
   private changed(e: CustomEvent) {

@@ -26,7 +26,7 @@ export interface InlineSpeakers extends HTMLElement {
 import { defineElement } from './define';
 import { FavController } from './heart';
 import { favoriteButtonFor } from './favorites';
-import { shownRepeat, nextRepeat } from './repeat';
+import { shownRepeat, nextRepeat, REPEAT_LABEL, type RepeatMode } from './repeat';
 import { SLEEP_MINUTES, sleepLabel, fmtSleepRemain, remainFromExpires, sleepPlayerId, canMaSleep, parseExpires, type SleepMinutes } from './sleep';
 
 const VOL_THROTTLE_MS = 200;
@@ -188,7 +188,7 @@ export class JbNow extends LitElement {
     this.flags.set('shuffle', { v, t: Date.now() }); this.requestUpdate();
     this.call('media_player', 'shuffle_set', { shuffle: v }, this.eid);
   }
-  /** 0.6.5: off <-> all only; 'one' is never sent (a player on 'one' is shown as all, so a tap turns repeat off) */
+  /** #139: off → all → one → off, matching Music Assistant */
   cycleRepeat() {
     const cur = this.flag('repeat', shownRepeat(this.ent?.attributes?.repeat));
     const v = nextRepeat(cur);
@@ -431,7 +431,7 @@ export class JbNow extends LitElement {
     const prov = providerLabel(a.media_content_id);
     const playing = this.isPlaying();
     const shuffle = this.flag('shuffle', !!a.shuffle);
-    const repeat = this.flag('repeat', shownRepeat(a.repeat));
+    const repeat: RepeatMode = this.flag('repeat', shownRepeat(a.repeat));
     const { pos, dur } = this.position();
     const where = (a.friendly_name as string) ?? (this.eid ? this.eid.replace(/^media_player\./, '').replace(/_/g, ' ') : '');
     const stateWord = playing ? 'Playing on' : e?.state === 'paused' || this.flag('state', e?.state) === 'paused' ? 'Paused on' : 'Ready on';
@@ -496,7 +496,7 @@ export class JbNow extends LitElement {
           ${tb('pr', 'prev', 'Previous', () => this.prev())}
           ${tb('pp', playing ? 'pause' : 'play', playing ? 'Pause' : 'Play', () => this.playPause())}
           ${tb('nx', 'next', 'Next', () => this.next())}
-          ${tb('rp', 'repeat', 'Repeat queue', () => this.cycleRepeat(), repeat !== 'off', repeat !== 'off')}
+          ${tb('rp', repeat === 'one' ? 'repeatone' : 'repeat', REPEAT_LABEL[repeat], () => this.cycleRepeat(), repeat !== 'off', repeat !== 'off')}
           ${showFav ? tb('fv', favOn ? 'heart' : 'heartline', favOn ? 'Remove from favorites' : 'Add to favorites', () => this.toggleFavorite(), favOn, false, idle) : nothing}
         </div>
         ${nextIt ? html`<button class="upn panel" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>

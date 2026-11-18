@@ -603,21 +603,21 @@ async def test_repeat_queue_command_not_forwarded(
     assert fake_ma.calls == []
 
 
-async def test_repeat_one_mapped_to_all_if_ever_forwarded(
+async def test_repeat_mode_forwarded_unchanged_if_ever_allowlisted(
     hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """If a repeat command is ever allowlisted, 'one' still goes to MA as 'all'."""
+    """#139: if a repeat command is ever allowlisted, 'one' / 'all' / 'off' go to MA as sent."""
     from custom_components.jukebox_kiosk import const, websocket_api
     from custom_components.jukebox_kiosk.const import MaCommand, PermClass
 
     table = {**const.MA_COMMANDS, "player_queues/repeat": MaCommand(PermClass.PLAYBACK, "client")}
     monkeypatch.setattr(websocket_api, "MA_COMMANDS", table)
     ws = await _ws(hass_ws_client, admin_token[1])
-    for sent, want in (("one", "all"), ("ONE", "all"), ("all", "all"), ("off", "off")):
+    for mode in ("one", "ONE", "all", "off"):
         res = await _call(ws, type="jukebox_kiosk/ma", command="player_queues/repeat",
-                          args={"queue_id": PLAYER_A, "repeat_mode": sent})
-        assert res["success"], sent
-        assert fake_ma.calls[-1] == ("player_queues/repeat", {"queue_id": PLAYER_A, "repeat_mode": want}), sent
+                          args={"queue_id": PLAYER_A, "repeat_mode": mode})
+        assert res["success"], mode
+        assert fake_ma.calls[-1] == ("player_queues/repeat", {"queue_id": PLAYER_A, "repeat_mode": mode}), mode
 
 
 # ---- 0.7.2: combined Library tab (search source picker, genres list) ----

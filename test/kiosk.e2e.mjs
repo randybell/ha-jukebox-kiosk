@@ -592,24 +592,24 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('K16 Now Playing heart → info chip naming the track (top right), heart off', (await pressedOf(p, npb)) === 'false' && ch4?.kind === 'info' && /^Removed .+ from favorites$/.test(ch4.text) && ch4.top < 140, J(ch4));
   await p.close();
 }
-// ---------------- 0.6.5 repeat one → repeat queue, only with Playback ----------------
+// ---------------- #139 repeat one is shown as Repeat single track; nothing is rewritten ----------------
 {
   const reps = (p) => ev(p, `window.__calls.filter((c) => c.service === 'repeat_set').map((c) => ({ r: c.data.repeat, e: [c.target?.entity_id].flat().join() }))`);
-  const shown = (p) => ev(p, `(() => { const b = ${NP}.querySelector('.tb.rp'); return b.classList.contains('on') && b.getAttribute('aria-label') === 'Repeat queue'; })()`);
+  const shown = (p) => ev(p, `(() => { const b = ${NP}.querySelector('.tb.rp'); return b.classList.contains('on') && b.getAttribute('aria-label') === 'Repeat single track'; })()`);
   let p = await open('&repeat=one'); // plain kiosk user, default guest classes include playback
-  await sleep(2200);
+  await sleep(500);
   let r = await reps(p);
-  check('RP1 kiosk user with Playback: player on one → shown as repeat queue, exactly one repeat_set all on the target', (await shown(p)) && r.length === 1 && r[0].r === 'all' && r[0].e === EV, J(r));
+  check('RP1 kiosk user with Playback: player on one → shown as Repeat single track, nothing sent', (await shown(p)) && r.length === 0, J(r));
   await p.close();
   p = await open(`&repeat=one&kcaps=${encodeURIComponent(J({ queue_play: false }))}`); // no Playback class
-  await sleep(2200);
+  await sleep(500);
   r = await reps(p);
-  check('RP2 kiosk user without Playback: shown as repeat queue, nothing sent', (await shown(p)) && r.length === 0, J(r));
+  check('RP2 kiosk user without Playback: shown as Repeat single track, nothing sent', (await shown(p)) && r.length === 0, J(r));
   await p.close();
   p = await open('&repeat=one&kfail=capabilities'); // the server never says what the user may do
-  await sleep(2200);
+  await sleep(500);
   r = await reps(p);
-  check('RP3 capabilities unknown (server error) → nothing sent', r.length === 0, J(r));
+  check('RP3 capabilities unknown (server error) → shown as Repeat single track, nothing sent', (await shown(p)) && r.length === 0, J({ r, shown: await shown(p) }));
   await p.close();
 }
 check('no page errors', pageErrors.length === 0, J(pageErrors.slice(0, 3)));

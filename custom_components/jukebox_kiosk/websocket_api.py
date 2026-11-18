@@ -36,9 +36,6 @@ from .const import (
     PLAYER_LIST_ARG_KEYS,
     QUEUE_EVENTS,
     QUEUE_LIMIT_MAX,
-    REPEAT_ALL,
-    REPEAT_ARG_KEYS,
-    REPEAT_ONE,
     RESERVED_ARG_KEYS,
     SEARCH_PROVIDER_TYPES,
     TODO_VERIFY,
@@ -133,14 +130,6 @@ def _guard_lyrics_track(track: Any) -> None:
         raise KioskError("library_track", "Pass the provider track, not the library track")
 
 
-def _no_repeat_one(args: dict[str, Any]) -> None:
-    """Repeat 'one' is never forwarded: it is mapped to 'all' (0.6.5)."""
-    for key in REPEAT_ARG_KEYS:
-        val = args.get(key)
-        if isinstance(val, str) and val.lower() == REPEAT_ONE:
-            args[key] = REPEAT_ALL
-
-
 def _impersonation(client: MusicAssistantClient, user: User | None) -> dict[str, Any]:
     if user is None or impersonation_arg is None:
         return {}
@@ -189,7 +178,6 @@ async def forward(
             value = args.get(key)
             if not isinstance(value, str) or not value.startswith(prefixes):
                 raise KioskError("invalid_args", f"{key} must start with {' or '.join(prefixes)} for {command}")
-    _no_repeat_one(args)
     _entry_, policy, client = _context(hass)
     check_class(user, policy, spec.perm)
     _check_players(hass, user, args, control=spec.perm is not PermClass.READ)
