@@ -37,6 +37,9 @@ node scripts/run-tests.mjs --list                  # which files each group runs
 # The browser tests and screenshot scripts start their own static server (test/serve.mjs) on a free 127.0.0.1 port, so a server
 # already running elsewhere can't be tested by mistake. JB_PORT=8765 picks a fixed port (and fails clearly if it is taken);
 # JB_URL=http://127.0.0.1:8765/dev/index.html (or JB_ROOT=http://127.0.0.1:8765/dev/) uses a server you started.
+# The shipped card has no window.__jb* test hooks. Suites that set them build a hooks card once per run (JB_TEST_HOOKS=1 npx rollup -c
+# -> test/tmp/jukebox-card.hooks.js, from the current src; test/hooks-build.mjs) and open the harness with &hooks=1. With JB_URL that
+# build is skipped, so run it yourself first.
 npm run shots                                      # = node tools/screenshots/shots-m2.mjs
 node tools/screenshots/shots-m2.mjs f1             # every tab at 1920x1080, 1280x800, 820x1180 and 390x844 -> test/shots/m2/
 JB_SIZES=1920x1080 node tools/screenshots/shots-m2.mjs x1                   # one size
@@ -73,6 +76,9 @@ URL parameters:
 | `recents=1` | seeds the recent-search chips |
 | `fresh=1` | clears localStorage |
 | `log=1` | shows a panel with every `callService` call |
+| `hooks=1` | loads the test-hooks build (`test/tmp/jukebox-card.hooks.js`) instead of the shipped card |
+| `norbi=1` | no Radio Browser provider in the kiosk `search_providers` list |
+| `jjmany=N` | with `jjgrey=1`: N more library albums and tracks by JJ Grey (artist filter paging past 100) |
 | `tab=now\|browse\|search\|queue` | opens that tab (default `now`) |
 | `lyrics=none` | every lyrics lookup finds nothing |
 | `lyrfail=perm\|err` | lyrics lookups (through the kiosk mock's `ma`) fail with a permission error / a generic error |

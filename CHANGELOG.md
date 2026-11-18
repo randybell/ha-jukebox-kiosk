@@ -4,6 +4,18 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.8.9 — 2026-11-18
+
+- Album art on Now Playing and the screensaver now recovers on its own. If a picture won't load, the card tries the next picture it has for that track, then shows the no-art look. Each picture is tried only once per track, and everything starts fresh when the next track begins, so a picture that failed no longer keeps later covers blank.
+- If you open your dashboard over plain http (not https), pictures with plain http addresses now show too. On https dashboards they are still left out, because the browser would block them.
+- The clock in the top bar and on the screensaver follows the 12-hour or 24-hour setting and the time zone in your Home Assistant profile, the same way Home Assistant shows times. The screensaver date uses your profile's language and time zone too.
+- The clock now changes right on the minute. It used to update every 15 seconds, so it could be up to 15 seconds late.
+- In More Info, the Published date for podcast episodes and audiobooks uses the language and time zone in your Home Assistant profile. A date with no time of day shows exactly as written, so it no longer shows a day early in some time zones.
+- In the Library, Filter by on an artist's page now finds all of that artist's albums and tracks in your library, up to 1,000 of each. It used to stop at the first 100.
+- The "Stations by" lists on Library → Radio now open the Radio Browser provider by the id Music Assistant gives it. If Music Assistant won't allow that, for example for a guest, the card goes back to the way it opened them before.
+- Jukebox Kiosk now waits up to 60 seconds for a lyrics lookup, the same as the card. It used to give up after 30 seconds, so a slow first lookup could fail.
+- The `accent` and `font_base` settings are gone. Neither did anything any more. Old setups that still have them keep loading, and you can remove them.
+
 ## 0.8.8 — 2026-11-18
 
 - In the card editor, the Player, Rooms and speaker pickers list only Music Assistant players, so you can't pick a player the jukebox can't use.
