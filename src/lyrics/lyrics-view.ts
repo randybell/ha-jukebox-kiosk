@@ -344,7 +344,7 @@ export class JbLyrics extends LitElement {
     .sc::-webkit-scrollbar { display: none; }
     .pad { height: 42%; }
     .ln { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); color: var(--_inactive); padding: .28em 0;
-      transition: color 300ms ease, opacity 300ms ease, transform 300ms ease; transform-origin: left center; text-wrap: balance; overflow-wrap: anywhere; }
+      transition: color var(--_t-normal) ease, opacity var(--_t-normal) ease, transform var(--_t-normal) ease; transform-origin: left center; text-wrap: balance; overflow-wrap: anywhere; }
     .plain .ln { color: var(--_fg); font-weight: var(--ha-font-weight-medium, 500); }
     .synced .ln.past { color: var(--_inactive); }
     .synced .ln.cur { color: var(--_fg); }
@@ -352,7 +352,7 @@ export class JbLyrics extends LitElement {
     .seekable .ln { cursor: pointer; position: relative; }
     /* long-press feedback: a white bar fills under the line while held, then the line flashes */
     .seekable .ln::after { content: ""; position: absolute; left: 0; bottom: .05em; height: 3px; width: 0; background: var(--_active); border-radius: 2px; opacity: 0; }
-    .seekable .ln.press::after { width: min(100%, 220px); opacity: .9; transition: width ${LONG_PRESS_MS}ms linear, opacity 120ms; }
+    .seekable .ln.press::after { width: min(100%, 220px); opacity: .9; transition: width ${LONG_PRESS_MS}ms linear, opacity var(--_t-fast); }
     .ln.press { transform: scale(.985); }
     .ln.flash { color: var(--_fg) !important; animation: flash 900ms ease; }
     @keyframes flash { 0% { background: var(--_chip-sel) } 100% { background: transparent } }
@@ -394,7 +394,7 @@ export class JbLyrics extends LitElement {
     .m-saver.st-plain .win { height: 7.5em; font-size: clamp(16px, 2.2cqw, 28px); -webkit-mask-image: linear-gradient(transparent, #000 25%, #000 75%, transparent);
       mask-image: linear-gradient(transparent, #000 25%, #000 75%, transparent); }
     .m-saver.st-plain .ln { font-size: 1em; color: rgba(255, 255, 255, .8); font-weight: 600; white-space: normal; text-shadow: 0 2px 24px #000c; }
-    @media (prefers-reduced-motion: reduce) { .ln, .m-saver .col { transition: none; animation: none; } }
+    @media (prefers-reduced-motion: reduce) { .ln, .m-saver .col { transition: none; animation: none; } .st-loading .mt { animation: none; } }
   `];
 }
 defineElement('jb-lyrics', JbLyrics);

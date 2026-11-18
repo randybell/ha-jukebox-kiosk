@@ -850,7 +850,7 @@ export class JbSearch extends LitElement {
     .lcrow .lcats { flex: 1; min-width: 0; margin-bottom: 0; }
     .lcats .fc.lc { flex: 1 1 auto; min-width: 68px; height: auto; min-height: 62px; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-xl, 16px); display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .03em; text-transform: uppercase;
-      color: var(--_muted); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background 120ms, color 120ms; }
+      color: var(--_muted); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background var(--_t-fast), color var(--_t-fast); }
     .lc .lci { width: 26px; height: 26px; flex: none; }
     .lc .lcl { white-space: nowrap; }
     .lcats .fc.lc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
@@ -894,7 +894,7 @@ export class JbSearch extends LitElement {
     .qx { width: 44px; height: 44px; flex: none; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center; color: var(--_inactive); background: var(--_chip-bg); }
     .qx .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     /* loading hairline: 2px white at ~60% under the query text, no blank flash */
-    .hair { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; overflow: hidden; opacity: 0; transition: opacity 120ms; pointer-events: none; }
+    .hair { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; overflow: hidden; opacity: 0; transition: opacity var(--_t-fast); pointer-events: none; }
     .hair::before { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -40%; background: var(--_active); animation: hair 900ms ease-in-out infinite; }
     .hair.on { opacity: 1; }
     @keyframes hair { from { left: -40% } to { left: 100% } }
@@ -902,6 +902,8 @@ export class JbSearch extends LitElement {
     .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); box-shadow: 0 0 0 var(--ha-border-width-lg, 3px) var(--_chip-sel); flex: none; }
     .live.busy { animation: pulse 800ms ease-in-out infinite alternate; }
     @keyframes pulse { from { opacity: 1 } to { opacity: .35 } }
+    /* #115 reduced motion: the caret stays on, the loading line stays still (full width), the busy dot stops pulsing */
+    @media (prefers-reduced-motion: reduce) { .caret, .live.busy { animation: none; } .hair::before { animation: none; left: 0; width: 100%; } }
     .recents { display: flex; align-items: center; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; white-space: nowrap; min-width: 0; min-height: 0;
       -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
     .recents::-webkit-scrollbar { display: none; }

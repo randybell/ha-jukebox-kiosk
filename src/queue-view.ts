@@ -396,6 +396,7 @@ export class JbQueue extends LitElement {
     .aps-err { color: var(--error-color); font-size: var(--ha-font-size-m, 14px); padding: 0 8px; }
     .live { width: 7px; height: 7px; border-radius: 50%; background: var(--_active); align-self: center; animation: pulse 800ms ease-in-out infinite alternate; }
     @keyframes pulse { from { opacity: 1 } to { opacity: .35 } }
+    @media (prefers-reduced-motion: reduce) { .spin, .live { animation: none; } }
     .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 10px 12px 20px; display: flex; flex-direction: column; touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     /* the list sits directly on the HA card surface: no second fill */

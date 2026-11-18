@@ -535,7 +535,7 @@ export class JbNow extends LitElement {
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg);
-      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background 150ms, color 150ms; }
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background var(--_t-fast), color var(--_t-fast); }
     .ab .i { width: var(--_icon); height: var(--_icon); }
     .art .sleep-strip { position: absolute; z-index: 2; top: calc(18px + max(40px, calc(48px / var(--_z, 1)))); right: 10px; left: 10px; margin: 0; justify-content: flex-end; }
     .art .sleep-strip .sp { background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
@@ -674,6 +674,7 @@ export class JbNow extends LitElement {
     .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: var(--_dim); }
     .vr.pending .ra { animation: jb-pulse 1s ease-in-out infinite; }
     @keyframes jb-pulse { 50% { opacity: .35; } }
+    @media (prefers-reduced-motion: reduce) { .vr.pending .ra { animation: none; } .tb:active, .sleep-strip .sp:active { transform: none; } }
     .vn .else { display: block; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vr.muted .vs { opacity: var(--_dim); }
     @container vol (min-width: 600px) {

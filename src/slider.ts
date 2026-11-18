@@ -83,7 +83,8 @@ export class JbSlider extends LitElement {
     .t { position: absolute; left: 0; right: 0; top: 50%; height: var(--_slider-h, 6px); transform: translateY(-50%); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--ha-slider-track-color, var(--_track)); overflow: hidden; }
     .f { position: absolute; inset: 0 auto 0 0; background: var(--ha-slider-indicator-color, var(--_active)); border-radius: var(--ha-border-radius-pill, 9999px); }
     .k { position: absolute; top: 50%; width: var(--_slider-knob, 18px); height: var(--_slider-knob, 18px); border-radius: var(--ha-border-radius-circle, 50%); background: var(--ha-slider-thumb-color, var(--_active));
-      transform: translate(-50%, -50%); transition: box-shadow .12s; }
+      transform: translate(-50%, -50%); transition: box-shadow var(--ha-animation-duration-fast, 150ms); }
+    @media (prefers-reduced-motion: reduce) { .k { transition: none; } }
     .k.on { box-shadow: 0 0 0 calc(2 * var(--ha-border-width-md, 2px)) color-mix(in srgb, var(--ha-slider-thumb-color, var(--_active)) calc(var(--dark-divider-opacity, 0.12) * 100%), transparent); }
   `;
 }

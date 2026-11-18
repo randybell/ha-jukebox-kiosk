@@ -877,10 +877,10 @@ export class JukeboxCard extends LitElement {
     .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--ha-space-1, 4px); min-width: 0; min-height: 58px;
       padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-xl, 16px); background: transparent; border: 0;
       color: var(--_muted); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: .01em; position: relative;
-      transition: background-color 120ms ease, color 120ms ease, transform 120ms ease; }
+      transition: background-color var(--_t-fast) ease, color var(--_t-fast) ease, transform var(--_t-fast) ease; }
     .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tab .i { width: calc(var(--_icon) * 30 / 24); height: calc(var(--_icon) * 30 / 24); }
-    .tab + .tab::before { content: ""; position: absolute; left: -2.5px; top: 25%; bottom: 25%; width: 1px; background: var(--_hairline); transition: opacity 120ms ease; }
+    .tab + .tab::before { content: ""; position: absolute; left: -2.5px; top: 25%; bottom: 25%; width: 1px; background: var(--_hairline); transition: opacity var(--_t-fast) ease; }
     .tab.active::before, .tab.active + .tab::before, .tab:hover::before, .tab:hover + .tab::before { opacity: 0; }
     @media (hover: hover) { .tab:hover { background: var(--_chip-sel); color: var(--_fg); } }
     .tab:active { transform: scale(.97); background: var(--_chip-sel); color: var(--_fg); }

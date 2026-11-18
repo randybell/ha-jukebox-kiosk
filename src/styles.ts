@@ -50,6 +50,11 @@ export const tokens = css`
     --_card-border-color: var(--ha-card-border-color, var(--divider-color, var(--_surface-border)));
     --_font-body: var(--ha-font-family-body, Roboto, Noto, sans-serif);
     --_font-display: var(--ha-font-family-heading, var(--ha-card-header-font-family, var(--ha-font-family-body, Roboto, Noto, sans-serif)));
+    /* #115 motion: HA's duration tokens (HA itself sets them to 1 ms when the device asks for reduced motion; the media rule below does the same
+       where a theme or an older HA leaves them out) */
+    --_t-instant: var(--ha-animation-duration-instant, 75ms);
+    --_t-fast: var(--ha-animation-duration-fast, 150ms);
+    --_t-normal: var(--ha-animation-duration-normal, 250ms);
     /* #114 icons follow HA's icon size (--mdc-icon-size, 24 px by default); other icon sizes are multiples of it */
     --_icon: var(--mdc-icon-size, 24px);
     /* #113 one look for things you can't tap (HA ha-control-button / ha-icon-button: --disabled-text-color on text and icons, --disabled-color on fills)
@@ -63,6 +68,9 @@ export const tokens = css`
     --_pad: clamp(var(--ha-space-3, 12px), 3cqw, var(--ha-space-9, 36px));
     --_radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
     --_radius-s: var(--ha-border-radius-md, 8px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :host { --_t-instant: 1ms; --_t-fast: 1ms; --_t-normal: 1ms; }
   }
 `;
 
