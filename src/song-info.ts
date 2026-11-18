@@ -1,7 +1,7 @@
 /**
  * 0.7.12: the More Info panel's lines (press-and-hold on a song, podcast episode or audiobook). Only fields Music
  * Assistant already sends with the item the card has (search / library item, or a queue item with its media_item and
- * streamdetails); nothing is fetched. Empty lines are left out. Approved by Randy via Kiosk PM, Nov 9 2026 3:50 PM CT.
+ * streamdetails); nothing is fetched. Empty lines are left out.
  */
 import { fmtDur } from './shared';
 import { formatDateShort } from './datetime';

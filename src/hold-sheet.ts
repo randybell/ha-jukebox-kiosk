@@ -15,7 +15,7 @@ export interface HoldSheet { item: { name: string } & Partial<MaItem>; sub: stri
  * the item's art and name on top; one big full-width button per choice (≥ 64 px); Cancel set apart. A tap on the backdrop, Cancel or Esc
  * (card-level, see onKeyCap) closes it. Choices are a normal tap; the finger-lift right after the hold is swallowed (swallowNextClick).
  *
- * 0.7.12 (Approved by Randy via Kiosk PM, Nov 9 2026): one shared scale for buttons, text and pictures (the scale that fits the
+ * 0.7.12: one shared scale for buttons, text and pictures (the scale that fits the
  * tallest hold pop-up). Each pop-up is as tall as its content, capped at a shared maximum that fits between the top bar and the
  * bottom tab bar (measured from the card layout). Cancel follows the last choice; buttons are not stretched.
  */

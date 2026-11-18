@@ -281,7 +281,7 @@ export class JbDetail extends LitElement {
     this._menu = { item: it, type, pos: menuPos(this.root(), el.closest('.row') as HTMLElement, actions.length), actions };
   }
 
-  /** 0.7.20: a track / episode row here opens the same pop-up (jb-hold-sheet) as Library Tracks, on a tap or a hold (Randy, Nov 10: action buttons are off
+  /** 0.7.20: a track / episode row here opens the same pop-up (jb-hold-sheet) as Library Tracks, on a tap or a hold (action buttons are off
    *  everywhere, so the pop-up is how to act on one track). Stations and every other row type keep their old tap. */
   private isSong(it: MaItem, type: string) { return (type === 'track' || type === 'podcast_episode') && !isRadio(it); }
   private songMenu(it: MaItem, type: string, key: string) {

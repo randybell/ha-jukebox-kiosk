@@ -159,7 +159,7 @@ export interface JukeboxCardConfig {
   grouping_users?: string[];
   /** What everyone else may do in the Speakers panel: volume (default) or none (read only). */
   guest_access?: 'volume' | 'none';
-  /** Dropping the leader of a playing group: block (default) or allow (MA hands off; WiiM restarts the group after a gap). */
+  /** Dropping the leader of a playing group: block (default) or allow (MA hands off; some players restart the group after a gap). */
   leader_drop?: 'allow' | 'block'; // default 'allow' (0.6.3)
   /** 0.6.4: true brings back the centred confirm dialogs for drop / last room / takeovers. Default false: status chip only. */
   confirm_drop?: boolean;

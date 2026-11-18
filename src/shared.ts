@@ -325,7 +325,7 @@ export function mediaActions(play: (enq: Enqueue) => void, open: (() => void) | 
     ...(!hideRadio ? [{ id: 'radio', icon: RA.radio.icon, label: 'Start radio', run: () => { if (seedRadio) ask('radio'); }, ...(seedRadio ? {} : { disabled: true as const }) }] : []),
   ];
 }
-/** Press-and-hold: no Start radio at all for podcasts, podcast episodes or audiobooks (Approved by Randy via PM, Nov 9 2026). */
+/** Press-and-hold: no Start radio at all for podcasts, podcast episodes or audiobooks. */
 export const hideStartRadio = (type: string, it?: Partial<MaItem>) =>
   /^(podcast|audiobook)/.test(type) || /^(podcast|audiobook)/.test(String(it?.media_type ?? ''));
 /** Tap on a playable item (track, station, episode, audiobook): a small sheet, nothing plays until a choice is made. */
