@@ -524,14 +524,14 @@ export class JbNow extends LitElement {
       /* 0.7.9 #55: rows as tall as their content, so the square art always pushes the title down (never under it) */
       grid-auto-rows: max-content; }
     .nw::-webkit-scrollbar { display: none; }
-    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), 44cqh, 580px); aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: var(--primary-color, #03a9f4);
+    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), 44cqh, 580px); aspect-ratio: 1; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; background: var(--primary-color, #03a9f4);
       box-shadow: 0 0 0 1px var(--_hairline); }
     .art .ovl { position: absolute; inset: 0; z-index: 1; }
     .slx { position: absolute; inset: 0; z-index: 4; } .art .slx { z-index: 1; }
     .nw.sl-open .art { z-index: 5; }
     .art-btns { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: var(--ha-space-2, 8px); }
     /* #42: ≥48px at 1x; on zoomed big screens (--_z > 1) the same 40px floor as before (54px at 1920x1080) */
-    .ab { width: max(40px, calc(48px / var(--_z, 1))); height: max(40px, calc(48px / var(--_z, 1))); border-radius: 50%; display: grid; place-items: center;
+    .ab { width: max(40px, calc(48px / var(--_z, 1))); height: max(40px, calc(48px / var(--_z, 1))); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg);
@@ -587,7 +587,7 @@ export class JbNow extends LitElement {
     .badges { display: flex; align-items: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; }
     .pv.big { font-size: var(--ha-font-size-s, 12px); padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); }
     .where { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
-      padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: 999px; background: var(--_chip-sel); border: 1px solid var(--_hairline); color: var(--_muted); }
+      padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-sel); border: 1px solid var(--_hairline); color: var(--_muted); }
     .ti { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-3xl, 28px), 4.6cqw, var(--ha-font-size-5xl, 40px)); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: -.01em;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: none; }
     .sub { font-size: clamp(var(--ha-font-size-m, 14px), 1.8cqw, var(--ha-font-size-xl, 20px)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: calc(-1 * var(--ha-space-1, 4px)); }
@@ -601,20 +601,20 @@ export class JbNow extends LitElement {
     .tp { display: grid; grid-template-columns: repeat(6, 1fr); align-items: center; justify-items: center; margin: 2px 0; }
     .tp:has(.tb:nth-child(5):last-child) { grid-template-columns: repeat(5, 1fr); }
     .tp:has(.tb.fv) { grid-template-columns: repeat(7, 1fr); } .tp:has(.tb.fv) .tb.sh { grid-column: 2; } /* #42: empty first slot keeps Play/Pause centered with the heart */
-    .tb { position: relative; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; color: var(--_active); }
+    .tb { position: relative; width: 56px; height: 56px; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center; color: var(--_active); }
     .tb .i { width: 30px; height: 30px; }
     .tb.sh, .tb.rp, .tb.sl { color: var(--_inactive); } .tb.sh .i, .tb.rp .i, .tb.sl .i { width: 24px; height: 24px; }
     .tb.sh.on, .tb.rp.on, .tb.fv.on, .tb.sl.on { color: var(--_active); }
     .tb.fv { color: var(--_inactive); } .tb.fv .i { width: 26px; height: 26px; }
     .sleep-strip { display: flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; margin: -2px 0 2px; }
-    .sleep-strip .sp { height: 34px; min-width: 44px; padding: 0 var(--ha-space-4, 16px); border-radius: 999px; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+    .sleep-strip .sp { height: 34px; min-width: 44px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
       background: var(--_chip-bg); border: 1px solid var(--_surface-border); color: var(--_fg); }
     .sleep-strip .sp.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .sleep-strip .sp:active { transform: scale(.96); }
     .sleep-cd { letter-spacing: .04em; font-variant-numeric: tabular-nums; }
     .sleep-strip .sp.sleep-cd { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-3, 12px); }
     .sleep-strip .sp.sleep-cd .i { width: 14px; height: 14px; }
-    .tb .dot { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: currentColor; }
+    .tb .dot { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
     .tb.pp { width: 80px; height: 80px; background: var(--_active); color: var(--_on-accent); }
     .tb.pp .i { width: 44px; height: 44px; }
     .tb.pr, .tb.nx { width: 72px; height: 72px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
@@ -633,7 +633,7 @@ export class JbNow extends LitElement {
     .volw { position: relative; display: flex; flex-direction: column; min-height: 0; }
     /* More speakers floats over the fading speaker list: use ha-card's fill + backdrop-filter (not a transparent hole, not --_surface-solid) so the label stays readable. */
     .vmore { display: none; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 2; align-items: center; gap: var(--ha-space-1, 4px);
-      padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); min-height: 30px; border-radius: 999px; border: 1px solid var(--_surface-border);
+      padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); min-height: 30px; border-radius: var(--ha-border-radius-pill, 9999px); border: 1px solid var(--_surface-border);
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
@@ -648,7 +648,7 @@ export class JbNow extends LitElement {
     /* the lead speaker row stays fixed; only the rooms scroll (0.7.9 #59 scroll area moved from .vol to .rooms). No second surface: the card shows through as before. */
     .vr.main, .rooms > .vr { flex-shrink: 0; }
     .vr { display: grid; grid-template-columns: 30px minmax(80px, 30%) minmax(0, 1fr) 34px; align-items: center; gap: var(--ha-space-2, 8px); min-height: 46px; }
-    .vm { width: 34px; height: 34px; display: grid; place-items: center; color: var(--_active); margin-left: -6px; border-radius: 50%; }
+    .vm { width: 34px; height: 34px; display: grid; place-items: center; color: var(--_active); margin-left: -6px; border-radius: var(--ha-border-radius-circle, 50%); }
     .vm .i { width: 20px; height: 20px; }
     .vr.room .vm { color: var(--_inactive); } .vr.room .vm .i { width: 18px; height: 18px; }
     .vr.muted .vm { color: var(--_active); }
@@ -660,10 +660,10 @@ export class JbNow extends LitElement {
     /* 0.6.3 speaker controls: a trailing column for Speakers (main row) and Drop/Add (rooms) */
     .vol.acts .vr.main { grid-template-columns: 30px minmax(0, max-content) minmax(0, 1fr) 34px auto; }
     .vol.acts .rooms .vr { grid-template-columns: 30px minmax(70px, 28%) minmax(0, 1fr) 34px 36px; }
-    .spkb { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 34px; padding: 0 var(--ha-space-3, 12px); border-radius: 999px; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+    .spkb { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 34px; padding: 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
       background: var(--_chip-bg); border: 1px solid var(--_surface-border); color: var(--_fg); white-space: nowrap; }
     .spkb:active { background: var(--_chip-sel); }
-    .ra { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--_surface-border); color: var(--_fg); background: var(--_chip-bg); justify-self: end; }
+    .ra { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: 1px solid var(--_surface-border); color: var(--_fg); background: var(--_chip-bg); justify-self: end; }
     .ra span { display: none; }
     .ra .i { width: 18px; height: 18px; }
     .ra.add { background: var(--_active); border-color: transparent; color: var(--_on-accent); }

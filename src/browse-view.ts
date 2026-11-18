@@ -925,25 +925,25 @@ export class JbBrowse extends LitElement {
     .row.gen { grid-template-columns: 44px minmax(0, 1fr) auto 40px; cursor: pointer; }
     .cats { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
     .cats::-webkit-scrollbar { display: none; }
-    .fc { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 42px; padding: 0 var(--ha-space-4, 16px); border-radius: 999px; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+    .fc { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 42px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
       color: var(--_inactive); border: 1px solid var(--_surface-border); background: var(--_chip-bg); white-space: nowrap; }
     .fc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .fc.tog { padding: 0 var(--ha-space-4, 16px); font-size: var(--ha-font-size-m, 14px); }
     /* v0.7 Library filters: chips (same as Search), the filter box and the on-screen keyboard under the grid */
     .scope { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-width: 0; flex-wrap: wrap; }
-    .sc { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; max-width: 100%; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: 999px;
+    .sc { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; max-width: 100%; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       background: var(--_chip-sel); color: var(--_fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); min-width: 0; }
     .sc .scl { opacity: .8; flex: none; }
     .sc b { font-weight: var(--ha-font-weight-bold, 700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-    .sc .scx { width: 28px; height: 28px; padding: var(--ha-space-1, 4px); border-radius: 50%; background: var(--_chip-bg); flex: none; }
+    .sc .scx { width: 28px; height: 28px; padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-circle, 50%); background: var(--_chip-bg); flex: none; }
     .fc.clr { height: 44px; padding: 0 var(--ha-space-4, 16px); font-size: var(--ha-font-size-m, 14px); color: var(--_fg); border-color: var(--_surface-border); }
     .empty .fc.clr { margin-top: var(--ha-space-4, 16px); }
-    .lfq { display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: 52px; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: 16px; border: 1px solid var(--_surface-border);
+    .lfq { display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: 52px; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); border: 1px solid var(--_surface-border);
       background: var(--_input-bg); color: var(--_input-ink); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); min-width: 0; }
     .lfq .lfv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .lfq .lfv.ph { color: var(--_input-label); font-weight: var(--ha-font-weight-medium, 500); }
     .lfq .caret { width: 2px; height: 26px; background: var(--_active); flex: none; margin-left: calc(-1 * var(--ha-space-2, 8px)); }
-    .lfq .lfx { margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--_inactive); flex: none; }
+    .lfq .lfx { margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_inactive); flex: none; }
     .kbd { flex: none; width: 100%; max-width: 1100px; align-self: center; }
     .lsplit { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--ha-space-4, 16px); }
     .lkcol { display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); min-height: 0; }
@@ -971,7 +971,7 @@ export class JbBrowse extends LitElement {
     /* v0.7 Library home */
     .home { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--ha-space-4, 16px); }
     .lt { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: var(--ha-space-1, 4px); min-height: 180px; padding: var(--ha-space-6, 24px) var(--ha-space-6, 24px);
-      border-radius: 22px; border: 1px solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); text-align: left; cursor: pointer; }
+      border-radius: var(--ha-border-radius-3xl, 24px); border: 1px solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); text-align: left; cursor: pointer; }
     .lt:active { background: var(--_chip-sel); }
     .lti { flex: 1; display: flex; align-items: flex-start; } .lti svg { width: 52px; height: 52px; fill: var(--_active); }
     .ltl { font-family: var(--_font-display, inherit); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); }
@@ -979,22 +979,22 @@ export class JbBrowse extends LitElement {
     .lhead { align-items: center; gap: var(--ha-space-4, 16px); overflow: hidden; }
     .lt-title { font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ha-space-4, 16px) var(--ha-space-4, 16px); }
-    .tile { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; border-radius: 12px; padding: var(--ha-space-1, 4px); cursor: pointer; }
+    .tile { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; border-radius: var(--ha-border-radius-lg, 12px); padding: var(--ha-space-1, 4px); cursor: pointer; }
     .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 1.5px var(--_active); }
     .tw { position: relative; }
-    .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: 10px; }
-    .big.circ { border-radius: 50%; }
+    .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--ha-border-radius-md, 8px); }
+    .big.circ { border-radius: var(--ha-border-radius-circle, 50%); }
     .tw .pv { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); }
     .tile.artist .tw .pv { left: 50%; transform: translateX(-50%); bottom: 2px; }
     /* Playlist artwork (including lettering near its lower edge) must not sit behind a provider badge. */
     .tile[data-type="playlist"] .tw .pv { position: static; display: block; margin-top: var(--ha-space-2, 8px); max-width: 100%; }
     .tile[data-type="playlist"] b { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
-    .tw .open { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    .tw .open { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg); }
     .tw .open .i { width: 20px; height: 20px; }
-    .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_muted); }
@@ -1009,7 +1009,7 @@ export class JbBrowse extends LitElement {
     .row.ir { grid-template-columns: 44px minmax(0, 1fr); grid-auto-flow: column; grid-auto-columns: auto; }
     .tile small { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .list { display: flex; flex-direction: column; }
-    .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto auto; align-items: center; gap: var(--ha-space-3, 12px); min-height: 58px; padding: 0 var(--ha-space-1, 4px); border-radius: 10px; cursor: pointer; }
+    .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto auto; align-items: center; gap: var(--ha-space-3, 12px); min-height: 58px; padding: 0 var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-md, 8px); cursor: pointer; }
     .row + .row { border-top: 1px solid var(--_divider); }
     .row.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 1.5px var(--_active); }
     .row .n { text-align: center; color: var(--_inactive); font-size: var(--ha-font-size-m, 14px); font-variant-numeric: tabular-nums; }
@@ -1022,7 +1022,7 @@ export class JbBrowse extends LitElement {
     .dv { flex: 1; min-height: 0; }
     .sec { display: flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .08em; text-transform: uppercase; color: var(--_muted); margin: 2px 0 calc(-1 * var(--ha-space-1, 4px)); }
     .sec .i { width: 14px; height: 14px; color: var(--_active); }
-    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: 10px; border: 1px dashed var(--_divider); }
+    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-md, 8px); border: 1px dashed var(--_divider); }
     /* v0.7 radio "Stations by…" */
     .modes { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; margin-top: calc(-1 * var(--ha-space-1, 4px)); }
     .modes::-webkit-scrollbar { display: none; }
@@ -1041,7 +1041,7 @@ export class JbBrowse extends LitElement {
       scroll-snap-type: x proximity; touch-action: pan-x pan-y; padding-bottom: 2px; }
     .hs::-webkit-scrollbar { display: none; }
     .hs .tile { scroll-snap-align: start; }
-    .hs.skel .ar { background: var(--_chip-bg) !important; } .hs.skel b { background: var(--_chip-bg); border-radius: 6px; width: 70%; }
+    .hs.skel .ar { background: var(--_chip-bg) !important; } .hs.skel b { background: var(--_chip-bg); border-radius: var(--ha-border-radius-md, 8px); width: 70%; }
     .rowerr { display: flex; align-items: center; gap: var(--ha-space-2, 8px); } .rowerr .fc { height: 34px; }
     .rp { position: absolute; left: 8px; right: 8px; bottom: 6px; height: 4px; border-radius: 2px; background: var(--_chip-sel); overflow: hidden; }
     .rp i { display: block; height: 100%; background: var(--_active); }
@@ -1054,7 +1054,7 @@ export class JbBrowse extends LitElement {
       .bar { flex-wrap: wrap; } .cats { flex-basis: 100%; order: 0; } .fc { height: 36px; padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
       .scroll { padding: var(--ha-space-2, 8px); }
       .grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--ha-space-3, 12px) var(--ha-space-2, 8px); }
-      .home { grid-template-columns: 1fr 1fr; gap: var(--ha-space-3, 12px); } .lt { min-height: 132px; padding: var(--ha-space-4, 16px); border-radius: 18px; }
+      .home { grid-template-columns: 1fr 1fr; gap: var(--ha-space-3, 12px); } .lt { min-height: 132px; padding: var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); }
       .lti svg { width: 38px; height: 38px; } .ltl { font-size: var(--ha-font-size-xl, 20px); } .lts { font-size: var(--ha-font-size-m, 14px); } .lt-title { font-size: var(--ha-font-size-l, 16px); }
       .tw .pv { font-size: var(--ha-font-size-xs, 10px); left: 5px; bottom: 5px; }
       .row { grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: var(--ha-space-2, 8px); } .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto auto; } .row .pv { display: none; } .row .du { font-size: var(--ha-font-size-s, 12px); } .th { width: 40px; height: 40px; }

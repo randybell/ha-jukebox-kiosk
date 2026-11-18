@@ -803,7 +803,7 @@ export class JukeboxCard extends LitElement {
       background: transparent; border-bottom: 1px solid var(--_hairline); }
     .brand { display: flex; align-items: center; gap: var(--ha-space-2, 8px); font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-xl, 20px); }
     .brand-i { width: 28px; height: 28px; color: var(--_active); }
-    .pill { white-space: nowrap; display: flex; align-items: center; gap: var(--ha-space-2, 8px); padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: 999px; background: var(--_chip-bg);
+    .pill { white-space: nowrap; display: flex; align-items: center; gap: var(--ha-space-2, 8px); padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
       border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
     .pill b { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .pill .pl { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); margin-right: -2px; }
@@ -816,7 +816,7 @@ export class JukeboxCard extends LitElement {
     /* Now Playing, Library, Search, Queue and the detail pages are plain HA card surfaces: ha-card paints the one surface (album art is a background on the screensaver only). */
     .view { position: absolute; inset: 0; z-index: 1; }
     .view[hidden] { display: none; }
-    .badge { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 var(--ha-space-2, 8px); border-radius: 10px; background: var(--_active);
+    .badge { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-md, 8px); background: var(--_active);
       color: var(--_on-accent); font-style: normal; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); display: grid; place-items: center; font-variant-numeric: tabular-nums; }
     /* Screensaver / Stage: restored to e322336 look (fixed black canvas and white type). Theme rules do not apply here.
        color: #fff is set so the clock and title stay white now that the parent card uses theme body text. */
@@ -873,9 +873,9 @@ export class JukeboxCard extends LitElement {
       padding: var(--ha-space-3, 12px) calc(var(--_pad) + var(--ha-space-1, 4px)) calc(var(--ha-space-3, 12px) + env(safe-area-inset-bottom)); background: transparent;
       border-top: 1px solid var(--_hairline); position: relative; z-index: 2; }
     .tabs::before { content: ""; position: absolute; top: 7px; left: var(--_pad); right: var(--_pad); bottom: calc(9px + env(safe-area-inset-bottom));
-      border-radius: 18px; background: var(--_chip-bg); border: 1px solid var(--_surface-border); pointer-events: none; }
+      border-radius: var(--ha-border-radius-xl, 16px); background: var(--_chip-bg); border: 1px solid var(--_surface-border); pointer-events: none; }
     .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--ha-space-1, 4px); min-width: 0; min-height: 58px;
-      padding: var(--ha-space-1, 4px); border-radius: 14px; background: transparent; border: 0;
+      padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-xl, 16px); background: transparent; border: 0;
       color: var(--_muted); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: .01em; position: relative;
       transition: background-color 120ms ease, color 120ms ease, transform 120ms ease; }
     .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -906,14 +906,14 @@ export class JukeboxCard extends LitElement {
     :host([data-fit]) .brand { font-size: var(--ha-font-size-xl, 20px); } :host([data-fit]) .brand-i { width: 24px; height: 24px; } :host([data-fit]) .clock { font-size: var(--ha-font-size-xl, 20px); }
     :host([data-fit]) .pill { padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
     :host([data-fit]) .tabs { gap: var(--ha-space-1, 4px); padding: var(--ha-space-2, 8px) calc(var(--_pad) + var(--ha-space-1, 4px)) calc(var(--ha-space-2, 8px) + env(safe-area-inset-bottom)); }
-    :host([data-fit]) .tabs::before { top: 4px; bottom: calc(5px + env(safe-area-inset-bottom)); border-radius: 15px; }
-    :host([data-fit]) .tab { min-height: 50px; padding: var(--ha-space-1, 4px); gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-m, 14px); border-radius: 12px; } :host([data-fit]) .tab .i { width: 24px; height: 24px; }
+    :host([data-fit]) .tabs::before { top: 4px; bottom: calc(5px + env(safe-area-inset-bottom)); border-radius: var(--ha-border-radius-xl, 16px); }
+    :host([data-fit]) .tab { min-height: 50px; padding: var(--ha-space-1, 4px); gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-m, 14px); border-radius: var(--ha-border-radius-lg, 12px); } :host([data-fit]) .tab .i { width: 24px; height: 24px; }
     :host([data-fit]) .tab + .tab::before { left: -2px; }
     :host([data-fit=tiny]) .top { min-height: 44px; padding-top: var(--ha-space-1, 4px); padding-bottom: var(--ha-space-1, 4px); }
     /* tiny (< 560 px): one row, icon + small label side by side (icons only on narrow screens) */
     :host([data-fit=tiny]) .tabs { padding: var(--ha-space-2, 8px) calc(var(--_pad) + var(--ha-space-1, 4px)) calc(var(--ha-space-2, 8px) + env(safe-area-inset-bottom)); }
-    :host([data-fit=tiny]) .tabs::before { top: 3px; bottom: calc(3px + env(safe-area-inset-bottom)); border-radius: 14px; }
-    :host([data-fit=tiny]) .tab { flex-direction: row; gap: var(--ha-space-2, 8px); min-height: 44px; font-size: var(--ha-font-size-m, 14px); border-radius: 11px; }
+    :host([data-fit=tiny]) .tabs::before { top: 3px; bottom: calc(3px + env(safe-area-inset-bottom)); border-radius: var(--ha-border-radius-xl, 16px); }
+    :host([data-fit=tiny]) .tab { flex-direction: row; gap: var(--ha-space-2, 8px); min-height: 44px; font-size: var(--ha-font-size-m, 14px); border-radius: var(--ha-border-radius-lg, 12px); }
     :host([data-fit=tiny]) .tab .i { width: 22px; height: 22px; }
     :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 var(--ha-space-1, 4px); font-size: var(--ha-font-size-xs, 10px); flex: none; }
     @container jbapp (max-width: 640px) { :host([data-fit=tiny]) .tab span { display: none; } }
