@@ -15,39 +15,41 @@ The card's element is still `custom:jukebox-card`, so existing dashboards keep w
 
 ## Screenshots
 
-> Some of these pictures were taken before 0.7.20. Since 0.7.20 the Library lists show as rows by default (not tiles, and artists are no longer round). The pictures still show tiles, and some still show the old row buttons (Add to queue, Play Next, Play Now, Remove and so on), which the card no longer has.
+> Since 0.7.20 the Library lists show as rows by default (not tiles, and artists are no longer round). Since 0.8.0 the card follows your Home Assistant theme, so colors, corners and fonts come from the theme, in light and in dark. Since 0.8.4 Now Playing always follows the theme too: it has no album-art background and no option for one (album art is a background on the screensaver only).
 
-> Since 0.8.0 the card follows your Home Assistant theme, so colors, corners and fonts come from the theme, in light and in dark. Since 0.8.4 Now Playing always follows the theme too: it has no album-art background and no option for one (album art is a background on the screensaver only). The Now Playing, Queue, Queue pop-up and Speakers pictures below were retaken for 0.8.1, once with a light theme and once with a dark theme, using Home Assistant's default theme and font (Roboto). They show the Tiles setting, and the Queue pictures still show the old row buttons. The Library, Library typing and Library artists pictures were retaken for 0.8.4 (the bottom row of the keyboard now has the same size of text as the letters), and the Library artist page pictures for 0.8.2 (the Clear filter button). The Screensaver pictures are from 0.8.0 and show landscape, which has not changed; in portrait the screensaver now has a bigger track and a smaller clock. The pictures of the sources row, of Spotify only, of the track rows, of Radio and of the favorites heart were taken before 0.8.0 and still show the old look: a fixed black background, white buttons and the old fonts.
+> The pictures below were retaken for 0.9.0, once with a light theme and once with a dark theme, using Home Assistant's default theme and font (Roboto). They show Library lists as rows, Genres among the category buttons, and the Queue without row buttons. The Screensaver pictures show landscape, which has not changed; in portrait the screensaver now has a bigger track and a smaller clock.
 
-**One Library tab, keyboard always open.** The on-screen keyboard stays open on every screen size. Below the search box is an **All sources** button. Tap it and a row opens under the box: All, Library, then each music service set up in Music Assistant. You can turn on more than one. The button names the ones you picked and gets Home Assistant's soft selected highlight while any is on. Tap it again to close the row. Big buttons pick Playlists, Artists, Tracks or Radio, and the one you are in has the soft selected highlight. On the library list, a heart sits at the end of that row. There is no Keyboard pill and no hide handle. An empty box lists your library; typing searches that category, library first.
+**One Library tab, keyboard always open.** The on-screen keyboard stays open on every screen size. Below the search box is an **All sources** button. Tap it and a row opens under the box: All, Library, then each music service set up in Music Assistant. You can turn on more than one. The button names the ones you picked and gets Home Assistant's soft selected highlight while any is on. Tap it again to close the row. Big buttons pick Playlists, Artists, Tracks, Genres or Radio, and the one you are in has the soft selected highlight. On the library list, a heart sits at the end of that row. There is no Keyboard pill and no hide handle. An empty box lists your library; typing searches that category, library first.
 
 | Library, light theme | Library, dark theme |
 |---|---|
-| ![Library, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-light-084-1024x712.png) | ![Library, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-dark-084-1024x712.png) |
+| ![Library, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-light-090-1024x712.png) | ![Library, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-dark-090-1024x712.png) |
 
 | Library, typing, light theme | Library, typing, dark theme |
 |---|---|
-| ![Library, typing, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-light-084-1024x712.png) | ![Library, typing, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-dark-084-1024x712.png) |
+| ![Library, typing, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-light-090-1024x712.png) | ![Library, typing, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-typing-dark-090-1024x712.png) |
 
-Before 0.8.0 (old look):
-
-| All sources open, two services on | Typing, Spotify only (820x1180) |
+| All sources open, light theme | All sources open, dark theme |
 |---|---|
-| ![All sources open](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-sources-1280x800.png) | ![Library search, Spotify only](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-provider-820x1180.png) |
+| ![All sources open, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-sources-light-090-1024x712.png) | ![All sources open, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-sources-dark-090-1024x712.png) |
+
+| Library search, Spotify only, light theme | Library search, Spotify only, dark theme |
+|---|---|
+| ![Library search, Spotify only, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-provider-light-090-1024x712.png) | ![Library search, Spotify only, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-provider-dark-090-1024x712.png) |
 
 | Now Playing, light theme | Now Playing, dark theme |
 |---|---|
-| ![Now Playing, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-light-081-1024x712.png) | ![Now Playing, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-dark-081-1024x712.png) |
+| ![Now Playing, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-light-090-1024x712.png) | ![Now Playing, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/now-dark-090-1024x712.png) |
 
 | Queue, light theme | Queue, dark theme |
 |---|---|
-| ![Queue, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-light-081-1024x712.png) | ![Queue, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-dark-081-1024x712.png) |
+| ![Queue, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-light-090-1024x712.png) | ![Queue, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-dark-090-1024x712.png) |
 
 | Screensaver, light theme | Screensaver, dark theme |
 |---|---|
-| ![Screensaver, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/screensaver-light-1024x600.png) | ![Screensaver, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/screensaver-dark-1024x600.png) |
+| ![Screensaver, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/screensaver-light-090-1024x600.png) | ![Screensaver, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/screensaver-dark-090-1024x600.png) |
 
-The Screensaver is the same in both themes: black, with white text. Only its font comes from the theme. Its pictures are from 0.8.0.
+The Screensaver looks the same in both themes: the current art fills the background, with white text. Only its font comes from the theme.
 
 ## Requirements
 
@@ -220,7 +222,7 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 
 | Queue press-and-hold options, light theme | Queue press-and-hold options, dark theme |
 |---|---|
-| ![Queue press-and-hold options, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-popup-light-081-1024x712.png) | ![Queue press-and-hold options, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-popup-dark-081-1024x712.png) |
+| ![Queue press-and-hold options, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-popup-light-090-1024x712.png) | ![Queue press-and-hold options, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/queue-popup-dark-090-1024x712.png) |
 
 - **Search queue.** **Search queue** in the header opens a box and an on-screen keyboard that stays open. The list shows tracks whose title, artist or album contains what you type. Press and hold a track in the results (since 0.7.12), or tap it (since 0.7.13), to open the same pop-up as a normal Queue row, with the same choices and the same greyed-out rules. With a physical keyboard, typing goes into the search (since 0.7.13): letters, digits and punctuation are typed and Backspace deletes, so keys such as e, c, d, a and m no longer set off Home Assistant's own shortcuts (its search bar, Assist and so on). This applies only while Queue search is open on the Queue tab, and Esc is left to the card. **Done** closes the search and clears it.
 - **Header.** The Queue tab badge shows how many items are left, and the header says how many are up next.
@@ -242,7 +244,7 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 
 | Speakers panel with room volumes, light theme | Speakers panel with room volumes, dark theme |
 |---|---|
-| ![Speakers panel with room volumes, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/speakers-light-081-1024x712.png) | ![Speakers panel with room volumes, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/speakers-dark-081-1024x712.png) |
+| ![Speakers panel with room volumes, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/speakers-light-090-1024x712.png) | ![Speakers panel with room volumes, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/speakers-dark-090-1024x712.png) |
 
 ### Library (search and browse in one tab)
 
@@ -260,15 +262,19 @@ What stays: the heart and the LIBRARY tag, and the Genres list arrow in the olde
 
 | Library artists, light theme | Library artists, dark theme |
 |---|---|
-| ![Library artists, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-light-084-1024x712.png) | ![Library artists, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-dark-084-1024x712.png) |
+| ![Library artists, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-light-090-1024x712.png) | ![Library artists, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artists-dark-090-1024x712.png) |
 
-| Artist page with its filter on, light theme | Artist page with its filter on, dark theme |
+| Search in Abba with the Artist: Abba chip, light theme | Search in Abba with the Artist: Abba chip, dark theme |
 |---|---|
-| ![Artist page, Clear filter by Abba, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artist-clear-light-082-1024x712.png) | ![Artist page, Clear filter by Abba, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artist-clear-dark-082-1024x712.png) |
+| ![Search in Abba with the Artist: Abba chip, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artist-clear-light-090-1024x712.png) | ![Search in Abba with the Artist: Abba chip, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-artist-clear-dark-090-1024x712.png) |
 
-Before 0.8.0 (old look), Library track rows:
+| Genre: Jazz filter, light theme | Genre: Jazz filter, dark theme |
+|---|---|
+| ![Genre: Jazz filter, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-genre-filter-light-090-1024x712.png) | ![Genre: Jazz filter, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-genre-filter-dark-090-1024x712.png) |
 
-![Library track rows](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/live-library-songs-0711.png)
+| Library track rows, light theme | Library track rows, dark theme |
+|---|---|
+| ![Library track rows, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-tracks-light-090-1024x712.png) | ![Library track rows, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-tracks-dark-090-1024x712.png) |
 
 #### Library list details (all layouts)
 - **Categories.** On the combined tab the buttons are the ones above. On the separate Library tab the chips are Playlists, Albums, Artists, Tracks, Radio, Podcasts and Audiobooks.
@@ -301,7 +307,9 @@ Before 0.8.0 (old look), Library track rows:
 - **Search's Open action** jumps to the same detail page.
 - **Target.** Every `play_media` goes to the configured player (example: `media_player.everywhere`). Room players are volume targets.
 
-![Library radio stations](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/live-library-radio-0711.png)
+| Library radio stations, light theme | Library radio stations, dark theme |
+|---|---|
+| ![Library radio stations, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-radio-light-090-1024x712.png) | ![Library radio stations, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-radio-dark-090-1024x712.png) |
 
 ### Favourites (hearts)
 
@@ -311,7 +319,9 @@ Before 0.8.0 (old look), Library track rows:
 - No confirmation when you remove a heart. The heart flips immediately; if Music Assistant refuses or the call fails it flips back and the top-right status chip shows the error (with ✕). Successful changes show a short "Added … to favorites" in the same chip. There are no popups in the middle of the screen.
 - `hearts: false` hides the 0.7 row, tile and page hearts.
 
-![Library Radio with the favorites heart filter enabled](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/live-library-favorites-0711.png)
+| Library Radio with the favorites heart filter, light theme | Library Radio with the favorites heart filter, dark theme |
+|---|---|
+| ![Library Radio with the favorites heart filter, light theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-favorites-light-090-1024x712.png) | ![Library Radio with the favorites heart filter, dark theme](https://raw.githubusercontent.com/randybell/ha-jukebox-kiosk/main/docs/library-favorites-dark-090-1024x712.png) |
 
 ### Screensaver
 
