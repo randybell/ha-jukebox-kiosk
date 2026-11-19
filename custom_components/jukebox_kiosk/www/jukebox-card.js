@@ -1492,7 +1492,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .chips { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); }
     .chip { position: relative; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); }
-    .chip .i { width: 18px; height: 18px; }
+    .chip .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .chip.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .chip.busy { opacity: var(--_dim); }
     .chip:active { transform: scale(.97); }
@@ -1503,7 +1503,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .vr + .vr { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .vr.main { grid-template-areas: "m n n" "s s v"; }
     .vm { grid-area: m; width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_active); margin-left: calc(-1 * var(--ha-space-2, 8px)); }
-    .vm .i { width: 22px; height: 22px; }
+    .vm .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     .vn { grid-area: n; display: flex; flex-direction: column; min-width: 0; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
     .vn b, .vn small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vn small { font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
