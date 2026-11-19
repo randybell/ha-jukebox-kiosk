@@ -553,27 +553,27 @@ export class JbSpeakers extends LitElement {
     .tn { font-family: var(--_font-display); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ht small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); }
     /* 0.7.8 #50: a labeled Close button (was a small X), high contrast, sized like the card's other buttons */
-    .x { height: 48px; min-width: 88px; padding: 0 var(--ha-space-5, 20px); display: grid; place-items: center; border-radius: 999px; flex: none;
+    .x { height: 48px; min-width: 88px; padding: 0 var(--ha-space-5, 20px); display: grid; place-items: center; border-radius: var(--ha-border-radius-pill, 9999px); flex: none;
       background: var(--_active); color: var(--_on-accent); font: inherit; font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; }
     .x:active { transform: scale(.96); background: var(--_chip-sel); }
     .body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--ha-space-3, 12px) var(--ha-space-5, 20px) var(--ha-space-5, 20px); display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); scrollbar-width: none; }
-    .banner { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: 12px; border: 1px solid var(--_divider); background: var(--_chip-bg); }
+    .banner { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-lg, 12px); border: 1px solid var(--_divider); background: var(--_chip-bg); }
     .blk { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); }
     .eyebrow.sm { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
     .chips { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); }
-    .chip { position: relative; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px); border-radius: 999px; border: 1px solid var(--_surface-border);
+    .chip { position: relative; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: 1px solid var(--_surface-border);
       font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); }
     .chip .i { width: 18px; height: 18px; }
     .chip.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .chip.busy { opacity: .6; }
     .chip:active { transform: scale(.97); }
-    .chip .live { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .chip .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
     .mix { display: flex; flex-direction: column; }
     .rooms { display: flex; flex-direction: column; border-top: 1px solid var(--_divider); }
     .vr { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "m n a" "s s v"; align-items: center; column-gap: var(--ha-space-2, 8px); padding: var(--ha-space-2, 8px) 0; }
     .vr + .vr { border-top: 1px solid var(--_divider); }
     .vr.main { grid-template-areas: "m n n" "s s v"; }
-    .vm { grid-area: m; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; color: var(--_active); margin-left: calc(-1 * var(--ha-space-2, 8px)); }
+    .vm { grid-area: m; width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_active); margin-left: calc(-1 * var(--ha-space-2, 8px)); }
     .vm .i { width: 22px; height: 22px; }
     .vn { grid-area: n; display: flex; flex-direction: column; min-width: 0; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
     .vn b, .vn small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -585,7 +585,7 @@ export class JbSpeakers extends LitElement {
     .vv { grid-area: v; width: 34px; text-align: right; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
     .vv::after { content: attr(data-v); }
     .vr.off { opacity: .5; }
-    .act { grid-area: a; height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: 999px; border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); white-space: nowrap;
+    .act { grid-area: a; height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); white-space: nowrap;
       max-width: 52cqw; overflow: hidden; text-overflow: ellipsis; }
     .act.join { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
     .act.take { border-style: dashed; }
@@ -603,10 +603,10 @@ export class JbSpeakers extends LitElement {
     .st .ct { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: var(--ha-space-2, 8px) 0; }
     .st.wrap .ct { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
     .st .sep { font-style: normal; color: var(--_muted); margin: 0 -2px; }
-    .st .ca { position: relative; flex: none; height: 34px; padding: 0 var(--ha-space-4, 16px); border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
+    .st .ca { position: relative; flex: none; height: 34px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
     .st .ca::before, .st .cx::before { content: ""; position: absolute; inset: -6px -4px; }
-    .st .cx { position: relative; flex: none; height: 34px; padding: 0 var(--ha-space-4, 16px); display: grid; place-items: center; border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); } /* #51: labeled Close (was an X) */
-    .st .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--_active); animation: stpulse 1s ease-in-out infinite alternate; }
+    .st .cx { position: relative; flex: none; height: 34px; padding: 0 var(--ha-space-4, 16px); display: grid; place-items: center; border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); } /* #51: labeled Close (was an X) */
+    .st .dot { flex: none; width: 8px; height: 8px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); animation: stpulse 1s ease-in-out infinite alternate; }
     .st.error { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
     .st.error .si { color: var(--text-primary-color, #fff); flex: none; } .st.error .ca { background: var(--text-primary-color, #fff); color: var(--error-color); } .st.error .cx { background: var(--text-primary-color, #fff); color: var(--error-color); }
     @keyframes stin { from { opacity: 0; transform: translateY(-6px); } }
