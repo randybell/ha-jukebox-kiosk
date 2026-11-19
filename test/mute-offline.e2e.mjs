@@ -34,7 +34,11 @@ await p.evaluate(() => {
 const mutes = () => ev(p, `window.__mute.splice(0)`);
 const push = () => ev(p, `(__card.hass = window.__hass, 1)`);
 const status = () => ev(p, `[...__card.shadowRoot.querySelectorAll('[data-status="reconnecting"]')].map((e) => e.textContent.trim())`);
-const btn = (id) => p.evaluate((e) => { const r = eval(e).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, `${NOW}.querySelector('.vr[data-entity="${id}"] .vm')`);
+// #117: with 48px speaker rows a 1024x600 card shows Everywhere and the first room, and the other rooms scroll in the speaker list
+// (0.8.8: the lead speaker stays fixed, the rest scroll); bring the speaker's row into view before pressing its Mute, as a person would
+const btn = async (id) => { const sel = `${NOW}.querySelector('.vr[data-entity="${id}"] .vm')`;
+  await p.evaluate((e) => eval(e)?.closest('.rooms .vr')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }), sel); await sleep(80);
+  return p.evaluate((e) => { const r = eval(e).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, sel); };
 async function tap(id) { const b = await btn(id); await p.mouse.click(b.x, b.y); await sleep(250); }
 const L = 'media_player.living_room', K = 'media_player.kitchen', E = 'media_player.everywhere';
 
