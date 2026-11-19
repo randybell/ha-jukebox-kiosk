@@ -358,12 +358,14 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       }
       .kb-handle i { position: absolute; top: 3px; left: 50%; width: 40px; height: 4px; margin-left: calc(-1 * var(--ha-space-5, 20px)); border-radius: 2px; background: var(--_divider); }
       .kb-handle span { display: var(--_kb-handle-label, inline); }
-      /* #117 fluid keyboard. The letters take as many columns as the keyboard's own width allows: never narrower than a touch
-         target, never more than ten (the gap between keys shrinks a little on a narrow keyboard so seven still fit at 48 px).
-         The digits get their own row, and the wide keys (123, Space, backspace, Clear) their own row, sharing it by weight. */
+      /* #117 fluid keyboard. The key set is made for whole rows: 28 keys (26 letters, ' and -) in four rows of seven, or, once ten
+         48 px keys fit (the structural query below, which also adds the digits row and & .), 30 keys in three rows of ten. Any count in
+         between left a nearly empty last row (9 columns: 9 + 9 + 9 + 1) and narrower keys without saving a row, so the letters are
+         seven columns that stretch with the keyboard, then ten. The gap between keys shrinks a little on a narrow keyboard so seven
+         still fit at 48 px. The digits get their own row, and the wide keys (123, Space, backspace, Clear) their own row, sharing it by weight. */
       .kb { --_kcg: clamp(var(--ha-space-1, 4px), 1.5cqi, var(--kgap, var(--ha-space-2, 8px))); }
       .keys, .nums { display: grid; column-gap: var(--_kcg); row-gap: var(--kgap, var(--ha-space-2, 8px)); }
-      .keys { grid-template-columns: repeat(auto-fill, minmax(max(min(var(--_touch-min), calc((100% - 6 * 2px) / 7 - 0.5px)), calc((100% - 9 * var(--_kcg)) / 10)), 1fr));
+      .keys { grid-template-columns: repeat(7, minmax(0, 1fr));
         /* on a narrow keyboard the gap gives way first so a phone keeps seven letter columns (four letter rows) at 48 px; only a keyboard
            narrower than seven 48 px keys (a card under about 370 px) lets the letter keys go narrower than 48 px, because five columns
            would need seven rows and leave no room for the results (the one exception to the 48 px rule, reported in #117) */
@@ -387,8 +389,9 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       .k.pressed { background: var(--_chip-sel); color: var(--_fg); transform: scale(0.96); }
       .wide-only { display: none; }
       /* #117 structural, kept as a container query on the keyboard's own width: the digits row (and the #+= symbols key in place
-         of 123) appears once ten keys of the 48 px touch size fit side by side: 10 x 48 px + 9 gaps of at most 10 px. */
+         of 123) appears once ten keys of the 48 px touch size fit side by side: 10 x 48 px + 9 gaps of at most 10 px; the letters go to ten a row there too. */
       @container kb (min-width: calc(10 * 48px + 9 * 10px)) {
+        .keys { grid-template-columns: repeat(10, minmax(0, 1fr)); }
         .nums { display: grid; }
         .k { height: min(var(--_kh-room, 100vh), max(var(--_touch-min), var(--kh-wide, 56px))); }
         .wide-only { display: grid; }
