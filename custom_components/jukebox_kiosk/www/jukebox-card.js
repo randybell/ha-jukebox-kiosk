@@ -892,7 +892,8 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .sx.kb-hidden .res .scroll { padding-bottom: calc(var(--ha-space-2, 8px) + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
 
   `],qt("jb-search",ys);class ws extends oe{constructor(){super(...arguments),this.value=0,this.disabled=!1,this.label="",this._drag=!1,this._v=0,this.slop=0,this._x0=0,this._y0=0,this._armed=!1,this.down=e=>{if(!(this.disabled||"mouse"===e.pointerType&&0!==e.button)){e.preventDefault(),this._rect=this.getBoundingClientRect(),this._pid=e.pointerId,this._x0=e.clientX,this._y0=e.clientY,this._armed=!0;try{this.setPointerCapture(e.pointerId)}catch{}this.slop>0||(this._drag=!0,this._v=this.at(e),this.emit("jb-input"))}},this.move=e=>{if(e.pointerId===this._pid){if(!this._drag){if(!this._armed)return;const t=Math.abs(e.clientX-this._x0),i=Math.abs(e.clientY-this._y0);if(!(t>=this.slop&&t>i))return void(i>=this.slop&&this.disarm());this._drag=!0}e.preventDefault(),this._v=this.at(e),this.emit("jb-input")}},this.up=e=>{e.pointerId===this._pid&&(this._drag?(this._v=this.at(e),this._drag=!1,this._armed=!1,this._rect=void 0,this.value=this._v,this.emit("jb-change")):this.disarm())},this.cancel=()=>{this._armed=!1,this._drag&&(this._drag=!1,this.value=this._v,this.emit("jb-change"))}}get dragging(){return this._drag}shown(){return Math.max(0,Math.min(1,this._drag?this._v:this.value||0))}at(e){const t=this._rect??this.getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-t.left)/Math.max(1,t.width)))}emit(e){this.dispatchEvent(new CustomEvent(e,{detail:{value:Math.round(100*this._v)/100},bubbles:!0,composed:!0}))}disarm(){this._armed=!1,this._rect=void 0;try{void 0!==this._pid&&this.releasePointerCapture(this._pid)}catch{}}connectedCallback(){super.connectedCallback(),this.addEventListener("pointerdown",this.down),this.addEventListener("pointermove",this.move),this.addEventListener("pointerup",this.up),this.addEventListener("pointercancel",this.cancel),this.addEventListener("lostpointercapture",this.cancel),this.setAttribute("role","slider")}updated(){this.setAttribute("aria-valuenow",String(Math.round(100*this.shown()))),this.setAttribute("aria-label",this.label)}render(){const e=100*this.shown();return I`<div class="t"><div class="f" style="width:${e}%"></div></div><div class="k ${this._drag?"on":""}" style="left:${e}%"></div>`}}function xs(e,t){let i,s,a,r=0;const o=()=>{r=Date.now(),i=void 0;const t=s;s=void 0,a=t,e(...t)},n=(...e)=>{s=e;const a=t-(Date.now()-r);a<=0?(window.clearTimeout(i),o()):i||(i=window.setTimeout(o,a))};return n.flush=(...e)=>{window.clearTimeout(i),i=void 0,!s&&a&&e.length===a.length&&e.every((e,t)=>e===a[t])||(s=e,o())},n.cancel=()=>{window.clearTimeout(i),i=void 0,s=void 0},n}ws.properties={value:{type:Number},slop:{type:Number,reflect:!0},disabled:{type:Boolean,reflect:!0},label:{},_drag:{state:!0},_v:{state:!0}},ws.styles=r`
-    :host { position: relative; display: block; height: var(--_slider-hit, 36px); touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    /* #117: the hit area never goes under the 48px touch target, whatever a view asks for */
+    :host { position: relative; display: block; height: max(var(--_touch-min, 48px), var(--_slider-hit, 36px)); touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
     :host([slop]:not([slop="0"])) { touch-action: pan-y; } /* #63: a vertical swipe on a volume slider scrolls the page */
     :host([disabled]) { cursor: default; --ha-slider-indicator-color: var(--_disabled); --ha-slider-thumb-color: var(--_disabled); }
     /* ha-slider colours (HA 2026 frontend ha-slider.ts): track, fill, thumb. Fall back to the card tokens (--_track / --_active) which already point at --disabled-color and --primary-color. */
@@ -1056,11 +1057,14 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     </div>`}}wa.properties={hass:{attribute:!1},config:{attribute:!1},queue:{attribute:!1},active:{type:Boolean},lyrics:{attribute:!1},spk:{attribute:!1},_overlay:{state:!0},_tick:{state:!0},_snap:{state:!0},_toast:{state:!0},_sleepOpen:{state:!0},_sleepExpires:{state:!0},_sleepMins:{state:!0}},wa.styles=[le,ce,st,r`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     .nw { position: relative; height: 100%; display: grid; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain;
-      grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: var(--ha-space-6, 24px); padding: var(--ha-space-4, 16px) calc(var(--_pad) + var(--ha-space-3, 12px)) var(--ha-space-5, 20px);
+      grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-6, 24px));
+      /* #117: the side margin grows with the card (none beyond --_pad on the narrowest cards, so seven 48px transport buttons always fit) */
+      padding: clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)) calc(var(--_pad) + clamp(0px, 3cqi - var(--ha-space-3, 12px), var(--ha-space-3, 12px))) clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-5, 20px));
       /* 0.7.9 #55: rows as tall as their content, so the square art always pushes the title down (never under it) */
       grid-auto-rows: max-content; }
     .nw::-webkit-scrollbar { display: none; }
-    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), 44cqh, 580px); aspect-ratio: 1; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; background: var(--primary-color, #03a9f4);
+    /* #117: the cover takes a smaller share of the height on narrow cards (30% of it, up to 44% once the card is ~300px wider than that), so the controls stay in view */
+    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), clamp(30cqh, 100cqw - 300px, 44cqh), 580px); aspect-ratio: 1; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; background: var(--primary-color, #03a9f4);
       box-shadow: 0 0 0 var(--ha-border-width-sm, 1px) var(--_hairline); }
     .art .ovl { position: absolute; inset: 0; z-index: 1; }
     .slx { position: absolute; inset: 0; z-index: 4; } .art .slx { z-index: 1; }
@@ -1094,10 +1098,10 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .pv.big { font-size: var(--ha-font-size-s, 12px); padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); }
     .where { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
       padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-sel); border: var(--ha-border-width-sm, 1px) solid var(--_hairline); color: var(--_muted); }
-    .ti { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-3xl, 28px), 4.6cqw, var(--ha-font-size-5xl, 40px)); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: -.01em;
+    .ti { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-2xl, 24px), 4.6cqw, var(--ha-font-size-5xl, 40px)); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: -.01em;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .sub { font-size: clamp(var(--ha-font-size-m, 14px), 1.8cqw, var(--ha-font-size-xl, 20px)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: calc(-1 * var(--ha-space-1, 4px)); }
-    .prog { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
+    .prog { display: grid; grid-template-columns: clamp(40px, 10cqw, 52px) minmax(0, 1fr) clamp(40px, 10cqw, 52px); align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
     .prog .tr { text-align: right; }
     /* live labels: text comes from data-v so drag handlers can update it without touching Lit-owned text nodes */
     .tl::after, .vv::after { content: attr(data-v); }
@@ -1107,13 +1111,14 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .tp { display: grid; grid-template-columns: repeat(6, 1fr); align-items: center; justify-items: center; margin: 2px 0; }
     .tp:has(.tb:nth-child(5):last-child) { grid-template-columns: repeat(5, 1fr); }
     .tp:has(.tb.fv) { grid-template-columns: repeat(7, 1fr); } .tp:has(.tb.fv) .tb.sh { grid-column: 2; } /* #42: empty first slot keeps Play/Pause centered with the heart */
-    .tb { position: relative; width: 56px; height: 56px; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center; color: var(--_active); }
+    /* #117: transport buttons scale with the card, never under the 48px touch target (with the heart there are seven) */
+    .tb { position: relative; width: clamp(var(--_touch-min), 11cqw, 56px); height: clamp(var(--_touch-min), 11cqw, 56px); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center; color: var(--_active); }
     .tb .i { width: calc(var(--_icon) * 30 / 24); height: calc(var(--_icon) * 30 / 24); }
     .tb.sh, .tb.rp, .tb.sl { color: var(--_inactive); } .tb.sh .i, .tb.rp .i, .tb.sl .i { width: var(--_icon); height: var(--_icon); }
     .tb.sh.on, .tb.rp.on, .tb.fv.on, .tb.sl.on { color: var(--_active); }
     .tb.fv { color: var(--_inactive); } .tb.fv .i { width: calc(var(--_icon) * 26 / 24); height: calc(var(--_icon) * 26 / 24); }
     .sleep-strip { display: flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; margin: -2px 0 2px; }
-    .sleep-strip .sp { height: 34px; min-width: 44px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+    .sleep-strip .sp { min-height: var(--_touch-min); min-width: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
       background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
     .sleep-strip .sp.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .sleep-strip .sp:active { transform: scale(.96); }
@@ -1121,18 +1126,21 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .sleep-strip .sp.sleep-cd { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-3, 12px); }
     .sleep-strip .sp.sleep-cd .i { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); }
     .tb .dot { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
-    .tb.pp { width: 80px; height: 80px; background: var(--_active); color: var(--_on-accent); }
+    .tb.pp { width: clamp(56px, 16cqw, 80px); height: clamp(56px, 16cqw, 80px); background: var(--_active); color: var(--_on-accent); }
     .tb.pp .i { width: calc(var(--_icon) * 44 / 24); height: calc(var(--_icon) * 44 / 24); }
-    .tb.pr, .tb.nx { width: 72px; height: 72px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
+    .tb.pr, .tb.nx { width: clamp(var(--_touch-min), 14cqw, 72px); height: clamp(var(--_touch-min), 14cqw, 72px); } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
+    .tp:has(.tb.fv) .tb { width: clamp(var(--_touch-min), 9cqw, 56px); height: clamp(var(--_touch-min), 9cqw, 56px); }
+    .tp:has(.tb.fv) .tb.pp { width: clamp(var(--_touch-min), 13cqw, 80px); height: clamp(var(--_touch-min), 13cqw, 80px); }
+    .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: clamp(var(--_touch-min), 11cqw, 72px); height: clamp(var(--_touch-min), 11cqw, 72px); } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
     .tb:active { transform: scale(.94); }
     .tb:disabled { color: var(--_disabled); }
     .tb.pp:disabled { background: color-mix(in srgb, var(--_disabled-fill) 20%, transparent); }
-    .upn { display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px); text-align: left; min-width: 0; width: 100%; }
+    .upn { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); text-align: left; min-width: 0; width: 100%; }
     .upn .eyebrow { font-size: var(--ha-font-size-xs, 10px); flex: none; }
     .upn b { font-size: var(--ha-font-size-m, 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .upn .pv { flex: none; }
     .upn .more { margin-left: auto; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); flex: none; }
-    .vol { container: vol / inline-size; padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); display: flex; flex-direction: column; }
+    .vol { container: vol / inline-size; padding: clamp(var(--ha-space-1, 4px), 1.5cqi, var(--ha-space-2, 8px)) clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); display: flex; flex-direction: column; }
     /* the volume panel sits directly on the HA card surface: no second fill */
     .vol.panel { background: transparent; }
     /* the Up next panel sits directly on the HA card surface: no second fill */
@@ -1140,7 +1148,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .volw { position: relative; display: flex; flex-direction: column; min-height: 0; }
     /* More speakers floats over the fading speaker list: use ha-card's fill + backdrop-filter (not a transparent hole, not --_surface-solid) so the label stays readable. */
     .vmore { display: none; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 2; align-items: center; gap: var(--ha-space-1, 4px);
-      padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); min-height: 30px; border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+      padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); min-height: var(--_touch-min); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
@@ -1154,8 +1162,9 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .rooms { min-height: 0; display: flex; flex-direction: column; border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     /* the lead speaker row stays fixed; only the rooms scroll (0.7.9 #59 scroll area moved from .vol to .rooms). No second surface: the card shows through as before. */
     .vr.main, .rooms > .vr { flex-shrink: 0; }
-    .vr { display: grid; grid-template-columns: 30px minmax(80px, 30%) minmax(0, 1fr) 34px; align-items: center; gap: var(--ha-space-2, 8px); min-height: 46px; }
-    .vm { width: 34px; height: 34px; display: grid; place-items: center; color: var(--_active); margin-left: -6px; border-radius: var(--ha-border-radius-circle, 50%); }
+    .vr { display: grid; grid-template-columns: 30px minmax(min(80px, 25cqi), 30%) minmax(0, 1fr) 34px; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); }
+    /* #117: the mute button is a 48px target; the extra reaches into the panel's side margin so the icon stays where it was */
+    .vm { width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; color: var(--_active); margin-left: calc(-1 * var(--ha-space-3, 12px)); border-radius: var(--ha-border-radius-circle, 50%); }
     .vm .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
     .vr.room .vm { color: var(--_inactive); } .vr.room .vm .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .vr.muted .vm { color: var(--_active); }
@@ -1166,11 +1175,11 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .vr.off .vn, .vr.off .vv, .vr.off .vm, .vm:disabled { color: var(--_disabled); }
     /* 0.6.3 speaker controls: a trailing column for Speakers (main row) and Drop/Add (rooms) */
     .vol.acts .vr.main { grid-template-columns: 30px minmax(0, max-content) minmax(0, 1fr) 34px auto; }
-    .vol.acts .rooms .vr { grid-template-columns: 30px minmax(70px, 28%) minmax(0, 1fr) 34px 36px; }
-    .spkb { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 34px; padding: 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+    .vol.acts .rooms .vr { grid-template-columns: 30px minmax(min(70px, 22cqi), 28%) minmax(0, 1fr) 34px var(--_touch-min); }
+    .spkb { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
       background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); white-space: nowrap; }
     .spkb:active { background: var(--_chip-sel); }
-    .ra { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); background: var(--_chip-bg); justify-self: end; }
+    .ra { width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); background: var(--_chip-bg); justify-self: end; }
     .ra span { display: none; }
     .ra .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .ra.add { background: var(--_active); border-color: transparent; color: var(--_on-accent); }
@@ -1185,12 +1194,13 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .vr.muted .vs { opacity: var(--_dim); }
     @container vol (min-width: 600px) {
       .rooms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--ha-space-5, 20px); padding-top: var(--ha-space-2, 8px); }
-      .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 30px; grid-template-areas: "m n n" "s s v"; row-gap: 0; min-height: 0; padding-bottom: var(--ha-space-1, 4px); }
+      .rooms .vr { grid-template-columns: 36px minmax(0, 1fr) 30px; grid-template-areas: "m n n" "s s v"; row-gap: 0; min-height: 0; padding-bottom: var(--ha-space-1, 4px); }
       .rooms .vm { grid-area: m; } .rooms .vn { grid-area: n; } .rooms .vs { grid-area: s; } .rooms .vv { grid-area: v; }
-      .vol.acts .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 34px; grid-template-areas: "m n a" "s s v"; }
+      .vol.acts .rooms .vr { grid-template-columns: 36px minmax(0, 1fr) var(--_touch-min); grid-template-areas: "m n a" "s s v"; }
       .rooms .ra { grid-area: a; }
     }
-    @container np (orientation: portrait) and (min-width: 521px) { .nw { align-content: safe center; } }
+    /* #117: portrait centres the column whenever it fits (safe: a taller column starts at the top and scrolls), at every width */
+    @container np (orientation: portrait) { .nw { align-content: safe center; } }
     /* landscape: art left, info right */
     @container np (orientation: landscape) and (min-width: 700px) {
       .nw { grid-template-columns: auto minmax(0, 1fr); align-items: center; justify-items: stretch; column-gap: clamp(var(--ha-space-6, 24px), 3.5cqw, var(--ha-space-12, 48px)); overflow: hidden; padding-top: var(--ha-space-5, 20px); padding-bottom: var(--ha-space-5, 20px);
@@ -1203,42 +1213,23 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       .art { width: min(calc(100cqh - 40px), 46cqw); align-self: center; }
       .info { max-width: none; gap: var(--ha-space-2, 8px); }
       .ti { font-size: clamp(var(--ha-font-size-3xl, 28px), 3.4cqw, var(--ha-font-size-5xl, 40px)); }
-      .vs { --_slider-h: 6px; --_slider-knob: 20px; --_slider-hit: 36px; }
+      .vs { --_slider-h: 6px; --_slider-knob: 20px; }
       .tb.pp { width: 74px; height: 74px; }
       .tb.pr, .tb.nx { width: 64px; height: 64px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
     }
     @container np (orientation: landscape) and (max-height: 560px) {
-      .upn { display: none; } .vr { min-height: 38px; } .tb.pp { width: 70px; height: 70px; } .tb { width: 48px; height: 48px; }
+      .upn { display: none; } .tb.pp { width: 70px; height: 70px; } .tb { width: var(--_touch-min); height: var(--_touch-min); }
       .tb.pr, .tb.nx { width: 60px; height: 60px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
     }
-    /* phone */
-    @container np (max-width: 520px) {
-      .nw { --_narrow: 1; gap: var(--ha-space-4, 16px); padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); }
-      .art { width: min(calc(100cqw - 140px), 30cqh); }
-      .vs { --_slider-knob: 24px; }
-      .info { gap: var(--ha-space-2, 8px); }
-      .ti { font-size: var(--ha-font-size-2xl, 24px); -webkit-line-clamp: 1; display: block; white-space: nowrap; text-overflow: ellipsis; }
-      .sub { font-size: var(--ha-font-size-l, 16px); }
-      .prog { grid-template-columns: 40px minmax(0, 1fr) 40px; }
-      .tb { width: 48px; height: 48px; } .tb.pp { width: 70px; height: 70px; }
-      .tb.pr, .tb.nx { width: 58px; height: 58px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
-      .tp:has(.tb.fv) .tb { width: 40px; height: 40px; } .tp:has(.tb.fv) .tb.pp { width: 60px; height: 60px; }
-      .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: 48px; height: 48px; } .tp:has(.tb.fv) .tb.pr .i, .tp:has(.tb.fv) .tb.nx .i { width: calc(var(--_icon) * 34 / 24); height: calc(var(--_icon) * 34 / 24); }
-      .tp:has(.tb.fv) .tb .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); } .tp:has(.tb.fv) .tb.pp .i { width: calc(var(--_icon) * 32 / 24); height: calc(var(--_icon) * 32 / 24); }
-      .tp:has(.tb.fv) .tb.sh .i, .tp:has(.tb.fv) .tb.rp .i, .tp:has(.tb.fv) .tb.sl .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
-      .sleep-strip .sp { height: 32px; padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-s, 12px); }
-      /* phone: the sleep choices stay on one row on the artwork (≥ 40px tall) */
-      .art .sleep-strip { flex-wrap: nowrap; gap: var(--ha-space-1, 4px); }
-      .art .sleep-strip .sp { height: 40px; min-width: 40px; padding: 0 var(--ha-space-2, 8px); flex: none; }
-      .upn { display: none; }
-      .vol { padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); }
-      .vr { grid-template-columns: 28px 86px minmax(0, 1fr) 30px; min-height: 48px; }
-      .vn { font-size: var(--ha-font-size-m, 14px); }
-      /* phone: name + Speakers on top, the group slider below; rooms keep one line with a round Drop/Add */
-      .vol.acts .vr.main { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "m n b" "s s v"; row-gap: 0; padding-top: var(--ha-space-1, 4px); }
+    /* #117: a behaviour flag, not a layout: sleepStatus() reads it to skip the brief top-right status chip when the card is too narrow
+       for it to clear the cover's Fullscreen/Lyrics buttons (the Sleep M:SS chip already shows the same thing). Kept as a container query on the card's own width. */
+    @container np (max-width: 520px) { .nw { --_narrow: 1; } }
+    /* #117 structural, kept as a container query on the speaker panel's own width: below ~460px a one-line main row would squeeze the
+       group slider to almost nothing, so the name + Speakers button go on top and the slider gets the full row underneath */
+    @container vol (max-width: 460px) {
+      .vol.acts .vr.main { grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-areas: "m n b" "s s v"; row-gap: 0; padding-top: var(--ha-space-1, 4px); }
       .vol.acts .vr.main .vm { grid-area: m; } .vol.acts .vr.main .vn { grid-area: n; } .vol.acts .vr.main .vs { grid-area: s; }
       .vol.acts .vr.main .vv { grid-area: v; } .vol.acts .vr.main .spkb { grid-area: b; }
-      .vol.acts .rooms .vr { grid-template-columns: 26px 88px minmax(0, 1fr) 26px 34px; gap: var(--ha-space-2, 8px); }
     }
   `],qt("jb-now",wa);const xa="jukebox-card:lyrics-overlay:v1";function ka(e){try{localStorage.setItem(xa,e?"1":"0")}catch{}}const $a={send:!1,queue:!1,queuePlay:!1,queueEdit:!1,undo:!1,queueBuffer:!1,trackLists:!1,podcastEpisodes:!1,lyrics:!1,speakers:!1,unfavorite:!1,queuePush:!1,libraryWrite:!1},qa={genres:!1,radioBrowse:!1,discover:!1,resume:!1,autoplay:!1,autoplayMode:!1,searchProviders:!1},za=["auto","similar","library","playlist"];class Sa extends Error{constructor(e,t){super(t),this.code=e}}class Aa{constructor(){this.fns=new Set}on(e){return this.fns.add(e),()=>{this.fns.delete(e)}}emit(){for(const e of this.fns)e()}}async function Ma(e){if(!e?.user?.is_admin||!e.callWS)return"";try{const t=await e.callWS({type:"config_entries/get",domain:"music_assistant"}),i=(Array.isArray(t)?t:[]).find(e=>"loaded"===e?.state)??(Array.isArray(t)?t[0]:void 0);return"string"==typeof i?.entry_id?i.entry_id:""}catch(e){return console.warn("[jukebox-card] Music Assistant entry lookup failed",e),""}}class Ca extends Error{constructor(e="move"){super("remove"===e?"That track is already loading, so it can't be removed right now.":"That track is already loading, so it can't move right now."),this.kind=e}}class ja{constructor(){this.snap={items:[],current:-1,loading:!1,error:"",at:0},this.entity="",this.limitAfter=200,this.subs=new Set,this.seq=0,this.configForRemove={}}subscribe(e){return this.subs.add(e),e(this.snap),()=>this.subs.delete(e)}set(e){this.snap={...this.snap,...e},this.subs.forEach(e=>e(this.snap))}get upNext(){const e=this.snap;return e.current>=0?e.items.slice(e.current+1):e.items}get currentItem(){const e=this.snap;return e.current>=0?e.items[e.current]:void 0}get locked(){const e=this.snap;return t=e.current,i=e.currentIndex,s=e.bufferIndex,t<0||"number"!=typeof i||"number"!=typeof s?t:t+Math.max(0,s-i);var t,i,s}get remaining(){const e=this.snap;return void 0!==e.total&&void 0!==e.currentIndex&&e.total>0?Math.max(0,e.total-e.currentIndex-1):this.upNext.length}refreshSoon(e=350){window.clearTimeout(this.timer),this.timer=window.setTimeout(()=>this.refresh(),e)}async refresh(){const e=this.hass;if(!e)return;if(!this.entity)return void this.set({loading:!1,error:""});const t=++this.seq;this.set({loading:!0});const i=this.entity,s=this.backend;if(!s)return;const a=Number.isFinite(this.limitAfter)?Math.max(1,Math.min(1e3,Math.round(this.limitAfter))):200;try{const r=await s.queueWindow(i,a,this.readsBuffer?.()??!0);if(t!==this.seq)return;const o=r.items.filter(e=>e&&null!=e.queue_item_id).map(e=>({...e,queue_item_id:String(e.queue_item_id),media_title:ke(e.media_title??e.name??""),media_image:ye(e.media_image)||void 0}));let n=r.currentItemId?o.findIndex(e=>e.queue_item_id===r.currentItemId):-1;if(n<0){const t=e.states[i]?.attributes?.media_content_id;t&&(n=o.findIndex(e=>e.media_content_id===t))}n<0&&o.length&&null!=r.currentIndex&&(n=Math.min(0===r.currentIndex?0:1,o.length-1));const l=r.queueId||e.states[i]?.attributes?.active_queue||void 0;this.set({items:o,current:n,loading:!1,error:"",at:Date.now(),total:r.total,currentIndex:r.currentIndex,queueId:l,bufferIndex:r.bufferIndex,autoplay:r.autoplay,dynamic:r.dynamic})}catch(e){if(t!==this.seq)return;console.warn("[jukebox-card] queue refresh failed",e),this.set({loading:!1,error:"Queue unavailable. Check Music Assistant."})}}async setAutoplay(e){if(!this.entity)return;const t=this.backend;if(!t?.setAutoplay)throw new Sa("unsupported","Autoplay is not available");const i=this.snap.autoplay;this.set({autoplay:e});try{await t.setAutoplay(this.entity,e)}catch(e){throw this.set({autoplay:i}),e}finally{this.refreshSoon(800)}}async autoplayOptions(){const e=this.backend;if(!this.entity||!e?.autoplayOptions)throw new Sa("unsupported","Autoplay style is not available");return e.autoplayOptions(this.entity)}async setAutoplayMode(e,t){const i=this.backend;if(!this.entity||!i?.setAutoplayMode)throw new Sa("unsupported","Autoplay style is not available");await i.setAutoplayMode(this.entity,e,t)}async act(e,t,i,s){if(!this.hass)return;if(!this.entity)return;const a=this.snap.items.findIndex(e=>e.queue_item_id===t),r={items:this.snap.items,current:this.snap.current};if(a>=0){const e=i(this.snap.items.slice(),a);e&&this.set({items:e.items,current:e.current})}try{if(s)await s();else{if(!this.backend)throw new Sa("config","no backend");await this.backend.queueAction(this.entity,e,t,this.snap.queueId)}}catch(t){if(console.warn(`[jukebox-card] queue ${e} failed`,t),(e=>/already (played|buffered|played\/buffered)|already loaded in (the )?buffer/i.test(String(e?.message??e)))(t))throw this.set(r),await this.refresh(),new Ca(/delete|remove/.test(e)?"remove":"move");throw t}finally{this.refreshSoon(600)}}moveTo(e,t,i){const s=this.snap.current,a=s>=0?e[s]?.queue_item_id:void 0;i=Math.max(this.locked+1,Math.min(e.length-1,i));const[r]=e.splice(t,1);return e.splice(i,0,r),{items:e,current:a?e.findIndex(e=>e.queue_item_id===a):s}}play(e){return this.act("play",e,(e,t)=>({items:e,current:t}))}up(e){return this.act("up",e,(e,t)=>this.moveTo(e,t,t-1))}down(e){return this.act("down",e,(e,t)=>this.moveTo(e,t,t+1))}next(e){return this.act("next",e,(e,t)=>this.moveTo(e,t,this.locked+1))}isLocked(e){const t=this.snap.items.findIndex(t=>t.queue_item_id===e);return t>=0&&t<=this.locked}ma(e,t){const i=this.backend,s=this.snap.queueId;if(this.hass&&i?.caps.send&&s)return()=>i.send(e,{queue_id:s,...t})}playNow(e){const t=this.ma("player_queues/play_index",{index:e});return t?this.act("player_queues/play_index",e,(e,t)=>({items:e,current:t}),t):this.play(e)}playNext(e){const t=this.snap.items.findIndex(t=>t.queue_item_id===e),i=this.locked,s=function(e,t){return e<0||t<=e+1?0:e+1-t}(i,t);if(!s)return Promise.resolve();const a=this.ma("player_queues/move_item",{queue_item_id:e,pos_shift:s});return a?this.act("player_queues/move_item",e,(e,t)=>this.moveTo(e,t,i+1),a):this.next(e)}removeItem(e){const t=this.snap.items.find(t=>t.media_content_id===e.uri&&t.queue_item_id!==this.currentItem?.queue_item_id);return t&&!this.isLocked(t.queue_item_id)?this.removeRow(t.queue_item_id):async function(e,t,i,s,a){if(!e||!a.uri)throw new Error("This item has no queue media to remove");if(!s)return;const r=i;if(!r?.caps.queueEdit)throw new Error("Queue changes are not allowed");const o=await r.queueWindow(s,1e3,!1),n=o.items.find(e=>e.media_content_id===a.uri&&String(e.queue_item_id)!==String(o.currentItemId??""));if(null!=n?.queue_item_id)return r.queueAction(s,"remove",String(n.queue_item_id),o.queueId);throw new Error(`${a.name} is not in the queue`)}(this.hass,this.configForRemove,this.backend,this.entity,e)}remove(e){return this.act("remove",e,(e,t)=>{const i=this.snap.current;return e.splice(t,1),{items:e,current:t<i?i-1:i}})}removedInfo(e){const t=this.snap,i=t.items.findIndex(t=>t.queue_item_id===e);if(i<0||i===t.current)return;const s=t.items[i];return{id:e,title:s.media_title,uri:s.media_content_id,prevId:i>0?t.items[i-1].queue_item_id:void 0,before:i<t.current}}async removeRow(e){const t=this.removedInfo(e);if(!t)return;if(this.isLocked(e))throw new Ca("remove");const i=this.ma("player_queues/delete_item",{item_id_or_index:e});if(!i)return await this.remove(e),t;if(await this.act("player_queues/delete_item",e,(e,t)=>{const i=this.snap.current;return e.splice(t,1),{items:e,current:t<i?i-1:i}},i),await this.refresh(),this.snap.items.some(t=>t.queue_item_id===e))throw new Ca("remove");return t}async undoRemove(e){const t=this.backend,i=this.snap.queueId;if(!this.hass||!t?.caps.undo||!i)throw new Error("Undo needs the Jukebox Kiosk integration");if(!e.uri)throw new Error("No URI for this track");const s=(e,s)=>t.send(e,{queue_id:i,...s}),a=new Set(this.snap.items.map(e=>e.queue_item_id));try{if(await s("player_queues/play_media",{media:e.uri,option:"add"}),e.before)return"end";try{const t=Math.max(0,(this.snap.currentIndex??0)-1),i=await s("player_queues/items",{limit:1e3,offset:t}),r=Array.isArray(i)?i:[],o=e=>e?.media_item?.uri??e?.uri??e?.media_content_id,n=r.map((e,t)=>({x:e,k:t})).filter(({x:t})=>o(t)===e.uri&&!a.has(String(t?.queue_item_id))),l=n[n.length-1],c=e.prevId?r.findIndex(t=>String(t?.queue_item_id)===e.prevId):-1;if(!l||c<0)return"end";const h=l.k>c?c+1-l.k:c-l.k;return h&&await s("player_queues/move_item",{queue_item_id:String(l.x.queue_item_id),pos_shift:h}),"ok"}catch(e){return console.warn("[jukebox-card] undo: re-added but not moved back",e),"end"}}finally{this.refreshSoon(300)}}}const Ta={auto:{label:"Automatic",desc:"Similar music when it can, otherwise from your library"},similar:{label:"Similar music",desc:"Tracks like the ones in this queue"},library:{label:"My library",desc:"A mix from your music library"},playlist:{label:"A playlist",desc:"Choose one of your playlists"}},Ea=e=>({name:e.media_title||"?",image:e.media_image});class La extends oe{constructor(){super(...arguments),this.active=!1,this._search=!1,this._q="",this._toast="",this._confirm=null,this._undo=null,this._ap=null,this._apHeld=!1,this.press=new Ve(this,e=>this.tapSheet(e),e=>this.holdSheet(e)),this.onKey=e=>{"Escape"===e.key&&this.escape()&&e.stopPropagation()},this.onHwKey=e=>{if(!this._search||!this.active||e.ctrlKey||e.metaKey||e.altKey||e.isComposing)return;if(!e.composedPath().some(e=>e instanceof HTMLElement&&(e.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName)))){if("Backspace"===e.key)this._q=this._q.slice(0,-1);else{if(1!==e.key.length||!/[\p{L}\p{N}\p{P}\p{S} ]/u.test(e.key))return;this._q=(this._q+e.key.toUpperCase()).slice(0,60).replace(/^\s+/,"")}e.preventDefault(),e.stopPropagation()}},this.onSearchKey=e=>{const t=e.detail;"char"===t.type?this._q=(this._q+t.value).slice(0,60).replace(/^\s+/,""):"backspace"===t.type?this._q=this._q.slice(0,-1):"clear"===t.type&&(this._q="")}}tapSheet(e){Ne(e.media_content_id)||(_e(),this.press.held=e.queue_item_id,this.holdSheet(e))}shouldUpdate(e){return!(1===e.size&&e.has("hass"))}willUpdate(e){e.has("queue")&&(this._unsub?.(),this._unsub=this.queue?.subscribe(e=>this._snap=e)),e.has("active")&&this.active&&this.queue?.refreshSoon(0)}connectedCallback(){super.connectedCallback(),window.addEventListener("keydown",this.onHwKey,!0)}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("keydown",this.onHwKey,!0),this._unsub?.(),this._unsub=void 0}toast(e){this._toast=e,window.clearTimeout(this._toastTimer),this._toastTimer=window.setTimeout(()=>this._toast="",2200)}async run(e,t){this.press.release();try{await e,t&&this.toast(t)}catch(e){this.toast(e instanceof Ca?e.message:"Queue action failed")}}autoplayTpl(e){if(!this.config?._backend?.ext?.autoplay||"boolean"!=typeof e?.autoplay)return B;const t=e.autoplay,i=!!e.dynamic,s=this.apModes,a=s&&!i?{down:()=>{this._apHeld=!1,window.clearTimeout(this._apHold),this._apHold=window.setTimeout(()=>{this._apHeld=!0,this.openAp()},500)},up:()=>window.clearTimeout(this._apHold)}:{down:()=>{},up:()=>{}};return I`<span class="apg ${s?"split":""}"><button class="ap ${t?"on":""}" data-action="autoplay" tabindex="-1" aria-pressed=${t?"true":"false"} ?disabled=${i}
       title=${i?"This queue already keeps playing":t?"Autoplay is on: more music is added when the queue runs out":"Autoplay is off"}

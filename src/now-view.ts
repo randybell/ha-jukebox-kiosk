@@ -521,11 +521,14 @@ export class JbNow extends LitElement {
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     .nw { position: relative; height: 100%; display: grid; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain;
-      grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: var(--ha-space-6, 24px); padding: var(--ha-space-4, 16px) calc(var(--_pad) + var(--ha-space-3, 12px)) var(--ha-space-5, 20px);
+      grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-6, 24px));
+      /* #117: the side margin grows with the card (none beyond --_pad on the narrowest cards, so seven 48px transport buttons always fit) */
+      padding: clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)) calc(var(--_pad) + clamp(0px, 3cqi - var(--ha-space-3, 12px), var(--ha-space-3, 12px))) clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-5, 20px));
       /* 0.7.9 #55: rows as tall as their content, so the square art always pushes the title down (never under it) */
       grid-auto-rows: max-content; }
     .nw::-webkit-scrollbar { display: none; }
-    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), 44cqh, 580px); aspect-ratio: 1; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; background: var(--primary-color, #03a9f4);
+    /* #117: the cover takes a smaller share of the height on narrow cards (30% of it, up to 44% once the card is ~300px wider than that), so the controls stay in view */
+    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), clamp(30cqh, 100cqw - 300px, 44cqh), 580px); aspect-ratio: 1; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; background: var(--primary-color, #03a9f4);
       box-shadow: 0 0 0 var(--ha-border-width-sm, 1px) var(--_hairline); }
     .art .ovl { position: absolute; inset: 0; z-index: 1; }
     .slx { position: absolute; inset: 0; z-index: 4; } .art .slx { z-index: 1; }
@@ -559,10 +562,10 @@ export class JbNow extends LitElement {
     .pv.big { font-size: var(--ha-font-size-s, 12px); padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); }
     .where { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
       padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-sel); border: var(--ha-border-width-sm, 1px) solid var(--_hairline); color: var(--_muted); }
-    .ti { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-3xl, 28px), 4.6cqw, var(--ha-font-size-5xl, 40px)); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: -.01em;
+    .ti { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-2xl, 24px), 4.6cqw, var(--ha-font-size-5xl, 40px)); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: -.01em;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .sub { font-size: clamp(var(--ha-font-size-m, 14px), 1.8cqw, var(--ha-font-size-xl, 20px)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: calc(-1 * var(--ha-space-1, 4px)); }
-    .prog { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
+    .prog { display: grid; grid-template-columns: clamp(40px, 10cqw, 52px) minmax(0, 1fr) clamp(40px, 10cqw, 52px); align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
     .prog .tr { text-align: right; }
     /* live labels: text comes from data-v so drag handlers can update it without touching Lit-owned text nodes */
     .tl::after, .vv::after { content: attr(data-v); }
@@ -572,13 +575,14 @@ export class JbNow extends LitElement {
     .tp { display: grid; grid-template-columns: repeat(6, 1fr); align-items: center; justify-items: center; margin: 2px 0; }
     .tp:has(.tb:nth-child(5):last-child) { grid-template-columns: repeat(5, 1fr); }
     .tp:has(.tb.fv) { grid-template-columns: repeat(7, 1fr); } .tp:has(.tb.fv) .tb.sh { grid-column: 2; } /* #42: empty first slot keeps Play/Pause centered with the heart */
-    .tb { position: relative; width: 56px; height: 56px; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center; color: var(--_active); }
+    /* #117: transport buttons scale with the card, never under the 48px touch target (with the heart there are seven) */
+    .tb { position: relative; width: clamp(var(--_touch-min), 11cqw, 56px); height: clamp(var(--_touch-min), 11cqw, 56px); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center; color: var(--_active); }
     .tb .i { width: calc(var(--_icon) * 30 / 24); height: calc(var(--_icon) * 30 / 24); }
     .tb.sh, .tb.rp, .tb.sl { color: var(--_inactive); } .tb.sh .i, .tb.rp .i, .tb.sl .i { width: var(--_icon); height: var(--_icon); }
     .tb.sh.on, .tb.rp.on, .tb.fv.on, .tb.sl.on { color: var(--_active); }
     .tb.fv { color: var(--_inactive); } .tb.fv .i { width: calc(var(--_icon) * 26 / 24); height: calc(var(--_icon) * 26 / 24); }
     .sleep-strip { display: flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; margin: -2px 0 2px; }
-    .sleep-strip .sp { height: 34px; min-width: 44px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+    .sleep-strip .sp { min-height: var(--_touch-min); min-width: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
       background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
     .sleep-strip .sp.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .sleep-strip .sp:active { transform: scale(.96); }
@@ -586,18 +590,21 @@ export class JbNow extends LitElement {
     .sleep-strip .sp.sleep-cd { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-3, 12px); }
     .sleep-strip .sp.sleep-cd .i { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); }
     .tb .dot { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
-    .tb.pp { width: 80px; height: 80px; background: var(--_active); color: var(--_on-accent); }
+    .tb.pp { width: clamp(56px, 16cqw, 80px); height: clamp(56px, 16cqw, 80px); background: var(--_active); color: var(--_on-accent); }
     .tb.pp .i { width: calc(var(--_icon) * 44 / 24); height: calc(var(--_icon) * 44 / 24); }
-    .tb.pr, .tb.nx { width: 72px; height: 72px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
+    .tb.pr, .tb.nx { width: clamp(var(--_touch-min), 14cqw, 72px); height: clamp(var(--_touch-min), 14cqw, 72px); } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
+    .tp:has(.tb.fv) .tb { width: clamp(var(--_touch-min), 9cqw, 56px); height: clamp(var(--_touch-min), 9cqw, 56px); }
+    .tp:has(.tb.fv) .tb.pp { width: clamp(var(--_touch-min), 13cqw, 80px); height: clamp(var(--_touch-min), 13cqw, 80px); }
+    .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: clamp(var(--_touch-min), 11cqw, 72px); height: clamp(var(--_touch-min), 11cqw, 72px); } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
     .tb:active { transform: scale(.94); }
     .tb:disabled { color: var(--_disabled); }
     .tb.pp:disabled { background: color-mix(in srgb, var(--_disabled-fill) 20%, transparent); }
-    .upn { display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px); text-align: left; min-width: 0; width: 100%; }
+    .upn { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); text-align: left; min-width: 0; width: 100%; }
     .upn .eyebrow { font-size: var(--ha-font-size-xs, 10px); flex: none; }
     .upn b { font-size: var(--ha-font-size-m, 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .upn .pv { flex: none; }
     .upn .more { margin-left: auto; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); flex: none; }
-    .vol { container: vol / inline-size; padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); display: flex; flex-direction: column; }
+    .vol { container: vol / inline-size; padding: clamp(var(--ha-space-1, 4px), 1.5cqi, var(--ha-space-2, 8px)) clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); display: flex; flex-direction: column; }
     /* the volume panel sits directly on the HA card surface: no second fill */
     .vol.panel { background: transparent; }
     /* the Up next panel sits directly on the HA card surface: no second fill */
@@ -605,7 +612,7 @@ export class JbNow extends LitElement {
     .volw { position: relative; display: flex; flex-direction: column; min-height: 0; }
     /* More speakers floats over the fading speaker list: use ha-card's fill + backdrop-filter (not a transparent hole, not --_surface-solid) so the label stays readable. */
     .vmore { display: none; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 2; align-items: center; gap: var(--ha-space-1, 4px);
-      padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); min-height: 30px; border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+      padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); min-height: var(--_touch-min); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
@@ -619,8 +626,9 @@ export class JbNow extends LitElement {
     .rooms { min-height: 0; display: flex; flex-direction: column; border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     /* the lead speaker row stays fixed; only the rooms scroll (0.7.9 #59 scroll area moved from .vol to .rooms). No second surface: the card shows through as before. */
     .vr.main, .rooms > .vr { flex-shrink: 0; }
-    .vr { display: grid; grid-template-columns: 30px minmax(80px, 30%) minmax(0, 1fr) 34px; align-items: center; gap: var(--ha-space-2, 8px); min-height: 46px; }
-    .vm { width: 34px; height: 34px; display: grid; place-items: center; color: var(--_active); margin-left: -6px; border-radius: var(--ha-border-radius-circle, 50%); }
+    .vr { display: grid; grid-template-columns: 30px minmax(min(80px, 25cqi), 30%) minmax(0, 1fr) 34px; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); }
+    /* #117: the mute button is a 48px target; the extra reaches into the panel's side margin so the icon stays where it was */
+    .vm { width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; color: var(--_active); margin-left: calc(-1 * var(--ha-space-3, 12px)); border-radius: var(--ha-border-radius-circle, 50%); }
     .vm .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
     .vr.room .vm { color: var(--_inactive); } .vr.room .vm .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .vr.muted .vm { color: var(--_active); }
@@ -631,11 +639,11 @@ export class JbNow extends LitElement {
     .vr.off .vn, .vr.off .vv, .vr.off .vm, .vm:disabled { color: var(--_disabled); }
     /* 0.6.3 speaker controls: a trailing column for Speakers (main row) and Drop/Add (rooms) */
     .vol.acts .vr.main { grid-template-columns: 30px minmax(0, max-content) minmax(0, 1fr) 34px auto; }
-    .vol.acts .rooms .vr { grid-template-columns: 30px minmax(70px, 28%) minmax(0, 1fr) 34px 36px; }
-    .spkb { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 34px; padding: 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+    .vol.acts .rooms .vr { grid-template-columns: 30px minmax(min(70px, 22cqi), 28%) minmax(0, 1fr) 34px var(--_touch-min); }
+    .spkb { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
       background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); white-space: nowrap; }
     .spkb:active { background: var(--_chip-sel); }
-    .ra { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); background: var(--_chip-bg); justify-self: end; }
+    .ra { width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); background: var(--_chip-bg); justify-self: end; }
     .ra span { display: none; }
     .ra .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .ra.add { background: var(--_active); border-color: transparent; color: var(--_on-accent); }
@@ -650,12 +658,13 @@ export class JbNow extends LitElement {
     .vr.muted .vs { opacity: var(--_dim); }
     @container vol (min-width: 600px) {
       .rooms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--ha-space-5, 20px); padding-top: var(--ha-space-2, 8px); }
-      .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 30px; grid-template-areas: "m n n" "s s v"; row-gap: 0; min-height: 0; padding-bottom: var(--ha-space-1, 4px); }
+      .rooms .vr { grid-template-columns: 36px minmax(0, 1fr) 30px; grid-template-areas: "m n n" "s s v"; row-gap: 0; min-height: 0; padding-bottom: var(--ha-space-1, 4px); }
       .rooms .vm { grid-area: m; } .rooms .vn { grid-area: n; } .rooms .vs { grid-area: s; } .rooms .vv { grid-area: v; }
-      .vol.acts .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 34px; grid-template-areas: "m n a" "s s v"; }
+      .vol.acts .rooms .vr { grid-template-columns: 36px minmax(0, 1fr) var(--_touch-min); grid-template-areas: "m n a" "s s v"; }
       .rooms .ra { grid-area: a; }
     }
-    @container np (orientation: portrait) and (min-width: 521px) { .nw { align-content: safe center; } }
+    /* #117: portrait centres the column whenever it fits (safe: a taller column starts at the top and scrolls), at every width */
+    @container np (orientation: portrait) { .nw { align-content: safe center; } }
     /* landscape: art left, info right */
     @container np (orientation: landscape) and (min-width: 700px) {
       .nw { grid-template-columns: auto minmax(0, 1fr); align-items: center; justify-items: stretch; column-gap: clamp(var(--ha-space-6, 24px), 3.5cqw, var(--ha-space-12, 48px)); overflow: hidden; padding-top: var(--ha-space-5, 20px); padding-bottom: var(--ha-space-5, 20px);
@@ -668,42 +677,23 @@ export class JbNow extends LitElement {
       .art { width: min(calc(100cqh - 40px), 46cqw); align-self: center; }
       .info { max-width: none; gap: var(--ha-space-2, 8px); }
       .ti { font-size: clamp(var(--ha-font-size-3xl, 28px), 3.4cqw, var(--ha-font-size-5xl, 40px)); }
-      .vs { --_slider-h: 6px; --_slider-knob: 20px; --_slider-hit: 36px; }
+      .vs { --_slider-h: 6px; --_slider-knob: 20px; }
       .tb.pp { width: 74px; height: 74px; }
       .tb.pr, .tb.nx { width: 64px; height: 64px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
     }
     @container np (orientation: landscape) and (max-height: 560px) {
-      .upn { display: none; } .vr { min-height: 38px; } .tb.pp { width: 70px; height: 70px; } .tb { width: 48px; height: 48px; }
+      .upn { display: none; } .tb.pp { width: 70px; height: 70px; } .tb { width: var(--_touch-min); height: var(--_touch-min); }
       .tb.pr, .tb.nx { width: 60px; height: 60px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
     }
-    /* phone */
-    @container np (max-width: 520px) {
-      .nw { --_narrow: 1; gap: var(--ha-space-4, 16px); padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); }
-      .art { width: min(calc(100cqw - 140px), 30cqh); }
-      .vs { --_slider-knob: 24px; }
-      .info { gap: var(--ha-space-2, 8px); }
-      .ti { font-size: var(--ha-font-size-2xl, 24px); -webkit-line-clamp: 1; display: block; white-space: nowrap; text-overflow: ellipsis; }
-      .sub { font-size: var(--ha-font-size-l, 16px); }
-      .prog { grid-template-columns: 40px minmax(0, 1fr) 40px; }
-      .tb { width: 48px; height: 48px; } .tb.pp { width: 70px; height: 70px; }
-      .tb.pr, .tb.nx { width: 58px; height: 58px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
-      .tp:has(.tb.fv) .tb { width: 40px; height: 40px; } .tp:has(.tb.fv) .tb.pp { width: 60px; height: 60px; }
-      .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: 48px; height: 48px; } .tp:has(.tb.fv) .tb.pr .i, .tp:has(.tb.fv) .tb.nx .i { width: calc(var(--_icon) * 34 / 24); height: calc(var(--_icon) * 34 / 24); }
-      .tp:has(.tb.fv) .tb .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); } .tp:has(.tb.fv) .tb.pp .i { width: calc(var(--_icon) * 32 / 24); height: calc(var(--_icon) * 32 / 24); }
-      .tp:has(.tb.fv) .tb.sh .i, .tp:has(.tb.fv) .tb.rp .i, .tp:has(.tb.fv) .tb.sl .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
-      .sleep-strip .sp { height: 32px; padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-s, 12px); }
-      /* phone: the sleep choices stay on one row on the artwork (≥ 40px tall) */
-      .art .sleep-strip { flex-wrap: nowrap; gap: var(--ha-space-1, 4px); }
-      .art .sleep-strip .sp { height: 40px; min-width: 40px; padding: 0 var(--ha-space-2, 8px); flex: none; }
-      .upn { display: none; }
-      .vol { padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); }
-      .vr { grid-template-columns: 28px 86px minmax(0, 1fr) 30px; min-height: 48px; }
-      .vn { font-size: var(--ha-font-size-m, 14px); }
-      /* phone: name + Speakers on top, the group slider below; rooms keep one line with a round Drop/Add */
-      .vol.acts .vr.main { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "m n b" "s s v"; row-gap: 0; padding-top: var(--ha-space-1, 4px); }
+    /* #117: a behaviour flag, not a layout: sleepStatus() reads it to skip the brief top-right status chip when the card is too narrow
+       for it to clear the cover's Fullscreen/Lyrics buttons (the Sleep M:SS chip already shows the same thing). Kept as a container query on the card's own width. */
+    @container np (max-width: 520px) { .nw { --_narrow: 1; } }
+    /* #117 structural, kept as a container query on the speaker panel's own width: below ~460px a one-line main row would squeeze the
+       group slider to almost nothing, so the name + Speakers button go on top and the slider gets the full row underneath */
+    @container vol (max-width: 460px) {
+      .vol.acts .vr.main { grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-areas: "m n b" "s s v"; row-gap: 0; padding-top: var(--ha-space-1, 4px); }
       .vol.acts .vr.main .vm { grid-area: m; } .vol.acts .vr.main .vn { grid-area: n; } .vol.acts .vr.main .vs { grid-area: s; }
       .vol.acts .vr.main .vv { grid-area: v; } .vol.acts .vr.main .spkb { grid-area: b; }
-      .vol.acts .rooms .vr { grid-template-columns: 26px 88px minmax(0, 1fr) 26px 34px; gap: var(--ha-space-2, 8px); }
     }
   `];
 }

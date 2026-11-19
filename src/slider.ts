@@ -76,7 +76,8 @@ export class JbSlider extends LitElement {
     return html`<div class="t"><div class="f" style="width:${p}%"></div></div><div class="k ${this._drag ? 'on' : ''}" style="left:${p}%"></div>`;
   }
   static styles = css`
-    :host { position: relative; display: block; height: var(--_slider-hit, 36px); touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    /* #117: the hit area never goes under the 48px touch target, whatever a view asks for */
+    :host { position: relative; display: block; height: max(var(--_touch-min, 48px), var(--_slider-hit, 36px)); touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
     :host([slop]:not([slop="0"])) { touch-action: pan-y; } /* #63: a vertical swipe on a volume slider scrolls the page */
     :host([disabled]) { cursor: default; --ha-slider-indicator-color: var(--_disabled); --ha-slider-thumb-color: var(--_disabled); }
     /* ha-slider colours (HA 2026 frontend ha-slider.ts): track, fill, thumb. Fall back to the card tokens (--_track / --_active) which already point at --disabled-color and --primary-color. */
