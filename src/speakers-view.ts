@@ -561,7 +561,7 @@ export class JbSpeakers extends LitElement {
     .blk { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); }
     .eyebrow.sm { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
     .chips { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); }
-    .chip { position: relative; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+    .chip { position: relative; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); }
     .chip .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .chip.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
