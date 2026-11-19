@@ -93,12 +93,16 @@ const AUDIT = (MIN) => {
 };
 
 const BASE = await devIndex();
-const browser = await launch();
 const results = [];
 const jobs = [];
 for (const v of VIEWS) for (const s of LIST) jobs.push({ v, s });
-let failures = 0, done = 0;
-async function run({ v, s }) {
+let failures = 0, done = 0, retries = 0;
+// Each worker has a browser of its own: with three pages in one headless browser Chrome now and then never acks a synthetic touch
+// (Input.dispatchTouchEvent timed out) and a page in the background can be measured mid-transition. If a DevTools call still gets
+// stuck, that is a harness fault, not a card result: the scene runs once more in a fresh page with every check unchanged, and the
+// rerun is shown in the output.
+const HARNESS = /timed out|Target closed|Session closed/;
+async function run(browser, { v, s }, again = false) {
   const sc = SCENES[s]; if (!sc) { results.push({ view: v.name, scene: s, error: 'no scene' }); return; }
   let p;
   try {
@@ -107,22 +111,24 @@ async function run({ v, s }) {
     if (sc.act) await sc.act(p);
     await sleep(400);
     const a = await p.evaluate(`(${AUDIT.toString()})(${MIN})`);
-    results.push({ view: v.name, scene: s, targets: a.n, issues: a.issues });
+    results.push({ view: v.name, scene: s, targets: a.n, issues: a.issues, retried: again || undefined });
     if (a.issues.some((i) => !i.k.startsWith('kd:'))) failures++;
-  } catch (e) { results.push({ view: v.name, scene: s, error: String(e.message).slice(0, 160) }); failures++; }
+  } catch (e) {
+    if (!again && HARNESS.test(String(e.message))) { try { await p?.close(); } catch {} retries++; return run(browser, { v, s }, true); }
+    results.push({ view: v.name, scene: s, error: String(e.message).slice(0, 160), retried: again || undefined }); failures++;
+  }
   try { await p?.close(); } catch {}
   done++;
 }
 const JOBS = Number(process.env.JOBS ?? 3);
-await Promise.all(Array.from({ length: JOBS }, async () => { while (jobs.length) await run(jobs.shift()); }));
-await browser.close();
+await Promise.all(Array.from({ length: JOBS }, async () => { const browser = await launch(); while (jobs.length) await run(browser, jobs.shift()); await browser.close(); }));
 results.sort((a, b) => (a.view + a.scene).localeCompare(b.view + b.scene));
 const kinds = {};
 for (const r of results) {
   const ok = !r.error && !r.issues.some((i) => !i.k.startsWith('kd:'));
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${r.view} ${r.scene}: ${r.error ? 'ERROR ' + r.error : `${r.targets} targets` + (r.issues.length ? ' — ' + r.issues.map((i) => `${i.k} ${i.n}${i.m ? ' × ' + i.m : ''}${i.w != null ? ` ${i.w}x${i.h}` : ''}${i.t ? ` [${i.t}]` : ''}`).join(' | ') : '')}`);
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${r.view} ${r.scene}${r.retried ? ' (rerun after a harness timeout)' : ''}: ${r.error ? 'ERROR ' + r.error : `${r.targets} targets` + (r.issues.length ? ' — ' + r.issues.map((i) => `${i.k} ${i.n}${i.m ? ' × ' + i.m : ''}${i.w != null ? ` ${i.w}x${i.h}` : ''}${i.t ? ` [${i.t}]` : ''}`).join(' | ') : '')}`);
   for (const i of r.issues ?? []) kinds[i.k] = (kinds[i.k] ?? 0) + 1;
 }
 if (process.env.OUT) fs.writeFileSync(process.env.OUT, JSON.stringify(results, null, 1));
-console.log(`${results.length - failures}/${results.length} width-sweep checks passed; issues by kind ${JSON.stringify(kinds)}`);
+console.log(`${results.length - failures}/${results.length} width-sweep checks passed; issues by kind ${JSON.stringify(kinds)}; scenes rerun after a harness timeout: ${retries}`);
 process.exit(failures ? 1 : 0);
