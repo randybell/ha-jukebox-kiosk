@@ -54,7 +54,7 @@ for (const kind of ['touch', 'mouse']) {
   // ---- Library: category button, hint, placeholders ----
   const p = await newPage('&tab=browse');
   const btns = await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].map((b) => b.dataset.lcat + ':' + b.textContent.trim())`);
-  check(`${tag}: Library category buttons read Playlists, Artists, Tracks, Radio (no Songs)`, J(btns) === J(['playlist:Playlists', 'artist:Artists', 'track:Tracks', 'radio:Radio']), J(btns));
+  check(`${tag}: Library category buttons read Playlists, Artists, Tracks, Genres, Radio (no Songs; 0.9.0: Genres is back, like MA)`, J(btns) === J(['playlist:Playlists', 'artist:Artists', 'track:Tracks', 'genre:Genres', 'radio:Radio']), J(btns));
   const c = await center(p, `${SV}.querySelector('.lcats .lc[data-lcat="track"]')`);
   await tapAt(p, kind, c); await sleep(600);
   const w = (await wording(p)).join(' | ');
