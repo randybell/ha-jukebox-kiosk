@@ -24,6 +24,16 @@ export function swallowNextClick() {
   window.setTimeout(off, 5000);
 }
 
+/** A tap that opens a new screen (a result row opening its page) is acted on at pointerup, before the browser sends the click that
+ *  follows a touch; that click then lands on whatever the new screen put under the finger (e.g. the artist page's Shuffle, which
+ *  opened its confirm). Eat that one click: only the next click within 600 ms, and only if no new press starts first. */
+export function swallowTapClick() {
+  const eat = (e: Event) => { e.preventDefault(); e.stopPropagation(); off(); };
+  const off = () => { window.clearTimeout(t); window.removeEventListener('click', eat, true); window.removeEventListener('pointerdown', off, true); };
+  window.addEventListener('click', eat, true); window.addEventListener('pointerdown', off, true);
+  const t = window.setTimeout(off, 600);
+}
+
 /** Image URLs the card will load: https, data:image and same-origin relative paths, and plain http only when the
  *  dashboard itself is plain http (#147: e.g. MA's http://<lan-ip>:8095/imageproxy art). On an https dashboard plain http
  *  is mixed content and is dropped. Protocol-relative URLs are always dropped. */
@@ -263,7 +273,8 @@ export class PressController<T> implements ReactiveController {
       up: (e: PointerEvent) => {
         const p = this.p; if (!p) return;
         window.clearTimeout(p.timer); this.p = undefined; this.pressing = '';
-        if (!p.fired) { this.held = ''; this.host.requestUpdate(); this.onTap(p.item, p.el); }
+        // touch / pen: the click the browser sends after this pointerup must not hit the screen the tap opens (mouse clicks go to the row)
+        if (!p.fired) { if (e.pointerType !== 'mouse') swallowTapClick(); this.held = ''; this.host.requestUpdate(); this.onTap(p.item, p.el); }
         e.preventDefault();
       },
       cancel: () => this.cancel(),
