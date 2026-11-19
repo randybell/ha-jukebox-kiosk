@@ -6,7 +6,6 @@ import { combinedOn, libraryTabLabel } from './library-home';
 import { mediaStyles, noFocus, fire, artTpl, provTpl, PressController, swallowNextClick, confirmTpl, isRadioUri, type ConfirmState, type MenuAction } from './shared';
 import './keyboard';
 import type { KeyDetail } from './keyboard';
-import { canJumpQueue } from './speakers/model';
 import { QueueBusy, type QueueItem, type QueueModel, type QueueSnapshot, type RemovedRow } from './queue-model';
 /** MA refused or ignored a change on a played / buffered track (live 2.10.9: 500 "<n> is already played/buffered", delete ignored) */
 import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
@@ -291,7 +290,7 @@ export class JbQueue extends LitElement {
     ];
   }
 
-  private jumps() { return !!this.config && (this.caps?.queuePlay ?? true) && canJumpQueue(this.config, this.hass?.user); }
+  private jumps() { return !!this.config && (this.caps?.queuePlay ?? true); }
   private row(it: QueueItem, kind: 'now' | 'next' | 'past', n: number, buf = false, search = false) {
     const p = this.press.handlers(it.queue_item_id, it);
     // #72 (0.7.12): search-result rows get the same press-and-hold handlers as normal Queue rows

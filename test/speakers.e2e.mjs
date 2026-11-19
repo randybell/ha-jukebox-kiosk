@@ -667,8 +667,8 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
 }
 
 // ---------- P. Play Now only jumps: never resorts, replaces or clears the queue (every Play Now path) ----------
-// User requirement: "play now not resort or clear the queue". Icon, ⋯ sheet entry, the 0.4 long-press menu entry and a
-// row tap (0.4: no confirm) must only move playback to that item in place (play_index / play_queue_item). After each one
+// User requirement: "play now not resort or clear the queue". Icon, hold-sheet Play Now (admin and guest, after confirm) and a
+// row tap (opens the pop-up, no play) must only move playback to that item in place (play_index / play_queue_item). After each one
 // MA's queue and the card's rows keep the same items in the same order, and no replace / clear / move / delete is sent.
 {
   const QV = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
@@ -720,13 +720,15 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
     await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   }, t);
   await p.close();
-  // 3. guest 0.4 long-press (0.7.11: the big pop-up) → Play Now (no confirm, 0.4) → jumps in place
+  // 3. guest hold pop-up → Play Now (same confirm as admin) → jumps in place
   p = await openQ('');
   t = (await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`))[3];
-  await playNowPath('0.4 long-press menu entry (guest)', p, async () => {
+  await playNowPath('hold-sheet Play Now (guest)', p, async () => {
     const r = await rectOf(p, `${QV}.querySelector('.qr[data-id="${t}"] .rt')`);
     await p.mouse.move(r.x, r.y); await p.mouse.down(); await sleep(700); await p.mouse.up(); await sleep(150);
-    await tap(p, `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot.querySelector('.it[data-action="play"]')`); // 0.7.11: the hold opens the big pop-up
+    await tap(p, `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot.querySelector('.it[data-action="play"]')`);
+    if (!(await wait(p, `!!${QV}.querySelector('.confirm[data-kind="jump"]')`, 4000))) throw new Error('guest Play Now did not open its confirmation');
+    await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   }, t);
   // 4. #40 (0.7.8): tapping a row body plays nothing (0.7.13: it opens the row pop-up); only the row icons / pop-up choices act
   const rowTapIdle = async (name, p, t) => {
