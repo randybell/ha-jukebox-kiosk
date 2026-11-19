@@ -113,9 +113,20 @@ export class JbKeyboard extends LitElement {
               @pointerdown=${(e: PointerEvent) => e.preventDefault()}
               @click=${() => this.emit({ type: 'hide' })}><i></i><span>Hide keyboard</span>${icon('chev', 'i xs')}</button>`
           : nothing}
-        <div class="keys" role="group">
-          ${this.keys().map(
-            (k) => html`<button
+        ${(() => {
+          // #117: digits row (when ten keys fit), the letters / symbols grid, and the row of wide keys are three blocks, so the
+          // letter grid can take as many 48 px columns as the keyboard's own width allows
+          const all = this.keys(), key = (k: KeyDef) => this.keyTpl(k);
+          return html`<div class="nums">${all.filter((k) => k.cls === 'num').map(key)}</div>
+            <div class="keys" role="group">${all.filter((k) => k.cls !== 'num' && !k.cls?.includes('sp')).map(key)}</div>
+            <div class="ksp">${all.filter((k) => k.cls?.includes('sp')).map(key)}</div>`;
+        })()}
+      </section>
+    `;
+  }
+
+  private keyTpl(k: KeyDef) {
+    return html`<button
               class="k ${k.cls ?? ''} ${this._pressed === k.id ? 'pressed' : ''}"
               data-key=${k.id}
               tabindex="-1"
@@ -126,11 +137,7 @@ export class JbKeyboard extends LitElement {
               @lostpointercapture=${() => this.onCancel()}
               @click=${(e: MouseEvent) => this.onClick(e, k)}
               @contextmenu=${(e: Event) => e.preventDefault()}
-            >${k.icon ? icon(k.icon) : k.label}</button>`,
-          )}
-        </div>
-      </section>
-    `;
+            >${k.icon ? icon(k.icon) : k.label}</button>`;
   }
 
   static styles = [
@@ -146,20 +153,24 @@ export class JbKeyboard extends LitElement {
       }
       .kb-handle {
         display: var(--_kb-handle-display, flex); align-items: center; justify-content: center; gap: var(--ha-space-2, 8px);
-        width: 100%; height: var(--_kb-handle-h, 28px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_inactive); position: relative;
+        /* #117: the handle is a button, so it is a full touch target */
+        width: 100%; min-height: max(var(--_touch-min), var(--_kb-handle-h, 28px)); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_inactive); position: relative;
       }
       .kb-handle i { position: absolute; top: 3px; left: 50%; width: 40px; height: 4px; margin-left: calc(-1 * var(--ha-space-5, 20px)); border-radius: 2px; background: var(--_divider); }
       .kb-handle span { display: var(--_kb-handle-label, inline); }
-      .keys { display: grid; grid-template-columns: repeat(28, minmax(0, 1fr)); gap: var(--kgap, var(--ha-space-2, 8px)); }
-      /* Four grid tracks make one letter key (the gap between tracks is the same as between keys, so a letter is as wide as before).
-         The bottom row is a little re-balanced in the same units: 123 and backspace a bit wider than a letter key, Space still the
-         widest, Clear the smallest. Narrow: 5 + 11 + 5 + 7 = 28 tracks (7 letter keys). Wide (below): 10 + 14 + 10 + 6 = 40 (10 letter keys). */
-      .k { grid-column: span 4; }
-      .k.tg, .k.bk { grid-column: span 5; }
-      .k.space { grid-column: span 11; }
-      .k.clr { grid-column: span 7; }
+      /* #117 fluid keyboard. The letters take as many columns as the keyboard's own width allows: never narrower than a touch
+         target, never more than ten (the gap between keys shrinks a little on a narrow keyboard so seven still fit at 48 px).
+         The digits get their own row, and the wide keys (123, Space, backspace, Clear) their own row, sharing it by weight. */
+      .kb { --_kcg: clamp(var(--ha-space-1, 4px), 1.5cqi, var(--kgap, var(--ha-space-2, 8px))); }
+      .keys, .nums { display: grid; column-gap: var(--_kcg); row-gap: var(--kgap, var(--ha-space-2, 8px)); }
+      .keys { grid-template-columns: repeat(auto-fill, minmax(max(var(--_touch-min), calc((100% - 9 * var(--_kcg)) / 10)), 1fr)); }
+      .nums { display: none; grid-template-columns: repeat(10, minmax(0, 1fr)); margin-bottom: var(--kgap, var(--ha-space-2, 8px)); }
+      .ksp { display: flex; gap: var(--_kcg); margin-top: var(--kgap, var(--ha-space-2, 8px)); }
+      .ksp .k { min-width: var(--_touch-min); flex: 5 1 0; }
+      .ksp .k.space { flex-grow: 11; }
+      .ksp .k.clr { flex-grow: 7; }
       .k {
-        height: var(--kh, 60px); display: grid; place-items: center; border-radius: var(--ha-border-radius-lg, 12px);
+        height: max(var(--_touch-min), var(--kh, 60px)); display: grid; place-items: center; border-radius: var(--ha-border-radius-lg, 12px);
         font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
         user-select: none; -webkit-user-select: none; transition: transform var(--_t-instant), background var(--_t-instant);
       }
@@ -168,18 +179,17 @@ export class JbKeyboard extends LitElement {
       /* 123, Space and Clear use the same label size and weight as the letter keys. */
       .k.sp { font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); }
       .k.pressed { background: var(--_chip-sel); color: var(--_fg); transform: scale(0.96); }
-      .k.num, .wide-only { display: none; }
-      @container kb (min-width: 600px) {
-        .keys { grid-template-columns: repeat(40, minmax(0, 1fr)); }
-        .k { height: var(--kh-wide, 56px); }
-        .k.num, .wide-only { display: grid; }
+      .wide-only { display: none; }
+      /* #117 structural, kept as a container query on the keyboard's own width: the digits row (and the #+= symbols key in place
+         of 123) appears once ten keys of the 48 px touch size fit side by side: 10 x 48 px + 9 gaps of at most 10 px. */
+      @container kb (min-width: calc(10 * 48px + 9 * 10px)) {
+        .nums { display: grid; }
+        .k { height: max(var(--_touch-min), var(--kh-wide, 56px)); }
+        .wide-only { display: grid; }
         .narrow-only { display: none !important; }
-        .k.tg, .k.bk { grid-column: span 10; }
-        .k.space { grid-column: span 14; }
-        .k.clr { grid-column: span 6; }
-      }
-      @container kb (max-width: 380px) {
-        .kb-handle span { display: none; }
+        .ksp .k.tg, .ksp .k.bk { flex-grow: 10; }
+        .ksp .k.space { flex-grow: 14; }
+        .ksp .k.clr { flex-grow: 6; }
       }
     `,
   ];
