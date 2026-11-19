@@ -213,9 +213,6 @@ export class JbSpeakers extends LitElement {
   }
   private volOf(id: string) { return this.held(this.vol, id, Number(this.hass?.states[id]?.attributes?.volume_level ?? 0), (x, y) => Math.abs(x - y) < 0.011); }
   private mutedOf(id: string) { return this.held(this.mute, id, !!this.hass?.states[id]?.attributes?.is_volume_muted, (x, y) => x === y); }
-  private callVol(id: string, service: string, data: Record<string, any>) {
-    return this.hass!.callService('media_player', service, data, { entity_id: id }).catch(() => this.fail('That did not work. Check the speaker.'));
-  }
   private sendVol(id: string, v: number) { return sendVolume(this.hass, id, v).catch(() => this.fail('That did not work. Check the speaker.')); }
   private sender(id: string) {
     let s = this.senders.get(id);

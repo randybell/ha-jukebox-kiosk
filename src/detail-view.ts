@@ -4,7 +4,7 @@ import { icon } from './icons';
 import { providerLabel } from './providers';
 import { songInfo, INFO_TYPES } from './song-info';
 import {
-  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl,
+  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuTpl,
   playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, mediaActions, hideStartRadio, swallowNextClick, confirmTpl, drillable,
   type MenuAction, type MenuPos, type ConfirmState,
   maCall,
@@ -12,7 +12,6 @@ import {
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem } from './types';
 import type { MaBackend, TrackListType } from './backend/types';
 import { defineElement } from './define';
-import { removeFromQueue } from './queue-row-remove';
 import { FavController, heartTpl, heartType } from './heart';
 
 /** Track-list `page` is 0..1000. A first page shorter than this is taken as the whole list (no "load more" call). */
@@ -235,15 +234,6 @@ export class JbDetail extends LitElement {
       fire(this, 'jukebox-played', { item: it, ...r });
     } catch (err) { this.toast(`Couldn't play ${it.name}`); console.warn('[jukebox-card] play_media failed', err); }
   }
-  private async removeRow(it: MaItem, type: string) {
-    this.closeMenu();
-    try {
-      await removeFromQueue(this, it, type);
-      this.toast(`Removed ${it.name} from the queue`);
-    } catch (e) {
-      this.toast(e instanceof Error ? e.message : `Couldn't remove ${it.name} from the queue`);
-    }
-  }
   /** Header buttons, the whole list. Play (in order) and Shuffle replace the queue, so they ask first; Add does not. */
   private headerAct(mode: 'play' | 'shuffle' | 'add' | 'radio') {
     const e = this.entry; if (!e || !this.hass) return;
@@ -260,7 +250,6 @@ export class JbDetail extends LitElement {
       fire(this, 'jukebox-played', { item: e.item, ...r });
     } catch (err) { this.toast(`Couldn't play ${e.item.name}`); console.warn('[jukebox-card] play failed', err); }
   }
-  private root() { return this.renderRoot.querySelector('.dx') as HTMLElement; }
   /** Row tap: an album / artist / playlist / podcast row opens its detail; a station row is only highlighted. Track / episode rows go through songMenu. */
   private tap(it: MaItem, type: string, key: string) {
     if (type !== 'track' && type !== 'podcast_episode' && drillable(type, this.config)) { this.press.release(); fire(this, 'jb-nav', { op: 'push', item: it, type }); return; }
@@ -298,11 +287,11 @@ export class JbDetail extends LitElement {
   }
   private heart(it: MaItem, type: string) { return heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type)); }
   /** Album row inside an artist: tap opens the album; a hold opens the album's pop-up. */
-  private albumRow(it: MaItem, radioCol = false) {
+  private albumRow(it: MaItem) {
     const key = 'al|' + it.uri;
     const p = this.press.handlers(key, { it, type: 'album', key });
     const fav = !!heartType(this.config, 'album', it);
-    return html`<div class="row drill sr ${radioCol && !canRadio('album', it) ? 'nor' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''} ${this.press.pressing === key ? 'hp' : ''}" data-uri=${it.uri} data-type="album" aria-label="Open ${it.name}"
+    return html`<div class="row drill ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''} ${this.press.pressing === key ? 'hp' : ''}" data-uri=${it.uri} data-type="album" aria-label="Open ${it.name}"
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       ${artTpl(it, 'th')}
@@ -380,7 +369,7 @@ export class JbDetail extends LitElement {
             <button class="sbtn retry" data-action="retry" tabindex="-1" @pointerdown=${noFocus} @click=${() => { e.data = undefined; this.load(e); this.requestUpdate(); }}>Retry</button></div>` : nothing}
           ${d.note ? html`<div class="note src" data-src=${d.src}>${d.note}</div>` : nothing}
           ${type === 'artist' && !d.loading ? html`<h3 class="eyebrow">Albums</h3>${d.albums.length
-            ? html`<div class="list albums">${d.albums.map((a) => this.albumRow(a, d.albums.some((x) => canRadio('album', x))))}</div>`
+            ? html`<div class="list albums">${d.albums.map((a) => this.albumRow(a))}</div>`
             : html`<div class="empty noalbums"><span>No albums found.</span></div>`}` : nothing}
           ${d.tracks.length ? html`<h3 class="eyebrow">${tracksTitle}${d.src === 'search' ? html` <em>matched by search</em>` : nothing}</h3>
             <div class="list tracks">${d.tracks.map((t, i) => this.row(t, type === 'album' && d.src === 'kiosk' ? i + 1 : undefined, i))}</div>

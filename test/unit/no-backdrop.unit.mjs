@@ -30,7 +30,7 @@ for (const [tag, cfg] of [['no config', {}], ['backdrop: full', { backdrop: 'ful
   check(`B1 the editor builds with ${tag}, with no error and no Background field`, !err && fields.length > 0 && !fields.includes('backdrop'), err || fields.join(','));
 }
 check('B2 no Background label and no shown default for it', !('backdrop' in Ed.LABELS) && !('backdrop' in Ed.SHOWN_DEFAULTS));
-check('B3 the other Display fields are all still there, in order', JSON.stringify(names(Ed.editorSchema({})).filter((n) => ['default_tab', 'screensaver_minutes', 'screensaver_lyrics', 'coerce_repeat_one'].includes(n))) === JSON.stringify(['default_tab', 'screensaver_minutes', 'screensaver_lyrics']));
+check('B3 the other Display fields are all still there, in order', JSON.stringify(names(Ed.editorSchema({})).filter((n) => ['default_tab', 'screensaver_minutes', 'screensaver_lyrics'].includes(n))) === JSON.stringify(['default_tab', 'screensaver_minutes', 'screensaver_lyrics']));
 
 // the card: nothing reads, validates or draws a backdrop any more
 const SRC = new URL('../../src/', import.meta.url);

@@ -570,11 +570,6 @@ export class JbSearch extends LitElement {
     fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, g) || providerLabel(it.uri), actions: mediaActions((enq) => { this.closeMenu(); this.play(it, g, enq); }, open, ask, searchRadio(type, it), station, hideStartRadio(type, it)), info: INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it, this.hass) : undefined, close: () => this.press.release() });
     void el;
   }
-  private showMenu(it: MaItem, g: GroupKey, anchor: HTMLElement | null, actions: MenuAction[]) {
-    this.press.held = it.uri;
-    this._menu = { item: it, group: g, pos: menuPos(this.root(), anchor, actions.length), actions };
-    fire(this, 'jukebox-menu', { item: it });
-  }
   private closeMenu() { this._menu = null; this.press.release(); }
   /** Push a detail view over the results. On a phone the on-screen keyboard is tucked away while browsing it
    *  (not on the combined tab with the keyboard pinned open). */
@@ -938,9 +933,6 @@ export class JbSearch extends LitElement {
     .ra.go { width: 48px; height: 48px; display: grid; place-items: center; color: var(--_inactive); }
     /* Labeled search actions need their own height and enough width for an unbroken touch label. */
     .row { min-height: 68px; }
-    .row .ra-b:is([data-act="add"], [data-act="next"], [data-act="replace"], [data-act="remove"], [data-act="radio"]) { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-      width: auto; min-width: 72px; height: auto; min-height: 56px; padding: 6px; font-size: var(--ha-font-size-m, 14px); line-height: var(--ha-line-height-condensed, 1.2); }
-    .row .ra-b:is([data-act="add"], [data-act="next"], [data-act="replace"], [data-act="remove"], [data-act="radio"]) span { white-space: nowrap; }
 
     .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: 14px;
       padding: 12px 14px 24px; border-radius: var(--_radius); background: transparent; border: 1px solid var(--_surface-border);
