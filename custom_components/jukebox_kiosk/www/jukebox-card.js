@@ -1260,8 +1260,9 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       .tb.pr, .tb.nx { width: 60px; height: 60px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
     }
     /* #117: a behaviour flag, not a layout: sleepStatus() reads it to skip the brief top-right status chip when the card is too narrow
-       for it to clear the cover's Fullscreen/Lyrics buttons (the Sleep M:SS chip already shows the same thing). Kept as a container query on the card's own width. */
-    @container np (max-width: 520px) { .nw { --_narrow: 1; } }
+       for it to clear the cover's Fullscreen/Lyrics buttons (the Sleep M:SS chip already shows the same thing). Kept as a container query on the card's own width.
+       Structural, as before #117: on a card this narrow the Up next strip is left out whole (the Queue tab shows it), so the speaker rows stay in view. */
+    @container np (max-width: 520px) { .nw { --_narrow: 1; } .upn { display: none; } }
     /* #117 structural, kept as a container query on the speaker panel's own width: below ~460px a one-line main row would squeeze the
        group slider to almost nothing, so the name + Speakers button go on top and the slider gets the full row underneath */
     @container vol (max-width: 460px) {
