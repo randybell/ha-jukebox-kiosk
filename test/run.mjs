@@ -304,7 +304,8 @@ await page.screenshot({ path: SHOTS + 'search-390x844.png' });
 await page.evaluate((sv) => { const row = eval(sv).shadowRoot.querySelector('.grp.tracks .row .rt b'); row.textContent = 'An exceptionally long touchscreen song title that must remain ellipsized beside the queue actions'; }, H.sv);
 const ph = await page.evaluate((r) => {
   const root = eval(r);
-  return [...root.querySelectorAll('.grp .row')].map((row) => {
+  // 0.9.0: genre rows (Genres is a search filter again) have no row buttons, like the Library's genre rows
+  return [...root.querySelectorAll('.grp:not(.genres) .row')].map((row) => {
     const rr = row.getBoundingClientRect();
     const t = row.querySelector('.rt b');
     return { h: rr.height, n: row.querySelectorAll('.ra-b').length, right: rr.right, vw: innerWidth, trunc: t.scrollWidth > t.clientWidth, tw: t.clientWidth };
@@ -794,6 +795,8 @@ await page.keyboard.press('Escape');
   check('16t null station image → theme-coloured placeholder, no fixed-colour picture (0.8.1); a dead logo (404) is hidden so the placeholder shows', hr && hr.img === '' && deadHidden, `${hr?.img.slice(0, 30)} dead=${deadImg} hidden=${deadHidden}`);
   const st = g.tiles.find((t) => t.name === 'Arrow Classic Rock');
   const stEl = `[...${BR}.shadowRoot.querySelectorAll('.tile')].find((x) => x.dataset.uri === '${st?.uri}')`;
+  // 0.9.0 (#109): the tile sat on the list's bottom edge at 1280x800, so the tap could land 1px under the list; bring it into view first
+  await pg.evaluate((e) => eval(e).scrollIntoView({ block: 'center' }), stEl); await sleep(250);
   let pr = await pq(async () => { const r = await rectOf(pg, stEl); await pg.mouse.click(r.x - r.w / 4, r.y - r.h / 4); });
   await sleep(300);
   const ST = `__card.shadowRoot.querySelector('jb-station').shadowRoot`;
@@ -806,6 +809,7 @@ await page.keyboard.press('Escape');
   a = await artState();
   check('16v Now Playing shows the station (title trimmed) with its art', /Arrow Classic Rock/.test(await pg.evaluate(() => __card.shadowRoot.querySelector('jb-now').shadowRoot.textContent)) && !!a.now, a.now.slice(0, 40));
   await pg.evaluate(() => { __card.shadowRoot.querySelector('[data-tab="browse"]').click(); }); await sleep(300);
+  await pg.evaluate((e) => eval(e).scrollIntoView({ block: 'center' }), `${BR}.shadowRoot.querySelector('.tile')`); await sleep(250); // the 16zc tap scrolled the list
   let r0 = await rectOf(pg, `${BR}.shadowRoot.querySelector('.tile')`);
   await pg.mouse.move(r0.x - r0.w / 4, r0.y - r0.h / 4); await pg.mouse.down(); await sleep(650); await pg.mouse.up(); await sleep(150);
   let mi = await pg.evaluate((h) => [...eval(h).querySelectorAll('.it')].map((e) => e.dataset.action), HSX);
