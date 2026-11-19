@@ -1094,7 +1094,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       grid-auto-rows: max-content; }
     .nw::-webkit-scrollbar { display: none; }
     /* #117: the cover takes a smaller share of the height on narrow cards (30% of it, up to 44% once the card is ~300px wider than that), so the controls stay in view */
-    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), clamp(30cqh, 100cqw - 300px, 44cqh), 580px); aspect-ratio: 1; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; background: var(--primary-color, #03a9f4);
+    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), max(clamp(30cqh, 100cqw - 300px, 44cqh), calc(4 * var(--_touch-min) + 6 * var(--ha-space-1, 4px))), 580px); aspect-ratio: 1; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; background: var(--primary-color, #03a9f4);
       box-shadow: 0 0 0 var(--ha-border-width-sm, 1px) var(--_hairline); }
     .art .ovl { position: absolute; inset: 0; z-index: 1; }
     .slx { position: absolute; inset: 0; z-index: 4; } .art .slx { z-index: 1; }
@@ -1108,7 +1108,12 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       color: var(--_fg);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background var(--_t-fast), color var(--_t-fast); }
     .ab .i { width: var(--_icon); height: var(--_icon); }
-    .art .sleep-strip { position: absolute; z-index: 2; top: calc(var(--_ab-inset) + var(--_ab) + var(--ha-space-2, 8px)); right: var(--_ab-inset); left: var(--_ab-inset); margin: 0; justify-content: flex-end; }
+    /* #117: the four sleep choices (48 px each) stay on one row over the cover: the artwork is never narrower than four of them plus
+       small gaps (unless the card itself is), and on a small cover the strip's side insets and gaps shrink before anything wraps */
+    .art .sleep-strip { position: absolute; z-index: 2; top: calc(var(--_ab-inset) + var(--_ab) + var(--ha-space-2, 8px)); margin: 0; justify-content: flex-end;
+      --_sp-in: clamp(var(--ha-space-1, 4px), (100% - 4 * var(--_touch-min) - 3 * var(--ha-space-2, 8px)) / 2, var(--_ab-inset)); right: var(--_sp-in); left: var(--_sp-in);
+      gap: clamp(2px, (100% - 4 * var(--_touch-min)) / 3, var(--ha-space-2, 8px)); }
+    .art .sleep-strip .sp { padding: 0 clamp(var(--ha-space-1, 4px), 2cqi, var(--ha-space-4, 16px)); }
     .art .sleep-strip .sp { background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       border-color: var(--_surface-border); }
@@ -1158,10 +1163,10 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .tb .dot { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
     .tb.pp { width: clamp(56px, 16cqw, 80px); height: clamp(56px, 16cqw, 80px); background: var(--_active); color: var(--_on-accent); }
     .tb.pp .i { width: calc(var(--_icon) * 44 / 24); height: calc(var(--_icon) * 44 / 24); }
-    .tb.pr, .tb.nx { width: clamp(var(--_touch-min), 14cqw, 72px); height: clamp(var(--_touch-min), 14cqw, 72px); } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
+    .tb.pr, .tb.nx { width: clamp(calc(var(--_touch-min) + 4px), 14cqw, 72px); height: clamp(calc(var(--_touch-min) + 4px), 14cqw, 72px); } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
     .tp:has(.tb.fv) .tb { width: clamp(var(--_touch-min), 9cqw, 56px); height: clamp(var(--_touch-min), 9cqw, 56px); }
-    .tp:has(.tb.fv) .tb.pp { width: clamp(var(--_touch-min), 13cqw, 80px); height: clamp(var(--_touch-min), 13cqw, 80px); }
-    .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: clamp(var(--_touch-min), 11cqw, 72px); height: clamp(var(--_touch-min), 11cqw, 72px); } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
+    .tp:has(.tb.fv) .tb.pp { width: clamp(calc(var(--_touch-min) + 8px), 13cqw, 80px); height: clamp(calc(var(--_touch-min) + 8px), 13cqw, 80px); }
+    .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: clamp(calc(var(--_touch-min) + 4px), 11cqw, 72px); height: clamp(calc(var(--_touch-min) + 4px), 11cqw, 72px); } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
     .tb:active { transform: scale(.94); }
     .tb:disabled { color: var(--_disabled); }
     .tb.pp:disabled { background: color-mix(in srgb, var(--_disabled-fill) 20%, transparent); }
