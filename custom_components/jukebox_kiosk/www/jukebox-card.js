@@ -1579,7 +1579,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     /* #50: left of the labeled Close button. #117: the room it leaves is the Close button's own width plus the header's right padding and gap, not a guessed 116px */
     :host { --_st-x: calc(var(--ha-space-4, 16px) + 88px + var(--ha-space-3, 12px)); }
     :host([open]) .st { right: var(--_st-x); top: var(--_space-3-5); max-width: min(360px, calc(100% - var(--_st-x) - var(--_pad))); }
-    @container spk (max-width: 640px) { :host([open]) .st { right: var(--_pad); top: 10px; } }
+    @container spk (max-width: 640px) { :host([open]) .st { right: var(--_pad); top: var(--_space-2-5); } }
     @container spk (max-width: 640px) and (max-height: 560px) { :host([open]) .st { right: var(--_st-x); top: var(--_space-1-5); max-width: calc(100% - var(--_st-x) - var(--_pad)); } }
     .confirm { z-index: 10; max-height: min(100cqh, var(--_popup-max-h)); overflow-y: auto; }
     /* the panel only knows the card's own height (not the viewport): short cards get tighter rows; max height stays the shared dialog ceiling */
