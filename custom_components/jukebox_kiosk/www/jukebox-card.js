@@ -345,10 +345,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
             >${e.icon?de(e.icon):e.label}</button>`}}async function na(e,t,a){const i=e.config,s=i?._queue;if(!s?.removeItem)throw new Error("Queue removal is not available");await s.removeItem({...t,media_type:t.media_type??a}),Oe(e,"jukebox-queue-removed",{item:t,media_type:a})}oa.properties={collapsible:{type:Boolean},_sym:{state:!0},_pressed:{state:!0}},oa.styles=[le,ce,r`
       :host { display: block; min-width: 0; }
       .kb {
-        container: kb / inline-size; min-width: 0; padding: var(--ha-space-2, 8px); border-radius: var(--_radius);
-        /* #117: the side padding gives way first (8 px down to 4 px) so seven 48 px letter keys still fit on a ~390 px card before the
-           letters go to six a row (percent = the keyboard's own width; 7 keys, 6 smallest gaps, the 1 px borders) */
-        padding-inline: clamp(var(--ha-space-1, 4px), (100% - 7 * var(--_touch-min) - 6 * 2px - 2 * var(--_card-border-width, 1px)) / 2, var(--ha-space-2, 8px));
+        container: kb / inline-size; min-width: 0; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px) var(--ha-space-2, 8px); border-radius: var(--_radius);
         /* HA input fill (ha-textfield); the keys on it are plain HA chips */
         background: var(--_input-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_card-shadow);
         user-select: none; -webkit-user-select: none; touch-action: manipulation;
@@ -395,10 +392,10 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
          area. Only on a card whose middle is at least 600 px tall: below that the key rows are already height-capped (--_kh-room, set
          by the host), and more rows would leave no list at all (that short-card case is a question for Randy, see #117). */
       @container np (min-height: 600px) {
-        @container kb (max-width: calc(7 * 48px + 6 * 2px - 1px)) {
+        @container kb (max-width: calc(7 * 48px + 6 * 2px - 0.01px)) {
           .keys { grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: clamp(2px, (100% - 6 * var(--_touch-min) - 1px) / 5, var(--_kcg)); }
         }
-        @container kb (max-width: calc(6 * 48px + 5 * 2px - 1px)) {
+        @container kb (max-width: calc(6 * 48px + 5 * 2px - 0.01px)) {
           .keys { grid-template-columns: repeat(5, minmax(0, 1fr)); column-gap: clamp(2px, (100% - 5 * var(--_touch-min) - 1px) / 4, var(--_kcg)); }
         }
       }
