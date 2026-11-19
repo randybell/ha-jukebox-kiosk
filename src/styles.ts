@@ -8,12 +8,12 @@ import { css } from 'lit';
  * #117 fluid layout. Sizes, paddings, gaps and type follow the card's own width continuously (clamp() with container units, flex wrap,
  * auto-fill grids); every touch target is at least --_touch-min (48px) at every width. Container queries on the card's own box (never the
  * window) remain only where the structure changes, each commented where it is:
- *   keyboard   digit row once ten 48px keys fit (kb)            search   keyboard beside the results, query row (np >= 700, landscape)
+ *   keyboard   digit row, ten letters a row, once ten 48px keys fit (kb)   search   keyboard beside the results, query row (np >= 700, landscape)
  *   Library    split filter view (np >= 1000)                    station  bottom sheet vs centred dialog (st >= 700)
  *   Speakers   bottom sheet vs right drawer (spk >= 641)         Now Playing  art beside info (np landscape >= 700), 3-column mini mixer (vol >= 600),
  *              two-row main speaker line (vol <= 460)
  *   narrow content choices (np <= 520 / 600): rows move the duration into the subtitle and drop the provider badge, the album page's
- *   actions take their own line, the text chip goes while typing; the narrow queue row layout (Kiosk Dev's row-button rework).
+ *   actions take their own line, the text chip goes while typing, Now Playing leaves out Up next; the narrow queue row layout (Kiosk Dev's row-button rework).
  *   Heights (landscape <= 400 / 520 / 560 px, short cards) only make room for the keyboard and Now Playing on short panels.
  * JavaScript reads the CSS result (for example --_narrow on Now Playing) instead of repeating a width.
  */
