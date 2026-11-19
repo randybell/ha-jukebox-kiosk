@@ -357,11 +357,14 @@ export class JbQueue extends LitElement {
 
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
-    .qx { position: relative; height: 100%; display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); padding: var(--ha-space-4, 16px) var(--_pad) var(--ha-space-4, 16px); width: 100%; }
-    .head { display: flex; align-items: baseline; gap: var(--ha-space-3, 12px); }
-    h2 { font-family: var(--_font-display); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); }
+    .qx { position: relative; height: 100%; display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); padding: clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)) var(--_pad) clamp(var(--ha-space-2, 8px), 3cqi, var(--ha-space-4, 16px)); width: 100%; }
+    /* #117: the header wraps (Autoplay goes to its own line) instead of squeezing "13 up next" into a column or pushing Autoplay off the card */
+    .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--ha-space-2, 8px) var(--ha-space-3, 12px); }
+    .cnt { white-space: nowrap; }
+    .qsearch { white-space: nowrap; }
+    h2 { font-family: var(--_font-display); font-size: clamp(var(--ha-font-size-2xl, 24px), 5cqi, var(--ha-font-size-3xl, 28px)); font-weight: var(--ha-font-weight-bold, 700); }
     .cnt { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); }
-    .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
+    .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_muted); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
     .ap.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .ap:disabled { color: var(--_disabled); border-color: var(--_disabled); cursor: default; } /* #113: HA disabled colours, not an ad-hoc opacity */
@@ -397,7 +400,7 @@ export class JbQueue extends LitElement {
     .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); align-self: center; animation: pulse 800ms ease-in-out infinite alternate; }
     @keyframes pulse { from { opacity: 1 } to { opacity: .35 } }
     @media (prefers-reduced-motion: reduce) { .spin, .live { animation: none; } }
-    .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px) var(--ha-space-5, 20px); display: flex; flex-direction: column; touch-action: pan-y; }
+    .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: var(--ha-space-2, 8px) clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-3, 12px)) clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-5, 20px)); display: flex; flex-direction: column; touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     /* the list sits directly on the HA card surface: no second fill */
     .scroll.panel { background: transparent; }
@@ -417,7 +420,7 @@ export class JbQueue extends LitElement {
     .qr.now .pv { color: var(--_on-accent); border-color: color-mix(in srgb, var(--_on-accent) 40%, transparent); background: color-mix(in srgb, var(--_on-accent) 12%, transparent); }
     .qr.past { opacity: var(--_dim); }
     .qr.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
-    .qsearch { align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
+    .qsearch { align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
     .qsearch.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .qsx { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(360px, 38%) minmax(0, 1fr); grid-template-rows: auto 1fr; gap: var(--ha-space-2, 8px) var(--ha-space-4, 16px);
@@ -434,12 +437,12 @@ export class JbQueue extends LitElement {
     .undo span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ub { height: var(--_undo-btn); padding: 0 var(--ha-space-5, 20px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
     /* #121 the toast sits right above Undo: Undo's bottom offset plus its height (button and padding) */
-    :host { --_undo-pad: var(--ha-space-2, 8px); --_undo-btn: 44px; }
+    :host { --_undo-pad: var(--ha-space-2, 8px); --_undo-btn: var(--_touch-min); }
     .undo ~ .toast { --_toast-bottom: calc(var(--ha-space-4, 16px) + 2 * var(--_undo-pad) + var(--_undo-btn)); }
     .end { text-align: center; color: var(--_inactive); font-size: var(--ha-font-size-m, 14px); padding: var(--ha-space-4, 16px); }
+    /* #117: the paddings and title above are fluid now; what is left here is the narrow queue row layout, which is Kiosk Dev's
+       queue row-button rework (kept as a container query on the card's own width until that lands) */
     @container np (max-width: 520px) {
-      .qx { padding: var(--ha-space-3, 12px) var(--ha-space-3, 12px) var(--ha-space-2, 8px); } h2 { font-size: var(--ha-font-size-2xl, 24px); }
-      .scroll { padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px) var(--ha-space-4, 16px); }
       .qr { grid-template-columns: 20px 42px minmax(0, 1fr) auto; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-1, 4px); }
       .qr .pv { display: none; } .qr .th { width: 42px; height: 42px; }
       .rt b { font-size: var(--ha-font-size-m, 14px); }

@@ -139,11 +139,11 @@ export class JbStation extends LitElement {
        no longer reserves a guessed 104 px for it */
     .sheet > .x { grid-column: 2; grid-row: 1; align-self: start; z-index: 1; }
     .sheet > .top { grid-column: 1; grid-row: 1; display: flex; gap: var(--ha-space-4, 16px); align-items: flex-start; }
-    .ar.logo { width: 96px; height: 96px; flex: none; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; display: block; }
+    .ar.logo { width: clamp(96px, 20cqi, 132px); height: clamp(96px, 20cqi, 132px); flex: none; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; display: block; }
     .ar.logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .tt { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; }
     .tt .eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
-    .nm { margin: 0; font-family: var(--_font-display); font-size: var(--ha-font-size-2xl, 24px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); overflow-wrap: anywhere; }
+    .nm { margin: 0; font-family: var(--_font-display); font-size: clamp(var(--ha-font-size-2xl, 24px), 4cqi, var(--ha-font-size-3xl, 28px)); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); overflow-wrap: anywhere; }
     .desc { margin: var(--ha-space-1, 4px) 0 0; font-size: var(--ha-font-size-m, 14px); line-height: var(--ha-line-height-condensed, 1.2); color: var(--_muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
     .meta { margin: 0; display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px) var(--ha-space-6, 24px); }
     .f { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -157,11 +157,10 @@ export class JbStation extends LitElement {
     .fav .i { width: calc(var(--_icon) * 28 / 24); height: calc(var(--_icon) * 28 / 24); } .fav.on { color: var(--_active); border-color: currentColor; } .fav:disabled { color: var(--_disabled); }
     .note { margin: -6px 0 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; }
     .toast.solo { z-index: 3; pointer-events: auto; }
-    /* tablet / desktop: a centred dialog */
+    /* tablet / desktop: a centred dialog. #117 kept as a container query on the card's own width (structural: bottom sheet vs dialog);
+       the logo and name sizes are fluid above */
     @container st (min-width: 700px) {
       .sheet { left: 50%; top: 50%; bottom: auto; transform: translate(-50%, -50%); width: min(560px, 90cqw); border-radius: var(--_dialog-radius); padding: var(--ha-space-6, 24px) var(--ha-space-6, 24px) var(--ha-space-5, 20px); }
-      .ar.logo { width: 132px; height: 132px; }
-      .nm { font-size: var(--ha-font-size-3xl, 28px); }
     }
   `];
 }

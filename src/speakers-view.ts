@@ -561,7 +561,7 @@ export class JbSpeakers extends LitElement {
     .blk { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); }
     .eyebrow.sm { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
     .chips { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); }
-    .chip { position: relative; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+    .chip { position: relative; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); }
     .chip .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .chip.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
@@ -569,11 +569,15 @@ export class JbSpeakers extends LitElement {
     .chip:active { transform: scale(.97); }
     .chip .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
     .mix { display: flex; flex-direction: column; }
-    .rooms { display: flex; flex-direction: column; border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
+    /* #117: rooms fill as many 320px columns as the panel has room for (one in the drawer and the phone sheet, two in a wide drawer), no width rule;
+       every row draws its own top divider so one or two columns look the same */
+    .rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); column-gap: var(--ha-space-6, 24px); }
+    .rooms > .vr { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .vr { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "m n a" "s s v"; align-items: center; column-gap: var(--ha-space-2, 8px); padding: var(--ha-space-2, 8px) 0; }
     .vr + .vr { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .vr.main { grid-template-areas: "m n n" "s s v"; }
-    .vm { grid-area: m; width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_active); margin-left: calc(-1 * var(--ha-space-2, 8px)); }
+    /* #117: a 48px mute target; the extra reaches into the panel margin so the icon stays where it was */
+    .vm { grid-area: m; width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_active); margin-left: calc(-1 * var(--ha-space-3, 12px)); }
     .vm .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     .vn { grid-area: n; display: flex; flex-direction: column; min-width: 0; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
     .vn b, .vn small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -585,7 +589,7 @@ export class JbSpeakers extends LitElement {
     .vv { grid-area: v; width: 34px; text-align: right; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
     .vv::after { content: attr(data-v); }
     .vr.off { opacity: var(--_dim); }
-    .act { grid-area: a; height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); white-space: nowrap;
+    .act { grid-area: a; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); white-space: nowrap;
       max-width: 52cqw; overflow: hidden; text-overflow: ellipsis; }
     .act.join { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
     .act.take { border-style: dashed; }
@@ -603,36 +607,33 @@ export class JbSpeakers extends LitElement {
     .st .ct { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: var(--ha-space-2, 8px) 0; }
     .st.wrap .ct { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
     .st .sep { font-style: normal; color: var(--_muted); margin: 0 -2px; }
-    .st .ca { position: relative; flex: none; height: 34px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
+    .st .ca { position: relative; flex: none; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
     .st .ca::before, .st .cx::before { content: ""; position: absolute; inset: -6px -4px; }
-    .st .cx { position: relative; flex: none; height: 34px; padding: 0 var(--ha-space-4, 16px); display: grid; place-items: center; border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); } /* #51: labeled Close (was an X) */
+    .st .cx { position: relative; flex: none; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); display: grid; place-items: center; border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); } /* #51: labeled Close (was an X) */
     .st .dot { flex: none; width: 8px; height: 8px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); animation: stpulse 1s ease-in-out infinite alternate; }
     .st.error { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
     .st.error .si { color: var(--text-primary-color, #fff); flex: none; } .st.error .ca { background: var(--text-primary-color, #fff); color: var(--error-color); } .st.error .cx { background: var(--text-primary-color, #fff); color: var(--error-color); }
     @keyframes stin { from { opacity: 0; transform: translateY(-6px); } }
     @keyframes stpulse { from { opacity: .35; } }
-    :host([open]) .st { right: 116px; top: 14px; max-width: min(360px, calc(100% - 116px - var(--_pad))); } /* #50: left of the labeled Close button */
+    /* #50: left of the labeled Close button. #117: the room it leaves is the Close button's own width plus the header's right padding and gap, not a guessed 116px */
+    :host { --_st-x: calc(var(--ha-space-4, 16px) + 88px + var(--ha-space-3, 12px)); }
+    :host([open]) .st { right: var(--_st-x); top: 14px; max-width: min(360px, calc(100% - var(--_st-x) - var(--_pad))); }
     @container spk (max-width: 640px) { :host([open]) .st { right: var(--_pad); top: 10px; } }
-    @container spk (max-width: 640px) and (max-height: 560px) { :host([open]) .st { right: 116px; top: 6px; max-width: calc(100% - 116px - var(--_pad)); } }
+    @container spk (max-width: 640px) and (max-height: 560px) { :host([open]) .st { right: var(--_st-x); top: 6px; max-width: calc(100% - var(--_st-x) - var(--_pad)); } }
     .confirm { z-index: 10; max-height: min(100cqh, var(--_popup-max-h)); overflow-y: auto; }
     /* the panel only knows the card's own height (not the viewport): short cards get tighter rows; max height stays the shared dialog ceiling */
     .sh { flex: none; }
     @container spk (max-height: 560px) {
       .sh { padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px); } .tn { font-size: var(--ha-font-size-l, 16px); }
-      .body { padding-top: var(--ha-space-2, 8px); gap: var(--ha-space-2, 8px); } .vr { padding: var(--ha-space-1, 4px) 0; } .chip { height: 40px; }
+      .body { padding-top: var(--ha-space-2, 8px); gap: var(--ha-space-2, 8px); } .vr { padding: var(--ha-space-1, 4px) 0; }
     }
     .ask-scrim { z-index: 9; }
     .tk { margin: 0; padding-left: var(--ha-space-5, 20px); display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-m, 14px); color: var(--_fg); }
     .sp-ask.danger .cbtn.ok { background: var(--_active); color: var(--_on-accent); }
-    /* tablet: right drawer */
+    /* tablet: right drawer. #117 kept as a container query on the card's own width (structural): the panel is a bottom sheet below this
+       and a right-hand drawer from here; the drawer then widens with the card (clamp) */
     @container spk (min-width: 641px) {
-      .sheet { left: auto; top: 0; bottom: 0; right: 0; width: min(440px, 92cqw); max-height: min(100%, var(--_popup-max-h)); border-radius: var(--_dialog-radius) 0 0 var(--_dialog-radius); border-width: 0 0 0 var(--_card-border-width, 1px); box-shadow: var(--_dialog-shadow); }
-    }
-    /* wide (1280+, incl. 1080p after the card's zoom): wider drawer, two-column rooms */
-    @container spk (min-width: 1200px) {
-      .sheet { width: min(760px, 58cqw); }
-      .rooms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--ha-space-6, 24px); }
-      .vr + .vr { border-top: 0; } .rooms .vr { border-bottom: var(--ha-border-width-sm, 1px) solid var(--_divider); }
+      .sheet { left: auto; top: 0; bottom: 0; right: 0; width: clamp(min(440px, 92cqw), 58cqw, 760px); max-height: min(100%, var(--_popup-max-h)); border-radius: var(--_dialog-radius) 0 0 var(--_dialog-radius); border-width: 0 0 0 var(--_card-border-width, 1px); box-shadow: var(--_dialog-shadow); }
     }
     @media (prefers-reduced-motion: reduce) { .chip:active { transform: none; } .st, .st .dot { animation: none; } }
   `];
