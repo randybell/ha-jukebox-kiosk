@@ -371,7 +371,7 @@ export class JbQueue extends LitElement {
     .apg { margin-left: auto; align-self: center; display: inline-flex; }
     .apg .ap { margin-left: 0; }
     .apg.split .ap:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: var(--ha-space-2, 8px); }
-    .apg.split .apc { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding: 0 var(--ha-space-2, 8px); box-shadow: inset 1px 0 0 var(--_divider); }
+    .apg.split .apc { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding: 0 var(--ha-space-2, 8px); min-width: var(--_touch-min); justify-content: center; box-shadow: inset 1px 0 0 var(--_divider); }
     .apg.split .apc.on { box-shadow: inset 1px 0 0 var(--_hairline); }
     .aps { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100% - 24px)); max-height: min(100%, var(--_popup-max-h));
       padding: var(--ha-space-4, 16px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); overflow: auto; }

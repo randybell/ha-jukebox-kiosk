@@ -618,6 +618,9 @@ export class JbNow extends LitElement {
       color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
     .vmore .i { width: calc(var(--_icon) * 12 / 24); height: calc(var(--_icon) * 12 / 24); }
     .volw.more-b .vmore { display: inline-flex; }
+    /* #117: the 48px More speakers pill gets its own strip under the speaker list instead of floating over a slider (two targets on one spot) */
+    .volw.more-b { padding-bottom: calc(var(--_touch-min) + var(--ha-space-1, 4px)); }
+    .volw.more-b .vmore { bottom: 0; }
     .volw.over .rooms { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
     .volw.over .rooms::-webkit-scrollbar { display: none; }
     .volw.more-b .rooms { -webkit-mask-image: linear-gradient(#000 calc(100% - 44px), #0000); mask-image: linear-gradient(#000 calc(100% - 44px), #0000); }
