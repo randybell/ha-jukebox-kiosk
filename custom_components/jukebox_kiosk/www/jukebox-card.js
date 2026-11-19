@@ -1659,7 +1659,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
           <div class="brand">${de("disc","i brand-i")}<span>${h.title??"Jukebox"}</span></div>
           <button class="pill" title=${h.entity} tabindex="-1" aria-label="${o} ${i}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk?"true":"false"}
             @pointerdown=${e=>e.preventDefault()}
-            @click=${()=>{this.closeSheet(),this._spk=!this._spk}}>${de("group","i xs")}<span class="pl">${o}</span><span class="pn">${i}</span>${s?I`<b>· ${!t&&this.hass?"not found":"buffering"===t?.state?"regrouping…":a?`${a} speaker${1===a?"":"s"}`:"idle"}</b>`:r?I`<b>· ${r} room${1===r?"":"s"} synced</b>`:B}${de("chev","i xs pc")}</button>
+            @click=${()=>{this.closeSheet(),this._spk=!this._spk}}>${de("group","i xs")}<span class="pt"><span class="pnm"><span class="pn">${i}</span><span class="pl">${o}</span></span>${s?I`<b>· ${!t&&this.hass?"not found":"buffering"===t?.state?"regrouping…":a?`${a} speaker${1===a?"":"s"}`:"idle"}</b>`:r?I`<b>· ${r} room${1===r?"":"s"} synced</b>`:B}</span>${de("chev","i xs pc")}</button>
           ${Ss()?I`<span class="lost" role="status" data-status="reconnecting">Reconnecting to Home Assistant…</span>`:this._lost?I`<span class="lost" role="status">${this._lost}</span>`:B}
           <div class="spacer"></div>
           <div class="clock">${this.timeStr()}</div>
@@ -1697,19 +1697,27 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       color: var(--_fg);
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
-    .top { display: flex; align-items: center; gap: var(--ha-space-4, 16px); padding: var(--ha-space-3, 12px) var(--_pad) var(--ha-space-3, 12px); min-height: 60px; position: relative; z-index: 2;
+    .top { display: flex; align-items: center; gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); padding: clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-3, 12px)) var(--_pad); min-height: clamp(52px, 8cqi, 60px); position: relative; z-index: 2;
       background: transparent; border-bottom: var(--ha-border-width-sm, 1px) solid var(--_hairline); }
-    .brand { display: flex; align-items: center; gap: var(--ha-space-2, 8px); font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-xl, 20px); }
+    .brand { display: flex; align-items: center; gap: var(--ha-space-2, 8px); flex: none; font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-l, 16px), 4cqi, var(--ha-font-size-xl, 20px)); }
     .brand-i { width: calc(var(--_icon) * 28 / 24); height: calc(var(--_icon) * 28 / 24); color: var(--_active); }
-    .pill { white-space: nowrap; display: flex; align-items: center; gap: var(--ha-space-2, 8px); padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
+    /* #117 fluid speaker pill: it shrinks with the header. The parts that no longer fit drop out whole, least important first
+       ("· 3 rooms synced", then "Playing on:"); they wrap onto a second line that the one-line box hides, so nothing is cut in half.
+       The speaker name always stays (a long one ends in "…", like every item name). No width breakpoints. */
+    .pill { white-space: nowrap; display: flex; align-items: center; gap: var(--ha-space-2, 8px); padding: var(--ha-space-1, 4px) clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px));
+      flex: 0 1 auto; min-width: var(--_touch-min); overflow: hidden; border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
+    .pill .pt, .pill .pnm { display: flex; flex-wrap: wrap; align-items: center; column-gap: .3em; min-width: 0; height: 1lh; overflow: hidden; }
+    .pill .pt { flex: 0 1 auto; }
+    .pill .pnm { flex-direction: row-reverse; justify-content: flex-end; flex: 0 1 auto; }
+    .pill .pn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .pill b { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
-    .pill .pl { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); margin-right: -2px; }
+    .pill .pl { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .pill .pc { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); opacity: .7; margin-left: -2px; }
     .lost { margin-left: var(--ha-space-2, 8px); font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: var(--_chip-sel); }
+    .pill { color: var(--_fg); min-height: var(--_touch-min); cursor: pointer; } .pill:active { background: var(--_chip-sel); }
     .spacer { flex: 1; }
-    .clock { white-space: nowrap; font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
+    .clock { white-space: nowrap; flex: none; font-size: clamp(var(--ha-font-size-l, 16px), 3.5cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
     .np { container: np / size; min-height: 0; position: relative; overflow: hidden; background: transparent; }
     /* Now Playing, Library, Search, Queue and the detail pages are plain HA card surfaces: ha-card paints the one surface (album art is a background on the screensaver only). */
     .view { position: absolute; inset: 0; z-index: 1; }
@@ -1778,8 +1786,10 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-xl, 16px); background: transparent; border: 0;
       color: var(--_muted); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: .01em; position: relative;
       transition: background-color var(--_t-fast) ease, color var(--_t-fast) ease, transform var(--_t-fast) ease; }
-    .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .tab .i { width: calc(var(--_icon) * 30 / 24); height: calc(var(--_icon) * 30 / 24); }
+    /* #117 fluid tab labels: the size follows the card's width and a long label wraps (centred) instead of being cut */
+    .tab { font-size: clamp(var(--ha-font-size-s, 12px), 2.6cqi, var(--ha-font-size-l, 16px)); letter-spacing: clamp(0px, .05cqi, .01em); }
+    .tab span { max-width: 100%; white-space: normal; text-align: center; overflow-wrap: break-word; }
+    .tab .i { width: clamp(calc(var(--_icon) * 26 / 24), 5cqi, calc(var(--_icon) * 30 / 24)); height: clamp(calc(var(--_icon) * 26 / 24), 5cqi, calc(var(--_icon) * 30 / 24)); }
     .tab + .tab::before { content: ""; position: absolute; left: -2.5px; top: 25%; bottom: 25%; width: 1px; background: var(--_hairline); transition: opacity var(--_t-fast) ease; }
     .tab.active::before, .tab.active + .tab::before, .tab:hover::before, .tab:hover + .tab::before { opacity: 0; }
     @media (hover: hover) { .tab:hover { background: var(--_chip-sel); color: var(--_fg); } }
@@ -1790,27 +1800,19 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .tab .badge { top: 4px; left: calc(50% + 6px); }
     /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole.
        0.7.12 fluid: gate and breakpoints follow the card's jbapp width, not the window. */
-    @container jbapp (max-width: 960px) { .pill b { display: none; } }
-    @container jbapp (max-width: 800px) { .pill .pl { display: none; } }
-    @container jbapp (max-width: 640px) {
-      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .clock { font-size: var(--ha-font-size-l, 16px); } .top { min-height: 52px; padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px); }
-      .tabs { gap: 2px; }
-      .tab { font-size: var(--ha-font-size-s, 12px); letter-spacing: 0; } .tab .i { width: calc(var(--_icon) * 26 / 24); height: calc(var(--_icon) * 26 / 24); }
-      .tab span { white-space: normal; text-align: center; line-height: var(--ha-line-height-condensed, 1.2); }
-    }
+    .tabs { gap: clamp(2px, .5cqi, var(--ha-space-1, 4px)); }
     /* short panels (fitted height < 700 / < 560 px): tighter header and tab bar so the middle keeps the room */
     :host([data-fit]) .top { min-height: 50px; padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px); }
     :host([data-fit]) .brand { font-size: var(--ha-font-size-xl, 20px); } :host([data-fit]) .brand-i { width: var(--_icon); height: var(--_icon); } :host([data-fit]) .clock { font-size: var(--ha-font-size-xl, 20px); }
-    :host([data-fit]) .pill { padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
+    :host([data-fit]) .pill { font-size: var(--ha-font-size-m, 14px); }
     :host([data-fit]) .tabs { gap: var(--ha-space-1, 4px); --_tabs-pt: var(--ha-space-2, 8px); --_tabs-pb: var(--ha-space-2, 8px); }
     :host([data-fit]) .tabs::before { border-radius: var(--ha-border-radius-xl, 16px); }
     :host([data-fit]) .tab { min-height: 50px; padding: var(--ha-space-1, 4px); gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-m, 14px); border-radius: var(--ha-border-radius-lg, 12px); } :host([data-fit]) .tab .i { width: var(--_icon); height: var(--_icon); }
     :host([data-fit]) .tab + .tab::before { left: -2px; }
     :host([data-fit=tiny]) .top { min-height: 44px; padding-top: var(--ha-space-1, 4px); padding-bottom: var(--ha-space-1, 4px); }
-    /* tiny (< 560 px): one row, icon + small label side by side (icons only on narrow screens) */
+    /* tiny (< 560 px tall): one row, icon + label side by side; the label wraps rather than going away on a narrow card */
         :host([data-fit=tiny]) .tabs::before { border-radius: var(--ha-border-radius-xl, 16px); }
-    :host([data-fit=tiny]) .tab { flex-direction: row; gap: var(--ha-space-2, 8px); min-height: 44px; font-size: var(--ha-font-size-m, 14px); border-radius: var(--ha-border-radius-lg, 12px); }
+    :host([data-fit=tiny]) .tab { flex-direction: row; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); font-size: var(--ha-font-size-m, 14px); border-radius: var(--ha-border-radius-lg, 12px); }
     :host([data-fit=tiny]) .tab .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 var(--ha-space-1, 4px); font-size: var(--ha-font-size-xs, 10px); flex: none; }
-    @container jbapp (max-width: 640px) { :host([data-fit=tiny]) .tab span { display: none; } }
   `],qt("jukebox-card",Lr),window.customCards=window.customCards||[],window.customCards.some(e=>"jukebox-card"===e.type)||window.customCards.push({type:"jukebox-card",name:"Jukebox Kiosk",description:"A touchscreen Jukebox music player for Home Assistant",preview:!1}),console.info(`%c JUKEBOX-CARD %c ${Sr} `,"font-weight:700","");export{Lr as JukeboxCard,Sr as VERSION};
