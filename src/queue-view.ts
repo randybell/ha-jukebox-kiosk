@@ -362,7 +362,7 @@ export class JbQueue extends LitElement {
     h2 { font-family: var(--_font-display); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); }
     .cnt { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); }
     .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
-      border: 1px solid var(--_surface-border); background: var(--_chip-bg); color: var(--_muted); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_muted); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
     .ap.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .ap:disabled { opacity: .45; cursor: default; }
     .apg { margin-left: auto; align-self: center; display: inline-flex; }
@@ -386,10 +386,10 @@ export class JbQueue extends LitElement {
     .apo small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .apo .go { width: 22px; height: 22px; color: var(--_inactive); }
     .apo .pi { width: 24px; height: 24px; color: var(--_muted); }
-    .rb { flex: none; width: 22px; height: 22px; border-radius: var(--ha-border-radius-circle, 50%); border: 2px solid var(--_inactive); display: grid; place-items: center; }
+    .rb { flex: none; width: 22px; height: 22px; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-md, 2px) solid var(--_inactive); display: grid; place-items: center; }
     .rb.sel { border-color: var(--_active); }
     .dot { width: 10px; height: 10px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); }
-    .spin { width: 14px; height: 14px; border-radius: var(--ha-border-radius-circle, 50%); border: 2px solid var(--_chip-sel); border-top-color: var(--_fg); animation: spin 700ms linear infinite; }
+    .spin { width: 14px; height: 14px; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-md, 2px) solid var(--_chip-sel); border-top-color: var(--_fg); animation: spin 700ms linear infinite; }
     @keyframes spin { to { transform: rotate(360deg) } }
     .aps-note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: 0 var(--ha-space-2, 8px); }
     .aps-msg { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); padding: var(--ha-space-4, 16px) var(--ha-space-2, 8px); text-align: center; }
@@ -404,7 +404,7 @@ export class JbQueue extends LitElement {
     h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); margin: var(--ha-space-3, 12px) var(--ha-space-2, 8px) var(--ha-space-2, 8px); }
     h3.eyebrow:first-child { margin-top: 2px; }
     .qr { display: grid; grid-template-columns: 28px 48px minmax(0, 1fr) auto; align-items: center; gap: var(--ha-space-3, 12px); min-height: 72px; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-lg, 12px); }
-    .qr + .qr { border-top: 1px solid var(--_divider); }
+    .qr + .qr { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .qr .th { width: 48px; height: 48px; }
     .n { font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; font-variant-numeric: tabular-nums; }
     .eqi { width: 20px; height: 20px; margin: auto; color: var(--_on-accent); }
@@ -416,14 +416,14 @@ export class JbQueue extends LitElement {
     .qr.now .rt small { color: color-mix(in srgb, var(--_on-accent) 70%, transparent); } /* a tint of the on-primary text colour */
     .qr.now .pv { color: var(--_on-accent); border-color: color-mix(in srgb, var(--_on-accent) 40%, transparent); background: color-mix(in srgb, var(--_on-accent) 12%, transparent); }
     .qr.past { opacity: .45; }
-    .qr.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 1.5px var(--_active); }
+    .qr.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .qsearch { align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
-      border: 1px solid var(--_surface-border); color: var(--_fg); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
     .qsearch.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .qsx { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(360px, 38%) minmax(0, 1fr); grid-template-rows: auto 1fr; gap: var(--ha-space-2, 8px) var(--ha-space-4, 16px);
       grid-template-areas: "q res" "kb res"; }
     .qsbar { grid-area: q; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
-    .qsq { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 48px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); background: var(--_input-bg); color: var(--_input-ink); border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); }
+    .qsq { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 48px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); background: var(--_input-bg); color: var(--_input-ink); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); }
     .qsq .ph { color: var(--_input-label); font-weight: var(--ha-font-weight-medium, 500); }
     .qsbar small { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); padding-left: var(--ha-space-1, 4px); }
     .qkbd { grid-area: kb; align-self: end; --kh: 42px; --kgap: 6px; --kfs: var(--ha-font-size-2xl, 24px); }

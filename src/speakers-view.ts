@@ -547,7 +547,7 @@ export class JbSpeakers extends LitElement {
     .sp-scrim { z-index: 1; background: var(--_scrim); -webkit-backdrop-filter: var(--_scrim-filter); backdrop-filter: var(--_scrim-filter); }
     .sheet { position: absolute; z-index: 2; display: flex; flex-direction: column; background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow);
       left: 0; right: 0; bottom: 0; max-height: min(100%, var(--_popup-max-h)); border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; padding-bottom: env(safe-area-inset-bottom); overflow: hidden; }
-    .sh { display: flex; align-items: center; gap: var(--ha-space-3, 12px); padding: var(--ha-space-4, 16px) var(--ha-space-4, 16px) var(--ha-space-3, 12px) var(--ha-space-5, 20px); border-bottom: 1px solid var(--_divider); }
+    .sh { display: flex; align-items: center; gap: var(--ha-space-3, 12px); padding: var(--ha-space-4, 16px) var(--ha-space-4, 16px) var(--ha-space-3, 12px) var(--ha-space-5, 20px); border-bottom: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .ht { display: flex; flex-direction: column; min-width: 0; flex: 1; }
     .ht .eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
     .tn { font-family: var(--_font-display); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -557,11 +557,11 @@ export class JbSpeakers extends LitElement {
       background: var(--_active); color: var(--_on-accent); font: inherit; font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; }
     .x:active { transform: scale(.96); background: var(--_chip-sel); }
     .body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--ha-space-3, 12px) var(--ha-space-5, 20px) var(--ha-space-5, 20px); display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); scrollbar-width: none; }
-    .banner { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-lg, 12px); border: 1px solid var(--_divider); background: var(--_chip-bg); }
+    .banner { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-lg, 12px); border: var(--ha-border-width-sm, 1px) solid var(--_divider); background: var(--_chip-bg); }
     .blk { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); }
     .eyebrow.sm { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
     .chips { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); }
-    .chip { position: relative; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: 1px solid var(--_surface-border);
+    .chip { position: relative; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); }
     .chip .i { width: 18px; height: 18px; }
     .chip.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
@@ -569,9 +569,9 @@ export class JbSpeakers extends LitElement {
     .chip:active { transform: scale(.97); }
     .chip .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
     .mix { display: flex; flex-direction: column; }
-    .rooms { display: flex; flex-direction: column; border-top: 1px solid var(--_divider); }
+    .rooms { display: flex; flex-direction: column; border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .vr { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "m n a" "s s v"; align-items: center; column-gap: var(--ha-space-2, 8px); padding: var(--ha-space-2, 8px) 0; }
-    .vr + .vr { border-top: 1px solid var(--_divider); }
+    .vr + .vr { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .vr.main { grid-template-areas: "m n n" "s s v"; }
     .vm { grid-area: m; width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_active); margin-left: calc(-1 * var(--ha-space-2, 8px)); }
     .vm .i { width: 22px; height: 22px; }
@@ -585,7 +585,7 @@ export class JbSpeakers extends LitElement {
     .vv { grid-area: v; width: 34px; text-align: right; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
     .vv::after { content: attr(data-v); }
     .vr.off { opacity: .5; }
-    .act { grid-area: a; height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); white-space: nowrap;
+    .act { grid-area: a; height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); white-space: nowrap;
       max-width: 52cqw; overflow: hidden; text-overflow: ellipsis; }
     .act.join { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
     .act.take { border-style: dashed; }
@@ -632,7 +632,7 @@ export class JbSpeakers extends LitElement {
     @container spk (min-width: 1200px) {
       .sheet { width: min(760px, 58cqw); }
       .rooms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--ha-space-6, 24px); }
-      .vr + .vr { border-top: 0; } .rooms .vr { border-bottom: 1px solid var(--_divider); }
+      .vr + .vr { border-top: 0; } .rooms .vr { border-bottom: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     }
     @media (prefers-reduced-motion: reduce) { .chip:active { transform: none; } .st, .st .dot { animation: none; } }
   `];
