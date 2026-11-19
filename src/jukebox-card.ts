@@ -898,9 +898,6 @@ export class JukeboxCard extends LitElement {
     .tab .badge { top: 4px; left: calc(50% + 6px); }
     /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole.
        0.7.12 fluid: gate and breakpoints follow the card's jbapp width, not the window. */
-    @container jbapp (min-width: 641px) {
-      @container jbapp (max-width: 600px) { .pill b, .brand span { display: none; } .top { gap: var(--ha-space-2, 8px); } }
-    }
     @container jbapp (max-width: 960px) { .pill b { display: none; } }
     @container jbapp (max-width: 800px) { .pill .pl { display: none; } }
     @container jbapp (max-width: 640px) {

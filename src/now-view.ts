@@ -275,10 +275,11 @@ export class JbNow extends LitElement {
     // MA route: the server already stopped the player. Card-side fallback pauses below via the timeout.
     this.requestUpdate();
   }
-  /** Top-right status for sleep set/cancel. Skipped on phone (np ≤ 520px): the Sleep M:SS chip already shows it,
-   *  and the brief chip covers the art fullscreen / lyrics buttons. */
+  /** Top-right status for sleep set/cancel. Skipped on a narrow card (the CSS narrow layout, which sets --_narrow): the Sleep M:SS
+   *  chip already shows it, and the brief chip covers the art fullscreen / lyrics buttons. #117: the width lives in the CSS only. */
   private sleepStatus(msg: string) {
-    if (this.clientWidth <= 520) return;
+    const nw = this.renderRoot.querySelector('.nw');
+    if (nw && getComputedStyle(nw).getPropertyValue('--_narrow').trim() === '1') return;
     status(this, msg);
   }
   /** minutes 0 = Off. Uses MA sleep_timer when available so it survives the screen sleeping. */
@@ -677,7 +678,7 @@ export class JbNow extends LitElement {
     }
     /* phone */
     @container np (max-width: 520px) {
-      .nw { gap: var(--ha-space-4, 16px); padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); }
+      .nw { --_narrow: 1; gap: var(--ha-space-4, 16px); padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); }
       .art { width: min(calc(100cqw - 140px), 30cqh); }
       .vs { --_slider-knob: 24px; }
       .info { gap: var(--ha-space-2, 8px); }

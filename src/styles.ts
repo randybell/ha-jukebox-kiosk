@@ -4,6 +4,17 @@ import { css } from 'lit';
  * Private `--_*` aliases point at Home Assistant theme variables (no public `--jb-*` color knobs).
  * Roles follow HA's built-in components (see the comments on each token). The only fixed look left is the screensaver.
  */
+/*
+ * #117 card widths. Every width rule is a container query on the card's own box (never the window), so a half-width card or the editor
+ * preview gets the layout for its own width. CSS cannot read a variable inside @container, so the widths are listed here once:
+ *   narrow   <= 520 px   the editor preview (~460 px) and half-width cards: one column, compact rows        (np, rows, jbapp)
+ *   medium   <= 720 px   portrait tablets and narrow panels: header pill shortens, row actions fold          (np, rows, jbapp 640-960)
+ *   wide     >= 700 px   landscape side by side: keyboard beside results, station sheet as a centred dialog (np, st)
+ *   Heights (landscape <= 400 / 520 / 560 px) only make room for the keyboard and Now Playing on short panels.
+ * JavaScript reads the CSS result (for example --_narrow on Now Playing) instead of repeating a width.
+ */
+/** the narrow card width from the table above, for the one JavaScript layout choice that has no element to read a CSS flag from (menuPos) */
+export const NARROW_W = 520;
 export const tokens = css`
   :host {
     /* selected / on: HA primary + label on primary (built-in media-control / sidebar pattern). */

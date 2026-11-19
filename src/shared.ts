@@ -2,6 +2,7 @@ import { html, css, nothing, type ReactiveController, type ReactiveControllerHos
 import { keyed } from 'lit/directives/keyed.js';
 import { icon } from './icons';
 import { providerLabel } from './providers';
+import { NARROW_W } from './styles';
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem, RoomConfig } from './types';
 
 /* ---------------- small helpers shared by every view ---------------- */
@@ -292,7 +293,7 @@ export function localRect(el: Element) {
 export function menuPos(root: HTMLElement, anchor: HTMLElement | null, rows: number): MenuPos {
   const rr = localRect(root);
   const ar = anchor ? localRect(anchor) : { top: rr.top + rr.height / 3, bottom: rr.top + rr.height / 3, right: rr.right - rr.width / 3 };
-  const sheet = rr.width <= 520 || !anchor;
+  const sheet = rr.width <= NARROW_W || !anchor;
   const menuH = (rows + 1) * 46 + 46;
   const below = ar.bottom - rr.top - 6;
   const up = below + menuH > rr.height - 8;
