@@ -1691,7 +1691,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
           <div class="brand">${de("disc","i brand-i")}<span>${h.title??"Jukebox"}</span></div>
           <button class="pill" title=${h.entity} tabindex="-1" aria-label="${o} ${i}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk?"true":"false"}
             @pointerdown=${e=>e.preventDefault()}
-            @click=${()=>{this.closeSheet(),this._spk=!this._spk}}>${de("group","i xs")}<span class="pt"><span class="pnm"><span class="pn">${i}</span><span class="pl">${o}</span></span>${a?I`<b>· ${!t&&this.hass?"not found":"buffering"===t?.state?"regrouping…":s?`${s} speaker${1===s?"":"s"}`:"idle"}</b>`:r?I`<b>· ${r} room${1===r?"":"s"} synced</b>`:B}</span>${de("chev","i xs pc")}</button>
+            @click=${()=>{this.closeSheet(),this._spk=!this._spk}}>${de("group","i xs")}<span class="pt"><span class="pnm"><span class="pl">${o}</span> <span class="pn">${i}</span></span> ${a?I`<b>· ${!t&&this.hass?"not found":"buffering"===t?.state?"regrouping…":s?`${s} speaker${1===s?"":"s"}`:"idle"}</b>`:r?I`<b>· ${r} room${1===r?"":"s"} synced</b>`:B}</span>${de("chev","i xs pc")}</button>
           ${za()?I`<span class="lost" role="status" data-status="reconnecting">Reconnecting to Home Assistant…</span>`:this._lost?I`<span class="lost" role="status">${this._lost}</span>`:B}
           <div class="spacer"></div>
           <div class="clock">${this.timeStr()}</div>
@@ -1741,7 +1741,10 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
     .pill .pt, .pill .pnm { display: flex; flex-wrap: wrap; align-items: center; column-gap: .3em; min-width: 0; height: 1lh; overflow: hidden; }
     .pill .pt { flex: 0 1 auto; }
+    /* the words keep their reading order ("Playing on: Everywhere"); the name is laid out first (order) and the row is reversed,
+       so "Playing on:" is the part that wraps away when there is no room, while it still reads before the name */
     .pill .pnm { flex-direction: row-reverse; justify-content: flex-end; flex: 0 1 auto; }
+    .pill .pn { order: -1; }
     .pill .pn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .pill b { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .pill .pl { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
