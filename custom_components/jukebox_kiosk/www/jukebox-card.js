@@ -748,7 +748,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     /* #117 fluid: the buttons share the row by width and never get narrower than their label or a touch target; when they no longer
        fit they wrap to a second row instead of cutting a label. Sentence case (HA's label style) keeps them one row down to ~460 px. */
     .lcats { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); }
-    .lcats .fc.lc { flex: 1 1 0; min-width: max(var(--_touch-min), min-content); height: auto; min-height: clamp(var(--_touch-min), 13cqi, 62px); padding: var(--ha-space-1, 4px) clamp(2px, 1cqi, var(--ha-space-2, 8px));
+    .lcats .fc.lc { flex: 1 0 var(--_touch-min); min-width: auto; height: auto; min-height: clamp(var(--_touch-min), 13cqi, 62px); padding: var(--ha-space-1, 4px) clamp(2px, 1cqi, var(--ha-space-2, 8px));
       border-radius: clamp(var(--ha-border-radius-lg, 12px), 3cqi, var(--ha-border-radius-xl, 16px)); display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: 0; text-transform: none;
       color: var(--_muted); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background var(--_t-fast), color var(--_t-fast); }
