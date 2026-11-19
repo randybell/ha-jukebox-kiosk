@@ -362,10 +362,10 @@ await clickEl(page, `${NP}.querySelector('.tb.pp')`);           // (optimistic p
 await clickEl(page, `${NP}.querySelector('.tb.pr')`);
 await clickEl(page, `${NP}.querySelector('.tb.nx')`);
 await clickEl(page, `${NP}.querySelector('.tb.sh')`);
-for (let i = 0; i < 3; i++) { await clickEl(page, `${NP}.querySelector('.tb.rp')`); await sleep(150); }
+for (let i = 0; i < 2; i++) { await clickEl(page, `${NP}.querySelector('.tb.rp')`); await sleep(150); }
 let cs = actions(await calls(page, n0));
 const tp = cs.map((c) => `${c.s}${c.data.shuffle !== undefined ? ':' + c.data.shuffle : ''}${c.data.repeat ? ':' + c.data.repeat : ''}`);
-check('9a transport: pause, play, prev, next, shuffle_set, repeat_set off→all→one→off (Music Assistant)', tp.join(',') === 'media_pause,media_play,media_previous_track,media_next_track,shuffle_set:true,repeat_set:all,repeat_set:one,repeat_set:off', tp.join(','));
+check('9a transport: pause, play, prev, next, shuffle_set, repeat_set off→all→off (no repeat-one step)', tp.join(',') === 'media_pause,media_play,media_previous_track,media_next_track,shuffle_set:true,repeat_set:all,repeat_set:off', tp.join(','));
 check('9b every transport call targets media_player.everywhere only', cs.every((c) => tgt(c) === EV), [...new Set(cs.map(tgt))].join(' | '));
 s = await page.evaluate((np) => { const r = eval(np); return { sh: r.querySelector('.tb.sh').classList.contains('on'), dot: !!r.querySelector('.tb.sh .dot'), rp: r.querySelector('.tb.rp').classList.contains('on') }; }, NP);
 check('9c shuffle on shows white + dot; repeat off is inactive', s.sh && s.dot && !s.rp, JSON.stringify(s));
