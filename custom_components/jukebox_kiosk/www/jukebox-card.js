@@ -191,8 +191,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
   .ra-b.fav.on { color: var(--_active); }
   .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto; }
   /* #117 kept as a container query on the card's own width (structural): a narrow row drops the duration column and shows the time in
-     the subtitle instead, with 40px art, so the title keeps its room. The row-button lines (.ra, .ra-b) are Kiosk Dev's #85 area; they only
-     get the 48px touch floor here. */
+     the subtitle instead, with 40px art, so the title keeps its room. The heart (.ra-b.fav) keeps the 48px touch floor. */
   @container np (max-width: 520px) {
     .row { grid-template-columns: 40px minmax(0, 1fr) auto; }
     .row .du { display: none; }
@@ -1357,9 +1356,9 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .apg.split .apc.on { box-shadow: inset 1px 0 0 var(--_hairline); }
     .aps { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100% - 24px)); max-height: min(100%, var(--_popup-max-h));
       padding: var(--ha-space-4, 16px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); overflow: auto; }
-    .aps-h { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 44px; }
+    .aps-h { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); }
     .aps-h b { flex: 1; font-family: var(--_font-display); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); padding-left: var(--ha-space-2, 8px); }
-    .aps-h .qa { width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_inactive); }
+    .aps-h .qa { width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_inactive); }
     .aps-h .qa:active { background: var(--_chip-sel); color: var(--_fg); }
     .aps-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; scrollbar-width: none; }
     .apo { display: flex; align-items: center; gap: var(--ha-space-4, 16px); min-height: 64px; padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-lg, 12px); text-align: left; color: var(--_fg); font: inherit; }
@@ -1422,8 +1421,9 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     :host { --_undo-pad: var(--ha-space-2, 8px); --_undo-btn: var(--_touch-min); }
     .undo ~ .toast { --_toast-bottom: calc(var(--ha-space-4, 16px) + 2 * var(--_undo-pad) + var(--_undo-btn)); }
     .end { text-align: center; color: var(--_inactive); font-size: var(--ha-font-size-m, 14px); padding: var(--ha-space-4, 16px); }
-    /* #117: the paddings and title above are fluid now; what is left here is the narrow queue row layout, which is Kiosk Dev's
-       queue row-button rework (kept as a container query on the card's own width until that lands) */
+    /* #117: the paddings and title above are fluid now; kept as a container query on the card's own width (structural): a narrow queue
+       row uses smaller number and art columns and drops the preview, Search queue stacks its keyboard under the results, and the
+       Autoplay style sheet becomes a bottom sheet. Queue rows have no buttons (#85); every action is in the hold pop-up. */
     @container np (max-width: 520px) {
       .qr { grid-template-columns: 20px 42px minmax(0, 1fr) auto; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-1, 4px); }
       .qr .pv { display: none; } .qr .th { width: 42px; height: 42px; }

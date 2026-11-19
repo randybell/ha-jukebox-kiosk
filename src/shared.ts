@@ -446,8 +446,7 @@ export const mediaStyles = css`
   .ra-b.fav.on { color: var(--_active); }
   .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto; }
   /* #117 kept as a container query on the card's own width (structural): a narrow row drops the duration column and shows the time in
-     the subtitle instead, with 40px art, so the title keeps its room. The row-button lines (.ra, .ra-b) are Kiosk Dev's #85 area; they only
-     get the 48px touch floor here. */
+     the subtitle instead, with 40px art, so the title keeps its room. The heart (.ra-b.fav) keeps the 48px touch floor. */
   @container np (max-width: 520px) {
     .row { grid-template-columns: 40px minmax(0, 1fr) auto; }
     .row .du { display: none; }
