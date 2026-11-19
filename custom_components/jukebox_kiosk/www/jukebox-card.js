@@ -1729,7 +1729,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       color: var(--_fg);
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
-    .top { display: flex; align-items: center; gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); padding: clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-3, 12px)) var(--_pad); min-height: clamp(52px, 8cqi, 60px); position: relative; z-index: 2;
+    .top { display: flex; align-items: center; gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); padding: var(--ha-space-2, 8px) var(--_pad); min-height: clamp(52px, 8cqi, 60px); /* the 48px pill + 8px above and below: the header keeps its pre-#117 height */ position: relative; z-index: 2;
       background: transparent; border-bottom: var(--ha-border-width-sm, 1px) solid var(--_hairline); }
     .brand { display: flex; align-items: center; gap: var(--ha-space-2, 8px); flex: none; font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-l, 16px), 4cqi, var(--ha-font-size-xl, 20px)); }
     .brand-i { width: calc(var(--_icon) * 28 / 24); height: calc(var(--_icon) * 28 / 24); color: var(--_active); }
