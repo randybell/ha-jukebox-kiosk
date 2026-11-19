@@ -41,10 +41,10 @@ check('C2 defaults: the five music categories, podcasts / audiobooks opt-in',
   J(C.resolveCategories({})) === J(['tracks', 'artists', 'albums', 'playlists', 'radio']));
 check('C3 configured order kept; unknown + duplicate keys dropped',
   J(C.resolveCategories({ search_categories: ['radio', 'podcasts', 'bogus', 'radio', 'tracks'] })) === J(['radio', 'podcasts', 'tracks']));
-check('C4 0.7.11: an old config listing genres is ignored safely (the genre page is gone), even when the backend has genres',
+check('C4 0.9.0: a configured genres is kept only when the backend can search genres (Genres is a filter again, like MA)',
   J(C.resolveCategories({ search_categories: ['genres', 'tracks'] }, { genres: false })) === J(['tracks'])
-  && J(C.resolveCategories({ search_categories: ['genres', 'tracks'] }, { genres: true })) === J(['tracks'])
-  && !C.CATEGORIES.some((c) => c.key === 'genres'));
+  && J(C.resolveCategories({ search_categories: ['genres', 'tracks'] }, { genres: true })) === J(['genres', 'tracks'])
+  && C.CATEGORIES.some((c) => c.key === 'genres' && c.optIn));
 check('C5 empty / all-invalid list falls back to the defaults',
   J(C.resolveCategories({ search_categories: [] })) === J(C.DEFAULT_CATEGORIES) && J(C.resolveCategories({ search_categories: ['genres'] })) === J(C.DEFAULT_CATEGORIES));
 check('C6 service media types exclude genres', J(C.serviceTypes(['tracks', 'genres', 'podcasts', 'audiobooks'])) === J(['track', 'podcast', 'audiobook']));

@@ -59,10 +59,10 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   await typeQ(p, 'r');
   await wait(p, `${SV}.querySelectorAll('.cats .fc').length > 0`);
   const chips = await ev(p, `[...${SV}.querySelectorAll('.cats .fc')].map((b) => b.dataset.cat)`);
-  check('S1 chips: All + the configured categories in order (0.7.11: a configured genres is ignored, no Genres chip)', J(chips) === J(['all', ...ALL.search_categories.filter((k) => k !== 'genres')]), J(chips));
+  check('S1 chips: All + the configured categories in order (0.9.0: Genres is a filter again, like MA)', J(chips) === J(['all', ...ALL.search_categories]), J(chips));
   await typeQ(p, 'ock'); await sleep(600);
-  check('S2 0.7.11: no genre search and no genre rows even with genres configured and a backend that has them (the genre page is gone)',
-    (await maOf(p, 'music/search')).every((a) => J(a.media_types) !== J(['genre'])) && !(await ev(p, `!!${SV}.querySelector('.row[data-group="genres"]')`)));
+  check('S2 0.9.0: genres configured + a backend that has them: MA music/search media_types [genre] (library only), genre rows shown',
+    (await maOf(p, 'music/search')).some((a) => J(a.media_types) === J(['genre'])) && (await wait(p, `!!${SV}.querySelector('.row[data-group="genres"]')`)));
   await p.close();
 }
 // ---------------- 3. podcasts & audiobooks categories; genres need the flag + backend ----------------

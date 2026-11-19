@@ -42,6 +42,7 @@ const GROUPS: Array<{ key: GroupKey; label: string; type: string }> = [
   { key: 'radio', label: 'Radio', type: 'radio' },
   { key: 'podcasts', label: 'Podcasts', type: 'podcast' },
   { key: 'audiobooks', label: 'Audiobooks', type: 'audiobook' },
+  { key: 'genres', label: 'Genres', type: 'genre' },
 ];
 const SEARCH_TYPES = ['artist', 'album', 'track', 'playlist', 'radio', 'audiobook', 'podcast'];
 /** 0.7.9 #57: Recent searches were removed; this old key is cleared once so no history stays on the device. */
@@ -333,12 +334,14 @@ export class JbSearch extends LitElement {
 
   // ---------- 0.7.2 combined tab: category buttons + the embedded library list ----------
   get browse(): JbBrowse | null { return this.renderRoot?.querySelector('jb-browse') as JbBrowse | null; }
-  /** 0.7.9 #34: no Genres button at the top of the combined Library (it took room above the results) */
+  /** 0.9.0: Genres is a filter again, like MA's Command Center (replaces 0.7.9 #34); only with a genre-capable backend */
   private lcats(): Array<{ type: string; label: string }> {
     const b = this.browse;
-    if (b) return b.visibleCats().filter((c) => c.type !== 'genre').map((c) => ({ type: c.type, label: c.label }));
-    return libraryCategories(this.config).filter((t) => t !== 'genre').map((t) => ({ type: t, label: libraryCatLabel(t) }));
+    if (b) return b.visibleCats().map((c) => ({ type: c.type, label: c.label }));
+    return libraryCategories(this.config).filter((t) => t !== 'genre' || this.genreOk()).map((t) => ({ type: t, label: libraryCatLabel(t) }));
   }
+  /** the backend can search genres (MA music/search media_types ['genre'], library only) */
+  private genreOk() { return !!this.config?._backend?.ext?.genres; }
   /** a category button: the library list (box empty) or the search results (typed) switch to it */
   selectCat(t: string) {
     this._menu = null; this._sel = '';
@@ -373,12 +376,13 @@ export class JbSearch extends LitElement {
   private searchTypes(): { types: string[]; genres: boolean } {
     if (this.combined) {
       const g = CAT_GROUP[this._lcat];
-      if (g === 'genres') return { types: [], genres: false }; // 0.7.11: genres are not searched (the genre page is gone)
+      if (g === 'genres') return { types: [], genres: this.genreOk() };
       if (g) return { types: [GROUPS.find((x) => x.key === g)!.type], genres: false };
-      return { types: SEARCH_TYPES, genres: false };
+      // All: every type, genres too when there is a Genres button (MA's All searches all eight types)
+      return { types: SEARCH_TYPES, genres: this.genreOk() && this.lcats().some((c) => c.type === 'genre') };
     }
     const cats = this._cats;
-    return { types: cats ? serviceTypes(cats) : SEARCH_TYPES, genres: false };
+    return { types: cats ? serviceTypes(cats) : SEARCH_TYPES, genres: this.genreOk() && (cats ? cats.includes('genres') : true) };
   }
   /** The selected sources: MA's music/search with `providers` (the HA service can't limit providers). Library alone =
    *  providers ['library']; providers = all of them in one call; Library + providers = both, library first. */
