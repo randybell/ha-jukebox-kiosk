@@ -340,13 +340,12 @@ export function tapActions(play: (enq: Enqueue | 'remove') => void, radioStation
   ];
 }
 /* ---------------- row actions: Play Next / Play Now / Remove / Start radio ---------------- */
-export type RowAct = 'add' | 'remove' | 'next' | 'replace' | 'radio';
+export type RowAct = 'add' | 'next' | 'replace' | 'radio';
 /** Can MA radio mode be seeded from this item? */
 export const canRadio = (type: string, it: Partial<MaItem>) =>
   ['track', 'artist', 'album'].includes(type) && !isRadio(it) && !/^(podcast|audiobook)/.test(String(it.media_type ?? ''));
 const RA: Record<RowAct, { icon: string }> = {
   add: { icon: 'qadd' },
-  remove: { icon: 'trash' },
   next: { icon: 'qnext' },
   replace: { icon: 'play' },
   radio: { icon: 'tower' },
@@ -452,12 +451,11 @@ export const mediaStyles = css`
     .rt small .du2 { display: inline; }
     .ar.th { width: 40px; height: 40px; }
     .ra { gap: 3px; }
-    .ra-b { min-width: 44px; min-height: 44px; padding: 5px 4px; font-size: var(--ha-font-size-xs, 10px); }
+    .ra-b { min-width: 44px; min-height: 44px; }
     .ra-b .i { width: 18px; height: 18px; }
     .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: 6px; }
     .row.hasfav .ra-b { width: 40px; }
   }
-
   .confirm { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 24px)); padding: 18px;
     border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); max-height: min(100%, var(--_popup-max-h)); display: flex; flex-direction: column; gap: 12px; overflow: auto; }
   .cf-h { display: flex; align-items: center; gap: 12px; min-width: 0; }

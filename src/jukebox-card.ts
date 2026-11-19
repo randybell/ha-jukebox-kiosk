@@ -494,6 +494,8 @@ export class JukeboxCard extends LitElement {
 
   // ---------- child events ----------
   private onPlayed = () => this.queue.refreshSoon(800);
+  /** The hold pop-up's Cancel path (same as Cancel or Esc): no action is sent. */
+  private closeSheet() { ((this.renderRoot as ShadowRoot).querySelector('jb-hold-sheet') as JbHoldSheet | null)?.close(); }
   /** tablist keyboard support (roving tabindex): ←/→/Home/End select a tab and move the focus ring with it */
   private onTabKey = (e: KeyboardEvent) => {
     const ids = this.tabs().map((t) => t.id), n = ids.length;
@@ -501,6 +503,7 @@ export class JukeboxCard extends LitElement {
     if (e.key === 'ArrowRight') i = (i + 1) % n; else if (e.key === 'ArrowLeft') i = (i - 1 + n) % n;
     else if (e.key === 'Home') i = 0; else if (e.key === 'End') i = n - 1; else return;
     e.preventDefault();
+    this.closeSheet();
     this._tab = ids[i]; this._spk = false;
     this.updateComplete.then(() => (this.renderRoot.querySelector(`.tab[data-tab="${ids[i]}"]`) as HTMLElement | null)?.focus());
   };
@@ -568,7 +571,7 @@ export class JukeboxCard extends LitElement {
   /** #37: Esc on the station confirm wins over everything (capture, registered before the tabs' own key handlers) */
   private onKeyCap = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && this._stAsk) { e.preventDefault(); e.stopImmediatePropagation(); this.stAnswer(false); }
-    else if (e.key === 'Escape' && this._sheet) { e.preventDefault(); e.stopImmediatePropagation(); ((this.renderRoot as ShadowRoot).querySelector('jb-hold-sheet') as JbHoldSheet | null)?.close(); }
+    else if (e.key === 'Escape' && this._sheet) { e.preventDefault(); e.stopImmediatePropagation(); this.closeSheet(); }
   };
   private onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && this._saver === 'on') this.ambClose(e, 'saver');
@@ -749,7 +752,7 @@ export class JukeboxCard extends LitElement {
           <div class="brand">${icon('disc', 'i brand-i')}<span>${c.title ?? 'Jukebox'}</span></div>
           <button class="pill" title=${c.entity!} tabindex="-1" aria-label="${pre} ${name}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk ? 'true' : 'false'}
             @pointerdown=${(e: PointerEvent) => e.preventDefault()}
-            @click=${() => (this._spk = !this._spk)}>${icon('group', 'i xs')}<span class="pl">${pre}</span><span class="pn">${name}</span>${dyn
+            @click=${() => { this.closeSheet(); this._spk = !this._spk; }}>${icon('group', 'i xs')}<span class="pl">${pre}</span><span class="pn">${name}</span>${dyn
               ? html`<b>· ${!ent && this.hass ? 'not found' : ent?.state === 'buffering' ? 'regrouping…' : live ? `${live} speaker${live === 1 ? '' : 's'}` : 'idle'}</b>`
               : rooms ? html`<b>· ${rooms} room${rooms === 1 ? '' : 's'} synced</b>` : nothing}${icon('chev', 'i xs pc')}</button>
           ${volDown() ? html`<span class="lost" role="status" data-status="reconnecting">Reconnecting to Home Assistant…</span>`
@@ -774,7 +777,7 @@ export class JukeboxCard extends LitElement {
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
           ${tabs.map((t) => html`<button class="tab ${this._tab === t.id ? 'active' : ''}" role="tab" tabindex=${this._tab === t.id ? '0' : '-1'} data-tab=${t.id}
               aria-selected=${this._tab === t.id ? 'true' : 'false'}
-              @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { if (t.id === 'browse' && this._tab === 'browse') { const lh = this.libHost(); if (lh) lh.home(); else (this.renderRoot.querySelector('jb-browse') as any)?.goHome?.(); } this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
+              @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { this.closeSheet(); if (t.id === 'browse' && this._tab === 'browse') { const lh = this.libHost(); if (lh) lh.home(); else (this.renderRoot.querySelector('jb-browse') as any)?.goHome?.(); } this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
                 ? html`<em class="badge">${this._qcount > 99 ? '99+' : this._qcount}</em>` : nothing}</button>`)}
         </nav>
         ${this._stage ? this.renderAmbient('stage') : nothing}
