@@ -132,10 +132,13 @@ export class JbStation extends LitElement {
     .scrim { position: absolute; inset: 0; }
     .st-scrim { z-index: 1; background: var(--_scrim); -webkit-backdrop-filter: var(--_scrim-filter); backdrop-filter: var(--_scrim-filter); }
     .sheet { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; max-height: min(100%, var(--_popup-max-h)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
-      display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); padding: var(--ha-space-6, 24px) var(--ha-space-5, 20px) calc(var(--ha-space-4, 16px) + env(safe-area-inset-bottom));
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: start; gap: var(--ha-space-4, 16px) var(--ha-space-3, 12px); padding: var(--ha-space-6, 24px) var(--ha-space-5, 20px) calc(var(--ha-space-4, 16px) + env(safe-area-inset-bottom));
       background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; box-shadow: var(--_dialog-shadow); }
-    .x { position: absolute; top: 12px; right: 12px; z-index: 1; } /* #51: the labeled Close pill (was an X) */
-    .top { display: flex; gap: var(--ha-space-4, 16px); align-items: flex-start; padding-right: 104px; }
+    .sheet > * { grid-column: 1 / -1; }
+    /* #51: the labeled Close pill (was an X). #109: it sits in its own grid column beside the station header, so the header
+       no longer reserves a guessed 104 px for it */
+    .sheet > .x { grid-column: 2; grid-row: 1; align-self: start; z-index: 1; }
+    .sheet > .top { grid-column: 1; grid-row: 1; display: flex; gap: var(--ha-space-4, 16px); align-items: flex-start; }
     .ar.logo { width: 96px; height: 96px; flex: none; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; display: block; }
     .ar.logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .tt { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; }

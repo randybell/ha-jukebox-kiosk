@@ -423,7 +423,7 @@ export class JbDetail extends LitElement {
     .more-t { align-self: center; min-width: 220px; justify-content: center; }
     .empty { padding: var(--ha-space-4, 16px); }
     @container np (max-width: 520px) {
-      .scroll { padding: 10px; }
+      .scroll { padding: var(--ha-space-2, 8px); }
       .dh { grid-template-columns: 96px minmax(0, 1fr); gap: var(--ha-space-3, 12px); } .dart { width: 96px; height: 96px; }
       .dt h2 { font-size: var(--ha-font-size-xl, 20px); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       .da { grid-column: 1 / -1; }

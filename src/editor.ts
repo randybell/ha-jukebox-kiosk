@@ -270,6 +270,6 @@ export class JukeboxCardEditor extends LitElement {
     return html`<ha-form .hass=${this.hass} .data=${this.formData()} .schema=${editorSchema(this._config)}
       .computeLabel=${(s: any) => LABELS[s.name] ?? s.title ?? s.name} @value-changed=${this.changed}></ha-form>`;
   }
-  static styles = css`p { padding: 8px 0; }`;
+  static styles = css`p { padding: var(--ha-space-2, 8px) 0; }`;
 }
 defineElement('jukebox-card-editor', JukeboxCardEditor);
