@@ -363,14 +363,20 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
          The digits get their own row, and the wide keys (123, Space, backspace, Clear) their own row, sharing it by weight. */
       .kb { --_kcg: clamp(var(--ha-space-1, 4px), 1.5cqi, var(--kgap, var(--ha-space-2, 8px))); }
       .keys, .nums { display: grid; column-gap: var(--_kcg); row-gap: var(--kgap, var(--ha-space-2, 8px)); }
-      .keys { grid-template-columns: repeat(auto-fill, minmax(max(var(--_touch-min), calc((100% - 9 * var(--_kcg)) / 10)), 1fr)); }
+      .keys { grid-template-columns: repeat(auto-fill, minmax(max(min(var(--_touch-min), calc((100% - 6 * 2px) / 7 - 0.5px)), calc((100% - 9 * var(--_kcg)) / 10)), 1fr));
+        /* on a narrow keyboard the gap gives way first so a phone keeps seven letter columns (four letter rows) at 48 px; only a keyboard
+           narrower than seven 48 px keys (a card under about 370 px) lets the letter keys go narrower than 48 px, because five columns
+           would need seven rows and leave no room for the results (the one exception to the 48 px rule, reported in #117) */
+        column-gap: clamp(2px, (100% - 7 * var(--_touch-min) - 1px) / 6, var(--_kcg)); }
       .nums { display: none; grid-template-columns: repeat(10, minmax(0, 1fr)); margin-bottom: var(--kgap, var(--ha-space-2, 8px)); }
       .ksp { display: flex; gap: var(--_kcg); margin-top: var(--kgap, var(--ha-space-2, 8px)); }
       .ksp .k { min-width: var(--_touch-min); flex: 5 1 0; }
       .ksp .k.space { flex-grow: 11; }
       .ksp .k.clr { flex-grow: 7; }
+      /* keys are 48 px wide at least; their height is also capped by --_kh-room, the room the host leaves for each key row on a
+         short card (see jb-search), so on a short screen the keyboard ends above the tab bar instead of being cut off */
       .k {
-        height: max(var(--_touch-min), var(--kh, 60px)); display: grid; place-items: center; border-radius: var(--ha-border-radius-lg, 12px);
+        height: min(var(--_kh-room, 100vh), max(var(--_touch-min), var(--kh, 60px))); display: grid; place-items: center; border-radius: var(--ha-border-radius-lg, 12px);
         font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
         user-select: none; -webkit-user-select: none; transition: transform var(--_t-instant), background var(--_t-instant);
       }
@@ -384,7 +390,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
          of 123) appears once ten keys of the 48 px touch size fit side by side: 10 x 48 px + 9 gaps of at most 10 px. */
       @container kb (min-width: calc(10 * 48px + 9 * 10px)) {
         .nums { display: grid; }
-        .k { height: max(var(--_touch-min), var(--kh-wide, 56px)); }
+        .k { height: min(var(--_kh-room, 100vh), max(var(--_touch-min), var(--kh-wide, 56px))); }
         .wide-only { display: grid; }
         .narrow-only { display: none !important; }
         .ksp .k.tg, .ksp .k.bk { flex-grow: 10; }
@@ -520,7 +526,10 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .lfq .lfv.ph { color: var(--_input-label); font-weight: var(--ha-font-weight-medium, 500); }
     .lfq .caret { width: 2px; height: 26px; background: var(--_active); flex: none; margin-left: calc(-1 * var(--ha-space-2, 8px)); }
     .lfq .lfx { margin-left: auto; width: var(--_touch-min); height: var(--_touch-min); margin-right: calc(-1 * var(--ha-space-1, 4px)); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_inactive); flex: none; }
-    .kbd { flex: none; width: 100%; max-width: 1100px; align-self: center; }
+    /* #117: the filter keyboard uses the same fluid key size as the search keyboard (48 px touch size up to 60 px on a wide card), with
+       the same height cap so a short card keeps room for the list */
+    .kbd { flex: none; width: 100%; max-width: 1100px; align-self: center;
+      --kh: clamp(var(--_touch-min), 12cqi, 60px); --kgap: clamp(var(--ha-space-1, 4px), 1.6cqi, var(--ha-space-2, 8px)); --_kh-room: max(28px, 15cqh - 42px); }
     .lsplit { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--ha-space-4, 16px); }
     .lkcol { display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); min-height: 0; }
     .lkcol .kbd { margin-top: auto; }
@@ -718,6 +727,9 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
       grid-template-areas: "q" "rec" "res" "kb";
       --kh: clamp(var(--_touch-min), 12cqi, 60px); --kgap: clamp(var(--ha-space-1, 4px), 1.6cqi, var(--ha-space-2, 8px)); --kfs: var(--ha-font-size-2xl, 24px);
+      /* #117 height cap for a key row (keys stay 48 px wide): it is 48 px once the card's middle is 600 px tall and shrinks faster
+         below that, so a short card (320x640) still keeps a results area above the keyboard; on any taller card it changes nothing */
+      --_kh-room: max(28px, 15cqh - 42px);
     }
     .qwrap { grid-area: q; min-width: 0; }
     .qrow { display: flex; gap: var(--ha-space-2, 8px); align-items: stretch; min-width: 0; } .qrow .qbar { flex: 1; min-width: 0; }
@@ -828,7 +840,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .row { min-height: 68px; }
 
     .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px));
-      padding: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-3, 12px)) clamp(var(--ha-space-2, 8px), 3cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 4cqi, var(--ha-space-6, 24px)); border-radius: var(--_radius); background: transparent; border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+      padding: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-3, 12px)) clamp(var(--ha-space-2, 8px), 3cqi - var(--ha-space-2, 8px), var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 4cqi, var(--ha-space-6, 24px)); border-radius: var(--_radius); background: transparent; border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     .dv { flex: 1; min-height: 0; }
@@ -844,7 +856,10 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     @container np (orientation: landscape) and (min-width: 700px) {
       .sx { grid-template-columns: minmax(400px, 40%) minmax(0, 1fr); grid-template-rows: auto auto 1fr; column-gap: clamp(var(--ha-space-4, 16px), 2.5cqw, var(--ha-space-8, 32px));
         grid-template-areas: "q res" "rec res" "kb res";
-        --kh: clamp(56px, var(--_kb-row, 88px), 88px); --kgap: 10px; --kfs: clamp(var(--ha-font-size-2xl, 24px), 2.4cqw, var(--ha-font-size-3xl, 28px)); }
+        --kh: clamp(56px, var(--_kb-row, 88px), 88px); --kgap: 10px; --kfs: clamp(var(--ha-font-size-2xl, 24px), 2.4cqw, var(--ha-font-size-3xl, 28px));
+        /* #117: beside the results the keyboard has the whole left column; a key row is never taller than the room measured for it
+           (--_kb-row), so on a short landscape card (1024x600 under the HA toolbar, a phone on its side) no key row is cut off */
+        --_kh-room: max(28px, var(--_kb-row, 100vh)); }
       /* the source buttons (two rows here) take room from the keys */
       .sx.srcs-on { --kh: clamp(var(--_touch-min), var(--_kb-row, 88px), 88px); }
       /* Keep the unchanged keyboard at the top of its available area, directly below the query/hint. */
@@ -885,6 +900,11 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     /* keyboard pinned open (combined tab default): the list area never spills under the keyboard or the tab bar, whatever the size
        (on the smallest screens it gets less room rather than overlapping) */
     .sx.kb-always .res { overflow: hidden; }
+    /* #117 structural, on the card's own height: on a portrait card up to 720 px tall the source buttons stay on one row that scrolls
+       sideways (as before 0.9.0), so two or three wrapped rows of sources do not take the room the results need above the keyboard */
+    @container np (orientation: portrait) and (max-height: 720px) {
+      .srcs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .srcs::-webkit-scrollbar { display: none; } .srcs .fc.src { flex: none; }
+    }
     /* #117 structural, on the card's own height: a short portrait card drops the status line so the list keeps a row above the keyboard */
     @container np (orientation: portrait) and (max-height: 600px) {
       .sx.kb-always, .sx.kb-always.srcs-on { --kgap: 4px; gap: var(--ha-space-2, 8px); }
@@ -896,6 +916,8 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     }
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
       .lcats .fc.lc { flex-direction: row; min-height: var(--_touch-min); gap: var(--ha-space-2, 8px); } .lc .lci { width: 18px; height: 18px; }
+      /* #117: a phone on its side has no room for a second row of category buttons: they stay on one row that scrolls sideways */
+      .lcats { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .lcats::-webkit-scrollbar { display: none; } .lcats .fc.lc { flex: none; }
     }
     .sx.kb-hidden .res .scroll { padding-bottom: calc(var(--ha-space-2, 8px) + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
 

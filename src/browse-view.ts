@@ -956,7 +956,10 @@ export class JbBrowse extends LitElement {
     .lfq .lfv.ph { color: var(--_input-label); font-weight: var(--ha-font-weight-medium, 500); }
     .lfq .caret { width: 2px; height: 26px; background: var(--_active); flex: none; margin-left: calc(-1 * var(--ha-space-2, 8px)); }
     .lfq .lfx { margin-left: auto; width: var(--_touch-min); height: var(--_touch-min); margin-right: calc(-1 * var(--ha-space-1, 4px)); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_inactive); flex: none; }
-    .kbd { flex: none; width: 100%; max-width: 1100px; align-self: center; }
+    /* #117: the filter keyboard uses the same fluid key size as the search keyboard (48 px touch size up to 60 px on a wide card), with
+       the same height cap so a short card keeps room for the list */
+    .kbd { flex: none; width: 100%; max-width: 1100px; align-self: center;
+      --kh: clamp(var(--_touch-min), 12cqi, 60px); --kgap: clamp(var(--ha-space-1, 4px), 1.6cqi, var(--ha-space-2, 8px)); --_kh-room: max(28px, 15cqh - 42px); }
     .lsplit { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--ha-space-4, 16px); }
     .lkcol { display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); min-height: 0; }
     .lkcol .kbd { margin-top: auto; }

@@ -163,14 +163,20 @@ export class JbKeyboard extends LitElement {
          The digits get their own row, and the wide keys (123, Space, backspace, Clear) their own row, sharing it by weight. */
       .kb { --_kcg: clamp(var(--ha-space-1, 4px), 1.5cqi, var(--kgap, var(--ha-space-2, 8px))); }
       .keys, .nums { display: grid; column-gap: var(--_kcg); row-gap: var(--kgap, var(--ha-space-2, 8px)); }
-      .keys { grid-template-columns: repeat(auto-fill, minmax(max(var(--_touch-min), calc((100% - 9 * var(--_kcg)) / 10)), 1fr)); }
+      .keys { grid-template-columns: repeat(auto-fill, minmax(max(min(var(--_touch-min), calc((100% - 6 * 2px) / 7 - 0.5px)), calc((100% - 9 * var(--_kcg)) / 10)), 1fr));
+        /* on a narrow keyboard the gap gives way first so a phone keeps seven letter columns (four letter rows) at 48 px; only a keyboard
+           narrower than seven 48 px keys (a card under about 370 px) lets the letter keys go narrower than 48 px, because five columns
+           would need seven rows and leave no room for the results (the one exception to the 48 px rule, reported in #117) */
+        column-gap: clamp(2px, (100% - 7 * var(--_touch-min) - 1px) / 6, var(--_kcg)); }
       .nums { display: none; grid-template-columns: repeat(10, minmax(0, 1fr)); margin-bottom: var(--kgap, var(--ha-space-2, 8px)); }
       .ksp { display: flex; gap: var(--_kcg); margin-top: var(--kgap, var(--ha-space-2, 8px)); }
       .ksp .k { min-width: var(--_touch-min); flex: 5 1 0; }
       .ksp .k.space { flex-grow: 11; }
       .ksp .k.clr { flex-grow: 7; }
+      /* keys are 48 px wide at least; their height is also capped by --_kh-room, the room the host leaves for each key row on a
+         short card (see jb-search), so on a short screen the keyboard ends above the tab bar instead of being cut off */
       .k {
-        height: max(var(--_touch-min), var(--kh, 60px)); display: grid; place-items: center; border-radius: var(--ha-border-radius-lg, 12px);
+        height: min(var(--_kh-room, 100vh), max(var(--_touch-min), var(--kh, 60px))); display: grid; place-items: center; border-radius: var(--ha-border-radius-lg, 12px);
         font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
         user-select: none; -webkit-user-select: none; transition: transform var(--_t-instant), background var(--_t-instant);
       }
@@ -184,7 +190,7 @@ export class JbKeyboard extends LitElement {
          of 123) appears once ten keys of the 48 px touch size fit side by side: 10 x 48 px + 9 gaps of at most 10 px. */
       @container kb (min-width: calc(10 * 48px + 9 * 10px)) {
         .nums { display: grid; }
-        .k { height: max(var(--_touch-min), var(--kh-wide, 56px)); }
+        .k { height: min(var(--_kh-room, 100vh), max(var(--_touch-min), var(--kh-wide, 56px))); }
         .wide-only { display: grid; }
         .narrow-only { display: none !important; }
         .ksp .k.tg, .ksp .k.bk { flex-grow: 10; }

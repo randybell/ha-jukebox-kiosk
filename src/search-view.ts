@@ -905,6 +905,9 @@ export class JbSearch extends LitElement {
       grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
       grid-template-areas: "q" "rec" "res" "kb";
       --kh: clamp(var(--_touch-min), 12cqi, 60px); --kgap: clamp(var(--ha-space-1, 4px), 1.6cqi, var(--ha-space-2, 8px)); --kfs: var(--ha-font-size-2xl, 24px);
+      /* #117 height cap for a key row (keys stay 48 px wide): it is 48 px once the card's middle is 600 px tall and shrinks faster
+         below that, so a short card (320x640) still keeps a results area above the keyboard; on any taller card it changes nothing */
+      --_kh-room: max(28px, 15cqh - 42px);
     }
     .qwrap { grid-area: q; min-width: 0; }
     .qrow { display: flex; gap: var(--ha-space-2, 8px); align-items: stretch; min-width: 0; } .qrow .qbar { flex: 1; min-width: 0; }
@@ -1015,7 +1018,7 @@ export class JbSearch extends LitElement {
     .row { min-height: 68px; }
 
     .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px));
-      padding: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-3, 12px)) clamp(var(--ha-space-2, 8px), 3cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 4cqi, var(--ha-space-6, 24px)); border-radius: var(--_radius); background: transparent; border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+      padding: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-3, 12px)) clamp(var(--ha-space-2, 8px), 3cqi - var(--ha-space-2, 8px), var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 4cqi, var(--ha-space-6, 24px)); border-radius: var(--_radius); background: transparent; border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     .dv { flex: 1; min-height: 0; }
@@ -1031,7 +1034,10 @@ export class JbSearch extends LitElement {
     @container np (orientation: landscape) and (min-width: 700px) {
       .sx { grid-template-columns: minmax(400px, 40%) minmax(0, 1fr); grid-template-rows: auto auto 1fr; column-gap: clamp(var(--ha-space-4, 16px), 2.5cqw, var(--ha-space-8, 32px));
         grid-template-areas: "q res" "rec res" "kb res";
-        --kh: clamp(56px, var(--_kb-row, 88px), 88px); --kgap: 10px; --kfs: clamp(var(--ha-font-size-2xl, 24px), 2.4cqw, var(--ha-font-size-3xl, 28px)); }
+        --kh: clamp(56px, var(--_kb-row, 88px), 88px); --kgap: 10px; --kfs: clamp(var(--ha-font-size-2xl, 24px), 2.4cqw, var(--ha-font-size-3xl, 28px));
+        /* #117: beside the results the keyboard has the whole left column; a key row is never taller than the room measured for it
+           (--_kb-row), so on a short landscape card (1024x600 under the HA toolbar, a phone on its side) no key row is cut off */
+        --_kh-room: max(28px, var(--_kb-row, 100vh)); }
       /* the source buttons (two rows here) take room from the keys */
       .sx.srcs-on { --kh: clamp(var(--_touch-min), var(--_kb-row, 88px), 88px); }
       /* Keep the unchanged keyboard at the top of its available area, directly below the query/hint. */
@@ -1072,6 +1078,11 @@ export class JbSearch extends LitElement {
     /* keyboard pinned open (combined tab default): the list area never spills under the keyboard or the tab bar, whatever the size
        (on the smallest screens it gets less room rather than overlapping) */
     .sx.kb-always .res { overflow: hidden; }
+    /* #117 structural, on the card's own height: on a portrait card up to 720 px tall the source buttons stay on one row that scrolls
+       sideways (as before 0.9.0), so two or three wrapped rows of sources do not take the room the results need above the keyboard */
+    @container np (orientation: portrait) and (max-height: 720px) {
+      .srcs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .srcs::-webkit-scrollbar { display: none; } .srcs .fc.src { flex: none; }
+    }
     /* #117 structural, on the card's own height: a short portrait card drops the status line so the list keeps a row above the keyboard */
     @container np (orientation: portrait) and (max-height: 600px) {
       .sx.kb-always, .sx.kb-always.srcs-on { --kgap: 4px; gap: var(--ha-space-2, 8px); }
@@ -1083,6 +1094,8 @@ export class JbSearch extends LitElement {
     }
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
       .lcats .fc.lc { flex-direction: row; min-height: var(--_touch-min); gap: var(--ha-space-2, 8px); } .lc .lci { width: 18px; height: 18px; }
+      /* #117: a phone on its side has no room for a second row of category buttons: they stay on one row that scrolls sideways */
+      .lcats { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .lcats::-webkit-scrollbar { display: none; } .lcats .fc.lc { flex: none; }
     }
     .sx.kb-hidden .res .scroll { padding-bottom: calc(var(--ha-space-2, 8px) + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
 
