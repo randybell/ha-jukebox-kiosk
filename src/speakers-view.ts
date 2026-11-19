@@ -565,7 +565,7 @@ export class JbSpeakers extends LitElement {
       font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); }
     .chip .i { width: 18px; height: 18px; }
     .chip.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
-    .chip.busy { opacity: .6; }
+    .chip.busy { opacity: var(--_dim); }
     .chip:active { transform: scale(.97); }
     .chip .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
     .mix { display: flex; flex-direction: column; }
@@ -580,17 +580,17 @@ export class JbSpeakers extends LitElement {
     .vn small { font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .vr.out .vn b { color: var(--_muted); }
     .vr.out .vm { color: var(--_inactive); }
-    .vr.pending { opacity: .7; }
+    .vr.pending { opacity: var(--_dim); }
     .vs { grid-area: s; --_slider-h: 7px; --_slider-knob: 22px; --_slider-hit: 40px; }
     .vv { grid-area: v; width: 34px; text-align: right; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
     .vv::after { content: attr(data-v); }
-    .vr.off { opacity: .5; }
+    .vr.off { opacity: var(--_dim); }
     .act { grid-area: a; height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); white-space: nowrap;
       max-width: 52cqw; overflow: hidden; text-overflow: ellipsis; }
     .act.join { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
     .act.take { border-style: dashed; }
     .act.blocked, .act.idle { color: var(--_inactive); border-color: var(--_divider); }
-    .act:disabled { opacity: .4; }
+    .act:disabled { color: var(--_disabled); border-color: var(--_disabled); } /* #113: HA disabled colours */
     /* 0.6.4 status chip: top-right of the middle area, right under the header clock (never over it); it replaces the
        0.6.3 centred toast and the bottom Undo bar. With the panel open it moves left of the panel's close button. */
     .st { position: absolute; z-index: 12; top: 10px; right: var(--_pad); max-width: min(400px, calc(100% - 2 * var(--_pad))); min-height: 40px;

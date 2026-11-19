@@ -1333,7 +1333,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_muted); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
     .ap.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
-    .ap:disabled { opacity: .45; cursor: default; }
+    .ap:disabled { color: var(--_disabled); border-color: var(--_disabled); cursor: default; } /* #113: HA disabled colours, not an ad-hoc opacity */
     .apg { margin-left: auto; align-self: center; display: inline-flex; }
     .apg .ap { margin-left: 0; }
     .apg.split .ap:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: var(--ha-space-2, 8px); }
@@ -1348,7 +1348,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .aps-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; scrollbar-width: none; }
     .apo { display: flex; align-items: center; gap: var(--ha-space-4, 16px); min-height: 64px; padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-lg, 12px); text-align: left; color: var(--_fg); font: inherit; }
     .apo:active { background: var(--_chip-sel); }
-    .apo:disabled { opacity: .6; }
+    .apo:disabled { color: var(--_disabled); }
     .apo[aria-checked="true"] { background: var(--_chip-sel); }
     .apo span:not(.rb):not(.dot):not(.spin) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .apo b { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1384,7 +1384,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .qr.now + .qr, h3 + .qr { border-top-color: transparent; }
     .qr.now .rt small { color: color-mix(in srgb, var(--_on-accent) 70%, transparent); } /* a tint of the on-primary text colour */
     .qr.now .pv { color: var(--_on-accent); border-color: color-mix(in srgb, var(--_on-accent) 40%, transparent); background: color-mix(in srgb, var(--_on-accent) 12%, transparent); }
-    .qr.past { opacity: .45; }
+    .qr.past { opacity: var(--_dim); }
     .qr.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .qsearch { align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
@@ -1494,7 +1494,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); }
     .chip .i { width: 18px; height: 18px; }
     .chip.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
-    .chip.busy { opacity: .6; }
+    .chip.busy { opacity: var(--_dim); }
     .chip:active { transform: scale(.97); }
     .chip .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
     .mix { display: flex; flex-direction: column; }
@@ -1509,17 +1509,17 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .vn small { font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .vr.out .vn b { color: var(--_muted); }
     .vr.out .vm { color: var(--_inactive); }
-    .vr.pending { opacity: .7; }
+    .vr.pending { opacity: var(--_dim); }
     .vs { grid-area: s; --_slider-h: 7px; --_slider-knob: 22px; --_slider-hit: 40px; }
     .vv { grid-area: v; width: 34px; text-align: right; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
     .vv::after { content: attr(data-v); }
-    .vr.off { opacity: .5; }
+    .vr.off { opacity: var(--_dim); }
     .act { grid-area: a; height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); white-space: nowrap;
       max-width: 52cqw; overflow: hidden; text-overflow: ellipsis; }
     .act.join { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
     .act.take { border-style: dashed; }
     .act.blocked, .act.idle { color: var(--_inactive); border-color: var(--_divider); }
-    .act:disabled { opacity: .4; }
+    .act:disabled { color: var(--_disabled); border-color: var(--_disabled); } /* #113: HA disabled colours */
     /* 0.6.4 status chip: top-right of the middle area, right under the header clock (never over it); it replaces the
        0.6.3 centred toast and the bottom Undo bar. With the panel open it moves left of the panel's close button. */
     .st { position: absolute; z-index: 12; top: 10px; right: var(--_pad); max-width: min(400px, calc(100% - 2 * var(--_pad))); min-height: 40px;

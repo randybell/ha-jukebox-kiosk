@@ -364,7 +364,7 @@ export class JbQueue extends LitElement {
     .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_muted); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
     .ap.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
-    .ap:disabled { opacity: .45; cursor: default; }
+    .ap:disabled { color: var(--_disabled); border-color: var(--_disabled); cursor: default; } /* #113: HA disabled colours, not an ad-hoc opacity */
     .apg { margin-left: auto; align-self: center; display: inline-flex; }
     .apg .ap { margin-left: 0; }
     .apg.split .ap:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: var(--ha-space-2, 8px); }
@@ -379,7 +379,7 @@ export class JbQueue extends LitElement {
     .aps-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; scrollbar-width: none; }
     .apo { display: flex; align-items: center; gap: var(--ha-space-4, 16px); min-height: 64px; padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-lg, 12px); text-align: left; color: var(--_fg); font: inherit; }
     .apo:active { background: var(--_chip-sel); }
-    .apo:disabled { opacity: .6; }
+    .apo:disabled { color: var(--_disabled); }
     .apo[aria-checked="true"] { background: var(--_chip-sel); }
     .apo span:not(.rb):not(.dot):not(.spin) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .apo b { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -415,7 +415,7 @@ export class JbQueue extends LitElement {
     .qr.now + .qr, h3 + .qr { border-top-color: transparent; }
     .qr.now .rt small { color: color-mix(in srgb, var(--_on-accent) 70%, transparent); } /* a tint of the on-primary text colour */
     .qr.now .pv { color: var(--_on-accent); border-color: color-mix(in srgb, var(--_on-accent) 40%, transparent); background: color-mix(in srgb, var(--_on-accent) 12%, transparent); }
-    .qr.past { opacity: .45; }
+    .qr.past { opacity: var(--_dim); }
     .qr.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .qsearch { align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 40px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
