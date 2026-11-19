@@ -11,7 +11,7 @@ import { hasMoreInfo, type InfoLine } from './song-info';
 export interface HoldSheet { item: { name: string } & Partial<MaItem>; sub: string; actions: MenuAction[]; close: () => void; info?: InfoLine[] }
 
 /**
- * 0.7.10: the large, centered press-and-hold sheet (search rows, artist Albums rows, Library tiles). A dimmed backdrop over the whole card;
+ * 0.7.10: the large, centered press-and-hold sheet (search rows, artist Albums rows, Library tiles). A dimmed backdrop over the middle band (the host lives in main.np, like the other hold pop-ups);
  * the item's art and name on top; one big full-width button per choice (≥ 64 px); Cancel set apart. A tap on the backdrop, Cancel or Esc
  * (card-level, see onKeyCap) closes it. Choices are a normal tap; the finger-lift right after the hold is swallowed (swallowNextClick).
  *
@@ -63,7 +63,7 @@ export class JbHoldSheet extends LitElement {
     const its = sh.querySelector('.its') as HTMLElement | null;
     const hd = sh.querySelector('.hd') as HTMLElement | null;
 
-    // Band between .top and .tabs on the card (backdrop still covers the whole card).
+    // Band between .top and .tabs when the host is the card; inside main.np the host already is that band (8 px inset).
     const card = this.parentElement as HTMLElement | null;
     const topEl = card?.querySelector('.top') as HTMLElement | null;
     const tabsEl = card?.querySelector('.tabs') as HTMLElement | null;
@@ -148,7 +148,7 @@ export class JbHoldSheet extends LitElement {
       </div>`;
   }
   static styles = [tokens, base, mediaStyles, css`
-    /* Host fills the card; fit() caps height to the band between .top and .tabs and clamps if needed. */
+    /* Host fills its parent (main.np, same placement as the other hold pop-ups); fit() caps height to the band between the bars. */
     :host { position: absolute; inset: 0; z-index: 45; display: none; box-sizing: border-box; font-family: var(--_font-body); color: var(--_fg); container-type: size; }
     :host([open]) { display: grid; place-items: center; }
     .bk { position: absolute; inset: 0; background: var(--_scrim); -webkit-backdrop-filter: var(--_scrim-filter); backdrop-filter: var(--_scrim-filter); }

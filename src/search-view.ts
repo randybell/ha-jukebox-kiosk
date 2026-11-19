@@ -5,7 +5,7 @@ import { icon } from './icons';
 import { providerLabel } from './providers';
 import { SearchEngine } from './search-engine';
 import {
-  imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, swallowNextClick, menuPos, menuTpl,
+  imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, swallowNextClick, menuTpl,
   playMedia, playMessage, drillable, canRadio, isRadio, hideStartRadio, mediaActions, searchRadio, confirmTpl, type MenuAction, type MenuPos, type ConfirmState,
   maCall,
 } from './shared';
@@ -548,7 +548,6 @@ export class JbSearch extends LitElement {
   }
 
   // ---------- taps, menus, detail stack ----------
-  private root() { return this.renderRoot.querySelector('.sx') as HTMLElement; }
   private tap(it: MaItem, g: GroupKey, el?: HTMLElement) {
     const type = this.mediaType(it, g);
     if (drillable(type, this.config)) { this.openDetail(it, type); return; }

@@ -769,6 +769,7 @@ export class JukeboxCard extends LitElement {
             .cancel=${() => this.stAnswer(false)}></jb-station-confirm>
           <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null}></jb-station>
           <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver}></jb-speakers>
+          <jb-hold-sheet .state=${this._sheet}></jb-hold-sheet>
         </main>
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
           ${tabs.map((t) => html`<button class="tab ${this._tab === t.id ? 'active' : ''}" role="tab" tabindex=${this._tab === t.id ? '0' : '-1'} data-tab=${t.id}
@@ -776,7 +777,6 @@ export class JukeboxCard extends LitElement {
               @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { if (t.id === 'browse' && this._tab === 'browse') { const lh = this.libHost(); if (lh) lh.home(); else (this.renderRoot.querySelector('jb-browse') as any)?.goHome?.(); } this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
                 ? html`<em class="badge">${this._qcount > 99 ? '99+' : this._qcount}</em>` : nothing}</button>`)}
         </nav>
-        <jb-hold-sheet .state=${this._sheet}></jb-hold-sheet>
         ${this._stage ? this.renderAmbient('stage') : nothing}
         ${this._saver ? this.renderAmbient('saver') : nothing}
       </ha-card>`;

@@ -19,10 +19,10 @@ const ev = (p, e) => p.evaluate((x) => eval(x), e);
 const center = (p, expr) => p.evaluate((e) => { const el = eval(e); if (!el) return null; el.scrollIntoView?.({ block: 'nearest' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, expr);
 const plays = (p) => ev(p, `(window.__calls || []).filter((c) => c.domain === 'music_assistant' && c.service === 'play_media').map((c) => c.data.enqueue)`);
 const clear = (p) => ev(p, `window.__calls = []`);
-// 0.7.10 d: the large centered sheet (jb-hold-sheet at card level) for row holds and Library tile holds
+// 0.7.10 d: the large centered sheet (jb-hold-sheet in main.np, same placement as the other hold pop-ups) for row holds and Library tile holds
 const menuIds = (p) => ev(p, `[...${HS}.querySelectorAll('.it')].map((b) => b.dataset.action + ':' + b.textContent.trim())`);
 const sheetOpen = (p) => ev(p, `!!${HS}.querySelector('.sh')`);
-const sheetGeo = (p) => ev(p, `(() => { const c = __card.shadowRoot.querySelector('ha-card').getBoundingClientRect(), s = ${HS}.querySelector('.sh'), r = s.getBoundingClientRect(), bk = ${HS}.querySelector('.bk').getBoundingClientRect();
+const sheetGeo = (p) => ev(p, `(() => { const c = __card.shadowRoot.querySelector('main.np').getBoundingClientRect(), s = ${HS}.querySelector('.sh'), r = s.getBoundingClientRect(), bk = ${HS}.querySelector('.bk').getBoundingClientRect();
   const its = [...${HS}.querySelectorAll('.it')].map((b) => b.getBoundingClientRect().height), fs = parseFloat(getComputedStyle(${HS}.querySelector('.it:not(.cancel) span')).fontSize);
   const scale = parseFloat(getComputedStyle(s).getPropertyValue('--_hs-s')) || parseFloat(s.style.getPropertyValue('--_hs-s')) || 1;
   return { dx: Math.abs((r.left + r.right) / 2 - (c.left + c.right) / 2), dy: Math.abs((r.top + r.bottom) / 2 - (c.top + c.bottom) / 2), inside: r.top >= c.top && r.bottom <= c.bottom && r.left >= c.left && r.right <= c.right,
@@ -32,10 +32,10 @@ async function sheetChecks(p, tag) {
   const g = await sheetGeo(p);
   // 0.7.12: one shared scale from the 7-choice Queue fit — button/text floors follow 64×scale and HA xl (20px)×scale.
   const minBtn = 64 * g.scale - 1, minFs = 20 * g.scale - 0.5;
-  check(`${tag}: the sheet is centered on the card, fits without scrolling, items ≥ ${minBtn.toFixed(1)}px tall with ≥ ${minFs.toFixed(1)}px text (shared scale ${g.scale}), over a full-card backdrop`, g.dx <= 2 && g.dy <= 2 && g.inside && g.noScroll && g.minH >= minBtn && g.fs >= minFs && g.bk, J(g));
+  check(`${tag}: the sheet is centered between the header and the tab bar, fits without scrolling, items ≥ ${minBtn.toFixed(1)}px tall with ≥ ${minFs.toFixed(1)}px text (shared scale ${g.scale}), over a backdrop that stays between the bars`, g.dx <= 2 && g.dy <= 2 && g.inside && g.noScroll && g.minH >= minBtn && g.fs >= minFs && g.bk, J(g));
 }
 async function closeWays(p, tag, reopen) {
-  for (const [how, act] of [['a backdrop tap', async () => { const c = await ev(p, `(() => { const r = __card.shadowRoot.querySelector('ha-card').getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; })()`); await p.mouse.click(c.x, c.y); }],
+  for (const [how, act] of [['a backdrop tap', async () => { const c = await ev(p, `(() => { const r = __card.shadowRoot.querySelector('main.np').getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; })()`); await p.mouse.click(c.x, c.y); }],
     ['Cancel', async () => { const c = await center(p, `${HS}.querySelector('.it.cancel')`); await p.mouse.click(c.x, c.y); }], ['Escape', () => p.keyboard.press('Escape')]]) {
     if (!(await sheetOpen(p))) await reopen(); const was = await sheetOpen(p); await clear(p); await act(); await sleep(250);
     check(`${tag}: ${how} closes the sheet and plays nothing`, was && !(await sheetOpen(p)) && J(await plays(p)) === '[]', J({ was, plays: await plays(p) }));

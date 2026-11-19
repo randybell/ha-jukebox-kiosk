@@ -51,10 +51,10 @@ export class JbQueue extends LitElement {
   private _undoTimer?: number;
   private _toastTimer?: number;
   private _unsub?: () => void;
-  private press = new PressController<QueueItem>(this, (it, el) => this.tapSheet(it, el), (it, el) => this.holdSheet(it, el));
+  private press = new PressController<QueueItem>(this, (it) => this.tapSheet(it), (it) => this.holdSheet(it));
   /** 0.7.13 (issue #78): a tap on a song row opens the same pop-up as a hold on it (a tap did nothing before). The tap's own click is swallowed
    *  so it cannot land on a choice that opened under the finger. */
-  private tapSheet(it: QueueItem, el: HTMLElement) { if (isRadioUri(it.media_content_id)) return; /* a station in the queue: tap stays as it was (nothing) */ swallowNextClick(); this.press.held = it.queue_item_id; this.holdSheet(it, el); }
+  private tapSheet(it: QueueItem) { if (isRadioUri(it.media_content_id)) return; /* a station in the queue: tap stays as it was (nothing) */ swallowNextClick(); this.press.held = it.queue_item_id; this.holdSheet(it); }
 
   protected shouldUpdate(ch: PropertyValues) { return !(ch.size === 1 && ch.has('hass')); }
   protected willUpdate(ch: PropertyValues) {
@@ -205,22 +205,55 @@ export class JbQueue extends LitElement {
   };
   private play(it: QueueItem) { this.run(this.queue?.play(it.queue_item_id), `Playing ${it.media_title}`); }
   /** Press-and-hold (and tap) on a row: the card's large centered pop-up (jb-hold-sheet). Same six choices as before, plus Cancel; ones this song can't use are grayed and do nothing. */
-  private holdSheet(it: QueueItem, el?: HTMLElement) {
+  private holdSheet(it: QueueItem) {
+    // 0.7.12: always the same five choices (+ Cancel) in the same order; ones this song can't use are grayed out and do nothing
     const can = new Map(this.actions(it).map((a) => [a.id, a]));
     const all: Array<[string, string, string]> = [['play', 'play', 'Play Now'], ['next', 'qnext', 'Play Next'], ['up', 'up', 'Move up'], ['down', 'down', 'Move down'], ['remove', 'trash', 'Remove']];
-    // Up Next song 1 = index locked+1 (already next). Guests keep working Play Next on song 2+; only song 1 (and locked/buffer) is grayed.
-    const idx = this._snap?.items.findIndex((x) => x.queue_item_id === it.queue_item_id) ?? -1;
-    const lk = this.queue?.locked ?? -1;
+    // Enable/gray matches 804e479: the row buttons decided too (Move up/down followed the arrows; Play Next / Remove
+    // stayed usable for an admin when queue_edit was off because those row buttons followed queue_play, not queue_edit).
+    const s = this._snap, q = this.queue;
+    const idx = s?.items.findIndex((x) => x.queue_item_id === it.queue_item_id) ?? -1;
+    const lk = q?.locked ?? -1;
+    const cur = s?.current ?? -1;
+    const nextLen = cur >= 0 ? (s?.items.length ?? 0) - cur - 1 : (s?.items.length ?? 0);
+    const nb = cur >= 0 ? Math.max(0, Math.min(nextLen, lk - cur)) : 0;
+    const kind = idx === cur ? 'now' : idx < cur ? 'past' : 'next';
+    const buf = kind === 'next' && idx < cur + 1 + nb;
+    const isFirstNext = idx === cur + 1 + nb;
+    const isLast = !!s && idx === s.items.length - 1;
+    const radio = isRadioUri(it.media_content_id);
+    const jumps = this.jumps();
+    // Same exists/enabled rules as the 804e479 row buttons (search rows had no Move up/down buttons).
+    const btn = (id: string): { exists: boolean; enabled: boolean } => {
+      if (id === 'play') return { exists: true, enabled: jumps && kind !== 'now' };
+      if (id === 'next') return { exists: !radio, enabled: !radio && jumps && kind === 'next' && !buf && !isFirstNext };
+      if (id === 'remove') return { exists: true, enabled: jumps && kind === 'next' && !buf };
+      if (id === 'up' || id === 'down') {
+        const exists = !this._search && kind === 'next' && this.edits;
+        return { exists, enabled: exists && !(id === 'up' ? isFirstNext || buf : isLast || buf) };
+      }
+      return { exists: false, enabled: false };
+    };
+    const runBtn = (id: string) => {
+      const qid = it.queue_item_id;
+      if (id === 'play') this.askPlayNow(it);
+      else if (id === 'next') this.run(q!.playNext(qid), `${it.media_title} plays next`);
+      else if (id === 'up') this.run(q!.up(qid), '');
+      else if (id === 'down') this.run(q!.down(qid), '');
+      else if (id === 'remove') this.removeRow(it);
+    };
+    // Up Next song 1 = index locked+1 (already next). Guests keep working Play Next on song 2+ (v0.7.11); only song 1 is grayed.
     const actions: MenuAction[] = all.map(([id, ic, label]) => {
-      const a = can.get(id);
+      const a = can.get(id), b = btn(id);
+      if ((id === 'up' || id === 'down') && b.exists && !b.enabled) return { id, icon: ic, label, run: () => {}, disabled: true };
       if (id === 'next' && idx <= lk + 1) return { id, icon: ic, label, run: () => {}, disabled: true };
       if (a) return a;
+      if (b.exists && b.enabled) return { id, icon: ic, label, run: () => runBtn(id) };
       return { id, icon: ic, label, run: () => {}, disabled: true };
     });
     // 0.7.12: More Info (song info) before Cancel, grayed when MA sent nothing beyond the title; not for radio stations in the queue
     const info = isRadioUri(it.media_content_id) ? undefined : songInfo(it, this.hass);
     fire(this, 'jukebox-sheet', { item: asArt(it), sub: it.media_artist ?? '', actions, info, close: () => this.press.release() });
-    void el;
   }
   /** backend feature flags (undefined = 0.5.x behaviour: everything on) */
   private get caps() { return this.config?._backend?.caps; }

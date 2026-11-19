@@ -344,14 +344,12 @@ export type RowAct = 'add' | 'remove' | 'next' | 'replace' | 'radio';
 /** Can MA radio mode be seeded from this item? */
 export const canRadio = (type: string, it: Partial<MaItem>) =>
   ['track', 'artist', 'album'].includes(type) && !isRadio(it) && !/^(podcast|audiobook)/.test(String(it.media_type ?? ''));
-export const QUEUE_ACTIONS = ['next', 'replace', 'remove'] as const;
-export const QUEUE_ACTION_LABELS: Record<(typeof QUEUE_ACTIONS)[number], string> = { next: 'Play Next', replace: 'Play Now', remove: 'Remove' };
-const RA: Record<RowAct, { icon: string; title: string; label: (n: string) => string }> = {
-  add: { icon: 'qadd', title: 'Add to queue', label: (n) => `Add ${n} to the end of the queue` },
-  remove: { icon: 'trash', title: QUEUE_ACTION_LABELS.remove, label: (n) => `Remove ${n} from the queue` },
-  next: { icon: 'qnext', title: QUEUE_ACTION_LABELS.next, label: (n) => `Play ${n} next` },
-  replace: { icon: 'play', title: QUEUE_ACTION_LABELS.replace, label: (n) => `Play ${n} now` },
-  radio: { icon: 'tower', title: 'Start radio', label: (n) => `Start radio from ${n}` },
+const RA: Record<RowAct, { icon: string }> = {
+  add: { icon: 'qadd' },
+  remove: { icon: 'trash' },
+  next: { icon: 'qnext' },
+  replace: { icon: 'play' },
+  radio: { icon: 'tower' },
 };
 /** Start radio (MA 2.10: a seed for its radio / endless mix): tracks, artists, albums and playlists. Not podcasts,
  *  episodes or audiobooks (MA seeds radio from songs only), not stations. */
@@ -459,16 +457,7 @@ export const mediaStyles = css`
     .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: 6px; }
     .row.hasfav .ra-b { width: 40px; }
   }
-  @container rows (max-width: 450px) {
-    .row .rt { grid-column: 2; grid-row: 1; }
-    .row .ra { grid-column: 1 / -1; grid-row: 2; flex-direction: row; justify-content: flex-start; flex-wrap: wrap; gap: 3px; }
-    .row .ra-b { flex-direction: row; min-height: 44px; min-width: 44px; padding: 5px 4px; font-size: var(--ha-font-size-xs, 10px); }
-    .row .ra-b .i { flex: none; }
-    .row.hasfav .ra-b { width: auto; }
-    .row.hasfav { grid-template-rows: auto auto auto; }
-    .row.hasfav .ra { grid-column: 1 / -1; grid-row: 3; }
-    .row .fav { display: none; }
-  }
+
   .confirm { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 24px)); padding: 18px;
     border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); max-height: min(100%, var(--_popup-max-h)); display: flex; flex-direction: column; gap: 12px; overflow: auto; }
   .cf-h { display: flex; align-items: center; gap: 12px; min-width: 0; }
