@@ -182,11 +182,6 @@ export function canGroup(c: JukeboxCardConfig, user: User): boolean {
 }
 /** Volume and mute: everyone unless guest_access is 'none' (then only users who may group). */
 export const canVolume = (c: JukeboxCardConfig, user: User) => (c.guest_access ?? 'volume') !== 'none' || canGroupAny(c, user);
-/**
- * Queue-row Play now / Play next icons: whoever may group (admins, grouping_users, everyone when grouping is everyone),
- * in either speaker mode. Guests (volume only / read only) don't see them. A UI lock, not security.
- */
-export const canJumpQueue = (c: JukeboxCardConfig, user: User) => canGroupAny(c, user);
 /** like canGroup, but ignoring the mode (fixed-mode admins keep volume when guests are read-only) */
 function canGroupAny(c: JukeboxCardConfig, user: User) { return canGroup({ ...c, speaker_mode: 'dynamic' }, user); }
 

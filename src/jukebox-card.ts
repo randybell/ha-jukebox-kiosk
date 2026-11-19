@@ -15,7 +15,7 @@ import './station-sheet';
 import './station-confirm';
 import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
-import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
+import { canGroup, targetsOf, targetMa, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
 /** the screensaver's reduced-motion class (.rm) follows the browser setting */
 const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
@@ -205,7 +205,7 @@ export class JukeboxCard extends LitElement {
     if (!this.tabs().some((t) => t.id === this._tab)) this._tab = 'now';
     this.lyrics.enabled = this._config.show_lyrics !== false;
     this.syncBackend(true);
-    this.queue.readsBuffer = () => !!this._config && canJumpQueue(this._config, this.hass?.user);
+    this.queue.readsBuffer = () => !!this._config;
     this.queue.entity = this._config.entity!;
     this.queue.limitAfter = this._config.queue_limit ?? 200;
     this.armIdle();
