@@ -752,6 +752,11 @@ export class JbBrowse extends LitElement {
   }
   /** A genre tile (0.7.20, tiles layout): the glyph cover like the genre row's; a tap opens nothing, as on the row. */
   private genreTile(it: MaItem) {
+    // filters off (search_filters: false): a genre filters nothing, so the tile is plain text (no Filter pill, no button role or label)
+    if (!this.filtersOn()) return html`<div class="tile gen off" data-uri=${it.uri} data-type="genre">
+      <div class="tw"><span class="ar big gl" aria-hidden="true">${icon('genre')}</span></div>
+      <b>${it.name}</b><small>Genre</small>
+    </div>`;
     return html`<div class="tile gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Filter by genre ${it.name}`} @click=${() => this.genreTap(it)}>
       <div class="tw"><span class="ar big gl" aria-hidden="true">${icon('genre')}</span><span class="gf" aria-hidden="true">Filter</span></div>
       <b>${it.name}</b><small>Genre</small>
@@ -804,6 +809,11 @@ export class JbBrowse extends LitElement {
   }
   /** A genre row (separate layout's Genres list): a tap filters by that genre (#46). */
   private genreRow(it: MaItem) {
+    // filters off (search_filters: false): a plain row, as on the tile above
+    if (!this.filtersOn()) return html`<div class="row gen off" data-uri=${it.uri} data-type="genre">
+      <span class="ar th gl" aria-hidden="true">${icon('genre')}</span>
+      <div class="rt"><b>${it.name}</b><small>Genre</small></div>
+    </div>`;
     return html`<div class="row gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Filter by genre ${it.name}`}
         @click=${() => this.genreTap(it)}>
       <span class="ar th gl" aria-hidden="true">${icon('genre')}</span>
@@ -931,6 +941,8 @@ export class JbBrowse extends LitElement {
     :host([embedded]) .bar .fc { min-height: var(--_touch-min); padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
     .bsp { flex: 1; }
     .row.gen { grid-template-columns: 44px minmax(0, 1fr) auto auto; cursor: pointer; }
+    /* search_filters: false: a genre does nothing when tapped, so its row or tile does not look tappable */
+    .row.gen.off, .tile.gen.off { cursor: default; }
     /* #46: "Filter" says what a tap on a genre does (a labeled pill, no small icon) */
     .gf { display: inline-flex; align-items: center; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; flex: none; }

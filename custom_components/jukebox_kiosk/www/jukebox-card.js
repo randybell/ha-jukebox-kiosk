@@ -437,8 +437,11 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       ${Re(e.uri,e.provider,e.media_type??t)}
       ${i?Et(e,this.hearts.isFav(e),()=>this.toggleFav(e,t),"mo fav"):B}
       ${at(t,this.config)?I`<span class="mo go" aria-hidden="true">${de("open")}</span>`:B}
-    </div>`}genreTile(e){return I`<div class="tile gen" role="button" data-uri=${e.uri} data-type="genre" aria-label=${`Filter by genre ${e.name}`} @click=${()=>this.genreTap(e)}>
+    </div>`}genreTile(e){return this.filtersOn()?I`<div class="tile gen" role="button" data-uri=${e.uri} data-type="genre" aria-label=${`Filter by genre ${e.name}`} @click=${()=>this.genreTap(e)}>
       <div class="tw"><span class="ar big gl" aria-hidden="true">${de("genre")}</span><span class="gf" aria-hidden="true">Filter</span></div>
+      <b>${e.name}</b><small>Genre</small>
+    </div>`:I`<div class="tile gen off" data-uri=${e.uri} data-type="genre">
+      <div class="tw"><span class="ar big gl" aria-hidden="true">${de("genre")}</span></div>
       <b>${e.name}</b><small>Genre</small>
     </div>`}tile(e,t,a=!1,i=!1){if("genre"===t)return this.genreTile(e);const s=this.press.handlers(e.uri,{it:e,type:t}),r="artist"===t&&!i,o=a?function(e){const t=Number(e.resume_position_ms),a=Number(e.duration);return!0!==e.fully_played&&t>0&&a>0?Math.max(0,Math.min(1,t/1e3/a)):0}(e):0;return I`<div class="tile ${r?"artist":""} ${this.press.held===e.uri?"held":""} ${this.press.pressing===e.uri?"hp":""}" data-uri=${e.uri} data-type=${t}
         @pointerdown=${s.down} @pointermove=${s.move} @pointerup=${s.up} @pointercancel=${s.cancel} @pointerleave=${s.cancel}
@@ -456,10 +459,13 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       <div class="rt"><b>${e.name}${e.version?I` <i class="ver">${e.version}</i>`:B}</b><small>${this.sub(e,"track")}</small></div>
       ${Re(e.uri,e.provider)}<span class="du">${je(e.duration)}</span>
       ${i?Et(e,this.hearts.isFav(e),()=>this.toggleFav(e,"track"),"mo fav"):B}
-    </div>`}genreTap(e){this.embedded?this.dispatchEvent(new CustomEvent("jb-lib-scope",{detail:{item:e,type:"genre"}})):this.dispatchEvent(new CustomEvent("jukebox-nav",{detail:{tab:"search",genre:e},bubbles:!0,composed:!0}))}genreRow(e){return I`<div class="row gen" role="button" data-uri=${e.uri} data-type="genre" aria-label=${`Filter by genre ${e.name}`}
+    </div>`}genreTap(e){this.embedded?this.dispatchEvent(new CustomEvent("jb-lib-scope",{detail:{item:e,type:"genre"}})):this.dispatchEvent(new CustomEvent("jukebox-nav",{detail:{tab:"search",genre:e},bubbles:!0,composed:!0}))}genreRow(e){return this.filtersOn()?I`<div class="row gen" role="button" data-uri=${e.uri} data-type="genre" aria-label=${`Filter by genre ${e.name}`}
         @click=${()=>this.genreTap(e)}>
       <span class="ar th gl" aria-hidden="true">${de("genre")}</span>
       <div class="rt"><b>${e.name}</b><small>Genre</small></div><span class="du"></span><span class="gf" aria-hidden="true">Filter</span>
+    </div>`:I`<div class="row gen off" data-uri=${e.uri} data-type="genre">
+      <span class="ar th gl" aria-hidden="true">${de("genre")}</span>
+      <div class="rt"><b>${e.name}</b><small>Genre</small></div>
     </div>`}renderStations(e){const t=e.favs??[],a=new Set(t.map(e=>e.uri)),i=!!this.config?.radio_favorites_only,s=i?[]:e.items.filter(e=>!a.has(e.uri));return t.length||s.length?I`${t.length?I`<h3 class="sec" data-sec="favorites">${de("heart","i xs")}Favorites</h3>
         ${this.libItems(t,"radio","favorites")}`:B}
       ${s.length?I`<h3 class="sec" data-sec="more">${t.length?"More stations":"Stations"}</h3>
@@ -507,6 +513,8 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     :host([embedded]) .bar .fc { min-height: var(--_touch-min); padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
     .bsp { flex: 1; }
     .row.gen { grid-template-columns: 44px minmax(0, 1fr) auto auto; cursor: pointer; }
+    /* search_filters: false: a genre does nothing when tapped, so its row or tile does not look tappable */
+    .row.gen.off, .tile.gen.off { cursor: default; }
     /* #46: "Filter" says what a tap on a genre does (a labeled pill, no small icon) */
     .gf { display: inline-flex; align-items: center; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; flex: none; }
@@ -668,7 +676,11 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       ${e.album?t("album","Album",e.album.name):B}
       ${e.genre?t("genre","Genre",e.genre.name):B}
       <button class="fc clr" data-action="clear-filters" tabindex="-1" @pointerdown=${ge} @click=${()=>this.clearFilters()}>Clear filters</button>
-    </div>`}sub(e,t){return"tracks"===t?[Te(e),e.album?.name].filter(Boolean).join(" · "):"artists"===t?"Artist":"albums"===t?["Album",Te(e)].filter(Boolean).join(" · "):"playlists"===t?["Playlist",e.owner].filter(Boolean).join(" · "):"radio"===t?e.metadata&&e.metadata.description?e.metadata.description:"Radio station":"podcasts"===t?["Podcast",e.publisher??Te(e)].filter(Boolean).join(" · "):"audiobooks"===t?["Audiobook",Te(e)].filter(Boolean).join(" · "):"genres"===t?"Genre":Te(e)}row(e,t){const a=this.mediaType(e,t),i=at(a,this.config),s=this.press.handlers(e.uri,{it:e,g:t}),r=this.canFav(e,t);return I`<div class="row ${i?"drill":""} ${r?"hasfav":""} ${this.press.held===e.uri?"held":""} ${this.press.pressing===e.uri&&"genres"!==t?"hp":""} ${this._sel===e.uri?"sel":""}"
+    </div>`}sub(e,t){return"tracks"===t?[Te(e),e.album?.name].filter(Boolean).join(" · "):"artists"===t?"Artist":"albums"===t?["Album",Te(e)].filter(Boolean).join(" · "):"playlists"===t?["Playlist",e.owner].filter(Boolean).join(" · "):"radio"===t?e.metadata&&e.metadata.description?e.metadata.description:"Radio station":"podcasts"===t?["Podcast",e.publisher??Te(e)].filter(Boolean).join(" · "):"audiobooks"===t?["Audiobook",Te(e)].filter(Boolean).join(" · "):"genres"===t?"Genre":Te(e)}row(e,t){const a=this.mediaType(e,t);if("genres"===t&&!this.filtersOn())return I`<div class="row" data-uri=${e.uri} data-group=${t} data-type=${a}>
+      <span class="ar th gen" aria-hidden="true">${de("genre")}</span>
+      <div class="rt"><b>${e.name}</b><small>${Re(e.uri,e.provider,e.media_type)}<span class="st">${this.sub(e,t)}</span></small></div>
+      <span class="du"></span>
+    </div>`;const i=at(a,this.config),s=this.press.handlers(e.uri,{it:e,g:t}),r=this.canFav(e,t);return I`<div class="row ${i?"drill":""} ${r?"hasfav":""} ${this.press.held===e.uri?"held":""} ${this.press.pressing===e.uri&&"genres"!==t?"hp":""} ${this._sel===e.uri?"sel":""}"
         data-uri=${e.uri} data-group=${t} data-type=${a} aria-label=${"genres"===t?`Filter by genre ${e.name}`:i?`Open ${e.name}`:e.name}
         @pointerdown=${s.down} @pointermove=${s.move} @pointerup=${s.up} @pointercancel=${s.cancel} @pointerleave=${s.cancel}
         @contextmenu=${e=>e.preventDefault()}>

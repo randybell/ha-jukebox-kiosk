@@ -6,6 +6,7 @@
 //    and a labeled "Clear filters" button, both >= 48px; no detail page opens; the words typed to find the genre are cleared
 //  - the results come from music/{artists,albums,tracks}/library_items with genre = the genre's item id (and search = the words once typed)
 //  - typing searches inside the genre (search arg sent); the chip and Clear filters remove the filter and the Library list comes back
+//  - search_filters: false: genre rows and tiles offer no Filter (no pill, role, label or pointer) and a tap or hold changes nothing
 // Usage: node test/genre-filter.e2e.mjs (starts its own dev server). SHOTS=<dir> also writes screenshots.
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -111,6 +112,57 @@ for (const kind of ['touch', 'mouse']) {
     check(`separate layout: a genre tapped in Library opens Search filtered by it ("Genre: ${name}")`, tab === 'search' && cs.chip?.t === `Genre: ${name}`, J({ tab, cs }));
   } else check('separate layout: Library shows a Genres button (library_categories default)', false, 'no Genres button');
   await p.close();
+}
+
+// ---- search_filters: false: a genre filters nothing, so no genre row or tile offers it (no dead "Filter" control) ----
+// Each genre row / tile: no "Filter" pill, no open arrow, no button role, no "Filter by genre" aria-label, not a pointer cursor; a tap
+// and a hold change nothing (no chip, no tab change, no MA genre call, no detail page, no pressed or held look).
+{
+  const offState = (p, sel) => ev(p, `JSON.stringify([...${sel}].map((r) => ({ f: !!r.querySelector('.gf'), open: !!r.querySelector('.mo, .open, .go'),
+    role: r.getAttribute('role'), a: r.getAttribute('aria-label') ?? '', cur: getComputedStyle(r).cursor, t: r.innerText.replace(/\\s+/g, ' ').trim() })))`).then(JSON.parse);
+  const plain = (rs) => rs.length > 0 && rs.every((r) => !r.f && !r.open && !r.role && !/filter/i.test(r.a) && r.cur !== 'pointer' && !/\bFilter\b/.test(r.t));
+  const tapNothing = async (p, tag, el, root) => {
+    const b = (await calls(p)).length, tab0 = await ev(p, `__card._tab`);
+    for (const kind of ['touch', 'mouse']) { await ev(p, `${el}.scrollIntoView({ block: 'center' })`); await sleep(150); await tapAt(p, kind, await rect(p, el)); await sleep(700); }
+    const c = await rect(p, el); await p.mouse.move(c.x, c.y); await p.mouse.down(); await sleep(250);
+    const pressed = await ev(p, `${el}.matches('.held, .hp, .sel')`); await sleep(500); await p.mouse.up(); await sleep(500);
+    const after = { chip: (await chipState(p, SV)).chip, tab: await ev(p, `__card._tab`), calls: (await calls(p)).length - b,
+      detail: await ev(p, `!!${SV}.querySelector('jb-detail') || !!(${root})?.querySelector('jb-detail')`), held: await ev(p, `${el}.matches('.held, .hp, .sel')`), pressed };
+    check(`${tag}: a tap and a hold on a genre change nothing`, !after.chip && after.tab === tab0 && after.calls === 0 && !after.detail && !after.held && !after.pressed, J(after));
+  };
+  const off = { search_filters: false };
+  for (const view of ['rows', 'tiles']) {
+    const cfg = encodeURIComponent(J({ ...off, library_view: view }));
+    const p = await newPage(`&tab=browse&cfg=${cfg}`, { width: 1024, height: 600 });
+    await tapAt(p, 'touch', await rect(p, `${SV}.querySelector('.lcats .lc[data-lcat="genre"]')`)); await sleep(900);
+    await p.waitForFunction((b) => !!eval(b)?.querySelector('[data-type="genre"]'), { timeout: 8000 }, BRC);
+    const rs = await offState(p, `${BRC}.querySelectorAll('[data-type="genre"]')`);
+    check(`filters off, Library > Genres (${view}): genres show no Filter label or arrow, no button role or Filter aria-label, not a pointer`, plain(rs), J(rs.slice(0, 3)));
+    await tapNothing(p, `filters off, Library > Genres (${view})`, `${BRC}.querySelector('[data-type="genre"]')`, BRC);
+    await shot(p, `genre-filters-off-${view}`);
+    await p.close();
+  }
+  {
+    const p = await newPage(`&tab=browse&cfg=${encodeURIComponent(J(off))}`, { width: 1024, height: 600 });
+    await tapAt(p, 'touch', await rect(p, `${SV}.querySelector('.lcats .lc[data-lcat="genre"]')`)); await sleep(700);
+    await p.keyboard.type('mock'); await sleep(1500);
+    await p.waitForFunction((r) => !!eval(r), { timeout: 8000 }, `${SV}.querySelector('.res .row[data-group="genres"]')`);
+    const rs = await offState(p, `${SV}.querySelectorAll('.res .row[data-group="genres"]')`);
+    check('filters off, typed Genres results: rows show no Filter label or arrow, no button role or Filter aria-label, not a pointer', plain(rs), J(rs.slice(0, 3)));
+    await tapNothing(p, 'filters off, typed Genres results', `${SV}.querySelector('.res .row[data-group="genres"]')`, SV);
+    await p.close();
+  }
+  {
+    const cfg = encodeURIComponent(J({ ...off, library_categories: ['playlist', 'artist', 'track', 'genre', 'radio'] }));
+    const p = await newPage(`&layout=separate&tab=browse&lhome=0&cfg=${cfg}`, { width: 1024, height: 600 });
+    const BR = `__card.shadowRoot.querySelector('jb-browse').shadowRoot`;
+    await ev(p, `${BR}.querySelector('.cats .fc[data-cat="genre"]').click()`); await sleep(900);
+    await p.waitForFunction((b) => !!eval(b).querySelector('[data-type="genre"]'), { timeout: 8000 }, BR);
+    const rs = await offState(p, `${BR}.querySelectorAll('[data-type="genre"]')`);
+    check('filters off, separate layout Library > Genres: rows show no Filter label, no button role or Filter aria-label, not a pointer', plain(rs), J(rs.slice(0, 3)));
+    await tapNothing(p, 'filters off, separate layout Library > Genres', `${BR}.querySelector('[data-type="genre"]')`, BR);
+    await p.close();
+  }
 }
 
 await browser.close();

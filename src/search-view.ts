@@ -722,6 +722,12 @@ export class JbSearch extends LitElement {
   /** One result row: art, title, subtitle (provider badge + artist / type), duration. */
   private row(it: MaItem, g: GroupKey) {
     const type = this.mediaType(it, g);
+    // search_filters: false: a genre filters nothing, so its row is plain (no Filter pill, no press handlers, no "Filter by" label)
+    if (g === 'genres' && !this.filtersOn()) return html`<div class="row" data-uri=${it.uri} data-group=${g} data-type=${type}>
+      <span class="ar th gen" aria-hidden="true">${icon('genre')}</span>
+      <div class="rt"><b>${it.name}</b><small>${provTpl(it.uri, it.provider, it.media_type)}<span class="st">${this.sub(it, g)}</span></small></div>
+      <span class="du"></span>
+    </div>`;
     const drill = drillable(type, this.config);
     const p = this.press.handlers(it.uri, { it, g });
     const fav = this.canFav(it, g);
