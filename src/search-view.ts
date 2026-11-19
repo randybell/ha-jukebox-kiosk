@@ -819,10 +819,10 @@ export class JbSearch extends LitElement {
     const status = this._error ? this._error
       : sc ? (!this._query ? (r ? `${count} in ${name} · type to search inside it` : `Loading ${name}…`)
         : !r ? `Searching ${name}…` : count ? `${count} result${count === 1 ? '' : 's'} in ${name} for “${this._shownQuery}”` : `No matches in ${name}`)
-      : this.combined && !this._query ? (this.srcOn() ? `${this.srcLabel()} · type to search ${this._srcs.length > 1 ? 'them' : 'it'}` : `${libraryCatLabel(this._lcat)} in your library · type to search all providers`)
+      : this.combined && !this._query ? (this.srcOn() ? `${this.srcLabel()} · type to search ${this._srcs.length > 1 ? 'them' : 'it'}` : (this._lcat === 'genre' ? 'Genres in your library · type to search them' : `${libraryCatLabel(this._lcat)} in your library · type to search all providers`)) /* MA searches genres in the library only */
       : !this._query ? (this.srcOn() ? `Type to search ${this.srcLabel()}` : 'Type to search all providers')
       : !r ? 'Searching…'
-      : count ? `${count} result${count === 1 ? '' : 's'} for “${this._shownQuery}” · ${this.srcOn() ? this.srcLabel() : 'all providers'}`
+      : count ? `${count} result${count === 1 ? '' : 's'} for “${this._shownQuery}” · ${this.combined && this._lcat === 'genre' ? 'your library' : this.srcOn() ? this.srcLabel() : 'all providers'}`
       : `No results for “${this._shownQuery}”`;
     return html`
       <div class="sx ${this._kbHidden ? 'kb-hidden' : ''} ${this.kbAlways() ? 'kb-always' : ''} ${this.srcAvail() && (!this.srcCompact() || this._srcOpen) ? 'srcs-on' : ''}">
