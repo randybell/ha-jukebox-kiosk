@@ -871,36 +871,39 @@ export class JbSearch extends LitElement {
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     .sx {
-      position: relative; z-index: 1; height: 100%; display: grid; gap: var(--ha-space-3, 12px); padding: var(--ha-space-4, 16px) var(--_pad) var(--ha-space-3, 12px);
+      position: relative; z-index: 1; height: 100%; display: grid; gap: clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-3, 12px));
+      /* #117 fluid: spacing, the search box and the keys scale with the card's own width (cqi = the np container) instead of a phone rule */
+      padding: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)) var(--_pad) clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-3, 12px));
       grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
       grid-template-areas: "q" "rec" "res" "kb";
-      --kh: 60px; --kgap: 8px; --kfs: var(--ha-font-size-2xl, 24px);
+      --kh: clamp(var(--_touch-min), 12cqi, 60px); --kgap: clamp(var(--ha-space-1, 4px), 1.6cqi, var(--ha-space-2, 8px)); --kfs: var(--ha-font-size-2xl, 24px);
     }
     .qwrap { grid-area: q; min-width: 0; }
     .qrow { display: flex; gap: var(--ha-space-2, 8px); align-items: stretch; min-width: 0; } .qrow .qbar { flex: 1; min-width: 0; }
     /* 0.7.2 source buttons: always visible under the search box, Black Frame chips, touch-sized; wrap when there are many */
     .srcs { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); margin-top: var(--ha-space-2, 8px); min-width: 0; }
-    .srcs .fc.src { height: auto; min-height: 44px; padding: 0 var(--ha-space-4, 16px); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
+    .srcs .fc.src { height: auto; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
       background: transparent; color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .srcs .fc.src.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
-    /* phones: one horizontally scrolling row so the buttons never push the results off screen */
-    @container np (max-width: 600px) { .srcs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .srcs::-webkit-scrollbar { display: none; } .srcs .fc.src { flex: none; } }
-    /* short phones: shorter keys pay for the button row so a results row stays visible above the keyboard */
-    @container np (max-width: 520px) and (max-height: 720px) { .sx.srcs-on { --kh: 38px; --kgap: 4px; } .srcs { margin-top: var(--ha-space-2, 8px); } }
+    /* #117: the source buttons always wrap (every button stays on screen and labelled); only a very short landscape card scrolls them */
     .srcn { align-self: center; padding: 0 var(--ha-space-2, 8px); color: var(--_muted); font-size: var(--ha-font-size-m, 14px); }
     .lcats { margin-bottom: var(--ha-space-2, 8px); }
     /* 0.7.3 walk-up category buttons: big icon-over-label tiles, the selected one lit solid white; Favorites and the sort sit
        as small corner icons at the end of the same row (no row of their own) */
     .lcrow { display: flex; gap: var(--ha-space-2, 8px); align-items: stretch; min-width: 0; flex: none; margin-bottom: var(--ha-space-2, 8px); }
     .lcrow .lcats { flex: 1; min-width: 0; margin-bottom: 0; }
-    .lcats .fc.lc { flex: 1 1 auto; min-width: 68px; height: auto; min-height: 62px; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-xl, 16px); display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .03em; text-transform: uppercase;
+    /* #117 fluid: the buttons share the row by width and never get narrower than their label or a touch target; when they no longer
+       fit they wrap to a second row instead of cutting a label. Sentence case (HA's label style) keeps them one row down to ~460 px. */
+    .lcats { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); }
+    .lcats .fc.lc { flex: 1 1 0; min-width: max(var(--_touch-min), min-content); height: auto; min-height: clamp(var(--_touch-min), 13cqi, 62px); padding: var(--ha-space-1, 4px) clamp(2px, 1cqi, var(--ha-space-2, 8px));
+      border-radius: clamp(var(--ha-border-radius-lg, 12px), 3cqi, var(--ha-border-radius-xl, 16px)); display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: 0; text-transform: none;
       color: var(--_muted); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background var(--_t-fast), color var(--_t-fast); }
-    .lc .lci { width: 26px; height: 26px; flex: none; }
+    .lc .lci { width: clamp(calc(var(--_icon) * 18 / 24), 5.5cqi, calc(var(--_icon) * 26 / 24)); height: clamp(calc(var(--_icon) * 18 / 24), 5.5cqi, calc(var(--_icon) * 26 / 24)); flex: none; }
     .lc .lcl { white-space: nowrap; }
     .lcats .fc.lc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .lcorner { display: flex; gap: var(--ha-space-2, 8px); flex: none; }
-    .cn { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: var(--ha-border-radius-xl, 16px);
+    .cn { min-width: var(--_touch-min); padding: 0 var(--ha-space-1, 4px); flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: var(--ha-border-radius-xl, 16px);
       color: var(--_muted); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
     .cn .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); } .cn small { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .02em; white-space: nowrap; }
     .cn.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
@@ -908,9 +911,9 @@ export class JbSearch extends LitElement {
     .qrow .srcs.srcc { display: flex; flex: none; flex-wrap: nowrap; margin-top: 0; overflow: visible; }
     .srct { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-width: 0; max-width: 168px; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-xl, 16px); font: inherit; font-size: var(--ha-font-size-s, 12px);
       font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .03em; text-transform: uppercase; color: var(--_fg); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); cursor: pointer; }
-    .srct .sts { display: none; }
-    .srct .stl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-    .srct .sti { width: 22px; height: 22px; flex: none; } .srct .stc { width: 20px; height: 20px; flex: none; margin-left: -2px; }
+    .srct { min-height: var(--_touch-min); }
+    .srct .stl { display: none; white-space: nowrap; }
+    .srct .sti { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); flex: none; } .srct .stc { width: clamp(16px, 4cqi, 20px); height: clamp(16px, 4cqi, 20px); flex: none; margin-left: -2px; }
     .srct.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .srct.open { border-color: var(--_active); }
     /* Tablet/monitor: reserve the whole column for the search text. The source control has its own touch-sized row. */
@@ -918,32 +921,32 @@ export class JbSearch extends LitElement {
       .qrow { flex-direction: column; }
       .qrow .qbar { flex: none; width: 100%; }
       .qrow .srcs.srcc { align-self: flex-start; max-width: 100%; }
-      .qrow .srct { min-height: 44px; max-width: 100%; }
-      .qmeta { white-space: normal; overflow: visible; line-height: var(--ha-line-height-condensed, 1.2); }
+      .qrow .srct { max-width: 100%; }
+      .srct .stl { display: inline; } .srct .sts { display: none; }
     }
     .lib { flex: 1; min-height: 0; display: flex; flex-direction: column; } .lib[hidden] { display: none; } .lib jb-browse { flex: 1; min-height: 0; }
     .lsec { display: flex; align-items: center; gap: var(--ha-space-2, 8px); margin: 2px 0 var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; color: var(--_muted); }
     .pbh { display: flex; align-items: center; gap: var(--ha-space-3, 12px); margin-bottom: var(--ha-space-2, 8px); } .pbh b { font-size: var(--ha-font-size-l, 16px); } .recents { grid-area: rec; } .res { grid-area: res; } .kbd { grid-area: kb; }
     .sx.kb-hidden .kbd { display: none; }
     .qbar {
-      position: relative; display: flex; align-items: center; gap: var(--ha-space-3, 12px); height: 60px; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--_radius);
+      position: relative; display: flex; align-items: center; gap: var(--ha-space-3, 12px); height: clamp(var(--_touch-min), 11cqi, 60px); padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--_radius);
       background: var(--_input-bg); color: var(--_input-ink); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); overflow: hidden;
     }
     .qi { width: 26px; height: 26px; color: var(--_fg); }
-    .q { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-start; font-size: var(--ha-font-size-2xl, 24px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em;
+    .q { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-start; font-size: clamp(var(--ha-font-size-xl, 20px), 4.4cqi, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em;
       white-space: pre; overflow: hidden; user-select: none; -webkit-user-select: none; }
     .q .qt { overflow: hidden; text-overflow: clip; direction: ltr; }
-    .q .ph { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; color: var(--_input-label); order: 2; margin-left: var(--ha-space-2, 8px); overflow: hidden; text-overflow: ellipsis; }
-    .caret { display: inline-block; flex: none; width: 3px; height: 30px; margin-left: var(--ha-space-1, 4px); background: var(--_fg); border-radius: 2px; animation: blink 1.06s steps(1) infinite; }
+    .q .ph { font-size: clamp(var(--ha-font-size-m, 14px), 3.2cqi, var(--ha-font-size-l, 16px)); font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; color: var(--_input-label); order: 2; margin-left: var(--ha-space-2, 8px); overflow: hidden; text-overflow: ellipsis; }
+    .caret { display: inline-block; flex: none; width: 3px; height: clamp(24px, 5.5cqi, 30px); margin-left: var(--ha-space-1, 4px); background: var(--_fg); border-radius: 2px; animation: blink 1.06s steps(1) infinite; }
     @keyframes blink { 0%, 55% { opacity: 1 } 56%, 100% { opacity: 0 } }
-    .qx { width: 44px; height: 44px; flex: none; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center; color: var(--_inactive); background: var(--_chip-bg); }
+    .qx { width: var(--_touch-min); height: var(--_touch-min); flex: none; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center; color: var(--_inactive); background: var(--_chip-bg); }
     .qx .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     /* loading hairline: 2px white at ~60% under the query text, no blank flash */
     .hair { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; overflow: hidden; opacity: 0; transition: opacity var(--_t-fast); pointer-events: none; }
     .hair::before { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -40%; background: var(--_active); animation: hair 900ms ease-in-out infinite; }
     .hair.on { opacity: 1; }
     @keyframes hair { from { left: -40% } to { left: 100% } }
-    .qmeta { display: flex; align-items: center; gap: var(--ha-space-2, 8px); margin: var(--ha-space-2, 8px) var(--ha-space-1, 4px) 0; font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .qmeta { display: flex; align-items: center; gap: var(--ha-space-2, 8px); margin: clamp(var(--ha-space-1, 4px), 1cqi, var(--ha-space-2, 8px)) var(--ha-space-1, 4px) 0; font-size: clamp(var(--ha-font-size-s, 12px), 2.8cqi, var(--ha-font-size-m, 14px)); color: var(--_muted); line-height: var(--ha-line-height-condensed, 1.2); } /* #117: wraps, never cut off */
     .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); box-shadow: 0 0 0 var(--ha-border-width-lg, 3px) var(--_chip-sel); flex: none; }
     .live.busy { animation: pulse 800ms ease-in-out infinite alternate; }
     @keyframes pulse { from { opacity: 1 } to { opacity: .35 } }
@@ -954,23 +957,23 @@ export class JbSearch extends LitElement {
     .recents::-webkit-scrollbar { display: none; }
     .recents:empty { display: none; }
     .rl { display: flex; align-items: center; gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .08em; text-transform: uppercase; color: var(--_inactive); flex: none; }
-    .chip { flex: none; height: 36px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_fg); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
+    .chip { flex: none; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_fg); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
     .res { position: relative; min-height: 0; display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); min-width: 0; container: res / inline-size; }
     .filters { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; flex: none; }
     .filters::-webkit-scrollbar { display: none; }
-    .fc { flex: none; height: 34px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_inactive); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
+    .fc { flex: none; min-height: var(--_touch-min); padding: 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); border-radius: var(--ha-border-radius-pill, 9999px); font-size: clamp(var(--ha-font-size-s, 12px), 3cqi, var(--ha-font-size-m, 14px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_inactive); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
     .fc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     /* v0.7 category chips: count after the label, empty categories dimmed but still tappable */
     .fc em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); margin-left: var(--ha-space-2, 8px); opacity: .7; font-variant-numeric: tabular-nums; }
     .fc.zero:not(.on) { opacity: var(--_dim); }
     /* v0.7 search filters: scope chips under the query, Clear filters, library-first section labels */
     .scope { display: flex; align-items: center; gap: var(--ha-space-2, 8px); margin-top: var(--ha-space-2, 8px); min-width: 0; flex-wrap: wrap; }
-    .sc { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; max-width: 100%; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
+    .sc { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); max-width: 100%; padding: 0 var(--ha-space-2, 8px) 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); border-radius: var(--ha-border-radius-pill, 9999px);
       background: var(--_chip-sel); color: var(--_fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); min-width: 0; }
     .sc .scl { opacity: .8; flex: none; }
     .sc b { font-weight: var(--ha-font-weight-bold, 700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .sc .scx { width: 28px; height: 28px; padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-circle, 50%); background: var(--_chip-bg); flex: none; }
-    .fc.clr { height: 44px; padding: 0 var(--ha-space-4, 16px); font-size: var(--ha-font-size-m, 14px); color: var(--_fg); border-color: var(--_surface-border); }
+    .fc.clr { min-height: var(--_touch-min); padding: 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); font-size: var(--ha-font-size-m, 14px); color: var(--_fg); border-color: var(--_surface-border); }
     .empty .fc.clr { margin-top: var(--ha-space-4, 16px); }
     .lsec { display: flex; align-items: center; gap: var(--ha-space-2, 8px); margin: var(--ha-space-1, 4px) 0 2px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .1em; text-transform: uppercase; color: var(--_inactive); }
     .lsec[data-sec="providers"] { margin-top: var(--ha-space-3, 12px); padding-top: var(--ha-space-2, 8px); border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
@@ -980,15 +983,15 @@ export class JbSearch extends LitElement {
     /* Labeled search actions need their own height and enough width for an unbroken touch label. */
     .row { min-height: 68px; }
 
-    .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: var(--ha-space-4, 16px);
-      padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px) var(--ha-space-6, 24px); border-radius: var(--_radius); background: transparent; border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+    .scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px));
+      padding: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-3, 12px)) clamp(var(--ha-space-2, 8px), 3cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 4cqi, var(--ha-space-6, 24px)); border-radius: var(--_radius); background: transparent; border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     .dv { flex: 1; min-height: 0; }
     .grp { min-width: 0; }
     h3 { display: flex; align-items: baseline; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; margin-bottom: var(--ha-space-2, 8px); }
     h3 em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); color: var(--_inactive); letter-spacing: 0; }
-    h3 .sa { margin-left: auto; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; text-transform: none; color: var(--_inactive); padding: var(--ha-space-1, 4px) 0 var(--ha-space-1, 4px) var(--ha-space-3, 12px); }
+    h3 .sa { min-height: var(--_touch-min); margin-left: auto; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; text-transform: none; color: var(--_inactive); padding: var(--ha-space-1, 4px) 0 var(--ha-space-1, 4px) var(--ha-space-3, 12px); }
     .kb-open { position: absolute; right: var(--_pad); bottom: 16px; z-index: 5; display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: 48px; padding: 0 var(--ha-space-4, 16px);
       border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); box-shadow: var(--_card-shadow); }
     /* while the floating Keyboard pill shows, lists (results and detail views) get room below their last row so nothing hides under it */
@@ -999,7 +1002,7 @@ export class JbSearch extends LitElement {
         grid-template-areas: "q res" "rec res" "kb res";
         --kh: clamp(56px, var(--_kb-row, 88px), 88px); --kgap: 10px; --kfs: clamp(var(--ha-font-size-2xl, 24px), 2.4cqw, var(--ha-font-size-3xl, 28px)); }
       /* the source buttons (two rows here) take room from the keys */
-      .sx.srcs-on { --kh: clamp(44px, var(--_kb-row, 88px), 88px); }
+      .sx.srcs-on { --kh: clamp(var(--_touch-min), var(--_kb-row, 88px), 88px); }
       /* Keep the unchanged keyboard at the top of its available area, directly below the query/hint. */
       .kbd { align-self: start; --_kb-handle-display: none; }
       .sx.kb-hidden .kbd { display: block; }
@@ -1011,65 +1014,39 @@ export class JbSearch extends LitElement {
       .sx:has(> .recents:empty) { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "q res" "kb res"; }
     }
     @container np (orientation: landscape) and (max-height: 520px) {
-      .sx, .sx.srcs-on { --kh: 46px; --kgap: 6px; } .recents { display: none; }
+      .sx, .sx.srcs-on { --kh: var(--_touch-min); --kgap: 6px; } .recents { display: none; }
       .srcs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-top: var(--ha-space-2, 8px); } .srcs::-webkit-scrollbar { display: none; } .srcs .fc.src { flex: none; }
     }
     /* short landscape (1024x600 under the HA toolbar): the recents are hidden, so drop their grid row (and its 12 px gap), and with the
        source buttons on size the keys to the room left under the search box so the keyboard always ends above the tab bar
-       (keys stay 46 px where there is room; the expanded choices also pay for the separate source-control row). */
+       (keys stay at the 48 px touch size; the expanded choices also pay for the separate source-control row). */
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 520px) {
       .sx { grid-template-rows: auto 1fr; grid-template-areas: "q res" "kb res";
-        --kh: clamp(28px, var(--_kb-row, 46px), 46px); }
-      .sx.srcs-on { --kh: clamp(24px, var(--_kb-row, 46px), 46px); }
+        --kh: var(--_touch-min); }
+      .sx.srcs-on { --kh: var(--_touch-min); }
     }
     /* very short landscape (phone on its side under the HA toolbar): keyboard alone on the left at full height,
        query above the results on the right, keys sized to the space so no row is clipped */
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
       .sx, .sx.srcs-on { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "kb q" "kb res"; row-gap: var(--ha-space-2, 8px); padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px);
-        --kgap: 4px; --kh: clamp(28px, var(--_kb-row, 46px), 46px); }
+        --kgap: 4px; --kh: var(--_touch-min); }
       .kbd { align-self: center; }
       .qbar { height: 48px; } .qmeta { margin-top: var(--ha-space-1, 4px); }
-    }
-    /* phone */
-    @container np (max-width: 520px) {
-      .sx { --kh: 44px; --kgap: 5px; --kfs: var(--ha-font-size-2xl, 24px); gap: var(--ha-space-2, 8px); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px) var(--ha-space-2, 8px); }
-      .qbar { height: 50px; padding-left: var(--ha-space-4, 16px); } .q { font-size: var(--ha-font-size-xl, 20px); } .caret { height: 24px; } .q .ph { font-size: var(--ha-font-size-m, 14px); }
-      .qmeta { font-size: var(--ha-font-size-s, 12px); margin-top: var(--ha-space-1, 4px); }
-      .chip { height: 32px; font-size: var(--ha-font-size-m, 14px); padding: 0 var(--ha-space-3, 12px); }
-      .kbd { --_kb-handle-h: 22px; --_kb-handle-label: none; }
-      .scroll { padding: var(--ha-space-2, 8px); gap: var(--ha-space-3, 12px); }
-      .fc { height: 30px; padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-s, 12px); }
-      .scope { margin-top: var(--ha-space-2, 8px); gap: var(--ha-space-2, 8px); }
-      .sc { height: 40px; font-size: var(--ha-font-size-m, 14px); padding-left: var(--ha-space-3, 12px); }
-      .fc.clr { height: 40px; padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
     }
     /* keyboard pinned open (combined tab default): the list area never spills under the keyboard or the tab bar, whatever the size
        (on the smallest screens it gets less room rather than overlapping) */
     .sx.kb-always .res { overflow: hidden; }
-    /* short phones (portrait under the HA toolbar): the status line goes and the keys shrink so the list keeps a row above the keyboard */
-    @container np (max-width: 520px) and (max-height: 600px) {
-      .sx.kb-always, .sx.kb-always.srcs-on { --kh: 32px; --kgap: 4px; gap: var(--ha-space-2, 8px); }
+    /* #117 structural, on the card's own height: a short portrait card drops the status line so the list keeps a row above the keyboard */
+    @container np (orientation: portrait) and (max-height: 600px) {
+      .sx.kb-always, .sx.kb-always.srcs-on { --kgap: 4px; gap: var(--ha-space-2, 8px); }
       .sx.kb-always .qmeta { display: none; } .sx.kb-always .lcats { margin-bottom: var(--ha-space-2, 8px); }
     }
     /* phone on its side: the keyboard has the left half, the status line goes so the list keeps room on the right */
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
       .sx.kb-always .qmeta { display: none; } .sx.kb-always .lcats { margin-bottom: var(--ha-space-2, 8px); }
     }
-    /* 0.7.3 category tiles + sources control on small screens */
-    @container np (max-width: 520px) {
-      .lcrow { gap: var(--ha-space-2, 8px); } .lcats { gap: var(--ha-space-2, 8px); }
-      .lcats .fc.lc { flex: 1 1 0; min-width: 0; min-height: 54px; padding: var(--ha-space-1, 4px) 2px; font-size: var(--ha-font-size-s, 12px); letter-spacing: 0; text-transform: none; border-radius: var(--ha-border-radius-lg, 12px); gap: var(--ha-space-1, 4px); }
-      .lc .lci { width: 22px; height: 22px; } .cn { width: 38px; } .cn small { display: none; } .lcorner { gap: var(--ha-space-1, 4px); }
-      .srct { padding: 0 var(--ha-space-2, 8px); gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-m, 14px); letter-spacing: 0; } .srct .stl { display: none; } .srct .sts { display: inline; } .srct .stc { width: 16px; height: 16px; }
-    }
-    @container np (max-width: 520px) and (max-height: 600px) {
-      .lcats .fc.lc { min-height: 46px; gap: 1px; } .lc .lci { width: 18px; height: 18px; }
-    }
-    @container np (orientation: landscape) and (max-height: 520px) {
-      .lcats .fc.lc { min-height: 54px; } .lc .lci { width: 22px; height: 22px; }
-    }
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
-      .lcats .fc.lc { flex-direction: row; min-height: 40px; gap: var(--ha-space-2, 8px); } .lc .lci { width: 18px; height: 18px; } .cn small { display: none; } .cn { width: 42px; }
+      .lcats .fc.lc { flex-direction: row; min-height: var(--_touch-min); gap: var(--ha-space-2, 8px); } .lc .lci { width: 18px; height: 18px; }
     }
     .sx.kb-hidden .res .scroll { padding-bottom: calc(var(--ha-space-2, 8px) + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
 
