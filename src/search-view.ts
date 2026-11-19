@@ -11,7 +11,7 @@ import {
 } from './shared';
 import './detail-view';
 import { loadDetail, type DetailEntry } from './detail-view';
-import { PoolCache, scopedResults, libraryFirstAll, isLib, scopeKey, scopeName, type Scope, type ScopePool } from './search-scope';
+import { PoolCache, scopedResults, libraryFirstAll, isLib, scopeKey, scopeName, genreId, POOL_MAX_TRACKS, POOL_MAX_ALBUMS, type Scope, type ScopePool } from './search-scope';
 import type { KeyDetail } from './keyboard';
 import './keyboard';
 import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, SearchCategory, SearchResults } from './types';
@@ -371,7 +371,7 @@ export class JbSearch extends LitElement {
   /** Back to the list (tapping the Library tab again): leaves detail pages, keeps the words and filters */
   home() { this.closeMenu(); if (this._stack.length) this.closeDetails(false); this.browse?.toList(); }
   private onBrowseCat = (e: CustomEvent) => { const c = e.detail?.cat; if (c && c !== this._lcat) this._lcat = c; else this.requestUpdate(); };
-  private onLibScope = (e: CustomEvent) => { const d = e.detail; this.scopeFromDetail(d.item, d.type, d.data, false); };
+  private onLibScope = (e: CustomEvent) => { const d = e.detail; if (d.type === 'genre') { this.applyGenre(d.item); return; } this.scopeFromDetail(d.item, d.type, d.data, false); };
   /** which search types the current category / categories ask for */
   private searchTypes(): { types: string[]; genres: boolean } {
     if (this.combined) {
@@ -423,6 +423,8 @@ export class JbSearch extends LitElement {
   /** Scoped query: the artist's own items filtered here (instant once cached) + MA's search for the words with the
    *  artist filter, kept only when the artist matches. Library first, provider copies of library items dropped. */
   private async fetchScoped(scope: Scope, name: string, limit: number): Promise<SearchResults> {
+    // #46: a genre filter with words typed: MA searches inside the genre itself (library_items with genre + search, like its Library views)
+    if (scope.genre) return scopedResults(scope, await this.genrePool(scope.genre, name, Math.max(limit, 50)), name);
     const extra = scope.album || !scope.artist ? Promise.resolve({} as SearchResults)
       : maCall(this.hass!, this.config, 'search', {
         name, limit, media_type: ['album', 'track'],
@@ -431,13 +433,36 @@ export class JbSearch extends LitElement {
     const [pool, ex] = await Promise.all([this.poolFor(scope), extra]);
     return scopedResults(scope, pool, name, ex, Math.max(limit, 50));
   }
+  /** #46: one genre's library items from Music Assistant: music/{artists,albums,tracks}/library_items with `genre` (the genre's
+   *  item id) and the typed words as `search`; the same calls and parameters MA's own Library views use for their genre filter. */
+  private async genrePool(g: MaItem, search: string, limit: number): Promise<ScopePool> {
+    const be = this.config._backend;
+    if (!be?.ext.genres) throw new Error('genre filters need the Jukebox Kiosk integration');
+    const genre = genreId(g);
+    if (!Number.isFinite(genre)) throw new Error(`no genre id for ${g.name}`);
+    const get = (type: string, n: number) => be.send(`music/${type}/library_items`, { genre, limit: n, offset: 0, order_by: 'sort_name', ...(search ? { search } : {}) })
+      .then((r: any) => (Array.isArray(r?.items) ? r.items : Array.isArray(r) ? r : []).filter((x: any) => x && x.uri && x.name).map(normItem));
+    const [artists, albums, tracks] = await Promise.all([get('artists', Math.min(limit, POOL_MAX_ALBUMS)), get('albums', Math.min(limit, POOL_MAX_ALBUMS)), get('tracks', Math.min(Math.max(limit, 50), POOL_MAX_TRACKS))]);
+    return { artists, albums, tracks };
+  }
   private poolFor(scope: Scope): Promise<ScopePool> {
+    if (scope.genre) { const g = scope.genre; return this.pools.get(scopeKey(scope), () => this.genrePool(g, '', POOL_MAX_TRACKS)); }
     const it = scope.album ?? scope.artist!;
     const type = scope.album ? 'album' : 'artist';
     return this.pools.get(scopeKey(scope), () => loadDetail(this.hass!, this.config, it, type).then((d) => {
       if (d.error && !d.tracks.length && !d.albums.length) throw new Error(d.error);
       return { albums: d.albums, tracks: d.tracks };
     }));
+  }
+  /** #46: filter by this genre. The words typed to find the genre are cleared (they named the genre, not the music in it);
+   *  typing again searches inside the genre. The filter shows as a "Genre: Country" chip next to Clear filters. */
+  applyGenre(g: MaItem) {
+    if (!this.genreOk() || !this.filtersOn()) return;
+    this._menu = null; this._sel = ''; this.press.release();
+    if (this._stack.length) this.closeDetails(false);
+    if (this._query) this.setQuery('');
+    this._filter = 'all';
+    this.setScope({ genre: g });
   }
   /** Apply (or clear, with null) the scope; the current query re-runs inside it. */
   setScope(scope: Scope | null) {
@@ -452,7 +477,7 @@ export class JbSearch extends LitElement {
     const f = this.scopeGroups();
     if (f && this._filter !== 'all' && !f.includes(this._filter)) this._filter = 'all';
     if (this._query) { this._results = null; this.engine.query(this._query); }
-    fire(this, 'jukebox-search-scope', { scope: scope ? { artist: scope.artist?.name ?? '', album: scope.album?.name ?? '' } : null });
+    fire(this, 'jukebox-search-scope', { scope: scope ? { artist: scope.artist?.name ?? '', album: scope.album?.name ?? '', genre: scope.genre?.name ?? '' } : null });
   }
   /** Clear filters: the scope and the category chip (the typed words stay). The combined Library tab also empties the
    *  search box and goes back to All. */
@@ -476,7 +501,7 @@ export class JbSearch extends LitElement {
   }
   /** groups a scope can show (null = no scope) */
   private scopeGroups(): GroupKey[] | null {
-    return !this._scope ? null : this._scope.album ? ['tracks'] : ['albums', 'tracks'];
+    return !this._scope ? null : this._scope.genre ? ['artists', 'albums', 'tracks'] : this._scope.album ? ['tracks'] : ['albums', 'tracks'];
   }
   private async fetchGlobal(name: string, limit: number): Promise<SearchResults> {
     const { types, genres: wantGenres } = this.searchTypes();
@@ -595,6 +620,8 @@ export class JbSearch extends LitElement {
   // ---------- taps, menus, detail stack ----------
   private tap(it: MaItem, g: GroupKey, el?: HTMLElement) {
     const type = this.mediaType(it, g);
+    // #46 (Randy): tapping a genre adds the filter genre = that genre to the results; it opens no page
+    if (g === 'genres' || type === 'genre') { this.applyGenre(it); return; }
     if (drillable(type, this.config)) { this.openDetail(it, type); return; }
     // a station opens the station sheet (details, heart, Play); a tap never plays (0.6.3)
     if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.hearts.isFav(it) } }); return; }
@@ -668,12 +695,13 @@ export class JbSearch extends LitElement {
   private scopeClear = (it: MaItem, type: string) => (this.filtersOn() && type === 'artist' && !this._scope?.album && this._scope?.artist?.uri === it.uri ? `Clear filter by ${it.name}` : '');
   private scopeTpl() {
     const s = this._scope; if (!s) return nothing;
-    const chip = (k: 'artist' | 'album', label: string, name: string) => html`<button class="sc" data-scope=${k} tabindex="-1"
+    const chip = (k: 'artist' | 'album' | 'genre', label: string, name: string) => html`<button class="sc" data-scope=${k} tabindex="-1"
       aria-label=${`Remove filter ${label}: ${name}`} @pointerdown=${noFocus}
       @click=${() => this.setScope(k === 'artist' || !s.artist ? null : { artist: s.artist })}><span class="scl">${label}:</span><b>${name}</b>${icon('close', 'i scx')}</button>`;
     return html`<div class="scope" role="group" aria-label="Search filters">
       ${s.artist ? chip('artist', 'Artist', s.artist.name) : nothing}
       ${s.album ? chip('album', 'Album', s.album.name) : nothing}
+      ${s.genre ? chip('genre', 'Genre', s.genre.name) : nothing}
       <button class="fc clr" data-action="clear-filters" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.clearFilters()}>Clear filters</button>
     </div>`;
   }
@@ -698,7 +726,7 @@ export class JbSearch extends LitElement {
     const p = this.press.handlers(it.uri, { it, g });
     const fav = this.canFav(it, g);
     return html`<div class="row ${drill ? 'drill' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''} ${this.press.pressing === it.uri && g !== 'genres' ? 'hp' : ''} ${this._sel === it.uri ? 'sel' : ''}"
-        data-uri=${it.uri} data-group=${g} data-type=${type} aria-label=${drill ? `Open ${it.name}` : it.name}
+        data-uri=${it.uri} data-group=${g} data-type=${type} aria-label=${g === 'genres' ? `Filter by genre ${it.name}` : drill ? `Open ${it.name}` : it.name}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       ${g === 'genres' ? html`<span class="ar th gen" aria-hidden="true">${icon('genre')}</span>` : artTpl(it, g === 'artists' ? 'th circ' : 'th')}
@@ -706,7 +734,7 @@ export class JbSearch extends LitElement {
         <small>${provTpl(it.uri, it.provider, it.media_type)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, g)}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
       ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, g)) : nothing}
-      ${g === 'genres' ? html`<span class="ra go" aria-hidden="true">${icon('open')}</span>` : nothing}
+      ${g === 'genres' ? html`<span class="gf" aria-hidden="true">Filter</span>` : nothing}
     </div>`;
   }
 
@@ -742,7 +770,7 @@ export class JbSearch extends LitElement {
         return html`<div class="empty scoped"><b>No ${what} in ${name}</b><span>${this._query ? html`for “${this._shownQuery || this._query}”. Try fewer letters, or clear the filter to search everything.` : 'Nothing found for this filter.'}</span>${clr}</div>`;
       }
       if (f !== 'all') return this.group(GROUPS.find((x) => x.key === f)!, r[f] ?? [], true);
-      return html`${(['albums', 'tracks'] as GroupKey[]).filter((k) => r[k]?.length).map((k) => this.group(GROUPS.find((x) => x.key === k)!, r[k]!, false))}`;
+      return html`${(this.scopeGroups() ?? ['albums', 'tracks']).filter((k) => r[k]?.length).map((k) => this.group(GROUPS.find((x) => x.key === k)!, r[k]!, false))}`;
     }
     if (this.combined) {
       if (!this._query) return nothing;
@@ -980,6 +1008,9 @@ export class JbSearch extends LitElement {
     .ar.gen { display: grid; place-items: center; background: var(--_chip-sel); color: var(--_fg); box-shadow: 0 0 0 var(--ha-border-width-sm, 1px) var(--_surface-border); }
     .ar.gen .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     .ra.go { width: 48px; height: 48px; display: grid; place-items: center; color: var(--_inactive); }
+    /* #46: a genre row filters by that genre: a labeled pill says so (the whole row is the 48px+ target) */
+    .gf { display: inline-flex; align-items: center; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; flex: none; }
     /* Labeled search actions need their own height and enough width for an unbroken touch label. */
     .row { min-height: 68px; }
 

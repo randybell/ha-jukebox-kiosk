@@ -538,6 +538,9 @@ export class JukeboxCard extends LitElement {
     this._tab = t;
     // v0.7 Library home: the Search tile (and Genres) open Search ready to type, optionally on a category chip
     const cat = e.detail?.category === 'genres' ? 'genre' : e.detail?.category;
+    // #46: a genre tapped in the separate Library tab filters the Search tab by it
+    const genre = e.detail?.genre;
+    if (genre) { this.updateComplete.then(() => ((comb ? this.libHost() : this.renderRoot.querySelector('jb-search')) as any)?.applyGenre?.(genre)); return; }
     if (comb) this.updateComplete.then(() => this.libHost()?.focusSearch?.(cat));
     else if (t === 'search' && e.detail?.focus) this.updateComplete.then(() => (this.renderRoot.querySelector('jb-search') as any)?.focusSearch?.(e.detail?.category));
   };

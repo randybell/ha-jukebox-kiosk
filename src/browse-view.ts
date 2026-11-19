@@ -752,8 +752,8 @@ export class JbBrowse extends LitElement {
   }
   /** A genre tile (0.7.20, tiles layout): the glyph cover like the genre row's; a tap opens nothing, as on the row. */
   private genreTile(it: MaItem) {
-    return html`<div class="tile gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Open ${it.name}`} @click=${() => this.openDetail(it, 'genre')}>
-      <div class="tw"><span class="ar big gl" aria-hidden="true">${icon('genre')}</span></div>
+    return html`<div class="tile gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Filter by genre ${it.name}`} @click=${() => this.genreTap(it)}>
+      <div class="tw"><span class="ar big gl" aria-hidden="true">${icon('genre')}</span><span class="gf" aria-hidden="true">Filter</span></div>
       <b>${it.name}</b><small>Genre</small>
     </div>`;
   }
@@ -796,12 +796,18 @@ export class JbBrowse extends LitElement {
     </div>`;
   }
 
-  /** A genre row (separate layout's Genres list). 0.7.11: the genre page is gone, so a tap opens nothing. */
+  /** #46 (Randy): tapping a genre filters the results by it (MA's genre filter). Embedded in the combined Library tab the search
+   *  view above applies it; the separate Library tab hands it to the Search tab. No genre page opens. */
+  private genreTap(it: MaItem) {
+    if (this.embedded) this.dispatchEvent(new CustomEvent('jb-lib-scope', { detail: { item: it, type: 'genre' } }));
+    else this.dispatchEvent(new CustomEvent('jukebox-nav', { detail: { tab: 'search', genre: it }, bubbles: true, composed: true }));
+  }
+  /** A genre row (separate layout's Genres list): a tap filters by that genre (#46). */
   private genreRow(it: MaItem) {
-    return html`<div class="row gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Open ${it.name}`}
-        @click=${() => this.openDetail(it, 'genre')}>
+    return html`<div class="row gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Filter by genre ${it.name}`}
+        @click=${() => this.genreTap(it)}>
       <span class="ar th gl" aria-hidden="true">${icon('genre')}</span>
-      <div class="rt"><b>${it.name}</b><small>Genre</small></div><span class="du"></span><span class="mo">${icon('open')}</span>
+      <div class="rt"><b>${it.name}</b><small>Genre</small></div><span class="du"></span><span class="gf" aria-hidden="true">Filter</span>
     </div>`;
   }
   /** Radio "My stations": Favorites, then "More stations" (library stations that are not favourites); a hint when both are empty. */
@@ -924,7 +930,11 @@ export class JbBrowse extends LitElement {
     :host([embedded]) .bx { padding: 0; gap: var(--ha-space-2, 8px); }
     :host([embedded]) .bar .fc { min-height: var(--_touch-min); padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
     .bsp { flex: 1; }
-    .row.gen { grid-template-columns: 44px minmax(0, 1fr) auto var(--_touch-min); cursor: pointer; }
+    .row.gen { grid-template-columns: 44px minmax(0, 1fr) auto auto; cursor: pointer; }
+    /* #46: "Filter" says what a tap on a genre does (a labeled pill, no small icon) */
+    .gf { display: inline-flex; align-items: center; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; flex: none; }
+    .tile.gen .tw .gf { position: absolute; right: var(--ha-space-2, 8px); bottom: var(--ha-space-2, 8px); background: var(--ha-card-background, var(--card-background-color, var(--_bg))); }
     .cats { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; flex: 1 1 20em; min-width: 0; }
     .cats::-webkit-scrollbar { display: none; }
     .fc { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);

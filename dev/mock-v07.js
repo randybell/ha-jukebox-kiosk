@@ -141,6 +141,17 @@ export function createV07({ params, catalog, sleep }) {
         list = [...list].sort((a, b) => (args.order_by === 'timestamp_added_desc' ? Number(b.item_id) - Number(a.item_id) : a.name.localeCompare(b.name)));
         return list.slice(off, off + lim);
       }
+      case 'music/tracks/library_items': case 'music/albums/library_items': case 'music/artists/library_items': case 'music/playlists/library_items': {
+        // #46: MA's library_items: genre (item id or list) filters by genre, search by words; logged for the tests
+        (window.__genreCalls ??= []).push({ command, args: { ...args } });
+        const key = command.split('/')[1];
+        const off = Number(args.offset ?? 0), lim = Number(args.limit ?? 25), q = String(args.search ?? '').trim().toLowerCase();
+        const gids = args.genre == null ? [] : Array.isArray(args.genre) ? args.genre.map(String) : [String(args.genre)];
+        let list = catalog[key] ?? [];
+        if (gids.length) list = list.filter((it) => gids.some((g) => inGenre(g, [it]).length));
+        if (q) list = list.filter((it) => String(it.name).toLowerCase().includes(q));
+        return list.slice(off, off + lim).map(pub); // MA 2.10 library_items returns a plain list
+      }
       case 'music/genres/tracks': {
         const gid = String(args.item_id ?? ''), off = Number(args.offset ?? 0), lim = Number(args.limit ?? 100);
         const list = inGenre(gid, catalog.tracks);
