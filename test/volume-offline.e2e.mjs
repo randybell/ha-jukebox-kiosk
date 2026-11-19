@@ -36,7 +36,10 @@ await p.evaluate(() => {
 const vols = () => ev(p, `window.__vol.splice(0)`);
 const push = () => ev(p, `(__card.hass = window.__hass, 1)`);
 const status = () => ev(p, `[...__card.shadowRoot.querySelectorAll('[data-status="reconnecting"]')].map((e) => e.textContent.trim())`);
-const box = (sel) => p.evaluate((e) => { const r = eval(e).getBoundingClientRect(); return { l: r.left, w: r.width, y: r.top + r.height / 2 }; }, sel);
+// #117: with 48px speaker rows a 1024x600 card shows Everywhere and the first room, and the other rooms scroll in the speaker list
+// (0.8.8: the lead speaker stays fixed, the rest scroll); bring the speaker's row into view before pressing its slider, as a person would
+const box = async (sel) => { await p.evaluate((e) => eval(e)?.closest('.rooms .vr')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }), sel); await sleep(80);
+  return p.evaluate((e) => { const r = eval(e).getBoundingClientRect(); return { l: r.left, w: r.width, y: r.top + r.height / 2 }; }, sel); };
 const slider = (id) => `${NOW}.querySelector('.vr[data-entity="${id}"] jb-slider')`;
 async function drag(sel, ms, from = 0.2, to = 0.8) {
   const r = await box(sel); await p.mouse.move(r.l + r.w * from, r.y); await p.mouse.down();
