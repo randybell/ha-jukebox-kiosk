@@ -55,9 +55,10 @@ const section = async (s, cat) => {
 const layoutOf = (s) => ev(s.p, `(() => { const r = ${s.BR}; const l = [...r.querySelectorAll('.lib')];
   return { layouts: [...new Set(l.map((x) => x.dataset.layout))], tiles: r.querySelectorAll('.lib .tile').length, rows: r.querySelectorAll('.lib .row').length,
     otherTiles: r.querySelectorAll('.tile:not(.lib .tile)').length, circ: r.querySelectorAll('.circ').length, artistTiles: r.querySelectorAll('.tile.artist').length }; })()`);
+// #117: library_columns is the most columns; a narrow grid shows fewer so every tile keeps room for its two 48px buttons (--_tmin)
 const cols = (s) => ev(s.p, `(() => { const g = ${s.BR}.querySelector('.grid.lib'); if (!g) return null; const ts = [...g.querySelectorAll('.tile')]; const top = Math.round(ts[0].getBoundingClientRect().top);
   const first = ts.filter((t) => Math.round(t.getBoundingClientRect().top) === top); const w = first.map((t) => Math.round(t.getBoundingClientRect().width));
-  return { tracks: getComputedStyle(g).gridTemplateColumns.split(' ').length, first: first.length, wMin: Math.min(...w), wMax: Math.max(...w), gw: Math.round(g.getBoundingClientRect().width), right: Math.round(Math.max(...first.map((t) => t.getBoundingClientRect().right))), grid: Math.round(g.getBoundingClientRect().right) }; })()`);
+  return { tracks: getComputedStyle(g).gridTemplateColumns.split(' ').length, first: first.length, wMin: Math.min(...w), wMax: Math.max(...w), gw: Math.round(g.getBoundingClientRect().width), fit: (() => { const cs = getComputedStyle(g), gap = parseFloat(cs.columnGap) || 0, tmin = parseFloat(cs.getPropertyValue('--_tmin')) || 0; return tmin ? Math.max(1, Math.floor((g.clientWidth + gap) / (tmin + gap))) : 99; })(), right: Math.round(Math.max(...first.map((t) => t.getBoundingClientRect().right))), grid: Math.round(g.getBoundingClientRect().right) }; })()`);
 const targetOf = (s, cat, view, i = 1) => view === 'tiles'
   ? `[...${s.BR}.querySelectorAll('.lib .tile')][${i}].querySelector('.ar')`
   : `[...${s.BR}.querySelectorAll('.lib .row')][${i}].querySelector('.rt')`;
@@ -91,8 +92,9 @@ for (const [tag, cfg] of [['default (library_view missing)', {}], ['rows', { lib
     const s = await open(cfg);
     await section(s, 'artist');
     const c = await cols(s);
-    check(`tiles, library_columns ${J(val) ?? 'missing'} → ${want} columns (grid tracks ${c?.tracks}, tiles on the first row ${c?.first}, ${c?.wMin}-${c?.wMax}px wide)`,
-      !!c && c.tracks === want && c.first === want && c.wMax - c.wMin <= 1 && c.right <= c.grid, J(c));
+    const w2 = Math.min(want, c?.fit ?? want);
+    check(`tiles, library_columns ${J(val) ?? 'missing'} → ${want} columns${w2 < want ? ` (${w2} fit this grid)` : ''} (grid tracks ${c?.tracks}, tiles on the first row ${c?.first}, ${c?.wMin}-${c?.wMax}px wide)`,
+      !!c && c.tracks === w2 && c.first === w2 && c.wMax - c.wMin <= 1 && c.right <= c.grid, J(c));
     if (SHOTS && [2, 6].includes(val)) { await ev(s.p, `${s.BR}.querySelector('.scroll').scrollTo({ top: 0 })`); await sleep(250); await shot(s.p, `artists-tiles-${val}`); }
     if (SHOTS && val === undefined) { await ev(s.p, `${s.BR}.querySelector('.scroll').scrollTo({ top: 0 })`); await sleep(250); await shot(s.p, `artists-tiles-3`); }
     await s.p.close();
@@ -103,8 +105,9 @@ for (const [tag, cfg] of [['default (library_view missing)', {}], ['rows', { lib
     for (const cat of separate ? ALLG : ALL) {
       await section(s, cat);
       const c = await cols(s);
-      if (cat === 'podcast' || cat === 'audiobook') check(`5 columns, ${separate ? 'separate' : 'combined'}, ${NAMES[cat]}: ${c?.tracks} tracks (only ${(await ev(s.p, `${s.BR}.querySelectorAll('.lib .tile').length`))} tiles)`, !!c && c.tracks === 5, J(c));
-      else check(`5 columns, ${separate ? 'separate' : 'combined'}, ${NAMES[cat]}: five on a row`, !!c && c.tracks === 5 && c.first === 5, J(c));
+      const w5 = Math.min(5, c?.fit ?? 5);
+      if (cat === 'podcast' || cat === 'audiobook') check(`5 columns, ${separate ? 'separate' : 'combined'}, ${NAMES[cat]}: ${c?.tracks} tracks (only ${(await ev(s.p, `${s.BR}.querySelectorAll('.lib .tile').length`))} tiles)`, !!c && c.tracks === w5, J(c));
+      else check(`5 columns, ${separate ? 'separate' : 'combined'}, ${NAMES[cat]}: five on a row${w5 < 5 ? ` (${w5} fit this grid)` : ''}`, !!c && c.tracks === w5 && c.first === w5, J(c));
     }
     await s.p.close();
   }
