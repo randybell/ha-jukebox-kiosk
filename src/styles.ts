@@ -5,12 +5,16 @@ import { css } from 'lit';
  * Roles follow HA's built-in components (see the comments on each token). The only fixed look left is the screensaver.
  */
 /*
- * #117 card widths. Every width rule is a container query on the card's own box (never the window), so a half-width card or the editor
- * preview gets the layout for its own width. CSS cannot read a variable inside @container, so the widths are listed here once:
- *   narrow   <= 520 px   the editor preview (~460 px) and half-width cards: one column, compact rows        (np, rows, jbapp)
- *   medium   <= 720 px   portrait tablets and narrow panels: header pill shortens, row actions fold          (np, rows, jbapp 640-960)
- *   wide     >= 700 px   landscape side by side: keyboard beside results, station sheet as a centred dialog (np, st)
- *   Heights (landscape <= 400 / 520 / 560 px) only make room for the keyboard and Now Playing on short panels.
+ * #117 fluid layout. Sizes, paddings, gaps and type follow the card's own width continuously (clamp() with container units, flex wrap,
+ * auto-fill grids); every touch target is at least --_touch-min (48px) at every width. Container queries on the card's own box (never the
+ * window) remain only where the structure changes, each commented where it is:
+ *   keyboard   digit row once ten 48px keys fit (kb)            search   keyboard beside the results, query row (np >= 700, landscape)
+ *   Library    split filter view (np >= 1000)                    station  bottom sheet vs centred dialog (st >= 700)
+ *   Speakers   bottom sheet vs right drawer (spk >= 641)         Now Playing  art beside info (np landscape >= 700), 3-column mini mixer (vol >= 600),
+ *              two-row main speaker line (vol <= 460)
+ *   narrow content choices (np <= 520 / 600): rows move the duration into the subtitle and drop the provider badge, the album page's
+ *   actions take their own line, the text chip goes while typing; the narrow queue row layout (Kiosk Dev's row-button rework).
+ *   Heights (landscape <= 400 / 520 / 560 px, short cards) only make room for the keyboard and Now Playing on short panels.
  * JavaScript reads the CSS result (for example --_narrow on Now Playing) instead of repeating a width.
  */
 /** the narrow card width from the table above, for the one JavaScript layout choice that has no element to read a CSS flag from (menuPos) */

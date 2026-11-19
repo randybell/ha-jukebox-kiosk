@@ -294,7 +294,7 @@ export function menuPos(root: HTMLElement, anchor: HTMLElement | null, rows: num
   const rr = localRect(root);
   const ar = anchor ? localRect(anchor) : { top: rr.top + rr.height / 3, bottom: rr.top + rr.height / 3, right: rr.right - rr.width / 3 };
   const sheet = rr.width <= NARROW_W || !anchor;
-  const menuH = (rows + 1) * 46 + 46;
+  const menuH = (rows + 1) * 48 + 46; // #117: menu items are 48px touch targets (.mi min-height --_touch-min)
   const below = ar.bottom - rr.top - 6;
   const up = below + menuH > rr.height - 8;
   const top = up ? Math.max(8, ar.top - rr.top - menuH + 6) : below;
