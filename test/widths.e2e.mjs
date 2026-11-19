@@ -101,7 +101,7 @@ let failures = 0, done = 0, retries = 0;
 // (Input.dispatchTouchEvent timed out) and a page in the background can be measured mid-transition. If a DevTools call still gets
 // stuck, that is a harness fault, not a card result: the scene runs once more in a fresh page with every check unchanged, and the
 // rerun is shown in the output.
-const HARNESS = /timed out|Target closed|Session closed/;
+const HARNESS = /timed out|Navigation timeout|Target closed|Session closed/;
 async function run(browser, { v, s }, again = false) {
   const sc = SCENES[s]; if (!sc) { results.push({ view: v.name, scene: s, error: 'no scene' }); return; }
   let p;
