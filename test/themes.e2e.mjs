@@ -70,7 +70,8 @@ for (const theme of ['light', 'dark', 'glass', 'wallpaper']) for (const name of 
 
 // 3. the exact roles, in the sentinel theme
 {
-  const rgbOf = (s) => (s.match(/[\d.]+/g) ?? []).slice(0, 4).map(Number);
+  // 0.9.0 (#112): color-mix() tints compute to color(srgb r g b / a) with 0-1 channels; read both forms as 0-255
+  const rgbOf = (s) => { const n = (s.match(/[\d.]+/g) ?? []).slice(0, 4).map(Number); return s.startsWith('color(srgb') ? n.map((x, i) => (i < 3 ? x * 255 : x)) : n; };
   const same = (s, t) => { const v = rgbOf(s); return t.every((x, i) => Math.abs((v[i] ?? 0) - x) <= 1); };
   let p = await newPage('sentinel', 'lib-keyboard-123');
   const kb = await ev(p, `(() => { const k = ${SV}.querySelector('jb-keyboard').shadowRoot; const kb = k.querySelector('.kb'); const key = [...k.querySelectorAll('.k')].find((e) => e.getBoundingClientRect().width > 0);
