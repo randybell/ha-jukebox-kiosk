@@ -4,6 +4,28 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.9.0 — 2026-11-19
+
+- Mute buttons now keep the last mute you set for each speaker while Home Assistant is disconnected, and send it once when the connection comes back, the same way volume already does.
+- The Repeat button now switches only between Repeat off and Repeat entire queue. There is no repeat-one in the cycle. If the player is already on repeat-one (set somewhere else), the button shows as pressed, labelled Repeat single track, and a tap turns repeat off. The card no longer turns repeat-one into repeat-all on its own, and the server no longer rewrites a repeat-one command.
+- The action buttons on track rows and on Queue rows are gone, and so is the `show_action_icons` setting. A tap or a press and hold on a row still opens its pop-up.
+- The `coerce_repeat_one` and `show_action_icons` settings are gone. Old setups that still have them keep loading; the card ignores those keys, and the editor does not write them back.
+- In the Queue pop-up, guests now get the same Play Now confirmation as admins, with Play Now greyed on the track that is playing, and the same Undo after Remove. When `queue_edit` is off, only Move up and Move down are greyed for that reason; Play Next and Remove follow `queue_play` for everyone.
+- Genres is a search filter again, and a Library category button, when Music Assistant can search genres. It is in the default Library button row, and it is an optional chip if you set `search_categories`. Radio and Podcasts stay separate. Tapping a genre does not open a page: it adds a Genre filter, and the results are that genre's artists, albums and tracks in your library. Words you typed to find the genre are cleared; typing again searches inside the genre. Genres are searched in your library only. With `search_filters` off, a genre row or tile is plain text and does nothing.
+- Selected chips, pressed keys and the Queue's playing row stay readable on dark themes.
+- The press-and-hold pop-up is capped at the same height as the other pop-ups (the smaller of that ceiling and the space between the bars). Its buttons never shrink below 48 px; the art, text and gaps shrink instead.
+- Side padding follows the card's own width, not the window, so a half-width card gets narrower padding.
+- Spacing, corner rounding and borders follow Home Assistant's theme tokens. Uneven 1.5 px outlines are now 1 px, and selected rings are 2 px. A theme that changes those tokens changes the card too. Icon sizes follow the theme's icon size; at the default they look the same.
+- Things you can't tap use Home Assistant's disabled colors. Quiet-but-tappable items share one dim look.
+- Transitions follow Home Assistant's timings. If the device asks for reduced motion, the caret blink, the loading line, the busy and pending pulses, lyrics loading and the queue spinner stop; the press-and-hold progress still fills.
+- The layout follows the card's size more smoothly. Controls are at least 48 px. The on-screen keyboard has seven letter keys a row, or ten once ten 48 px keys fit (the same point that adds the digit row). On a short landscape card the key height comes from the room left, so the keys end above the tab bar.
+- On a card narrower than about 520 px, the Up next strip on Now Playing is left out; the Queue tab still shows what is next.
+- The header keeps the height it had before (64 px on a wide card). The speaker status reads in order, with "Playing on:" first.
+- The Library category buttons are never narrower than 48 px. The four sleep choices on the cover stay on one row. The More speakers button sits in its own strip under the speaker list.
+- A touch on a result row no longer also presses the button that the newly opened page puts under your finger.
+- The Play on and Presets chips in Speakers have their outline again.
+- Messages share one toast look. The screensaver lyrics pill keeps its own look.
+
 ## 0.8.9 — 2026-11-18
 
 - Album art on Now Playing and the screensaver now recovers on its own. If a picture won't load, the card tries the next picture it has for that track, then shows the no-art look. Each picture is tried only once per track, and everything starts fresh when the next track begins, so a picture that failed no longer keeps later covers blank.
