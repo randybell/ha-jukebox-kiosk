@@ -1026,7 +1026,7 @@ export class JbSearch extends LitElement {
     h3 { display: flex; align-items: baseline; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; margin-bottom: var(--ha-space-2, 8px); }
     h3 em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); color: var(--_inactive); letter-spacing: 0; }
     h3 .sa { min-height: var(--_touch-min); margin-left: auto; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; text-transform: none; color: var(--_inactive); padding: var(--ha-space-1, 4px) 0 var(--ha-space-1, 4px) var(--ha-space-3, 12px); }
-    .kb-open { position: absolute; right: var(--_pad); bottom: 16px; z-index: 5; display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: 48px; padding: 0 var(--ha-space-4, 16px);
+    .kb-open { position: absolute; right: var(--_pad); bottom: var(--ha-space-4, 16px); z-index: 5; display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px);
       border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); box-shadow: var(--_card-shadow); }
     /* while the floating Keyboard pill shows, lists (results and detail views) get room below their last row so nothing hides under it */
     .sx.kb-hidden { --_fab-space: 72px; }
@@ -1034,7 +1034,7 @@ export class JbSearch extends LitElement {
     @container np (orientation: landscape) and (min-width: 700px) {
       .sx { grid-template-columns: minmax(400px, 40%) minmax(0, 1fr); grid-template-rows: auto auto 1fr; column-gap: clamp(var(--ha-space-4, 16px), 2.5cqw, var(--ha-space-8, 32px));
         grid-template-areas: "q res" "rec res" "kb res";
-        --kh: clamp(56px, var(--_kb-row, 88px), 88px); --kgap: 10px; --kfs: clamp(var(--ha-font-size-2xl, 24px), 2.4cqw, var(--ha-font-size-3xl, 28px));
+        --kh: clamp(56px, var(--_kb-row, 88px), 88px); --kgap: var(--_space-2-5); --kfs: clamp(var(--ha-font-size-2xl, 24px), 2.4cqw, var(--ha-font-size-3xl, 28px));
         /* #117: beside the results the keyboard has the whole left column; a key row is never taller than the room measured for it
            (--_kb-row), so on a short landscape card (1024x600 under the HA toolbar, a phone on its side) no key row is cut off */
         --_kh-room: max(28px, var(--_kb-row, 100vh)); }
@@ -1051,7 +1051,7 @@ export class JbSearch extends LitElement {
       .sx:has(> .recents:empty) { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "q res" "kb res"; }
     }
     @container np (orientation: landscape) and (max-height: 520px) {
-      .sx, .sx.srcs-on { --kh: var(--_touch-min); --kgap: 6px; } .recents { display: none; }
+      .sx, .sx.srcs-on { --kh: var(--_touch-min); --kgap: var(--_space-1-5); } .recents { display: none; }
       .srcs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-top: var(--ha-space-2, 8px); } .srcs::-webkit-scrollbar { display: none; } .srcs .fc.src { flex: none; }
     }
     /* short landscape (1024x600 under the HA toolbar): the recents are hidden, so drop their grid row (and its 12 px gap), and with the
@@ -1064,14 +1064,14 @@ export class JbSearch extends LitElement {
       /* #117: with a filter chip row (artist, album or genre) the 48px keys still have to end above the tab bar: the search box is a
          48px target here, the keys sit 4px apart, and the status line goes (the chip and Clear filters already say what is shown) */
       .sx:has(.scope) .qbar { height: var(--_touch-min); }
-      .sx:has(.scope) { --kgap: 4px; }
+      .sx:has(.scope) { --kgap: var(--ha-space-1, 4px); }
       .sx:has(.scope) .qmeta { display: none; }
     }
     /* very short landscape (phone on its side under the HA toolbar): keyboard alone on the left at full height,
        query above the results on the right, keys sized to the space so no row is clipped */
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
       .sx, .sx.srcs-on { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "kb q" "kb res"; row-gap: var(--ha-space-2, 8px); padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px);
-        --kgap: 4px; --kh: var(--_touch-min); }
+        --kgap: var(--ha-space-1, 4px); --kh: var(--_touch-min); }
       .kbd { align-self: center; }
       .qbar { height: 48px; } .qmeta { margin-top: var(--ha-space-1, 4px); }
     }
@@ -1085,7 +1085,7 @@ export class JbSearch extends LitElement {
     }
     /* #117 structural, on the card's own height: a short portrait card drops the status line so the list keeps a row above the keyboard */
     @container np (orientation: portrait) and (max-height: 600px) {
-      .sx.kb-always, .sx.kb-always.srcs-on { --kgap: 4px; gap: var(--ha-space-2, 8px); }
+      .sx.kb-always, .sx.kb-always.srcs-on { --kgap: var(--ha-space-1, 4px); gap: var(--ha-space-2, 8px); }
       .sx.kb-always .qmeta { display: none; } .sx.kb-always .lcats { margin-bottom: var(--ha-space-2, 8px); }
     }
     /* phone on its side: the keyboard has the left half, the status line goes so the list keeps room on the right */

@@ -836,7 +836,7 @@ export class JukeboxCard extends LitElement {
     /* Now Playing, Library, Search, Queue and the detail pages are plain HA card surfaces: ha-card paints the one surface (album art is a background on the screensaver only). */
     .view { position: absolute; inset: 0; z-index: 1; }
     .view[hidden] { display: none; }
-    .badge { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-md, 8px); background: var(--_active);
+    .badge { position: absolute; top: var(--_space-1-5); left: calc(50% + var(--ha-space-2, 8px)); min-width: 20px; height: 20px; padding: 0 var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-md, 8px); background: var(--_active);
       color: var(--_on-accent); font-style: normal; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); display: grid; place-items: center; font-variant-numeric: tabular-nums; }
     /* Screensaver / Stage: restored to e322336 look (fixed black canvas and white type). Theme rules do not apply here.
        color: #fff is set so the clock and title stay white now that the parent card uses theme body text. */

@@ -535,7 +535,7 @@ export class JbNow extends LitElement {
     .nw.sl-open .art { z-index: 5; }
     .art-btns { position: absolute; top: var(--_ab-inset); right: var(--_ab-inset); z-index: 2; display: flex; gap: var(--ha-space-2, 8px); }
     /* #42: the touch minimum at 1x; on zoomed big screens (--_z > 1) never below --_ab-floor before the zoom (54px on screen at 1920x1080) */
-    :host { --_ab-inset: 10px; --_ab-floor: 40px; --_ab: max(var(--_ab-floor), calc(var(--_touch-min) / var(--_z, 1))); }
+    :host { --_ab-inset: var(--_space-2-5); --_ab-floor: 40px; --_ab: max(var(--_ab-floor), calc(var(--_touch-min) / var(--_z, 1))); }
     .ab { width: var(--_ab); height: var(--_ab); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
@@ -594,7 +594,7 @@ export class JbNow extends LitElement {
     .sleep-cd { letter-spacing: .04em; font-variant-numeric: tabular-nums; }
     .sleep-strip .sp.sleep-cd { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-3, 12px); }
     .sleep-strip .sp.sleep-cd .i { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); }
-    .tb .dot { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
+    .tb .dot { position: absolute; left: 50%; bottom: var(--_space-1-5); width: 5px; height: 5px; margin-left: -2.5px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
     .tb.pp { width: clamp(56px, 16cqw, 80px); height: clamp(56px, 16cqw, 80px); background: var(--_active); color: var(--_on-accent); }
     .tb.pp .i { width: calc(var(--_icon) * 44 / 24); height: calc(var(--_icon) * 44 / 24); }
     .tb.pr, .tb.nx { width: clamp(calc(var(--_touch-min) + 4px), 14cqw, 72px); height: clamp(calc(var(--_touch-min) + 4px), 14cqw, 72px); } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
@@ -616,7 +616,7 @@ export class JbNow extends LitElement {
     .upn.panel { background: transparent; }
     .volw { position: relative; display: flex; flex-direction: column; min-height: 0; }
     /* More speakers floats over the fading speaker list: use ha-card's fill + backdrop-filter (not a transparent hole, not --_surface-solid) so the label stays readable. */
-    .vmore { display: none; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 2; align-items: center; gap: var(--ha-space-1, 4px);
+    .vmore { display: none; position: absolute; left: 50%; bottom: var(--_space-1-5); transform: translateX(-50%); z-index: 2; align-items: center; gap: var(--ha-space-1, 4px);
       padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); min-height: var(--_touch-min); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);

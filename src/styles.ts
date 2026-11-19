@@ -77,6 +77,10 @@ export const tokens = css`
     --_disabled: var(--disabled-text-color, #bdbdbd);
     --_disabled-fill: var(--disabled-color, #bdbdbd);
     --_dim: var(--dark-secondary-opacity, 0.54);
+    /* #109 half steps of HA's 4 px spacing scale, for the few gaps that sit between two --ha-space-N tokens; they follow --ha-space-1 */
+    --_space-1-5: calc(1.5 * var(--ha-space-1, 4px)); /* 6px */
+    --_space-2-5: calc(2.5 * var(--ha-space-1, 4px)); /* 10px */
+    --_space-3-5: calc(3.5 * var(--ha-space-1, 4px)); /* 14px */
     /* smallest tap target for any button (Material / HA touch target): buttons may shrink to fit, never below this */
     --_touch-min: 48px;
     /* side padding follows the card's own width (container units), not the window: a half-width card gets half-width padding */
