@@ -529,16 +529,16 @@ export class JbNow extends LitElement {
     .art .ovl { position: absolute; inset: 0; z-index: 1; }
     .slx { position: absolute; inset: 0; z-index: 4; } .art .slx { z-index: 1; }
     .nw.sl-open .art { z-index: 5; }
-    .art-btns { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: var(--ha-space-2, 8px); }
+    .art-btns { position: absolute; top: var(--_ab-inset); right: var(--_ab-inset); z-index: 2; display: flex; gap: var(--ha-space-2, 8px); }
     /* #42: the touch minimum at 1x; on zoomed big screens (--_z > 1) never below --_ab-floor before the zoom (54px on screen at 1920x1080) */
-    :host { --_ab-floor: 40px; --_ab: max(var(--_ab-floor), calc(var(--_touch-min) / var(--_z, 1))); }
+    :host { --_ab-inset: 10px; --_ab-floor: 40px; --_ab: max(var(--_ab-floor), calc(var(--_touch-min) / var(--_z, 1))); }
     .ab { width: var(--_ab); height: var(--_ab); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background var(--_t-fast), color var(--_t-fast); }
     .ab .i { width: var(--_icon); height: var(--_icon); }
-    .art .sleep-strip { position: absolute; z-index: 2; top: calc(18px + var(--_ab)); right: 10px; left: 10px; margin: 0; justify-content: flex-end; }
+    .art .sleep-strip { position: absolute; z-index: 2; top: calc(var(--_ab-inset) + var(--_ab) + var(--ha-space-2, 8px)); right: var(--_ab-inset); left: var(--_ab-inset); margin: 0; justify-content: flex-end; }
     .art .sleep-strip .sp { background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       border-color: var(--_surface-border); }

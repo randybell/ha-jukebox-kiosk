@@ -53,7 +53,7 @@ export class JbHoldSheet extends LitElement {
   }
   /**
    * Shared scale from the 7-choice Queue layout (6 actions + Cancel). Height stays content-sized.
-   * Available height is the band between the card's top bar and bottom tab bar (same 8 px margin top and bottom).
+   * Available height is the band between the card's top bar and bottom tab bar (the same --_hs-gap margin top and bottom).
    * The sheet stays centered on the card; if it would cover a bar, it is shifted into the band.
    */
   private fit() {
@@ -67,11 +67,13 @@ export class JbHoldSheet extends LitElement {
     const card = this.parentElement as HTMLElement | null;
     const topEl = card?.querySelector('.top') as HTMLElement | null;
     const tabsEl = card?.querySelector('.tabs') as HTMLElement | null;
-    let bandTop = 8, bandBot = Math.max(0, this.clientHeight - 8), avail = Math.max(0, this.clientHeight - 16);
+    // #121 the margin to the bars is the CSS token --_hs-gap (read back, not repeated here)
+    const m = parseFloat(getComputedStyle(this).getPropertyValue('--_hs-gap')) || 0;
+    let bandTop = m, bandBot = Math.max(0, this.clientHeight - m), avail = Math.max(0, this.clientHeight - 2 * m);
     if (card && topEl && tabsEl) {
       const cr = card.getBoundingClientRect();
-      bandTop = topEl.getBoundingClientRect().bottom - cr.top + 8;
-      bandBot = tabsEl.getBoundingClientRect().top - cr.top - 8;
+      bandTop = topEl.getBoundingClientRect().bottom - cr.top + m;
+      bandBot = tabsEl.getBoundingClientRect().top - cr.top - m;
       avail = Math.max(0, bandBot - bandTop);
     }
     // never taller than the ceiling every other pop-up uses (min(100%, --_popup-max-h), measured from the .pmh probe)
@@ -85,7 +87,6 @@ export class JbHoldSheet extends LitElement {
     sh.style.height = 'auto';
     sh.style.maxHeight = 'none';
     sh.style.transform = '';
-    if (cancel) cancel.style.marginTop = '16px';
 
     const cs = getComputedStyle(sh);
     const padT = parseFloat(cs.paddingTop) || 0;
@@ -96,10 +97,11 @@ export class JbHoldSheet extends LitElement {
       ? hd.getBoundingClientRect().height + (parseFloat(hdCS!.marginTop) || 0) + (parseFloat(hdCS!.marginBottom) || 0)
       : 0;
     const sample = (its?.querySelector('.it') || cancel) as HTMLElement | null;
-    const btnH = sample ? sample.getBoundingClientRect().height : 64;
+    const btnH = sample ? sample.getBoundingClientRect().height : 0;
     const cancelH = cancel ? cancel.getBoundingClientRect().height : btnH;
-    const gap = its ? (parseFloat(getComputedStyle(its).gap) || 0) : 6;
-    const cancelMt = 16;
+    const gap = its ? (parseFloat(getComputedStyle(its).gap) || 0) : 0;
+    // Cancel's own top margin at scale 1 (CSS), measured rather than repeated
+    const cancelMt = cancel ? (parseFloat(getComputedStyle(cancel).marginTop) || 0) : 0;
     const max = JbHoldSheet.MAX_ACTIONS;
     const n = its ? its.querySelectorAll('.it').length : 0;
     const packed = sh.getBoundingClientRect().height;
@@ -117,7 +119,6 @@ export class JbHoldSheet extends LitElement {
       s = Math.min(touch / btnH, Math.max(0.5, rest > 0 ? (avail - nRef * touch) / rest : 1));
     }
 
-    if (cancel) cancel.style.marginTop = '';
     sh.style.setProperty('--_hs-s', String(s));
     // Content height; shared maximum is the measured band between the bars.
     sh.style.height = 'auto';
@@ -160,7 +161,7 @@ export class JbHoldSheet extends LitElement {
   }
   static styles = [tokens, base, mediaStyles, css`
     /* Host fills its parent (main.np, same placement as the other hold pop-ups); fit() caps height to the band between the bars. */
-    :host { position: absolute; inset: 0; z-index: 45; display: none; box-sizing: border-box; font-family: var(--_font-body); color: var(--_fg); container-type: size; }
+    :host { --_hs-gap: var(--ha-space-2, 8px); position: absolute; inset: 0; z-index: 45; display: none; box-sizing: border-box; font-family: var(--_font-body); color: var(--_fg); container-type: size; }
     :host([open]) { display: grid; place-items: center; }
     /* probe for the shared pop-up ceiling (read by fit()) */
     .pmh { position: absolute; top: 0; left: 0; width: 0; height: min(100%, var(--_popup-max-h)); visibility: hidden; pointer-events: none; }

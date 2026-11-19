@@ -876,9 +876,11 @@ export class JukeboxCard extends LitElement {
     /* Tab bar (0.5.0, segmented): one rounded translucent track on the theme footer, equal segments with hairline
        dividers, the active segment using the theme primary. Only colour/transform transitions (no layout, no blur). */
     .tabs { display: grid; grid-template-columns: repeat(var(--tabs, 4), minmax(0, 1fr)); gap: var(--ha-space-1, 4px);
-      padding: var(--ha-space-3, 12px) calc(var(--_pad) + var(--ha-space-1, 4px)) calc(var(--ha-space-3, 12px) + env(safe-area-inset-bottom)); background: transparent;
+      /* #121 the track (::before) sits --_track-out outside the tab buttons on every side, derived from the bar's own padding */
+      --_tabs-pt: var(--ha-space-3, 12px); --_tabs-pb: var(--ha-space-3, 12px); --_track-out: var(--ha-space-1, 4px);
+      padding: var(--_tabs-pt) calc(var(--_pad) + var(--_track-out)) calc(var(--_tabs-pb) + env(safe-area-inset-bottom)); background: transparent;
       border-top: var(--ha-border-width-sm, 1px) solid var(--_hairline); position: relative; z-index: 2; }
-    .tabs::before { content: ""; position: absolute; top: 7px; left: var(--_pad); right: var(--_pad); bottom: calc(9px + env(safe-area-inset-bottom));
+    .tabs::before { content: ""; position: absolute; top: calc(var(--_tabs-pt) - var(--_track-out)); left: var(--_pad); right: var(--_pad); bottom: calc(var(--_tabs-pb) - var(--_track-out) + env(safe-area-inset-bottom));
       border-radius: var(--ha-border-radius-xl, 16px); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); pointer-events: none; }
     .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--ha-space-1, 4px); min-width: 0; min-height: 58px;
       padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-xl, 16px); background: transparent; border: 0;
@@ -903,7 +905,7 @@ export class JukeboxCard extends LitElement {
     @container jbapp (max-width: 800px) { .pill .pl { display: none; } }
     @container jbapp (max-width: 640px) {
       .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .clock { font-size: var(--ha-font-size-l, 16px); } .top { min-height: 52px; padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px); }
-      .tabs { gap: 2px; padding-left: calc(var(--_pad) + var(--ha-space-1, 4px)); padding-right: calc(var(--_pad) + var(--ha-space-1, 4px)); }
+      .tabs { gap: 2px; }
       .tab { font-size: var(--ha-font-size-s, 12px); letter-spacing: 0; } .tab .i { width: calc(var(--_icon) * 26 / 24); height: calc(var(--_icon) * 26 / 24); }
       .tab span { white-space: normal; text-align: center; line-height: var(--ha-line-height-condensed, 1.2); }
     }
@@ -911,14 +913,13 @@ export class JukeboxCard extends LitElement {
     :host([data-fit]) .top { min-height: 50px; padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px); }
     :host([data-fit]) .brand { font-size: var(--ha-font-size-xl, 20px); } :host([data-fit]) .brand-i { width: var(--_icon); height: var(--_icon); } :host([data-fit]) .clock { font-size: var(--ha-font-size-xl, 20px); }
     :host([data-fit]) .pill { padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
-    :host([data-fit]) .tabs { gap: var(--ha-space-1, 4px); padding: var(--ha-space-2, 8px) calc(var(--_pad) + var(--ha-space-1, 4px)) calc(var(--ha-space-2, 8px) + env(safe-area-inset-bottom)); }
-    :host([data-fit]) .tabs::before { top: 4px; bottom: calc(5px + env(safe-area-inset-bottom)); border-radius: var(--ha-border-radius-xl, 16px); }
+    :host([data-fit]) .tabs { gap: var(--ha-space-1, 4px); --_tabs-pt: var(--ha-space-2, 8px); --_tabs-pb: var(--ha-space-2, 8px); }
+    :host([data-fit]) .tabs::before { border-radius: var(--ha-border-radius-xl, 16px); }
     :host([data-fit]) .tab { min-height: 50px; padding: var(--ha-space-1, 4px); gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-m, 14px); border-radius: var(--ha-border-radius-lg, 12px); } :host([data-fit]) .tab .i { width: var(--_icon); height: var(--_icon); }
     :host([data-fit]) .tab + .tab::before { left: -2px; }
     :host([data-fit=tiny]) .top { min-height: 44px; padding-top: var(--ha-space-1, 4px); padding-bottom: var(--ha-space-1, 4px); }
     /* tiny (< 560 px): one row, icon + small label side by side (icons only on narrow screens) */
-    :host([data-fit=tiny]) .tabs { padding: var(--ha-space-2, 8px) calc(var(--_pad) + var(--ha-space-1, 4px)) calc(var(--ha-space-2, 8px) + env(safe-area-inset-bottom)); }
-    :host([data-fit=tiny]) .tabs::before { top: 3px; bottom: calc(3px + env(safe-area-inset-bottom)); border-radius: var(--ha-border-radius-xl, 16px); }
+        :host([data-fit=tiny]) .tabs::before { border-radius: var(--ha-border-radius-xl, 16px); }
     :host([data-fit=tiny]) .tab { flex-direction: row; gap: var(--ha-space-2, 8px); min-height: 44px; font-size: var(--ha-font-size-m, 14px); border-radius: var(--ha-border-radius-lg, 12px); }
     :host([data-fit=tiny]) .tab .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 var(--ha-space-1, 4px); font-size: var(--ha-font-size-xs, 10px); flex: none; }

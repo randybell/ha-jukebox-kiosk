@@ -7,7 +7,7 @@ import { SearchEngine } from './search-engine';
 import {
   imageOf, normItem, mediaStyles, artTpl, provTpl, artistNames, fmtDur, fire, noFocus, PressController, swallowNextClick, menuTpl,
   playMedia, playMessage, drillable, canRadio, isRadio, hideStartRadio, mediaActions, searchRadio, confirmTpl, type MenuAction, type MenuPos, type ConfirmState,
-  maCall,
+  maCall, localRect,
 } from './shared';
 import './detail-view';
 import { loadDetail, type DetailEntry } from './detail-view';
@@ -166,6 +166,47 @@ export class JbSearch extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener('keydown', this.onHwKey, true);
+    this._kbRo?.disconnect(); this._kbRo = undefined; this._kbObs = [];
+  }
+  /** #121: the keyboard's key height comes from the room it really has (measured), not from guessed heights of the search box,
+   *  hint and source buttons. */
+  private _kbRo?: ResizeObserver;
+  private _kbObs: Element[] = [];
+  protected updated() {
+    if (typeof ResizeObserver === 'undefined') return;
+    const sx = this.renderRoot.querySelector('.sx'), kb = sx?.querySelector('jb-keyboard');
+    if (!sx || !kb) return;
+    // the search screen and everything in its grid: a taller search box or hint moves the keyboard down without resizing it
+    const els = [sx, ...sx.children];
+    if (els.length === this._kbObs.length && els.every((e, i) => e === this._kbObs[i])) return;
+    this._kbRo?.disconnect();
+    this._kbRo = new ResizeObserver(() => this.measureKb());
+    for (const e of els) this._kbRo.observe(e);
+    this._kbObs = els;
+  }
+  /**
+   * Room for the keyboard = from the top of its grid area to the bottom of the search screen's content box; the keyboard's own
+   * chrome (padding, row gaps, handle) is its height minus its key rows. The key height that fills the room goes into --_kb-row;
+   * the CSS clamps it between each layout's smallest and largest key. Setting it changes the keyboard's height only, so the next
+   * measurement gives the same value and the observer settles.
+   */
+  private measureKb() {
+    const sx = this.renderRoot.querySelector('.sx') as HTMLElement | null;
+    const kb = sx?.querySelector('jb-keyboard') as HTMLElement | null;
+    if (!sx || !kb) return;
+    const keys = [...(kb.shadowRoot?.querySelectorAll('.k') ?? [])].filter((k) => (k as HTMLElement).offsetHeight > 0) as HTMLElement[];
+    const kr = localRect(kb);
+    if (!keys.length || kr.height <= 0) return;
+    const rows = new Set(keys.map((k) => Math.round(localRect(k).top))).size;
+    const kh = localRect(keys[0]).height;
+    const sr = localRect(sx), cs = getComputedStyle(sx);
+    const bottom = sr.bottom - (parseFloat(cs.paddingBottom) || 0) - (parseFloat(cs.borderBottomWidth) || 0);
+    const align = getComputedStyle(kb).alignSelf;
+    const top = align === 'center' ? 2 * (kr.top + kr.height / 2) - bottom : kr.top;
+    const row = (bottom - top - (kr.height - rows * kh)) / rows;
+    if (!(row > 0)) return;
+    const was = parseFloat(sx.style.getPropertyValue('--_kb-row')) || 0;
+    if (Math.abs(was - row) > 0.5) sx.style.setProperty('--_kb-row', `${Math.floor(row * 10) / 10}px`);
   }
 
   protected willUpdate(changed: PropertyValues) {
@@ -952,9 +993,9 @@ export class JbSearch extends LitElement {
     @container np (orientation: landscape) and (min-width: 700px) {
       .sx { grid-template-columns: minmax(400px, 40%) minmax(0, 1fr); grid-template-rows: auto auto 1fr; column-gap: clamp(var(--ha-space-4, 16px), 2.5cqw, var(--ha-space-8, 32px));
         grid-template-areas: "q res" "rec res" "kb res";
-        --kh: clamp(56px, calc((100cqh - 200px) / 5 - 12px), 88px); --kgap: 10px; --kfs: clamp(var(--ha-font-size-2xl, 24px), 2.4cqw, var(--ha-font-size-3xl, 28px)); }
+        --kh: clamp(56px, var(--_kb-row, 88px), 88px); --kgap: 10px; --kfs: clamp(var(--ha-font-size-2xl, 24px), 2.4cqw, var(--ha-font-size-3xl, 28px)); }
       /* the source buttons (two rows here) take room from the keys */
-      .sx.srcs-on { --kh: clamp(44px, calc((100cqh - 300px) / 5 - 12px), 88px); }
+      .sx.srcs-on { --kh: clamp(44px, var(--_kb-row, 88px), 88px); }
       /* Keep the unchanged keyboard at the top of its available area, directly below the query/hint. */
       .kbd { align-self: start; --_kb-handle-display: none; }
       .sx.kb-hidden .kbd { display: block; }
@@ -974,14 +1015,14 @@ export class JbSearch extends LitElement {
        (keys stay 46 px where there is room; the expanded choices also pay for the separate source-control row). */
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 520px) {
       .sx { grid-template-rows: auto 1fr; grid-template-areas: "q res" "kb res";
-        --kh: clamp(28px, calc((100cqh - 220px) / 5), 46px); }
-      .sx.srcs-on { --kh: clamp(24px, calc((100cqh - 274px) / 5), 46px); }
+        --kh: clamp(28px, var(--_kb-row, 46px), 46px); }
+      .sx.srcs-on { --kh: clamp(24px, var(--_kb-row, 46px), 46px); }
     }
     /* very short landscape (phone on its side under the HA toolbar): keyboard alone on the left at full height,
        query above the results on the right, keys sized to the space so no row is clipped */
     @container np (orientation: landscape) and (min-width: 700px) and (max-height: 400px) {
       .sx, .sx.srcs-on { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "kb q" "kb res"; row-gap: var(--ha-space-2, 8px); padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px);
-        --kgap: 4px; --kh: clamp(28px, calc((100cqh - 50px) / 5 - 1px), 46px); }
+        --kgap: 4px; --kh: clamp(28px, var(--_kb-row, 46px), 46px); }
       .kbd { align-self: center; }
       .qbar { height: 48px; } .qmeta { margin-top: var(--ha-space-1, 4px); }
     }

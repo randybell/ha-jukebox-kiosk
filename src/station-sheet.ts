@@ -7,7 +7,7 @@
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
-import { mediaStyles, noFocus, artTpl, fire, playMedia, playMessage } from './shared';
+import { mediaStyles, noFocus, artTpl, fire, playMedia, playMessage, localRect } from './shared';
 import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
 import { defineElement } from './define';
 import { stationInfo } from './radio-fav';
@@ -87,6 +87,14 @@ export class JbStation extends LitElement {
     }
   }
 
+  /** #121: the toast left after the sheet closes sits just above the card's tab bar, measured, instead of a guessed 96 px. */
+  protected updated() {
+    const t = this.renderRoot.querySelector('.toast.solo') as HTMLElement | null;
+    const tabs = this.parentElement?.querySelector('.tabs') as HTMLElement | null;
+    if (!t) return;
+    const lift = tabs && tabs.offsetHeight > 0 ? Math.max(0, localRect(this).bottom - localRect(tabs).top) : 0;
+    t.style.setProperty('--_toast-bottom', `calc(${Math.round(lift)}px + var(--ha-space-4, 16px))`);
+  }
   render() {
     const it = this.item;
     const t = this._toast ? html`<div class="toast solo" role="status">${this._toast}</div>` : nothing;
@@ -145,7 +153,7 @@ export class JbStation extends LitElement {
     .fav { width: 60px; height: 60px; flex: none; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
     .fav .i { width: calc(var(--_icon) * 28 / 24); height: calc(var(--_icon) * 28 / 24); } .fav.on { color: var(--_active); border-color: currentColor; } .fav:disabled { color: var(--_disabled); }
     .note { margin: -6px 0 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; }
-    .toast.solo { z-index: 3; --_toast-bottom: 96px; pointer-events: auto; }
+    .toast.solo { z-index: 3; pointer-events: auto; }
     /* tablet / desktop: a centred dialog */
     @container st (min-width: 700px) {
       .sheet { left: 50%; top: 50%; bottom: auto; transform: translate(-50%, -50%); width: min(560px, 90cqw); border-radius: var(--_dialog-radius); padding: var(--ha-space-6, 24px) var(--ha-space-6, 24px) var(--ha-space-5, 20px); }
