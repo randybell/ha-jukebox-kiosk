@@ -916,34 +916,36 @@ export class JbBrowse extends LitElement {
 
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
-    .bx { position: relative; height: 100%; display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); padding: var(--ha-space-4, 16px) var(--_pad) var(--ha-space-3, 12px); }
-    .bar { display: flex; gap: var(--ha-space-2, 8px); align-items: center; min-width: 0; }
+    .bx { position: relative; height: 100%; display: flex; flex-direction: column; gap: clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-3, 12px));
+      padding: clamp(var(--ha-space-2, 8px), 3cqi, var(--ha-space-4, 16px)) var(--_pad) clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-3, 12px)); }
+    /* #117: the category buttons keep a line of their own once they can't get ~20em next to Filter / Favorites / sort (flex wrap, no width rule) */
+    .bar { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); align-items: center; min-width: 0; }
     /* 0.7.2 combined Library tab: jb-search draws the padding, search box and category buttons */
     :host([embedded]) .bx { padding: 0; gap: var(--ha-space-2, 8px); }
-    :host([embedded]) .bar .fc { height: 36px; padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
+    :host([embedded]) .bar .fc { min-height: var(--_touch-min); padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
     .bsp { flex: 1; }
-    .row.gen { grid-template-columns: 44px minmax(0, 1fr) auto 40px; cursor: pointer; }
-    .cats { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+    .row.gen { grid-template-columns: 44px minmax(0, 1fr) auto var(--_touch-min); cursor: pointer; }
+    .cats { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; flex: 1 1 20em; min-width: 0; }
     .cats::-webkit-scrollbar { display: none; }
-    .fc { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 42px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+    .fc { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
       color: var(--_inactive); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); white-space: nowrap; }
     .fc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
-    .fc.tog { padding: 0 var(--ha-space-4, 16px); font-size: var(--ha-font-size-m, 14px); }
+    .fc.tog { padding: 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); font-size: var(--ha-font-size-m, 14px); }
     /* v0.7 Library filters: chips (same as Search), the filter box and the on-screen keyboard under the grid */
     .scope { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-width: 0; flex-wrap: wrap; }
-    .sc { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; max-width: 100%; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
+    .sc { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); max-width: 100%; padding: 0 var(--ha-space-2, 8px) 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); border-radius: var(--ha-border-radius-pill, 9999px);
       background: var(--_chip-sel); color: var(--_fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); min-width: 0; }
     .sc .scl { opacity: .8; flex: none; }
     .sc b { font-weight: var(--ha-font-weight-bold, 700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .sc .scx { width: 28px; height: 28px; padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-circle, 50%); background: var(--_chip-bg); flex: none; }
-    .fc.clr { height: 44px; padding: 0 var(--ha-space-4, 16px); font-size: var(--ha-font-size-m, 14px); color: var(--_fg); border-color: var(--_surface-border); }
+    .fc.clr { min-height: var(--_touch-min); padding: 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); font-size: var(--ha-font-size-m, 14px); color: var(--_fg); border-color: var(--_surface-border); }
     .empty .fc.clr { margin-top: var(--ha-space-4, 16px); }
-    .lfq { display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: 52px; padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
-      background: var(--_input-bg); color: var(--_input-ink); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); min-width: 0; }
+    .lfq { display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: clamp(var(--_touch-min), 10cqi, 52px); padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+      background: var(--_input-bg); color: var(--_input-ink); font-size: clamp(var(--ha-font-size-l, 16px), 3.5cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); min-width: 0; }
     .lfq .lfv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .lfq .lfv.ph { color: var(--_input-label); font-weight: var(--ha-font-weight-medium, 500); }
     .lfq .caret { width: 2px; height: 26px; background: var(--_active); flex: none; margin-left: calc(-1 * var(--ha-space-2, 8px)); }
-    .lfq .lfx { margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_inactive); flex: none; }
+    .lfq .lfx { margin-left: auto; width: var(--_touch-min); height: var(--_touch-min); margin-right: calc(-1 * var(--ha-space-1, 4px)); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_inactive); flex: none; }
     .kbd { flex: none; width: 100%; max-width: 1100px; align-self: center; }
     .lsplit { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--ha-space-4, 16px); }
     .lkcol { display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); min-height: 0; }
@@ -955,46 +957,44 @@ export class JbBrowse extends LitElement {
       .lkcol { display: contents; }
       .lkcol .lfq { order: 1; } .lkcol .scope { order: 2; } .lsplit > .scroll { order: 3; flex: 1; } .lkcol .kbd { order: 4; margin-top: 0; }
     }
+    /* #117 kept as a container query on the card's own width (a content choice, not sizes): on a narrow card the "matches the text" chip
+       is dropped while typing, since the box above already shows the text and two lines of chips would push the list down */
     @container np (max-width: 600px) {
-      .sc { height: 40px; font-size: var(--ha-font-size-m, 14px); padding-left: var(--ha-space-3, 12px); }
-      .fc.clr { height: 40px; padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
-      .fc.flt { padding: 0 var(--ha-space-3, 12px); }
-      .fc.flt .fl { display: none; }
-      .lfq { height: 46px; font-size: var(--ha-font-size-l, 16px); }
       .scope.typing.textonly { display: none; }
       .scope.typing .sc[data-scope="text"] { display: none; }
     }
-    .scroll { flex: 1; min-height: 0; overflow-y: auto; container: np / inline-size; scrollbar-width: none; overscroll-behavior: contain; padding: var(--ha-space-4, 16px); display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); touch-action: pan-y; }
+    .scroll { flex: 1; min-height: 0; overflow-y: auto; container: np / inline-size; scrollbar-width: none; overscroll-behavior: contain; padding: clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-4, 16px)); display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     /* the list sits directly on the HA card surface: no second fill */
     .scroll.panel { background: transparent; }
     /* v0.7 Library home */
-    .home { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--ha-space-4, 16px); }
-    .lt { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: var(--ha-space-1, 4px); min-height: 180px; padding: var(--ha-space-6, 24px) var(--ha-space-6, 24px);
-      border-radius: var(--ha-border-radius-3xl, 24px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); text-align: left; cursor: pointer; }
+    .home { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, calc(50% - var(--ha-space-2, 8px))), 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)); }
+    .lt { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: var(--ha-space-1, 4px); min-height: clamp(132px, 30cqi, 180px); padding: clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-6, 24px));
+      border-radius: clamp(var(--ha-border-radius-xl, 16px), 4cqi, var(--ha-border-radius-3xl, 24px)); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); text-align: left; cursor: pointer; }
     .lt:active { background: var(--_chip-sel); }
-    .lti { flex: 1; display: flex; align-items: flex-start; } .lti svg { width: calc(var(--_icon) * 52 / 24); height: calc(var(--_icon) * 52 / 24); fill: var(--_active); }
-    .ltl { font-family: var(--_font-display, inherit); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); }
+    .lti { flex: 1; display: flex; align-items: flex-start; } .lti svg { width: clamp(calc(var(--_icon) * 38 / 24), 9cqi, calc(var(--_icon) * 52 / 24)); height: clamp(calc(var(--_icon) * 38 / 24), 9cqi, calc(var(--_icon) * 52 / 24)); fill: var(--_active); }
+    .ltl { font-family: var(--_font-display, inherit); font-size: clamp(var(--ha-font-size-xl, 20px), 5cqi, var(--ha-font-size-3xl, 28px)); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); }
     .lts { font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); }
     .lhead { align-items: center; gap: var(--ha-space-4, 16px); overflow: hidden; }
-    .lt-title { font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ha-space-4, 16px) var(--ha-space-4, 16px); }
+    .lt-title { font-size: clamp(var(--ha-font-size-l, 16px), 3.5cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* #117: tiles never get narrower than 116px, so the two 48px cover buttons (heart, open) fit side by side on the picture */
+    .grid { --_tmin: 116px; display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(var(--_tmin), 28cqi, 150px), 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
     .tile { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; border-radius: var(--ha-border-radius-lg, 12px); padding: var(--ha-space-1, 4px); cursor: pointer; }
     .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .tw { position: relative; }
     .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--ha-border-radius-md, 8px); }
     .big.circ { border-radius: var(--ha-border-radius-circle, 50%); }
-    .tw .pv { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); }
+    .tw .pv { position: absolute; left: clamp(5px, 1.5cqi, 8px); bottom: clamp(5px, 1.5cqi, 8px); max-width: calc(100% - 16px); }
     .tile.artist .tw .pv { left: 50%; transform: translateX(-50%); bottom: 2px; }
     /* Playlist artwork (including lettering near its lower edge) must not sit behind a provider badge. */
     .tile[data-type="playlist"] .tw .pv { position: static; display: block; margin-top: var(--ha-space-2, 8px); max-width: 100%; }
     .tile[data-type="playlist"] b { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
-    .tw .open { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
+    .tw .open { position: absolute; right: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); width: var(--_touch-min); height: var(--_touch-min); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg); }
     .tw .open .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
-    .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
+    .tw .tfav { position: absolute; left: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); width: var(--_touch-min); height: var(--_touch-min); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_muted); }
@@ -1005,7 +1005,8 @@ export class JbBrowse extends LitElement {
     .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
     .tile.artist b { text-align: center; }
     /* 0.7.20 Library tiles: library_columns fixed columns (2 to 6) instead of as many 150px ones as fit */
-    .grid.lib { grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); }
+    /* #117: library_columns is the most columns; fewer when a column would go under the tile minimum (auto-fill, no width rule) */
+    .grid.lib { grid-template-columns: repeat(auto-fill, minmax(max(var(--_tmin), calc((100% - (var(--_cols, 3) - 1) * clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px))) / var(--_cols, 3) - 0.5px)), 1fr)); }
     .row.ir { grid-template-columns: 44px minmax(0, 1fr); grid-auto-flow: column; grid-auto-columns: auto; }
     .tile small { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .list { display: flex; flex-direction: column; }
@@ -1018,7 +1019,7 @@ export class JbBrowse extends LitElement {
     .rt .ver { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .rt small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .du { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); text-align: right; font-variant-numeric: tabular-nums; }
-    .mo { width: 40px; height: 40px; display: grid; place-items: center; color: var(--_inactive); }
+    .mo { width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; color: var(--_inactive); }
     .dv { flex: 1; min-height: 0; }
     .sec { display: flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .08em; text-transform: uppercase; color: var(--_muted); margin: 2px 0 calc(-1 * var(--ha-space-1, 4px)); }
     .sec .i { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); color: var(--_active); }
@@ -1026,37 +1027,28 @@ export class JbBrowse extends LitElement {
     /* v0.7 radio "Stations by…" */
     .modes { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; margin-top: calc(-1 * var(--ha-space-1, 4px)); }
     .modes::-webkit-scrollbar { display: none; }
-    .fc.sm { height: 36px; padding: 0 var(--ha-space-4, 16px); font-size: var(--ha-font-size-m, 14px); }
+    .fc.sm { min-height: var(--_touch-min); padding: 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); font-size: var(--ha-font-size-m, 14px); }
     .rbh { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-width: 0; }
-    .rbt { font-family: var(--_font-display); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .rbt { font-family: var(--_font-display); font-size: clamp(var(--ha-font-size-l, 16px), 4cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
     .tagc { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); }
     .row.fold { grid-template-columns: 44px minmax(0, 1fr) auto auto; }
     .ar.gl { display: grid; place-items: center; background: var(--_chip-bg); color: var(--_muted); } .ar.gl .i { width: 60%; height: 60%; }
     .empty .fc { margin-top: var(--ha-space-2, 8px); }
     /* v0.7 Discover */
-    .disc { display: flex; flex-direction: column; gap: var(--ha-space-6, 24px); }
+    .disc { display: flex; flex-direction: column; gap: clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-6, 24px)); }
     .drow { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); min-height: 120px; content-visibility: auto; contain-intrinsic-size: auto 260px; }
     .drow h3 { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); }
-    .hs { display: grid; grid-auto-flow: column; grid-auto-columns: 168px; gap: var(--ha-space-4, 16px); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
+    .hs { display: grid; grid-auto-flow: column; grid-auto-columns: clamp(var(--_tmin, 116px), 30cqi, 168px); gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
       scroll-snap-type: x proximity; touch-action: pan-x pan-y; padding-bottom: 2px; }
     .hs::-webkit-scrollbar { display: none; }
     .hs .tile { scroll-snap-align: start; }
     .hs.skel .ar { background: var(--_chip-bg) !important; } .hs.skel b { background: var(--_chip-bg); border-radius: var(--ha-border-radius-md, 8px); width: 70%; }
-    .rowerr { display: flex; align-items: center; gap: var(--ha-space-2, 8px); } .rowerr .fc { height: 34px; }
+    .rowerr { display: flex; align-items: center; gap: var(--ha-space-2, 8px); } .rowerr .fc { min-height: var(--_touch-min); }
     .rp { position: absolute; left: 8px; right: 8px; bottom: 6px; height: 4px; border-radius: 2px; background: var(--_chip-sel); overflow: hidden; }
     .rp i { display: block; height: 100%; background: var(--_active); }
+    /* #117 kept as a container query on the card's own width (a content choice): a narrow row drops its provider badge and
+       uses 40px art so the title keeps its room; every size above it is fluid */
     @container np (max-width: 520px) {
-      .hs { grid-auto-columns: 112px; gap: var(--ha-space-2, 8px); } .drow { contain-intrinsic-size: auto 190px; } .disc { gap: var(--ha-space-4, 16px); }
-      .fc.sm { height: 32px; padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); } .rbt { font-size: var(--ha-font-size-l, 16px); }
-    }
-    @container np (max-width: 520px) {
-      .bx { padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px) var(--ha-space-2, 8px); gap: var(--ha-space-2, 8px); }
-      .bar { flex-wrap: wrap; } .cats { flex-basis: 100%; order: 0; } .fc { height: 36px; padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
-      .scroll { padding: var(--ha-space-2, 8px); }
-      .grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--ha-space-3, 12px) var(--ha-space-2, 8px); }
-      .home { grid-template-columns: 1fr 1fr; gap: var(--ha-space-3, 12px); } .lt { min-height: 132px; padding: var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); }
-      .lti svg { width: calc(var(--_icon) * 38 / 24); height: calc(var(--_icon) * 38 / 24); } .ltl { font-size: var(--ha-font-size-xl, 20px); } .lts { font-size: var(--ha-font-size-m, 14px); } .lt-title { font-size: var(--ha-font-size-l, 16px); }
-      .tw .pv { font-size: var(--ha-font-size-xs, 10px); left: 5px; bottom: 5px; }
       .row { grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: var(--ha-space-2, 8px); } .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto auto; } .row .pv { display: none; } .row .du { font-size: var(--ha-font-size-s, 12px); } .th { width: 40px; height: 40px; }
     }
   `];

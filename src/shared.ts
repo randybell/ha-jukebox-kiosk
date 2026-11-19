@@ -406,7 +406,7 @@ export const mediaStyles = css`
   .scrim.dim { background: var(--_scrim); -webkit-backdrop-filter: var(--_scrim-filter); backdrop-filter: var(--_scrim-filter); }
   .menu { position: absolute; z-index: 7; width: min(220px, 90cqi); padding: var(--ha-space-2, 8px); border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); max-height: var(--_popup-max-h); overflow: auto; }
   .mh { font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase; color: var(--_inactive); padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px) var(--ha-space-2, 8px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mi { display: flex; align-items: center; gap: var(--ha-space-3, 12px); width: 100%; height: 46px; padding: 0 var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-md, 8px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_fg); text-align: left; }
+  .mi { display: flex; align-items: center; gap: var(--ha-space-3, 12px); width: 100%; min-height: var(--_touch-min); padding: 0 var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-md, 8px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_fg); text-align: left; }
   .mi:active { background: var(--_chip-sel); }
   .mi .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
   .mi.cancel { color: var(--_inactive); border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); border-radius: 0 0 var(--ha-border-radius-md, 8px) var(--ha-border-radius-md, 8px); margin-top: var(--ha-space-1, 4px); }
@@ -418,7 +418,7 @@ export const mediaStyles = css`
   .menu.sheet .mi { height: 52px; font-size: var(--ha-font-size-l, 16px); }
   /* list rows: art | title + subtitle | duration | icon buttons */
   .list { position: relative; display: flex; flex-direction: column; container: rows / inline-size; }
-  .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; align-items: center; column-gap: var(--ha-space-3, 12px); min-height: 60px; padding: var(--ha-space-1, 4px) 0 var(--ha-space-1, 4px) var(--ha-space-1, 4px);
+  .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; align-items: center; column-gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-3, 12px)); min-height: 60px; padding: var(--ha-space-1, 4px) 0 var(--ha-space-1, 4px) var(--ha-space-1, 4px);
     border-radius: var(--ha-border-radius-md, 8px); user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
   .row.drill { cursor: pointer; }
   .row + .row { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
@@ -445,16 +445,19 @@ export const mediaStyles = css`
   .ra-b.fav { flex: none; color: var(--_inactive); }
   .ra-b.fav.on { color: var(--_active); }
   .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto; }
+  /* #117 kept as a container query on the card's own width (structural): a narrow row drops the duration column and shows the time in
+     the subtitle instead, with 40px art, so the title keeps its room. The row-button lines (.ra, .ra-b) are Kiosk Dev's #85 area; they only
+     get the 48px touch floor here. */
   @container np (max-width: 520px) {
-    .row { grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: var(--ha-space-2, 8px); }
+    .row { grid-template-columns: 40px minmax(0, 1fr) auto; }
     .row .du { display: none; }
     .rt small .du2 { display: inline; }
     .ar.th { width: 40px; height: 40px; }
     .ra { gap: var(--ha-space-1, 4px); }
-    .ra-b { min-width: 44px; min-height: 44px; }
+    .ra-b { min-width: var(--_touch-min); min-height: var(--_touch-min); }
     .ra-b .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
-    .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: var(--ha-space-2, 8px); }
-    .row.hasfav .ra-b { width: 40px; }
+    .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto; }
+    .row.hasfav .ra-b { width: var(--_touch-min); }
   }
   .confirm { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 24px)); padding: var(--ha-space-4, 16px);
     border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); max-height: min(100%, var(--_popup-max-h)); display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); overflow: auto; }

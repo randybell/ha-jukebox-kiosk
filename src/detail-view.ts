@@ -387,30 +387,32 @@ export class JbDetail extends LitElement {
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     .dx { position: relative; height: 100%; display: flex; flex-direction: column; min-height: 0; }
-    .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: var(--ha-space-4, 16px); touch-action: pan-y;
-      padding-bottom: calc(var(--ha-space-4, 16px) + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
+    .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: clamp(var(--ha-space-2, 8px), 3cqi, var(--ha-space-4, 16px)); touch-action: pan-y;
+      padding-bottom: calc(clamp(var(--ha-space-2, 8px), 3cqi, var(--ha-space-4, 16px)) + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
     .scroll::-webkit-scrollbar { display: none; }
     /* the list sits directly on the HA card surface: no second fill */
     .scroll.panel { background: transparent; }
     .detail { display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); }
     .nav { display: flex; align-items: center; gap: var(--ha-space-3, 12px); min-width: 0; }
-    .back { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 44px; padding: 0 var(--ha-space-4, 16px) 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
+    .back { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px) 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
     .back .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     .trail { min-width: 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .dh { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--ha-space-4, 16px); align-items: center; }
-    .dart { width: 150px; height: 150px; border-radius: var(--ha-border-radius-lg, 12px); }
+    .dh { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); align-items: center; }
+    .dart { width: clamp(96px, 22cqi, 150px); height: clamp(96px, 22cqi, 150px); border-radius: var(--ha-border-radius-lg, 12px); }
     .dart.circ { border-radius: var(--ha-border-radius-circle, 50%); }
     .th.circ { border-radius: var(--ha-border-radius-circle, 50%); }
     .dt { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
     .dt .eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
-    .dt h2 { font-family: var(--_font-display); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dt h2 { font-family: var(--_font-display); font-size: clamp(var(--ha-font-size-xl, 20px), 4.5cqi, var(--ha-font-size-3xl, 28px)); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2);
+      overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
     .dt small { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); }
     .meta { font-size: var(--ha-font-size-m, 14px) !important; font-variant-numeric: tabular-nums; }
     .da { display: flex; gap: var(--ha-space-2, 8px); flex-wrap: wrap; margin-top: var(--ha-space-2, 8px); }
     .sbtn.hfav { padding: 0; aspect-ratio: 1; justify-content: center; color: var(--_inactive); }
     .sbtn.hfav.on { color: var(--_active); border-color: currentColor; }
-    .pbtn, .sbtn { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 46px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-weight: var(--ha-font-weight-bold, 700); }
+    .pbtn, .sbtn { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-weight: var(--ha-font-weight-bold, 700);
+      font-size: clamp(var(--ha-font-size-m, 14px), 3cqi, var(--ha-font-size-l, 16px)); }
     .pbtn { background: var(--_active); color: var(--_on-accent); }
     .sbtn { border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
     .pbtn .i, .sbtn .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
@@ -418,16 +420,14 @@ export class JbDetail extends LitElement {
     .sbtn.scope span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-md, 8px); border: var(--ha-border-width-sm, 1px) dashed var(--_divider); }
     .note.err { color: var(--_fg); display: flex; align-items: center; justify-content: space-between; gap: var(--ha-space-3, 12px); flex-wrap: wrap; }
-    .note .retry { height: 38px; }
+    .note .retry { min-height: var(--_touch-min); }
     h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); } h3 em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; text-transform: none; color: var(--_inactive); margin-left: var(--ha-space-2, 8px); }
     .more-t { align-self: center; min-width: 220px; justify-content: center; }
     .empty { padding: var(--ha-space-4, 16px); }
+    /* #117 kept as a container query on the card's own width (a structural choice): on a narrow card the Play / Shuffle / heart buttons
+       take a full line under the cover and title instead of squeezing beside a 96px cover, and rows drop the provider badge */
     @container np (max-width: 520px) {
-      .scroll { padding: var(--ha-space-2, 8px); }
-      .dh { grid-template-columns: 96px minmax(0, 1fr); gap: var(--ha-space-3, 12px); } .dart { width: 96px; height: 96px; }
-      .dt h2 { font-size: var(--ha-font-size-xl, 20px); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       .da { grid-column: 1 / -1; }
-      .pbtn, .sbtn { height: 42px; padding: 0 var(--ha-space-4, 16px); font-size: var(--ha-font-size-m, 14px); }
       .row .pv { display: none; }
     }
   `];
