@@ -188,18 +188,6 @@ export class JbKeyboard extends LitElement {
       .k.sp { font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); }
       .k.pressed { background: var(--_chip-sel); color: var(--_fg); transform: scale(0.96); }
       .wide-only { display: none; }
-      /* #117 structural, on the keyboard's own width: when seven 48 px letter keys (with the smallest 2 px gap) no longer fit side by
-         side, the letters go to six a row, then five, so every key keeps the 48 px touch size; the extra rows are paid by the results
-         area. Only on a card whose middle is at least 600 px tall: below that the key rows are already height-capped (--_kh-room, set
-         by the host), and more rows would leave no list at all (that short-card case is a question for Randy, see #117). */
-      @container np (min-height: 600px) {
-        @container kb (max-width: calc(7 * 48px + 6 * 2px - 0.01px)) {
-          .keys { grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: clamp(2px, (100% - 6 * var(--_touch-min) - 1px) / 5, var(--_kcg)); }
-        }
-        @container kb (max-width: calc(6 * 48px + 5 * 2px - 0.01px)) {
-          .keys { grid-template-columns: repeat(5, minmax(0, 1fr)); column-gap: clamp(2px, (100% - 5 * var(--_touch-min) - 1px) / 4, var(--_kcg)); }
-        }
-      }
       /* #117 structural, kept as a container query on the keyboard's own width: the digits row (and the #+= symbols key in place
          of 123) appears once ten keys of the 48 px touch size fit side by side: 10 x 48 px + 9 gaps of at most 10 px; the letters go to ten a row there too. */
       @container kb (min-width: calc(10 * 48px + 9 * 10px)) {
