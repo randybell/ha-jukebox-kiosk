@@ -14,6 +14,7 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 - Genres is a search filter again, and a Library category button, when Music Assistant can search genres. It is in the default Library button row, and it is an optional chip if you set `search_categories`. Radio and Podcasts stay separate. Tapping a genre does not open a page: it adds a Genre filter, and the results are that genre's artists, albums and tracks in your library. Words you typed to find the genre are cleared; typing again searches inside the genre. Genres are searched in your library only. With `search_filters` off, a genre row or tile is plain text and does nothing.
 - Selected chips, pressed keys and the Queue's playing row stay readable on dark themes.
 - The press-and-hold pop-up is capped at the same height as the other pop-ups (the smaller of that ceiling and the space between the bars). Its buttons never shrink below 48 px; the art, text and gaps shrink instead.
+- Tapping a tab or the Playing on button now closes an open pop-up.
 - Side padding follows the card's own width, not the window, so a half-width card gets narrower padding.
 - Spacing, corner rounding and borders follow Home Assistant's theme tokens. Uneven 1.5 px outlines are now 1 px, and selected rings are 2 px. A theme that changes those tokens changes the card too. Icon sizes follow the theme's icon size; at the default they look the same.
 - Things you can't tap use Home Assistant's disabled colors. Quiet-but-tappable items share one dim look.
