@@ -51,6 +51,12 @@ const mqCalls = (page) => page.evaluate(() => window.__calls.filter((c) => c.dom
 const openQ = async (q = '') => { const p = await open(`&tab=queue${q}`); await wait(p, `${QV}.querySelectorAll('.qr.next').length > 3`); await sleep(150); return p; };
 const nextIds = (p) => ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`);
 const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_item_id)`);
+const HS = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`;
+async function qsheet(p, id, action) {
+  await ev(p, `${QV}.querySelector('.qr[data-id="${id}"]')?.scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${id}"] .rt')`); await sleep(200);
+  await tap(p, `${HS}.querySelector('.it[data-action="${action}"]')`);
+}
 
 // ---------------- 1. auto picks the kiosk backend ----------------
 {
@@ -71,7 +77,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const p = await openQ('&admin=1');
   let ids = await nextIds(p);
   let n = await nws(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[3]}"] .ra-b[data-action="playnext"]')`);
+  await qsheet(p, ids[3], 'next');
   await wait(p, `${QV}.querySelector('.qr.next')?.dataset.id === '${ids[3]}' || [...${QV}.querySelectorAll('.qr.next')][1]?.dataset.id === '${ids[3]}'`, 3000);
   await sleep(800);
   let m = maOf(await ws(p, n), 'player_queues/move_item');
@@ -82,13 +88,13 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('Q2 the server push (queue_updated) refreshes the window', pushed >= 1, String(pushed));
   ids = await nextIds(p);
   n = await nws(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[4]}"] .ra-b[data-action="remove"]')`);
+  await qsheet(p, ids[4], 'remove');
   await sleep(900);
   m = maOf(await ws(p, n), 'player_queues/delete_item');
   check('Q3 Remove → player_queues/delete_item {item_id_or_index}; the row is gone', m.length === 1 && m[0].args.item_id_or_index === ids[4] && !(await maQueue(p)).includes(ids[4]) && !(await nextIds(p)).includes(ids[4]), J(m.map((x) => x.args)));
   ids = await nextIds(p);
   n = await nws(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[2]}"] .ra-b[data-action="playnow"]')`);
+  await qsheet(p, ids[2], 'play');
   await wait(p, `!!${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`, 2000);
   await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   await sleep(900);
@@ -144,8 +150,12 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const caps = encodeURIComponent(J({ queue_play: false, queue_edit: false, undo: false, unfavorite: false, speakers: false, lyrics: false, library_write: true }));
   const p = await openQ(`&admin=1&kcaps=${caps}`);
   await sleep(300);
-  const acts = await ev(p, `[...${QV}.querySelectorAll('.qr .qa')].filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.dataset.action ?? 'more')`);
-  check('G1 no queue_play / queue_edit → no Play Now / Play Next / Move / Remove icons', !acts.some((a) => ['playnow', 'playnext', 'up', 'down', 'remove'].includes(a)), J([...new Set(acts)]));
+  const rowBtns = await ev(p, `${QV}.querySelectorAll('.qr .ra-b, .qr .qa, .qr .acts').length`);
+  await tap(p, `${QV}.querySelector('.qr.next .rt')`); await sleep(200);
+  const sheet = await ev(p, `[...${HS}.querySelectorAll('.it')].map((b) => b.dataset.action + (b.getAttribute('aria-disabled') === 'true' ? '-off' : ''))`);
+  check('G1 no queue_play / queue_edit → no row buttons; the pop-up lists Play Now / Play Next / Move / Remove grayed',
+    rowBtns === 0 && ['play', 'next', 'up', 'down', 'remove'].every((a) => sheet.includes(a + '-off')), J({ rowBtns, sheet }));
+  await tap(p, `${HS}.querySelector('.it.cancel')`);
   const tabs = await ev(p, `[...__card.shadowRoot.querySelectorAll('.tab')].map((t) => t.dataset.tab)`);
   check('G2 the bar is Now Playing, Library, (Search in the separate layout,) Queue — no Lyrics tab', J(tabs) === J(['now', 'browse', 'search', 'queue']), J(tabs));
   const n = await nws(p);

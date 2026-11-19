@@ -240,7 +240,7 @@ for (const [tag, cfg] of [['missing', {}], ['false', { show_action_icons: false 
   await q.goto(`${BASE}?fresh=1&latency=20&legacy=0&kiosk=1&tab=queue&qbuf=0&admin=1&cfg=${encodeURIComponent(J(cfg))}`); await q.waitForFunction('window.__ready === true'); await sleep(900);
   await wait(q, `__card.shadowRoot.querySelector('jb-queue').shadowRoot.querySelectorAll('.qr').length > 4`);
   const nq = await ev(q, `(${BTN})(__card.shadowRoot.querySelector('jb-queue').shadowRoot)`);
-  check(`show_action_icons ${tag}: Queue rows stay hidden (${nq})`, nq === 0, String(nq));
+  check(`show_action_icons ${tag}: Queue rows carry no action buttons (${nq})`, nq === 0, String(nq));
   await q.close();
 }
 {

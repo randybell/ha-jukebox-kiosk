@@ -1,6 +1,6 @@
 // #85: Library search rows have no inline buttons. A tap or click on a result row, with a query typed on the on-screen keyboard and that keyboard still
 // open, opens the item's pop-up; its actions work (Play Now and Start radio still ask first). A swipe that starts on a row scrolls the list and
-// opens nothing. Queue search buttons still fire on a tap. Pressing and holding the row opens the same pop-up.
+// opens nothing. Queue search result rows have no buttons; a tap or click opens the pop-up and Play Next there still fires, with the keyboard still open. Pressing and holding the row opens the same pop-up.
 // Viewport 1024x600 only. Usage: node test/search-tap.e2e.mjs (starts its own dev server)
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -125,7 +125,7 @@ for (const kind of ['touch', 'mouse']) {
   await p.close();
 }
 
-// ---- Queue search: a tap on a result's button still fires ----
+// ---- Queue search: a tap or click on a result opens the pop-up; Play Next in the pop-up still fires, keyboard stays open ----
 {
   const p = await browser.newPage(); await hermetic(p);
   await p.setViewport({ width: 1024, height: 600, deviceScaleFactor: 1, hasTouch: true });
@@ -136,12 +136,16 @@ for (const kind of ['touch', 'mouse']) {
   await typeOnScreen(p, kb, 'E');
   await p.waitForFunction((e) => eval(e).querySelectorAll('.qr.sr').length > 0, {}, QV);
   check('1024x600 Queue search: a query is typed and the on-screen keyboard is open', await kbOpen(p, kb));
-  const qrow = `[...${QV}.querySelectorAll('.qr.sr.next:not(.buf)')].find((r) => !r.querySelector('[data-action=playnext]').disabled && !r.querySelector('[data-action=playnow]').disabled)`;
-  await clear(p); await hit(p, 'touch', `${qrow}.querySelector('[data-action="playnext"]')`);
-  check('1024x600 Queue search: a tap on Play Next fires it', (await qws(p)).length === 1 && J(await calls(p)) === '[]', J({ ws: await qws(p), calls: await calls(p) }));
+  const qrow = `([...${QV}.querySelectorAll('.qr.sr.next:not(.buf)')][1] || [...${QV}.querySelectorAll('.qr.sr.next:not(.buf)')][0])`;
+  check('1024x600 Queue search: result rows have no play or queue buttons', (await ev(p, `${qrow} && ${qrow}.querySelectorAll('.ra-b, .qa, .acts').length`)) === 0);
+  await clear(p); await hit(p, 'touch', `${qrow}.querySelector('.rt')`); await sleep(250);
+  check('1024x600 Queue search, keyboard open, touch: the pop-up opens', !!(await ev(p, `${HS}.querySelector('.sh')`)));
+  await hit(p, 'touch', `${HS}.querySelector('.it[data-action="next"]')`); await sleep(300);
+  check('1024x600 Queue search: a tap on Play Next in the pop-up fires it', (await qws(p)).length === 1 && J(await calls(p)) === '[]', J({ ws: await qws(p), calls: await calls(p) }));
   await shot(p, 'queue-search-tap-keyboard-open');
-  await clear(p); await hit(p, 'mouse', `${qrow}.querySelector('[data-action="playnext"]')`);
-  check('1024x600 Queue search: a mouse click on Play Next fires it', (await qws(p)).length === 1, J(await qws(p)));
+  await clear(p); await hit(p, 'mouse', `${qrow}.querySelector('.rt')`); await sleep(250);
+  await hit(p, 'mouse', `${HS}.querySelector('.it[data-action="next"]')`); await sleep(300);
+  check('1024x600 Queue search: a mouse click on Play Next in the pop-up fires it', (await qws(p)).length === 1, J(await qws(p)));
   await p.close();
 }
 

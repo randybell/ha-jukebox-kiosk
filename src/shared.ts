@@ -353,11 +353,6 @@ const RA: Record<RowAct, { icon: string; title: string; label: (n: string) => st
   replace: { icon: 'play', title: QUEUE_ACTION_LABELS.replace, label: (n) => `Play ${n} now` },
   radio: { icon: 'tower', title: 'Start radio', label: (n) => `Start radio from ${n}` },
 };
-/** One labeled queue button for the Queue tab's exact queue-row handlers. */
-export function queueActTpl(a: (typeof QUEUE_ACTIONS)[number], name: string, action: string, run: () => void, dis = false) {
-  return html`<button class="ra-b" data-act=${a} data-action=${action} tabindex="-1" title=${RA[a].title} aria-label=${RA[a].label(name)} ?disabled=${dis}
-    @pointerdown=${noFocus} @click=${(e: MouseEvent) => { e.stopPropagation(); run(); }}>${icon(RA[a].icon)}<span>${RA[a].title}</span></button>`;
-}
 /** Start radio (MA 2.10: a seed for its radio / endless mix): tracks, artists, albums and playlists. Not podcasts,
  *  episodes or audiobooks (MA seeds radio from songs only), not stations. */
 export const searchRadio = (type: string, it: MaItem) => canRadio(type, it) || (type === 'playlist' && !isRadio(it));
@@ -443,8 +438,6 @@ export const mediaStyles = css`
   .du:empty { display: none; }
   .rt small .du2 { display: none; flex: none; font-variant-numeric: tabular-nums; }
   .ra { display: flex; flex: none; }
-  /* Queue rows keep their buttons hidden, as they have been by default since 0.7.20; only a style on the card (--_ra-display) shows them */
-  .qr .ra { display: var(--_ra-display, none); }
   .ra-b { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; color: var(--_fg); }
   .ra-b:active { background: var(--_chip-sel); }
   /* hold progress: a fill that grows over HOLD_MS on a row / tile held for its pop-up */

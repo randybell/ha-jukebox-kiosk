@@ -504,11 +504,15 @@ const qcall = async (fn) => { const n = await ncalls(page); await fn(); await sl
 // queue edits: the MA player_queues/* commands the card sent through jukebox_kiosk/ma
 const qwcall = async (fn) => { const n = await nws(page); await fn(); await sleep(250); return (await wsSince(page, n)).filter((m) => m.type === 'ma' && /^player_queues\/(move_item|delete_item|play_index)$/.test(m.command)); };
 const qrow = (id) => `${QV}.querySelector('.qr[data-id="${id}"]')`;
-let a1 = await qwcall(() => clickEl(page, `${qrow(id2)}.querySelector('.qa[data-action="up"]')`));
-let a2 = await qwcall(() => clickEl(page, `${qrow(id2)}.querySelector('.qa[data-action="down"]')`));
-async function qmenu(id, action) { await clickEl(page, `${qrow(id)}.querySelector('.qa.mo')`); await sleep(100); await clickEl(page, `${QV}.querySelector('.menu .mi[data-action="${action}"]')`); }
-let a3 = await qwcall(() => qmenu(id3, 'next'));
-let a4 = await qwcall(() => qmenu(id3, 'remove'));
+const QHS = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`;
+async function qsheet(id, action) {
+  await clickEl(page, `${qrow(id)}.querySelector('.rt')`); await sleep(200);
+  await clickEl(page, `${QHS}.querySelector('.it[data-action="${action}"]')`);
+}
+let a1 = await qwcall(() => qsheet(id2, 'up'));
+let a2 = await qwcall(() => qsheet(id2, 'down'));
+let a3 = await qwcall(() => qsheet(id3, 'next'));
+let a4 = await qwcall(() => qsheet(id3, 'remove'));
 const qs = (a) => a.map((m) => `${m.command} ${JSON.stringify(m.args)}`).join(',');
 const QID = await page.evaluate(() => window.__hass.states['media_player.everywhere'].attributes.active_queue);
 const mv11 = (a, id, shift) => a.length === 1 && a[0].command === 'player_queues/move_item' && a[0].args.queue_id === QID && a[0].args.queue_item_id === id && a[0].args.pos_shift === shift;
@@ -519,18 +523,20 @@ s = await page.evaluate((q) => [...eval(q).querySelectorAll('.qr.next')].map((e)
 check('11c queue list reflects the moves (removed item gone)', !s.includes(id3) && s.length === 12, `${s.length} rows`);
 await open(page, '&latency=20&tab=queue&admin=1');
 await page.waitForFunction((q) => eval(q).querySelectorAll('.qr.next').length > 3, {}, QV);
-const queueLabels = await page.evaluate((q) => [...eval(q).querySelectorAll('.qr.next .acts')].map((a) =>
-  [...a.querySelectorAll('.ra-b[data-act]')].map((b) => `${b.dataset.act}:${b.querySelector('span')?.textContent}`).join()), QV);
-check('11f Queue rows use the same visible queue labels in the same order', queueLabels.length > 0 && queueLabels.every((x) => x === 'next:Play Next,replace:Play Now,remove:Remove'), JSON.stringify(queueLabels.slice(0, 2)));
+const noRowBtns = await page.evaluate((q) => [...eval(q).querySelectorAll('.qr')].every((r) => r.querySelectorAll('.ra-b, .qa, .acts').length === 0), QV);
+await clickEl(page, `${QV}.querySelector('.qr.next .rt')`); await sleep(200);
+const queueLabels = await page.evaluate((h) => [...eval(h).querySelectorAll('.it')].map((b) => `${b.dataset.action}:${b.textContent.trim()}`), QHS);
+check('11f Queue rows have no action buttons; the pop-up lists Play Now, Play Next, Move up, Move down, Remove, More Info, Cancel', noRowBtns && queueLabels.join() === 'play:Play Now,next:Play Next,up:Move up,down:Move down,remove:Remove,more:More Info,cancel:Cancel', JSON.stringify({ noRowBtns, queueLabels }));
+await clickEl(page, `${QHS}.querySelector('.it.cancel')`);
 await clickEl(page, `${QV}.querySelector('[data-action="queue-search"]')`);
 await page.waitForFunction((q) => eval(q).querySelector('.qkbd')?.shadowRoot.querySelector('.kb'), {}, QV);
 const qkey = (id) => `[...${QV}.querySelector('.qkbd').shadowRoot.querySelectorAll('[data-key="${id}"]')].find((b) => b.getBoundingClientRect().width > 0)`;
 for (const c of 'PORC') await clickEl(page, qkey(`k-${c}`));
-s = await page.evaluate((q) => ({ query: eval(q).querySelector('.qsq').dataset.query, rows: [...eval(q).querySelectorAll('.qr.sr')].map((r) => ({ id: r.dataset.id, title: r.querySelector('b')?.textContent, buttons: [...r.querySelectorAll('.ra-b')].map((b) => b.querySelector('span')?.textContent), remove: r.querySelector('[data-action="remove"]')?.disabled })) }), QV);
-check('11g Queue search filters inline, keyboard stays open, every match has a labeled Remove', s.query === 'PORC' && s.rows.length === 1 && /Porcelain/.test(s.rows[0].title) && s.rows[0].buttons.join() === 'Play Next,Play Now,Remove' && s.rows[0].remove === false, JSON.stringify(s));
+s = await page.evaluate((q) => ({ query: eval(q).querySelector('.qsq').dataset.query, rows: [...eval(q).querySelectorAll('.qr.sr')].map((r) => ({ id: r.dataset.id, title: r.querySelector('b')?.textContent, buttons: r.querySelectorAll('.ra-b, .qa, .acts').length })), kb: !!eval(q).querySelector('.qkbd') }), QV);
+check('11g Queue search filters inline, keyboard stays open, matches have no row buttons', s.query === 'PORC' && s.rows.length === 1 && /Porcelain/.test(s.rows[0].title) && s.rows[0].buttons === 0 && s.kb, JSON.stringify(s));
 const removedId = s.rows[0]?.id;
-a4 = await qwcall(() => clickEl(page, `${QV}.querySelector('.qr.sr [data-action="remove"]')`));
-check('11h labeled Remove in Queue search removes that item', rm11(a4, removedId) && await page.evaluate((q) => eval(q).querySelectorAll('.qr.sr').length === 0 && !!eval(q).querySelector('[data-action="undo"]'), QV), qs(a4));
+a4 = await qwcall(() => qsheet(removedId, 'remove'));
+check('11h Remove in the Queue search pop-up removes that item', rm11(a4, removedId) && await page.evaluate((q) => eval(q).querySelectorAll('.qr.sr').length === 0 && !!eval(q).querySelector('[data-action="undo"]'), QV), qs(a4));
 await clickEl(page, `${QV}.querySelector('[data-action="queue-search"]')`);
 check('11i Queue search closes back to the complete queue', await page.evaluate((q) => !eval(q).querySelector('.qsx') && eval(q).querySelectorAll('.qr.next').length > 0, QV));
 // An already-buffered item cannot be removed; search still renders its labeled, disabled Remove.
@@ -539,17 +545,22 @@ await page.waitForFunction((q) => eval(q).querySelectorAll('.qr.next').length > 
 await clickEl(page, `${QV}.querySelector('[data-action="queue-search"]')`);
 await page.waitForFunction((q) => eval(q).querySelector('.qkbd')?.shadowRoot.querySelector('.kb'), {}, QV);
 for (const c of 'TEAR') await clickEl(page, qkey(`k-${c}`));
-s = await page.evaluate((q) => ({ query: eval(q).querySelector('.qsq').dataset.query, rows: [...eval(q).querySelectorAll('.qr.sr')].map((r) => ({ title: r.querySelector('b')?.textContent, remove: r.querySelector('[data-action="remove"]')?.disabled, label: r.querySelector('[data-action="remove"] span')?.textContent })) }), QV);
-check('11j buffered search match keeps labeled Remove disabled', s.query === 'TEAR' && s.rows.length === 1 && s.rows[0].title === 'Teardrop' && s.rows[0].remove && s.rows[0].label === 'Remove', JSON.stringify(s));
+s = await page.evaluate((q) => ({ query: eval(q).querySelector('.qsq').dataset.query, rows: [...eval(q).querySelectorAll('.qr.sr')].map((r) => ({ id: r.dataset.id, title: r.querySelector('b')?.textContent, buttons: r.querySelectorAll('.ra-b, .qa, .acts').length })) }), QV);
+await clickEl(page, `${QV}.querySelector('.qr.sr .rt')`); await sleep(200);
+const bufSheet = await page.evaluate((h) => { const b = eval(h).querySelector('.it[data-action="remove"]'); return { id: b?.dataset.action, label: b?.textContent.trim(), off: b?.getAttribute('aria-disabled') === 'true' }; }, QHS);
+check('11j buffered search match has no row buttons; the pop-up lists Remove grayed', s.query === 'TEAR' && s.rows.length === 1 && s.rows[0].title === 'Teardrop' && s.rows[0].buttons === 0 && bufSheet.label === 'Remove' && bufSheet.off, JSON.stringify({ s, bufSheet }));
+await clickEl(page, `${QHS}.querySelector('.it.cancel')`);
 await open(page, '&latency=20&tab=queue&admin=1');
 await page.waitForFunction((q) => eval(q).querySelectorAll('.qr.next').length > 3, {}, QV);
-// 0.7.8 #40: a tap on a Queue row does nothing (use the row's play icon): no service call, no playback, no queue change
+// 0.7.13: a tap on a Queue row opens the pop-up and sends nothing
 const order0 = await page.evaluate((q) => ({ now: eval(q).querySelector('.qr.now')?.dataset.id, ids: [...eval(q).querySelectorAll('.qr.next')].map((r) => r.dataset.id) }), QV);
 let a5 = [...await qwcall(() => clickEl(page, `${qrow(id1)}.querySelector('.rt')`))];
-check('11d tap a row does nothing: no service call (no play_queue_item, no queue command)', a5.length === 0, qs(a5));
-await sleep(900);
+const sheetOpen = await page.evaluate((h) => !!eval(h).querySelector('.sh'), QHS);
+check('11d tap a row opens the pop-up and sends no queue command', sheetOpen && a5.length === 0, qs(a5) + ' sheet=' + sheetOpen);
 s = await page.evaluate((q) => ({ now: eval(q).querySelector('.qr.now')?.dataset.id, ids: [...eval(q).querySelectorAll('.qr.next')].map((r) => r.dataset.id) }), QV);
 check('11e after the tap, the same item is still playing and the queue order is unchanged', s.now === order0.now && s.now !== id1 && JSON.stringify(s.ids) === JSON.stringify(order0.ids), JSON.stringify({ before: order0, after: s }));
+await page.keyboard.press('Escape'); await sleep(200);
+check('11e2 physical Esc closes the Queue pop-up and plays nothing', !(await page.evaluate((h) => !!eval(h).querySelector('.sh'), QHS)) && JSON.stringify(s.ids) === JSON.stringify(order0.ids));
 
 // ---------- 12. browse ----------
 await open(page, '&latency=20&tab=browse&lhome=0');

@@ -27,6 +27,7 @@ const FIND = `(() => { const q = [document]; while (q.length) { const n = q.shif
 const C = `window.__card.shadowRoot`;
 const sub = (tag) => `${C}.querySelector('${tag}').shadowRoot`;
 const QV = sub('jb-queue'), SV = sub('jb-search'), BR = `${C}.querySelector('jb-browse')`;
+const HS = `${C}.querySelector('jb-hold-sheet').shadowRoot`;
 const LY = `${C}.querySelector('jb-lyrics[mode=tab]')`;
 
 async function open(who = 'admin', vp = { width: 1920, height: 1080 }, url = PAGE) {
@@ -122,7 +123,9 @@ const p = await open('admin');
   await shot(p, 'queue-1920');
   // Play next (move)
   let n = await nsent(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${before[3]}"] .qa[data-action="playnext"]')`);
+  await ev(p, `${QV}.querySelector('.qr[data-id="${before[3]}"]').scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${before[3]}"] .rt')`); await sleep(200);
+  await tap(p, `${HS}.querySelector('.it[data-action="next"]')`);
   const moved = await wait(p, `[...${QV}.querySelectorAll('.qr.next')][0]?.dataset.id === '${before[3]}'`, 6000);
   const mv = (await sent(p, n)).filter((m) => m.type === 'jukebox_kiosk/ma' && m.command === 'player_queues/move_item');
   check('Q1 Play next → player_queues/move_item; the row moves to the top of Up next', moved && mv.length === 1, J(mv.map((m) => m.args)));
@@ -130,7 +133,9 @@ const p = await open('admin');
   before = await ids();
   const victim = before[2];
   n = await nsent(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${victim}"] .qa[data-action="remove"]')`);
+  await ev(p, `${QV}.querySelector('.qr[data-id="${victim}"]').scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${victim}"] .rt')`); await sleep(200);
+  await tap(p, `${HS}.querySelector('.it[data-action="remove"]')`);
   const gone = await wait(p, `![...${QV}.querySelectorAll('.qr.next')].some((r) => r.dataset.id === '${victim}')`, 6000);
   const del = (await sent(p, n)).filter((m) => m.type === 'jukebox_kiosk/ma' && m.command === 'player_queues/delete_item');
   check('Q2 Remove → player_queues/delete_item; row gone; Undo offered', gone && del.length === 1 && (await ev(p, `!!${QV}.querySelector('.undo .ub')`)), J(del.map((m) => m.args)));
@@ -141,7 +146,9 @@ const p = await open('admin');
   // play_index (Play now, confirmed)
   before = await ids();
   n = await nsent(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${before[1]}"] .qa[data-action="playnow"]')`);
+  await ev(p, `${QV}.querySelector('.qr[data-id="${before[1]}"]').scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${before[1]}"] .rt')`); await sleep(200);
+  await tap(p, `${HS}.querySelector('.it[data-action="play"]')`);
   await wait(p, `!!${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`, 3000);
   await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   await sleep(2500);

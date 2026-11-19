@@ -11,17 +11,39 @@ let failures = 0, total = 0;
 function check(name, ok, info = '') { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); }
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu'] });
 const QV = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
+const HS = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`;
+const ev = (p, e) => p.evaluate((e) => eval(e), e);
+async function tap(p, expr) {
+  await ev(p, `${expr}?.scrollIntoView({ block: 'center' })`); await sleep(80);
+  const r = await p.evaluate((e) => { const el = eval(e); if (!el) return null; const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; }, expr);
+  if (!r) throw new Error('no element ' + expr);
+  await p.mouse.click(r.x, r.y); await sleep(150);
+}
 async function open(q) {
   const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width: 1024, height: 600 });
-  await p.goto(`${BASE}?layout=separate&fresh=1&latency=20&kiosk=1&tab=queue${q}`); await p.waitForFunction('window.__ready === true');
+  await p.goto(`${BASE}?layout=separate&fresh=1&latency=20&kiosk=1&admin=1&tab=queue${q}`); await p.waitForFunction('window.__ready === true');
   await p.waitForFunction(`${QV}.querySelectorAll('.qr.next').length > 3`); await sleep(400);
   return p;
 }
-const rows = (p) => p.evaluate((qv) => [...eval(qv).querySelectorAll('.qr.next')].map((r) => ({ id: r.dataset.id, buf: r.classList.contains('buf'),
-  up: r.querySelector('[data-action=up]')?.disabled, down: r.querySelector('[data-action=down]')?.disabled })), QV);
+async function sheetOf(p, id) {
+  await tap(p, `${QV}.querySelector('.qr[data-id="${id}"] .rt')`);
+  await p.waitForFunction((hs) => !!eval(hs).querySelector('.sh'), { timeout: 3000 }, HS);
+  const st = await ev(p, `(() => { const m = {}; for (const b of ${HS}.querySelectorAll('.its .it[data-action]')) m[b.dataset.action] = b.getAttribute('aria-disabled') === 'true'; return m; })()`);
+  await tap(p, `${HS}.querySelector('.it.cancel')`);
+  await p.waitForFunction((hs) => !eval(hs).querySelector('.sh'), { timeout: 3000 }, HS);
+  return st;
+}
+const rows = async (p) => {
+  const base = await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => ({ id: r.dataset.id, buf: r.classList.contains('buf') }))`);
+  const out = [];
+  for (const r of base) { const st = await sheetOf(p, r.id); out.push({ ...r, up: !!st.up, down: !!st.down }); }
+  return out;
+};
 const moves = (p) => p.evaluate(() => (window.__ws || []).filter((m) => m.type === 'ma' && m.command === 'player_queues/move_item').map((m) => m.args));
 async function tapMove(p, id, act) {
-  await p.evaluate((qv, id, act) => eval(qv).querySelector(`.qr[data-id="${id}"] [data-action=${act}]`).click(), QV, id, act);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${id}"] .rt')`);
+  await p.waitForFunction((hs) => !!eval(hs).querySelector('.sh'), { timeout: 3000 }, HS);
+  await tap(p, `${HS}.querySelector('.its .it[data-action="${act}"]')`);
   await sleep(1200); // optimistic move, then the card re-reads MA's queue
 }
 {

@@ -217,7 +217,7 @@ for (const z of [1, 0.8, 0.67]) {
 // ---------- 6. 0.5.0 inside the fitted height: Speakers panel, queue ⋯ sheet, Undo bar, Play-now confirm ----------
 // The panel and every queue overlay must stay between the header and the tab bar; the tab bar stays fully visible and
 // tappable (a tab tap closes the panel); the page never scrolls; overlays taller than the room scroll inside it.
-const SR6 = `__card.shadowRoot.querySelector('jb-speakers').shadowRoot`, QV6 = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
+const SR6 = `__card.shadowRoot.querySelector('jb-speakers').shadowRoot`, QV6 = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`, HS6 = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`;
 const ev6 = (pg, e) => pg.evaluate((e) => eval(e), e);
 async function tap6(pg, expr, touch, block = 'nearest') {
   const b = await ev6(pg, `(() => { const el = ${expr}; if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; })()`);
@@ -275,22 +275,24 @@ for (const [w, h, touch, size] of S6) {
   if (w === 1024 && h === 666) await pg.screenshot({ path: `${OUT}speakers-${w}x${h}-toolbar.png` });
   await tapTab(pg, 'queue', touch);
   check(`${tag}: a tab tap closes the Speakers panel`, await ev6(pg, `!__card.shadowRoot.querySelector('jb-speakers').open`));
-  // queue overlays
-  await pg.waitForFunction(`${QV6}.querySelectorAll('.qr.next .ra-b[data-action="remove"]').length > 2`, { timeout: 4000 }).catch(() => {});
-  const narrow = await ev6(pg, `(() => { const b = ${QV6}.querySelector('.qr.next .qa.mo'); return !!b && b.getBoundingClientRect().width > 0; })()`);
-  if (narrow) {
-    await tap6(pg, `${QV6}.querySelectorAll('.qr.next .qa.mo')[1]`, touch);
-    const ms = await inMiddle(pg, `${QV6}.querySelector('.menu')`, `${QV6}.querySelector('.menu')`);
-    check(`${tag} queue ⋯ sheet inside the middle (scrolls if taller)`, fits6(ms), JSON.stringify(ms));
-    await ev6(pg, `(() => { const m = ${QV6}.querySelector('.menu'); m.scrollTop = 1e4; })()`);
-    const cancel = await inMiddle(pg, `${QV6}.querySelector('.menu .mi.cancel')`);
-    check(`${tag} queue ⋯ sheet: Cancel reachable`, cancel && cancel.inside, JSON.stringify(cancel));
-    verify(`${tag} queue ⋯ sheet open`, await geom(pg), {});
-    if (w === 390) await pg.screenshot({ path: `${OUT}queue-sheet-${w}x${h}-toolbar.png` });
-    await tap6(pg, `${QV6}.querySelector('.menu .mi.cancel')`, touch);
-  }
+  // queue overlays: tap a row to open the existing pop-up, then Play Now confirm, then Remove from a search result
+  await pg.waitForFunction(`${QV6}.querySelectorAll('.qr.next').length > 2`, { timeout: 4000 }).catch(() => {});
+  await ev6(pg, `${QV6}.querySelectorAll('.qr.next')[2]?.scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap6(pg, `${QV6}.querySelectorAll('.qr.next .rt')[2]`, touch);
+  await pg.waitForFunction(`!!${HS6}.querySelector('.sh')`, { timeout: 4000 });
+  const ms = await inMiddle(pg, `${HS6}.querySelector('.sh')`, `${HS6}.querySelector('.sh')`);
+  check(`${tag} queue pop-up inside the middle (scrolls if taller)`, fits6(ms), JSON.stringify(ms));
+  await ev6(pg, `(() => { const m = ${HS6}.querySelector('.sh'); m.scrollTop = 1e4; })()`);
+  const cancel = await inMiddle(pg, `${HS6}.querySelector('.it.cancel')`);
+  check(`${tag} queue pop-up: Cancel reachable`, cancel && cancel.inside, JSON.stringify(cancel));
+  verify(`${tag} queue pop-up open`, await geom(pg), {});
+  if (w === 390) await pg.screenshot({ path: `${OUT}queue-sheet-${w}x${h}-toolbar.png` });
+  await tap6(pg, `${HS6}.querySelector('.it.cancel')`, touch);
   await ev6(pg, `${QV6}.querySelector('.scroll').scrollTop = 0`); await sleep(150);
-  await tap6(pg, `[...${QV6}.querySelectorAll('.qr.next .ra-b[data-action="playnow"]')].find((b) => !b.disabled)`, touch);
+  await ev6(pg, `${QV6}.querySelectorAll('.qr.next')[2]?.scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap6(pg, `${QV6}.querySelectorAll('.qr.next .rt')[2]`, touch);
+  await pg.waitForFunction(`!!${HS6}.querySelector('.sh')`, { timeout: 4000 });
+  await tap6(pg, `${HS6}.querySelector('.it[data-action="play"]')`, touch);
   await pg.waitForFunction(`!!${QV6}.querySelector('.confirm')`, { timeout: 4000 });
   const cf = await inMiddle(pg, `${QV6}.querySelector('.confirm')`, `${QV6}.querySelector('.confirm')`);
   check(`${tag} Play-now confirm inside the middle`, fits6(cf), JSON.stringify(cf));
@@ -300,8 +302,10 @@ for (const [w, h, touch, size] of S6) {
   await tap6(pg, `${QV6}.querySelector('.confirm .cbtn[data-action="cancel"]')`, touch);
   await tap6(pg, `${QV6}.querySelector('[data-action="queue-search"]')`, touch);
   for (const c of 'PORC') await tap6(pg, `[...${QV6}.querySelector('.qkbd').shadowRoot.querySelectorAll('[data-key="k-${c}"]')].find((b) => b.getBoundingClientRect().width > 0)`, touch);
-  await pg.waitForFunction(`(() => { const q = ${QV6}; const b = q.querySelector('.qr.sr .ra-b[data-action="remove"]'); return q.querySelector('.qsq')?.textContent.trim() === 'PORC' && b && !b.disabled; })()`);
-  await tap6(pg, `${QV6}.querySelector('.qr.sr .ra-b[data-action="remove"]')`, touch, 'center');
+  await pg.waitForFunction(`(() => { const q = ${QV6}; return q.querySelector('.qsq')?.textContent.trim() === 'PORC' && q.querySelector('.qr.sr.next:not(.buf) .rt'); })()`);
+  await tap6(pg, `${QV6}.querySelector('.qr.sr.next:not(.buf) .rt')`, touch, 'center');
+  await pg.waitForFunction(`!!${HS6}.querySelector('.sh')`, { timeout: 4000 });
+  await tap6(pg, `${HS6}.querySelector('.it[data-action="remove"]')`, touch);
   const ub = await inMiddle(pg, `${QV6}.querySelector('.undo')`);
   check(`${tag} Undo bar inside the middle, above the tab bar`, ub && ub.inside, JSON.stringify(ub));
   verify(`${tag} Undo bar showing`, await geom(pg), {});

@@ -16,6 +16,7 @@ const errors = [], files = [];
 const IN = 'media_player.indoor';
 const SPK = `__card.shadowRoot.querySelector('jb-speakers')`, SR = `${SPK}.shadowRoot`;
 const QV = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
+const HS = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`;
 const ev = (pg, e) => pg.evaluate((e) => eval(e), e);
 const wait = (pg, fn, timeout = 6000) => pg.waitForFunction(fn, { timeout, polling: 50 }).then(() => true, () => false);
 async function tap(pg, expr) {
@@ -63,16 +64,20 @@ for (const vp of VPS) {
   // guest (volume only) + quiet hours cap
   await open(pg, `&spk=dyn&target=${IN}`, vp); await panel(pg); await shot(pg, 'guest-view', vp);
   await open(pg, `&spk=dyn&target=${IN}${cfg({ quiet_hours: { start: '00:00', end: '00:00', max_volume: 30 } })}`, vp); await panel(pg); await shot(pg, 'guest-quiet-hours', vp);
-  // queue rows: icons, Play now confirm, Remove + Undo bar, narrow ⋯ action sheet
+  // queue rows: no row buttons; a tap opens the pop-up for Play Now confirm and Remove + Undo
   await open(pg, '&admin=1&tab=queue', vp); await wait(pg, `${QV}.querySelectorAll('.qr.next').length > 3`); await sleep(400);
   await shot(pg, 'queue-row-icons', vp);
   const ids = await ev(pg, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`);
-  if (vp.width > 520) await tap(pg, `${QV}.querySelector('.qr[data-id="${ids[2]}"] .qa[data-action="playnow"]')`);
-  else { await tap(pg, `${QV}.querySelector('.qr[data-id="${ids[2]}"] .qa.mo')`); await sleep(300); await shot(pg, 'queue-action-sheet', vp); await tap(pg, `${QV}.querySelector('.menu .mi[data-action="play"]')`); }
+  await ev(pg, `${QV}.querySelector('.qr[data-id="${ids[2]}"]').scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(pg, `${QV}.querySelector('.qr[data-id="${ids[2]}"] .rt')`); await sleep(300);
+  await shot(pg, 'queue-action-sheet', vp);
+  await tap(pg, `${HS}.querySelector('.it[data-action="play"]')`);
   await wait(pg, `!!${QV}.querySelector('.confirm')`); await sleep(300);
   await shot(pg, 'queue-play-now-confirm', vp);
   await tap(pg, `${QV}.querySelector('.confirm .cbtn[data-action="cancel"]')`); await sleep(300);
-  await tap(pg, `${QV}.querySelector('.qr[data-id="${ids[3]}"] .qa[data-action="remove"]')`);
+  await ev(pg, `${QV}.querySelector('.qr[data-id="${ids[3]}"]').scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(pg, `${QV}.querySelector('.qr[data-id="${ids[3]}"] .rt')`); await sleep(200);
+  await tap(pg, `${HS}.querySelector('.it[data-action="remove"]')`);
   await wait(pg, `!!${QV}.querySelector('.undo')`); await sleep(500);
   await shot(pg, 'queue-removed-undo', vp);
   await tap(pg, `${QV}.querySelector('.undo .ub')`);
@@ -94,7 +99,9 @@ for (const vp of VPS) {
   await open(pg, `${ha}&spk=dyn&admin=1`, vp); await panel(pg); await shot(pg, 'speakers-dynamic-toolbar', vp);
   await open(pg, `${ha}&admin=1&tab=queue`, vp); await wait(pg, `${QV}.querySelectorAll('.qr.next').length > 3`); await sleep(400);
   const ids = await ev(pg, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`);
-  await tap(pg, `${QV}.querySelector('.qr[data-id="${ids[3]}"] .qa[data-action="remove"]')`);
+  await ev(pg, `${QV}.querySelector('.qr[data-id="${ids[3]}"]').scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(pg, `${QV}.querySelector('.qr[data-id="${ids[3]}"] .rt')`); await sleep(200);
+  await tap(pg, `${HS}.querySelector('.it[data-action="remove"]')`);
   await wait(pg, `!!${QV}.querySelector('.undo')`); await sleep(500);
   await shot(pg, 'queue-removed-undo-toolbar', vp);
   await pg.close();

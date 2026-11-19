@@ -79,6 +79,14 @@ const target = (page) => ev(page, `${NOW}.config.entity`);
 const maMembers = (page, g) => page.evaluate((g) => window.__ma.G[g].members.slice(), g);
 const st = (page, e) => page.evaluate((e) => window.__hass.states[e]?.state, e);
 const joins = (page) => page.evaluate(() => window.__calls.filter((c) => c.domain === 'media_player' && /^(join|unjoin)$/.test(c.service)));
+const QHS = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`;
+const QV0 = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
+async function qsheet(p, id, action) {
+  await ev(p, `${QV0}.querySelector('.qr[data-id="${id}"]')?.scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(p, `${QV0}.querySelector('.qr[data-id="${id}"] .rt')`); await sleep(200);
+  await tap(p, `${QHS}.querySelector('.it[data-action="${action}"]')`);
+}
+
 async function openPanel(page) {
   await tap(page, `__card.shadowRoot.querySelector('.pill')`);
   await wait(page, `${SPK}.open && !!${SR}.querySelector('section.sheet')`);
@@ -545,10 +553,15 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
 {
   const QV = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
   const qrow = (id) => `${QV}.querySelector('.qr[data-id="${id}"]')`;
-  const qbtn = (id, a) => `${qrow(id)}?.querySelector('${['up','down'].includes(a) ? '.qa' : '.ra-b'}[data-action="${a}"]')`;
-  const rows = (p) => ev(p, `[...${QV}.querySelectorAll('.qr')].map((r) => ({ id: r.dataset.id, k: ['now', 'next', 'past'].find((k) => r.classList.contains(k)),
-    pn: !!r.querySelector('.ra-b[data-action="playnow"]'), nx: r.querySelector('.ra-b[data-action="playnext"]') ? (r.querySelector('.ra-b[data-action="playnext"]').disabled ? 'dis' : 'on') : '',
-    up: !!r.querySelector('.qa[data-action="up"]'), rm: !!r.querySelector('.ra-b[data-action="remove"]') }))`);
+  const rows = (p) => ev(p, `[...${QV}.querySelectorAll('.qr')].map((r) => ({ id: r.dataset.id, k: ['now', 'next', 'past'].find((k) => r.classList.contains(k)) }))`);
+  const offOf = async (p, sel) => {
+    await ev(p, `${sel}.scrollIntoView({ block: 'center' })`); await sleep(80);
+    await tap(p, `${sel}.querySelector('.rt')`); await sleep(200);
+    const st = await ev(p, `[...${QHS}.querySelectorAll('.it')].map((b) => b.dataset.action + (b.getAttribute('aria-disabled') === 'true' ? '-off' : ''))`);
+    await tap(p, `${QHS}.querySelector('.it.cancel')`); await sleep(120);
+    return st;
+  };
+  const noRowBtns = (p) => ev(p, `${QV}.querySelectorAll('.qr .ra-b, .qr .qa, .qr .acts').length`);
   const sends = (p) => ev(p, `window.__calls.filter((c) => c.service === 'send_command' && ['player_queues/play_index', 'player_queues/move_item'].includes(c.data?.command)).map(({ t, ...c }) => c)`);
   const mass = (p, svc) => ev(p, `window.__calls.filter((c) => c.domain === 'mass_queue' && c.service === '${svc}').length`);
   const openQ = async (q, vp) => { const p = await open(`&tab=queue${q}`, vp); await wait(p, `${QV}.querySelectorAll('.qr.next').length > 3`); await sleep(150); return p; };
@@ -556,18 +569,23 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
 
   const p = await openQ('&admin=1');
   let r = await rows(p);
-  const nx = r.filter((x) => x.k === 'next'), nowR = r.find((x) => x.k === 'now');
-  check('J1 admin: Play Now + Play Next + Remove on Up next rows; Play Now and Remove visible but disabled on the playing row; Play Next disabled on the row already next',
-    nx.every((x) => x.pn && x.rm) && nx[0].nx === 'dis' && nx.slice(1).every((x) => x.nx === 'on') && nowR && nowR.pn && nowR.rm && nowR.nx === 'dis' && nx.every((x) => x.up), J(r.slice(0, 5)));
+  const nx = r.filter((x) => x.k === 'next');
+  const firstS = await offOf(p, `${QV}.querySelectorAll('.qr.next')[0]`);
+  const midS = await offOf(p, `${QV}.querySelectorAll('.qr.next')[2]`);
+  const nowS = await offOf(p, `${QV}.querySelector('.qr.now')`);
+  check('J1 admin: no row buttons; pop-up has Play Next/Move up grayed on song 1, usable on later Up next rows; playing row has Play Now/Next/Remove grayed',
+    (await noRowBtns(p)) === 0 && firstS.includes('next-off') && firstS.includes('up-off') && !firstS.includes('play-off') && !firstS.includes('remove-off')
+      && !midS.includes('next-off') && !midS.includes('play-off') && nowS.includes('play-off') && nowS.includes('next-off') && nowS.includes('remove-off'),
+    J({ firstS, midS, nowS }));
   // Play Now → confirm (nothing sent yet)
   const target = nx[2].id;
-  await tap(p, qbtn(target, 'playnow'));
+  await qsheet(p, target, 'play');
   const d = await dlg(p);
   check('J2 Play Now asks first: "Play this now? The current track will stop." with Cancel / Play Now; nothing sent yet',
     d && d.kind === 'jump' && d.q === 'Play this now?' && d.b === 'The current track will stop.' && d.btn[0] === 'Cancel' && d.btn[1] === 'Play Now' && (await sends(p)).length === 0, J(d));
   await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="cancel"]')`); await sleep(300);
   check('J3 Cancel closes the dialog and sends nothing', !(await dlg(p)) && (await sends(p)).length === 0 && (await mass(p, 'play_queue_item')) === 0);
-  await tap(p, qbtn(target, 'playnow'));
+  await qsheet(p, target, 'play');
   await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   await wait(p, `${QV}.querySelector('.qr.now')?.dataset.id === '${target}'`, 4000);
   let sc = await sends(p);
@@ -580,7 +598,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   r = await rows(p);
   let up = r.filter((x) => x.k === 'next');
   const mv = up[3].id;
-  await tap(p, qbtn(mv, 'playnext')); await sleep(80);
+  await qsheet(p, mv, 'next'); await sleep(80);
   const d2 = await dlg(p);
   await wait(p, `${QV}.querySelector('.qr.next')?.dataset.id === '${mv}'`, 3000); await sleep(900);
   sc = (await sends(p)).slice(1);
@@ -590,55 +608,56 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
     !d2 && sc.length === 1 && sc[0].data.command === 'player_queues/move_item' && J(sc[0].data.data) === J({ queue_id: 'syncgroup_everywhere', queue_item_id: mv, pos_shift: -3 })
       && first === mv && maQ === mv, J(sc) + ` first=${first} ma=${maQ}`);
   r = await rows(p);
-  check('J6 after the move the new next row has Play Next disabled and the old one is enabled', r.find((x) => x.id === mv).nx === 'dis' && r.filter((x) => x.k === 'next')[1].nx === 'on', J(r.slice(0, 4)));
+  const mvS = await offOf(p, `${QV}.querySelector('.qr[data-id="${mv}"]')`);
+  const secondS = await offOf(p, `${QV}.querySelectorAll('.qr.next')[1]`);
+  check('J6 after the move the new next row has Play Next grayed in the pop-up and the following row does not',
+    mvS.includes('next-off') && !secondS.includes('next-off'), J({ mvS, secondS }));
   const pastR = r.filter((x) => x.k === 'past');
-  check('J7 played rows: Play Now only (MA refuses to move or delete played items)', pastR.length > 0 && pastR.every((x) => x.pn && x.nx === 'dis' && x.rm), J(pastR));
+  const pastS = pastR.length ? await offOf(p, `${QV}.querySelector('.qr.past')`) : [];
+  check('J7 played rows: the pop-up offers Play Now only (Move / Play Next / Remove grayed)', pastR.length > 0 && !pastS.includes('play-off') && pastS.includes('next-off') && pastS.includes('up-off') && pastS.includes('remove-off'), J({ n: pastR.length, pastS }));
   const wsMoves = (p) => ev(p, `window.__ws.filter((m) => m.type === 'ma' && m.command === 'player_queues/move_item' && m.args?.pos_shift === -1).length`);
   const u0 = await wsMoves(p);
-  await tap(p, qbtn(r.filter((x) => x.k === 'next')[2].id, 'up')); await sleep(300);
+  await qsheet(p, r.filter((x) => x.k === 'next')[2].id, 'up'); await sleep(300);
   check('J8 Move up still acts at once (no dialog, jukebox_kiosk/ma player_queues/move_item pos_shift -1)', !(await dlg(p)) && (await wsMoves(p)) === u0 + 1 && (await mass(p, 'move_queue_item_up')) === 0);
   await p.close();
 }
 {
   const QV = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
   const openQ = async (q, vp) => { const p = await open(`&tab=queue${q}`, vp); await wait(p, `${QV}.querySelectorAll('.qr.next').length > 3`); await sleep(150); return p; };
-  const icons = (p) => ev(p, `({ pn: [...${QV}.querySelectorAll('.ra-b[data-action="playnow"]')].filter((b) => !b.disabled).length, nx: [...${QV}.querySelectorAll('.ra-b[data-action="playnext"]')].filter((b) => !b.disabled).length, rm: [...${QV}.querySelectorAll('.ra-b[data-action="remove"]')].filter((b) => !b.disabled).length, up: [...${QV}.querySelectorAll('.qr.next .qa[data-action="up"]')].filter((b) => !b.disabled).length, labels: ${QV}.querySelectorAll('.ra-b[data-action="playnow"]').length })`);
+  const noBtns = (p) => ev(p, `${QV}.querySelectorAll('.qr .ra-b, .qr .qa, .qr .acts').length`);
+  const offOf = async (p, sel) => {
+    await ev(p, `${sel}.scrollIntoView({ block: 'center' })`); await sleep(80);
+    await tap(p, `${sel}.querySelector('.rt')`); await sleep(200);
+    const st = await ev(p, `[...${QHS}.querySelectorAll('.it')].map((b) => b.dataset.action + (b.getAttribute('aria-disabled') === 'true' ? '-off' : ''))`);
+    await tap(p, `${QHS}.querySelector('.it.cancel')`); await sleep(120);
+    return st;
+  };
   let p = await openQ('');
-  let c = await icons(p);
-  check('J9 guest: Play Now / Play Next / Remove stay labeled but disabled; Move up / down unchanged', c.pn === 0 && c.nx === 0 && c.rm === 0 && c.up > 3 && c.labels > 3, J(c));
+  const gS = await offOf(p, `${QV}.querySelectorAll('.qr.next')[3]`);
+  check('J9 guest: no row buttons; the pop-up still offers Move up on a later Up next row',
+    (await noBtns(p)) === 0 && !gS.includes('up-off') && gS.includes('up'), J({ btns: await noBtns(p), gS }));
   await p.close();
   p = await openQ(`&user=Kitchen%20Tablet&cfg=${encodeURIComponent(J({ grouping_users: ['Kitchen Tablet'] }))}`);
-  c = await icons(p);
-  check('J10 grouping_users lists this non-admin user → icons shown', c.pn > 3 && c.nx > 3 && c.rm > 3, J(c));
+  const uS = await offOf(p, `${QV}.querySelectorAll('.qr.next')[3]`);
+  check('J10 grouping_users lists this non-admin user → the pop-up offers Play Now, Play Next and Remove',
+    (await noBtns(p)) === 0 && !uS.includes('play-off') && !uS.includes('next-off') && !uS.includes('remove-off'), J({ btns: await noBtns(p), uS }));
   await p.close();
   p = await openQ(`&admin=1&cfg=${encodeURIComponent(J({ grouping: 'nobody' }))}`);
-  c = await icons(p);
-  check('J11 grouping: nobody → queue labels stay visible but disabled (same lock as grouping)', c.pn === 0 && c.nx === 0 && c.rm === 0 && c.labels > 3, J(c));
+  check('J11 grouping: nobody → Queue rows still have no action buttons', (await noBtns(p)) === 0);
   await p.close();
-  // wide: all five icons inline; phone: Play Next + Remove inline, the rest behind ⋯ (an action sheet)
   for (const vp of [{ width: 390, height: 844, isMobile: true, hasTouch: true }, { width: 1920, height: 1080 }, { width: 1280, height: 800 }]) {
     p = await openQ('&admin=1', vp);
-    const m = await ev(p, `(() => { const r = ${QV}.querySelector('.qr.next.jx .qa.mo')?.closest('.qr') || [...${QV}.querySelectorAll('.qr.next')][2]; const rr = r.getBoundingClientRect(); const t = r.querySelector('.rt b').getBoundingClientRect();
-      const bs = [...r.querySelectorAll('.qa, .ra-b')].filter((b) => getComputedStyle(b).display !== 'none').map((b) => { const x = b.getBoundingClientRect(); return { a: b.dataset.action || 'more', w: Math.round(x.width), h: Math.round(x.height), l: x.left, r: x.right, t: x.top, b: x.bottom }; });
-      return { row: [rr.left, rr.right].map(Math.round), title: { w: Math.round(t.width), r: Math.round(t.right), t: Math.round(t.top), b: Math.round(t.bottom) }, bs }; })()`);
-    const narrow = vp.width <= 520;
-    const want = narrow ? ['playnext', 'playnow', 'remove', 'more'] : ['playnext', 'playnow', 'remove', 'up', 'down'];
-    const set = J(m.bs.map((b) => b.a).sort()) === J([...want].sort());
-    const big = m.bs.every((b) => b.w >= 44 && b.h >= 44);
-    const inside = m.bs.every((b) => b.l >= m.row[0] - 1 && b.r <= m.row[1] + 1);
-    const oneLine = narrow ? m.bs.filter((b) => ['playnext','playnow','remove'].includes(b.a)).every((b) => b.t >= m.title.b - 1 && b.t === m.bs[0].t && b.b === m.bs[0].b) : m.bs.every((b) => b.l >= m.title.r - 1 && b.t < m.title.b && b.b > m.title.t);
-    const moreInside = !narrow || m.bs.filter((b) => b.a === 'more').every((b) => b.t >= m.title.t - 40 && b.b >= m.title.b);
-    const right = Math.abs(Math.max(...m.bs.map((b) => b.r)) - m.row[1]) < 24;
-    const titleW = m.title.w >= 80;
-    check(`J12 ${vp.width}x${vp.height}: ${narrow ? 'three labeled actions on their own row' : 'three labeled actions + Move up/down inline'}; ≥ 44 px, right-aligned, beside/below the title (title ${m.title.w}px)`,
-      set && big && inside && oneLine && moreInside && right && titleW, J(m));
+    const m = await ev(p, `(() => { const r = [...${QV}.querySelectorAll('.qr.next')][2]; const t = r.querySelector('.rt b').getBoundingClientRect();
+      return { buttons: r.querySelectorAll('.ra-b, .qa, .acts').length, titleW: Math.round(t.width) }; })()`);
+    check(`J12 ${vp.width}x${vp.height}: Queue rows have no action buttons; the title still has room (${m.titleW}px)`,
+      m.buttons === 0 && m.titleW >= 80, J(m));
     await p.close();
   }
   // live MA 2.10.9: the buffered track is index_in_buffer (player_queues/get), not current + 1; Play Next lands after it
   p = await openQ('&admin=1&qbuf=1');
   await wait(p, `${QV}.querySelector('.qr.next.buf')`, 3000);
   const ids = await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[3]}"] .ra-b[data-action="playnext"]')`);
+  await qsheet(p, ids[3], 'next');
   await sleep(1600);
   const after = await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`);
   const mv = await ev(p, `window.__calls.filter((c) => c.data?.command === 'player_queues/move_item').map((c) => c.data.data.pos_shift)`);
@@ -681,13 +700,13 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   let p = await openQ('&admin=1');
   let t = (await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`))[3];
   await playNowPath('icon (admin, 1280x800)', p, async () => {
-    await tap(p, `${QV}.querySelector('.qr[data-id="${t}"] .ra-b[data-action="playnow"]')`);
+    await qsheet(p, t, 'play');
     await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   }, t);
   // 1b. a played row's Play Now icon (jump back) is also in place
   t = (await ev(p, `[...${QV}.querySelectorAll('.qr.past')].map((r) => r.dataset.id)`))[0];
   await playNowPath('icon on a played row (jump back)', p, async () => {
-    await tap(p, `${QV}.querySelector('.qr[data-id="${t}"] .ra-b[data-action="playnow"]')`);
+    await qsheet(p, t, 'play');
     await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   }, t);
   await p.close();
@@ -696,7 +715,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   t = (await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`))[4];
   await playNowPath('labeled phone action (admin, 390x844)', p, async () => {
     await ev(p, `${QV}.querySelector('.qr[data-id="${t}"]').scrollIntoView({ block: 'center' })`); await sleep(100);
-    await tap(p, `${QV}.querySelector('.qr[data-id="${t}"] .ra-b[data-action="playnow"]')`);
+    await qsheet(p, t, 'play');
     if (!(await wait(p, `!!${QV}.querySelector('.confirm[data-kind="jump"]')`, 4000))) throw new Error('phone Play Now did not open its confirmation');
     await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   }, t);
@@ -728,7 +747,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   t = (await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`))[5];
   await rowTapIdle('row tap (admin)', p, t);
   await playNowPath('icon after a row tap (admin)', p, async () => {
-    await tap(p, `${QV}.querySelector('.qr[data-id="${t}"] .ra-b[data-action="playnow"]')`);
+    await qsheet(p, t, 'play');
     await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   }, t);
   await p.close();
@@ -749,7 +768,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   let p = await openQ('&admin=1');
   const before = await maUris(p), ids0 = await ids(p), victim = ids0[2], vTitle = await titleOf(p, victim);
   const vUri = before[(await maIds(p)).indexOf(victim)];
-  await tap(p, `${QV}.querySelector('.qr[data-id="${victim}"] .ra-b[data-action="remove"]')`);
+  await qsheet(p, victim, 'remove');
   // the Undo bar is shown before removeRow finishes; wait until the row is actually gone
   const settled = await wait(p, `!!${QV}.querySelector('.undo .ub') && !${QV}.querySelector('.confirm') && ![...${QV}.querySelectorAll('.qr')].some((r) => r.dataset.id === '${victim}') && !window.__queues['media_player.everywhere'].items.some((x) => x.queue_item_id === '${victim}')`, 4000);
   const dlg0 = await ev(p, `!!${QV}.querySelector('.confirm')`);
@@ -759,7 +778,17 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
     settled && !dlg0 && sc.length === 1 && J(sc[0]) === J({ command: 'player_queues/delete_item', data: { queue_id: 'syncgroup_everywhere', item_id_or_index: victim } })
       && !(await ids(p)).includes(victim) && !(await maIds(p)).includes(victim) && u && u.text === `Removed ${vTitle}.` && u.btn === 'Undo', J({ settled, sc, u }));
   const nowId = await ev(p, `${QV}.querySelector('.qr.now')?.dataset.id`);
-  check('D2 playing/played rows keep Remove visible but disabled', nowId && await ev(p, `[...${QV}.querySelectorAll('.qr.now, .qr.past')].every((r) => r.querySelector('.ra-b[data-action="remove"]')?.disabled)`));
+  await tap(p, `${QV}.querySelector('.qr.now .rt')`); await sleep(200);
+  const nowRm = await ev(p, `${QHS}.querySelector('.it[data-action="remove"]')?.getAttribute('aria-disabled') === 'true'`);
+  await tap(p, `${QHS}.querySelector('.it.cancel')`); await sleep(120);
+  const pastEl = await ev(p, `!!${QV}.querySelector('.qr.past')`);
+  let pastRm = true;
+  if (pastEl) {
+    await tap(p, `${QV}.querySelector('.qr.past .rt')`); await sleep(200);
+    pastRm = await ev(p, `${QHS}.querySelector('.it[data-action="remove"]')?.getAttribute('aria-disabled') === 'true'`);
+    await tap(p, `${QHS}.querySelector('.it.cancel')`); await sleep(120);
+  }
+  check('D2 playing/played rows have no Remove button; the pop-up lists Remove grayed', nowId && nowRm && pastRm, J({ nowId, nowRm, pastRm }));
   await tap(p, `${QV}.querySelector('.undo .ub')`);
   await wait(p, `${QV}.querySelector('.toast')?.textContent.includes('is back')`, 4000); await sleep(900);
   sc = (await qcmds(p)).slice(1);
@@ -775,8 +804,9 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   p = await openQ('&admin=1');
   const v2 = (await ids(p))[3];
   await armTimers(p);
-  const rm = `${QV}.querySelector('.qr[data-id="${v2}"] .ra-b[data-action="remove"]')`;
-  const barUp = await tapRegistered(p, rm, `!!${QV}.querySelector('.undo')`, 3000);
+  await ev(p, `${QV}.querySelector('.qr[data-id="${v2}"]').scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${v2}"] .rt')`); await sleep(200);
+  const barUp = await tapRegistered(p, `${QHS}.querySelector('.it[data-action="remove"]')`, `!!${QV}.querySelector('.undo')`, 3000);
   const life = barUp.ok ? await hideByTimer(p, `${QV}.querySelector('.undo')`, 5000) : { appeared: false };
   check('D4 the Undo bar stays for the default 5 s window, then hides', barUp.ok && life.ms === 5000 && heldFor(life), J({ taps: barUp.taps, life }));
   await p.close();
@@ -784,7 +814,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   // re-add fails → the toast says so
   p = await openQ('&admin=1&qadd=fail');
   const v3 = (await ids(p))[2], t3 = await titleOf(p, v3);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${v3}"] .ra-b[data-action="remove"]')`); await sleep(500);
+  await qsheet(p, v3, 'remove'); await sleep(500);
   await tap(p, `${QV}.querySelector('.undo .ub')`);
   await wait(p, `${QV}.querySelector('.toast')?.textContent.includes('Couldn')`, 3000);
   check('D5 Undo when MA refuses the re-add: "Couldn\'t undo: <title> wasn\'t added back"', (await toastT(p)) === `Couldn't undo: ${t3} wasn't added back`, await toastT(p));
@@ -794,7 +824,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   p = await openQ('&admin=1&qitems=fail');
   const b4 = await maUris(p), v4 = (await ids(p))[2], t4 = await titleOf(p, v4);
   const u4 = b4[(await maIds(p)).indexOf(v4)];
-  await tap(p, `${QV}.querySelector('.qr[data-id="${v4}"] .ra-b[data-action="remove"]')`); await sleep(500);
+  await qsheet(p, v4, 'remove'); await sleep(500);
   await tap(p, `${QV}.querySelector('.undo .ub')`);
   await wait(p, `${QV}.querySelector('.toast')?.textContent.includes('back')`, 3000); await sleep(500);
   const a4 = await maUris(p);
@@ -805,11 +835,18 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   p = await openQ('&admin=1&qbuf=1');
   await wait(p, `${QV}.querySelector('.qr.next.buf')`, 3000);
   const v5 = (await ids(p))[0];
-  const g5 = await ev(p, `(() => { const r = ${QV}.querySelector('.qr[data-id="${v5}"]'), n = r.nextElementSibling; const a = (el, k) => el.querySelector((['playnext','remove'].includes(k) ? '.ra-b' : '.qa') + '[data-action="' + k + '"]');
-    return { buf: r.classList.contains('buf'), remove: a(r, 'remove') ? { disabled: a(r, 'remove').disabled } : null, next: a(r, 'playnext') ? { disabled: a(r, 'playnext').disabled } : null, up: a(r, 'up')?.disabled, down: a(r, 'down')?.disabled,
-      nUp: a(n, 'up')?.disabled, nNext: a(n, 'playnext')?.disabled, nRemove: a(n, 'remove') ? { disabled: a(n, 'remove').disabled } : null, bufs: ${QV}.querySelectorAll('.qr.buf').length }; })()`);
-  check('D7 buffered row: labeled Remove / Play Next stay visible but disabled; Move up + down disabled',
-    !!(g5.buf && g5.remove?.disabled && g5.next?.disabled && g5.up && g5.down && g5.nUp && g5.nNext === true && g5.nRemove?.disabled === false && g5.bufs === 1), J(g5));
+  const buf = await ev(p, `${QV}.querySelector('.qr[data-id="${v5}"]').classList.contains('buf')`);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${v5}"] .rt')`); await sleep(200);
+  const bufS = await ev(p, `[...${QHS}.querySelectorAll('.it')].map((b) => b.dataset.action + (b.getAttribute('aria-disabled') === 'true' ? '-off' : ''))`);
+  await tap(p, `${QHS}.querySelector('.it.cancel')`); await sleep(120);
+  const nId = await ev(p, `${QV}.querySelector('.qr[data-id="${v5}"]').nextElementSibling?.dataset.id`);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${nId}"] .rt')`); await sleep(200);
+  const nS = await ev(p, `[...${QHS}.querySelectorAll('.it')].map((b) => b.dataset.action + (b.getAttribute('aria-disabled') === 'true' ? '-off' : ''))`);
+  await tap(p, `${QHS}.querySelector('.it.cancel')`); await sleep(120);
+  const bufs = await ev(p, `${QV}.querySelectorAll('.qr.buf').length`);
+  check('D7 buffered row: no row buttons; the pop-up grays Remove, Play Next and Move on the buffered row; the next row can be removed and has Play Next grayed (already next)',
+    buf && bufs === 1 && bufS.includes('remove-off') && bufS.includes('next-off') && bufS.includes('up-off') && bufS.includes('down-off')
+      && nS.includes('next-off') && !nS.includes('remove-off') && nS.includes('up-off'), J({ buf, bufS, nS, bufs }));
   await p.close();
   const BUSY36 = "That track is already loading, so it can't move right now."; // 0.7.9 #36c wording (moves)
   const BUSY_RM = "That track is already loading, so it can't be removed right now."; // 0.7.9 #58 wording (removes)
@@ -817,44 +854,46 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   p = await openQ('&admin=1');
   const v7 = (await ids(p))[0], v8 = (await ids(p))[3];
   await ev(p, `(() => { const Q = window.__queues['media_player.everywhere']; Q.buf = Q.index + 1; })()`);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${v7}"] .ra-b[data-action="remove"]')`);
+  await qsheet(p, v7, 'remove');
   await wait(p, `${QV}.querySelector('.toast')?.textContent === ${J(BUSY_RM)}`, 3000);
   check('D7b delete ignored by MA (200, row still there): toast exactly "That track is already loading, so it can\'t be removed right now.", the row is back, no Undo bar',
     (await toastT(p)) === BUSY_RM && (await ids(p))[0] === v7 && !(await bar(p)), J({ t: await toastT(p), ids: (await ids(p)).slice(0, 2) }));
   await sleep(2300); // let the toast clear
   // MA buffers further on between the card's read and the tap (set right before it, so the card still offers Up)
   await ev(p, `(() => { const Q = window.__queues['media_player.everywhere']; Q.buf = Q.index + 4; })()`);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${v8}"] .qa[data-action="up"]')`);
+  await qsheet(p, v8, 'up');
   await wait(p, `${QV}.querySelector('.toast')?.textContent === ${J(BUSY36)}`, 3000);
   await wait(p, `${QV}.querySelectorAll('.qr.buf').length === 4`, 3000);
   check('D7c move refused by MA (500 "<n> is already played/buffered"): toast "That track is already loading, so it can\'t move right now." and the queue reloads (4 rows now locked)',
     (await toastT(p)) === BUSY36 && (await ev(p, `${QV}.querySelectorAll('.qr.buf').length`)) === 4, J({ t: await toastT(p) }));
   await p.close();
 
-  // phone: ⋯ opens an action sheet with the rest; Play Now there still asks first; Remove there offers Undo
+  // phone: a tap opens the existing pop-up; Play Now still asks first; Remove still offers Undo
   p = await openQ('&admin=1', { width: 390, height: 844, isMobile: true, hasTouch: true });
-  const v6 = await ev(p, `[...${QV}.querySelectorAll('.qr.next.jx')].find((r) => { const a=(k)=>r.querySelector('.ra-b[data-action="'+k+'"],.qa[data-action="'+k+'"]'); return r.querySelector('.qa.mo') && !a('playnext')?.disabled && !a('up')?.disabled && !a('down')?.disabled && !a('remove')?.disabled; })?.dataset.id`);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${v6}"] .qa.mo')`); await sleep(250);
-  const sheet = await ev(p, `(() => { const m = ${QV}.querySelector('.menu'); return m ? { sheet: m.classList.contains('sheet'), items: [...m.querySelectorAll('[role=menuitem]')].map((b) => b.textContent.trim()) } : null; })()`);
-  check('D8 phone ⋯ → action sheet: Play Now, Play Next, Move up, Move down, Remove (+ Cancel)', sheet && sheet.sheet && J(sheet.items) === J(['Play Now', 'Play Next', 'Move up', 'Move down', 'Remove', 'Cancel']), J(sheet));
-  await tap(p, `[...${QV}.querySelectorAll('.menu .mi:not(.cancel)')][0]`); await sleep(200);
+  const v6 = (await ids(p))[3];
+  await ev(p, `${QV}.querySelector('.qr[data-id="${v6}"]').scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${v6}"] .rt')`); await sleep(250);
+  const sheet = await ev(p, `(() => { const m = ${QHS}.querySelector('.sh'); return m ? { items: [...${QHS}.querySelectorAll('.it')].map((b) => b.dataset.action + ':' + b.textContent.trim()), closeX: !!${QHS}.querySelector('.cls, [data-action="close"]') } : null; })()`);
+  check('D8 phone tap → pop-up: Play Now, Play Next, Move up, Move down, Remove, More Info, Cancel (no close X)',
+    sheet && !sheet.closeX && J(sheet.items) === J(['play:Play Now', 'next:Play Next', 'up:Move up', 'down:Move down', 'remove:Remove', 'more:More Info', 'cancel:Cancel']), J(sheet));
+  await tap(p, `${QHS}.querySelector('.it[data-action="play"]')`); await sleep(200);
   const cf = await ev(p, `${QV}.querySelector('.confirm')?.dataset.kind ?? ''`);
-  check('D9 Play Now from the sheet still asks first (nothing sent)', cf === 'jump' && (await qcmds(p)).length === 0, cf);
+  check('D9 Play Now from the pop-up still asks first (nothing sent)', cf === 'jump' && (await qcmds(p)).length === 0, cf);
   await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="cancel"]')`); await sleep(200);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${v6}"] .qa.mo')`); await sleep(250);
-  await tap(p, `[...${QV}.querySelectorAll('.menu .mi:not(.cancel)')].find((b) => b.textContent.trim() === 'Remove')`); await sleep(500);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${v6}"] .rt')`); await sleep(250);
+  await tap(p, `${QHS}.querySelector('.it[data-action="remove"]')`); await sleep(500);
   const sc6 = await qcmds(p);
-  check('D10 Remove from the sheet: delete_item + the Undo bar', sc6.length === 1 && sc6[0].command === 'player_queues/delete_item' && !!(await bar(p)), J(sc6));
+  check('D10 Remove from the pop-up: delete_item + the Undo bar', sc6.length === 1 && sc6[0].command === 'player_queues/delete_item' && !!(await bar(p)), J(sc6));
   await p.close();
 
-  // guest: no Remove icon; the 0.4 menu is unchanged
+  // guest: no row buttons; a tap still opens the existing pop-up
   p = await openQ('', { width: 390, height: 844, isMobile: true, hasTouch: true });
   const g = (await ids(p))[3];
-  const rmIcons = await ev(p, `[...${QV}.querySelectorAll('.ra-b[data-action="remove"]')].filter((b) => !b.disabled).length`);
-  const guestActionsDisabled = await ev(p, `[...${QV}.querySelectorAll('.qr .ra-b[data-action]')].filter((b) => ['playnext','playnow','remove'].includes(b.dataset.action)).every((b) => b.disabled)`);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${g}"] .qa.mo')`); await sleep(250);
-  const gm = await ev(p, `[...${QV}.querySelectorAll('.menu .mi:not(.cancel)')].map((b) => b.textContent.trim())`);
-  check('D11 guest: queue labels remain visible but disabled; ⋯ omits queue-edit actions', rmIcons === 0 && guestActionsDisabled && gm.length > 0, J({ rmIcons, gm }));
+  const rowBtns = await ev(p, `${QV}.querySelectorAll('.qr .ra-b, .qr .qa, .qr .acts').length`);
+  await ev(p, `${QV}.querySelector('.qr[data-id="${g}"]').scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${g}"] .rt')`); await sleep(250);
+  const gm = await ev(p, `[...${QHS}.querySelectorAll('.it')].map((b) => b.dataset.action + ':' + b.textContent.trim())`);
+  check('D11 guest: no row buttons; a tap still opens the pop-up with Cancel', rowBtns === 0 && gm.includes('play:Play Now') && gm.includes('cancel:Cancel'), J({ rowBtns, gm }));
   await p.close();
 }
 
