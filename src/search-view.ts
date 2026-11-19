@@ -1024,6 +1024,11 @@ export class JbSearch extends LitElement {
       .sx { grid-template-rows: auto 1fr; grid-template-areas: "q res" "kb res";
         --kh: var(--_touch-min); }
       .sx.srcs-on { --kh: var(--_touch-min); }
+      /* #117: with a filter chip row (artist, album or genre) the 48px keys still have to end above the tab bar: the search box is a
+         48px target here, the keys sit 4px apart, and the status line goes (the chip and Clear filters already say what is shown) */
+      .sx:has(.scope) .qbar { height: var(--_touch-min); }
+      .sx:has(.scope) { --kgap: 4px; }
+      .sx:has(.scope) .qmeta { display: none; }
     }
     /* very short landscape (phone on its side under the HA toolbar): keyboard alone on the left at full height,
        query above the results on the right, keys sized to the space so no row is clipped */
