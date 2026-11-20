@@ -434,11 +434,18 @@ async def test_capabilities_autoplay_follows_queue_class(hass: HomeAssistant, ha
 async def test_queue_items_autoplay_state(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
     ws = await _ws(hass_ws_client, user_token[1])
     r = (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
-    assert r["autoplay"] is True and r["dynamic"] is False and r["queue_id"] == SYNCGROUP
+    assert r["autoplay"] is True and r["dynamic"] is False and r["active"] is True and r["current_media_type"] == "track" and r["queue_id"] == SYNCGROUP
     fake_ma.autoplay_key = "dont_stop_the_music_enabled"
     assert (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]["autoplay"] is True
     fake_ma.autoplay_key = None
     assert "autoplay" not in (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
+
+
+async def test_queue_items_passes_active(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    fake_ma.active = False
+    r = (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
+    assert r["active"] is False
 
 
 async def test_set_autoplay_targets_entity_queue(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:

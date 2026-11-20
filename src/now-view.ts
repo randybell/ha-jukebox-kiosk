@@ -28,6 +28,7 @@ import { FavController } from './heart';
 import { favoriteButtonFor } from './favorites';
 import { shownRepeat, nextRepeat, REPEAT_LABEL, type RepeatMode } from './repeat';
 import { SLEEP_MINUTES, sleepLabel, fmtSleepRemain, remainFromExpires, canMaSleep, parseExpires, type SleepMinutes } from './sleep';
+import { npAutoplayMode } from './autoplay';
 
 const VOL_THROTTLE_MS = 200;
 const HOLD_MS = 4000; // keep optimistic values this long unless the entity confirms sooner
@@ -168,6 +169,10 @@ export class JbNow extends LitElement {
     });
   }
   private toast(t: string) { this._toast = t; window.clearTimeout(this._toastTimer); this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400); }
+  private async toggleAutoplay(on: boolean) {
+    try { await this.queue?.setAutoplay(on); this.toast(on ? 'Autoplay on' : 'Autoplay off'); }
+    catch { this.toast("Couldn't change Autoplay"); }
+  }
 
   // ---------- transport ----------
   private isPlaying() { return this.flag('state', this.ent?.state) === 'playing'; }
@@ -444,8 +449,17 @@ export class JbNow extends LitElement {
     const up = this.queue?.upNext ?? [];
     const nextIt = up[0];
     const more = Math.max(0, (this.queue?.remaining ?? up.length) - 1);
-    // Autoplay indicator only (the toggle lives in the Queue header): server lists it, MA says it is on, queue not dynamic
+    // Up next · Autoplay text (Themes will remove it): server lists it, MA says it is on, queue not dynamic
     const autoplay = !!this.config._backend?.ext?.autoplay && this._snap?.autoplay === true && !this._snap?.dynamic;
+    const apUri = cur?.media_content_id ?? (a.media_content_id as string | undefined);
+    const apMode = npAutoplayMode(!!this.config._backend?.ext?.autoplay, this._snap, apUri);
+    const apOn = this._snap?.autoplay === true;
+    const apTpl = apMode === 'hide' ? nothing
+      : apMode === 'locked' ? html`<button class="apb on ind" data-action="np-autoplay" tabindex="-1" disabled
+          aria-label="Autoplay" title="This queue already keeps playing">${icon('autoplay', 'i xs')}<span>Autoplay</span></button>`
+      : html`<button class="apb ${apOn ? 'on' : ''}" data-action="np-autoplay" tabindex="-1" aria-pressed=${apOn ? 'true' : 'false'}
+          aria-label="Autoplay" title=${apOn ? 'Autoplay is on: more music is added when the queue runs out' : 'Autoplay is off'}
+          @pointerdown=${noFocus} @click=${() => this.toggleAutoplay(!apOn)}>${icon('autoplay', 'i xs')}<span>Autoplay</span></button>`;
     const favOn = this.isFav();
     const showFav = this.canFav();
     const sleepRem = this.sleepRemain();
@@ -487,7 +501,7 @@ export class JbNow extends LitElement {
       </div>
       <div class="info">
         <div class="badges">${prov ? html`<span class="pv big">${prov}</span>` : nothing}
-          <span class="where">${icon('eq', 'i xs')}${stateWord} ${where}</span></div>
+          <span class="where">${icon('eq', 'i xs')}${stateWord} ${where}</span>${apTpl}</div>
         <h1 class="ti">${idle ? 'Nothing playing' : title}</h1>
         <div class="sub">${idle ? combinedOn(this.config) ? `Pick something in ${libraryTabLabel(this.config)}.` : `Pick something in Search or ${libraryTabLabel(this.config)}.` : [a.media_artist, a.media_album_name].filter(Boolean).join(' · ')}</div>
         <div class="prog ${dur ? '' : 'nodur'}">
@@ -568,6 +582,11 @@ export class JbNow extends LitElement {
     .art .sleep-strip .sp.on { color: var(--_active); border-color: var(--_active); }
     .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); color: var(--_fg); }
     .badges { display: flex; align-items: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; }
+    .apb { margin-left: auto; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px);
+      border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_muted);
+      font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
+    .apb.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
+    .apb:disabled, .apb.ind { cursor: default; color: var(--_disabled); }
     .pv.big { font-size: var(--ha-font-size-s, 12px); padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); }
     .where { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
       padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-sel); border: var(--ha-border-width-sm, 1px) solid var(--_hairline); color: var(--_muted); }

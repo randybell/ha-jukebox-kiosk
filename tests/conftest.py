@@ -45,6 +45,7 @@ def _qi(n: int) -> dict[str, Any]:
             "uri": f"library://track/{n}",
             "name": f"Song {n}",
             "provider": "library",
+            "media_type": "track",
             "favorite": n % 2 == 0,
             "artists": [{"name": "Artist"}],
             "album": {"name": "Album", "metadata": {"images": [{"path": "https://img.example/a.jpg", "remotely_accessible": True}]}},
@@ -62,6 +63,7 @@ class FakeMa:
         self.subs: list[tuple[Any, Any, Any]] = []
         self.sleep_timers: dict[str, float | None] = {}
         self.autoplay_key = "autoplay_enabled"  # older MA: "dont_stop_the_music_enabled"; None: no field
+        self.active = True
         self.autoplay_error: str | None = None  # raised by player_queues/autoplay when set
         # per-queue Autoplay style config (MA 2.10.9 config/player_queues/*); None = MA without the setting
         self.ap_mode: str | None = "global"
@@ -91,7 +93,8 @@ class FakeMa:
         self.calls.append((command, kwargs))
         if command == "player_queues/get":
             q = {"queue_id": kwargs["queue_id"], "current_index": 4, "index_in_buffer": 4,
-                 "items": len(self.queue), "current_item": self.queue[4], "is_dynamic": False}
+                 "items": len(self.queue), "current_item": self.queue[4], "is_dynamic": False,
+                 "active": self.active}
             if self.autoplay_key:
                 q[self.autoplay_key] = True
             return q

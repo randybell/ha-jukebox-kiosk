@@ -140,9 +140,12 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
         if (!Q) throw err('not_found', `${ent} is not a Music Assistant player`);
         const cur = Math.max(0, Q.index), off = Math.max(0, cur - (msg.limit_before ?? 1));
         const lim = (cur - off) + 1 + (msg.limit_after ?? 100);
+        const curIt = Q.items[Q.index];
+        const curUri = curIt?.media_content_id || curIt?._t?.uri || '';
+        const curType = params.get('qtype') || Q.current_media_type || ( /:\/\/radio\//.test(curUri) ? 'radio' : /:\/\/audio_source\//.test(curUri) ? 'audio_source' : 'track');
         return { queue_id: st(ent).attributes.active_queue, current_index: Q.index < 0 ? null : Q.index, index_in_buffer: Q.index < 0 ? null : bufOf(Q),
-          current_item_id: Q.items[Q.index]?.queue_item_id ?? null, total: Q.items.length, offset: off, items: Q.items.slice(off, off + lim).map(qPub),
-          ...(features.autoplay ? { autoplay: !!Q.autoplay, dynamic: false } : {}) };
+          current_item_id: curIt?.queue_item_id ?? null, total: Q.items.length, offset: off, items: Q.items.slice(off, off + lim).map(qPub),
+          ...(features.autoplay ? { autoplay: !!Q.autoplay, dynamic: !!(Q.dynamic || params.get('qdyn') === '1'), active: Q.active !== false && params.get('qactive') !== '0', current_media_type: curType } : {}) };
       }
       case 'set_autoplay': {
         if (!features.autoplay) throw err('unauthorized', 'Unauthorized');

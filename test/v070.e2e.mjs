@@ -229,8 +229,12 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
     sent.length === 1 && sent[0].on === true && /^media_player\./.test(sent[0].e) && (await maOf(c, 'player_queues/autoplay')).length === 0, J(sent));
   await tap(c, `__card.shadowRoot.querySelector('.tab[data-tab="now"]')`);
   const ind = await wait(c, `/Autoplay/.test(${NV}.querySelector('.upn')?.textContent ?? '')`);
-  check('AP5 Now Playing: "Up next · Autoplay" indicator only (no 7th transport button)', ind
-    && !(await ev(c, `!!${NV}.querySelector('.tb[aria-label*="Autoplay"]')`)), String(await ev(c, `${NV}.querySelector('.upn')?.textContent?.replace(/\\s+/g, ' ')`)));
+  const ap = await ev(c, `(() => { const b = ${NV}.querySelector('[data-action="np-autoplay"]');
+    return { has: !!b, pressed: b?.getAttribute('aria-pressed'), disabled: !!b?.disabled, tb: !!${NV}.querySelector('.tb[aria-label*="Autoplay"]'),
+      upn: ${NV}.querySelector('.upn')?.textContent?.replace(/\s+/g, ' ') }; })()`);
+  check('AP5 Now Playing: spot A Autoplay button (same state as the Queue pill), Up next still says Autoplay, no 7th transport button',
+    ind && ap.has && ap.pressed === 'true' && !ap.disabled && !ap.tb, J(ap));
+
   await c.close();
   // Autoplay style picker (feature autoplay_mode): chevron opens the sheet, playlist chooser, saves via set_autoplay_mode
   const noMode = await open('&tab=queue&kcaps=' + AP);

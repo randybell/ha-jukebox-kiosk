@@ -89,6 +89,10 @@ export interface QueueWindow {
   autoplay?: boolean;
   /** MA queue is_dynamic (radio/endless sources): autoplay does nothing there */
   dynamic?: boolean;
+  /** MA PlayerQueue.active */
+  active?: boolean;
+  /** media_type of the current queue item (radio / audio_source / track / …) */
+  currentMediaType?: string;
 }
 export type QueueAction = 'play' | 'up' | 'down' | 'next' | 'remove';
 export type TrackListType = 'album' | 'artist' | 'playlist' | 'podcast';

@@ -370,6 +370,12 @@ async def ws_queue_items(hass: HomeAssistant, connection: websocket_api.ActiveCo
         extra["autoplay"] = autoplay
     if isinstance(queue.get("is_dynamic"), bool):
         extra["dynamic"] = queue["is_dynamic"]
+    if isinstance(queue.get("active"), bool):
+        extra["active"] = queue["active"]
+    media = current_item.get("media_item") if isinstance(current_item.get("media_item"), dict) else {}
+    mt = media.get("media_type") or current_item.get("media_type")
+    if isinstance(mt, str) and mt:
+        extra["current_media_type"] = mt
     connection.send_result(
         msg["id"],
         {

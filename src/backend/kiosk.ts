@@ -96,6 +96,8 @@ export class KioskBackend implements MaBackend {
       currentItemId: r?.current_item_id != null ? String(r.current_item_id) : undefined,
       autoplay: typeof r?.autoplay === 'boolean' ? r.autoplay : undefined,
       dynamic: typeof r?.dynamic === 'boolean' ? r.dynamic : undefined,
+      active: typeof r?.active === 'boolean' ? r.active : undefined,
+      currentMediaType: typeof r?.current_media_type === 'string' ? r.current_media_type : undefined,
     };
   }
   async queueAction(entity: string, action: QueueAction, queueItemId: string, queueId?: string) {
