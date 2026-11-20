@@ -756,7 +756,7 @@ async def ws_sleep_timer_get(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Return the MA sleep timer expiry (and mode, when the player has one) for the entity's player."""
-    _e, _policy, client = _context(hass)
+    _e, _, client = _context(hass)
     player_id = player_id_for_entity(hass, msg["entity_id"])
     raw = await _send(client, "players/sleep_timer/get", player_id=player_id)
     connection.send_result(msg["id"], {**await _sleep_payload(client, player_id, raw), "player_id": player_id})
@@ -775,7 +775,7 @@ async def ws_sleep_timer_set(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Set the MA sleep timer for the entity's player (registry unique_id)."""
-    _e, _policy, client = _context(hass)
+    _e, _, client = _context(hass)
     seconds = msg["seconds"]
     if not isinstance(seconds, int) or seconds <= 0:
         raise KioskError("invalid_args", "seconds must be greater than zero")
@@ -793,7 +793,7 @@ async def ws_sleep_timer_clear(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Clear the MA sleep timer for the entity's player (registry unique_id)."""
-    _e, _policy, client = _context(hass)
+    _e, _, client = _context(hass)
     player_id = player_id_for_entity(hass, msg["entity_id"])
     await _send(client, "players/sleep_timer/clear", player_id=player_id)
     connection.send_result(msg["id"], {**await _sleep_payload(client, player_id, None), "player_id": player_id})
@@ -812,7 +812,7 @@ async def ws_subscribe_sleep_timer(
     The subscription is filtered to this entity's player plus its current playback
     owner (the id MA emits on). The filter is updated when the group changes.
     """
-    _e, _policy, client = _context(hass)
+    _e, _, client = _context(hass)
     player_id = player_id_for_entity(hass, msg["entity_id"])
     msg_id = msg["id"]
     from music_assistant_models.enums import EventType  # noqa: PLC0415
