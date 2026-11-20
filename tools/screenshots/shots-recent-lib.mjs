@@ -20,7 +20,6 @@ const browser = await puppeteer.launch({
 const done = [];
 for (const vp of [
   { width: 1024, height: 600 },
-  { width: 390, height: 844, isMobile: true, hasTouch: true },
   { width: 820, height: 1180 },
 ]) {
   const tag = `${vp.width}x${vp.height}`;

@@ -1,4 +1,4 @@
-// Screenshots: every tab at 1920x1080, 1280x800, 820x1180, 390x844 (JB_SIZES=1920x1080,... to pick) → test/shots/m2/<tab>-<WxH>-<tag>.png
+// Screenshots: every tab at 1920x1080, 1280x800, 820x1180 (JB_SIZES=1920x1080,... to pick) → test/shots/m2/<tab>-<WxH>-<tag>.png
 // Usage: node tools/screenshots/shots-m2.mjs [tag] [extra-query]
 import puppeteer from 'puppeteer-core';
 import { mkdirSync } from 'node:fs';
@@ -9,7 +9,7 @@ const OUT = new URL('../../test/shots/m2/', import.meta.url).pathname; mkdirSync
 const BASE = await devIndex();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const b = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars'] });
-const sizes = (process.env.JB_SIZES ?? '1920x1080,1280x800,820x1180,390x844').split(',').map((s) => s.split('x').map(Number));
+const sizes = (process.env.JB_SIZES ?? '1920x1080,1280x800,820x1180').split(',').map((s) => s.split('x').map(Number));
 const errs = [];
 for (const [w, hgt] of sizes) {
   const p = await b.newPage();

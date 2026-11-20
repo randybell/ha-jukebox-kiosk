@@ -11,7 +11,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const NP = `__card.shadowRoot.querySelector('jb-now').shadowRoot`;
 const b = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars'] });
 const errs = [], notes = [];
-for (const [w, h] of [[1920, 1080], [390, 844]]) {
+for (const [w, h] of [[1920, 1080]]) {
   for (const rep of ['off', 'all']) {
     const tag = `${w}x${h}`;
     const p = await b.newPage();

@@ -10,7 +10,7 @@ const OUT = new URL('../../test/shots/v050/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const J = JSON.stringify;
-const VPS = [{ width: 390, height: 844, isMobile: true, hasTouch: true }, { width: 1280, height: 800 }, { width: 1920, height: 1080 }];
+const VPS = [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }];
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 const errors = [], files = [];
 const IN = 'media_player.indoor';
@@ -106,7 +106,7 @@ for (const vp of VPS) {
   await shot(pg, 'queue-removed-undo-toolbar', vp);
   await pg.close();
 }
-// 0.5.0 segmented tab bar (variant B): whole card + a crop of the bar; 1024x666 / 1024x600 below the HA toolbar, 1280x800, 390x844
+// 0.5.0 segmented tab bar (variant B): whole card + a crop of the bar; 1024x666 / 1024x600 below the HA toolbar, 1280x800
 {
   const pg = await browser.newPage();
   await hermetic(pg);
@@ -119,7 +119,6 @@ for (const vp of VPS) {
     [{ width: 1024, height: 666 }, '&ha=toolbar&sidebar=narrow', 'tabs-b-toolbar'],
     [{ width: 1024, height: 600 }, '&ha=toolbar&sidebar=narrow', 'tabs-b-tiny-toolbar'],
     [{ width: 1280, height: 800 }, '', 'tabs-b'],
-    [{ width: 390, height: 844, isMobile: true, hasTouch: true }, '', 'tabs-b'],
   ];
   for (const [vp, q, name] of runs) {
     await open(pg, `${q}&tab=queue`, vp); await wait(pg, `${QV}.querySelectorAll('.qr.next').length > 3`); await sleep(400);

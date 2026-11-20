@@ -23,7 +23,7 @@ const LIB = `&kcaps=${encodeURIComponent(J({ library_write: true }))}`;
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 const done = [], errors = [];
 
-for (const vp of [{ width: 1920, height: 1080 }, { width: 390, height: 844 }]) {
+for (const vp of [{ width: 1920, height: 1080 }]) {
   const tag = `${vp.width}x${vp.height}`, phone = vp.width < 600;
   const open = async (q, cfg = {}) => {
     const p = await browser.newPage(); await hermetic(p); await p.setViewport({ deviceScaleFactor: 1, ...vp });
