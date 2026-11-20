@@ -292,6 +292,14 @@ for (const [tag, cfg] of [['missing', {}], ['false', { show_action_icons: false 
     const first = ts.filter((t) => Math.round(t.getBoundingClientRect().top) === top).length;
     return { layout: g.dataset.layout, tiles: [...g.querySelectorAll('.qt')].length, next: ts.length, rows: R.querySelectorAll('.qr').length, tracks: getComputedStyle(g).gridTemplateColumns.split(' ').length, first }; })()`);
   check('Queue library_views.queue: tiles shows an exact 4-column tile grid', q.layout === 'tiles' && q.tiles > 0 && q.rows === 0 && q.tracks === 4 && q.first === Math.min(4, q.next), J(q));
+  const look = await ev(p, `(() => { const R = __card.shadowRoot.querySelector('jb-queue').shadowRoot; const g = R.querySelector('.qg'); const gw = g.getBoundingClientRect().width;
+    const now = R.querySelector('.qt.now'), past = R.querySelector('.qt.past'), nx = [...R.querySelectorAll('.qt.next')];
+    const nb = now.getBoundingClientRect(), sc = R.querySelector('.scroll').getBoundingClientRect();
+    return { badges: nx.slice(0, 4).map((t) => t.querySelector('.qn')?.textContent.trim()), nowWide: nb.width > gw * 0.9, nowTight: nb.height < nx[0].getBoundingClientRect().height / 2,
+      nowBg: getComputedStyle(now).backgroundColor !== 'rgba(0, 0, 0, 0)', pastDim: past ? Number(getComputedStyle(past).opacity) < 1 : true,
+      nextTopInView: nx[0].getBoundingClientRect().top < sc.bottom, nextTop: Math.round(nx[0].getBoundingClientRect().top - sc.top), scH: Math.round(sc.height), tileH: Math.round(nx[0].getBoundingClientRect().height) }; })()`);
+  check('Queue tiles: numbered badges on Up next, playing song a tight highlighted row across the grid, played songs dimmed, first Up next row starts in view',
+    J(look.badges) === J(['1', '2', '3', '4']) && look.nowWide && look.nowTight && look.nowBg && look.pastDim && look.nextTopInView, J(look));
   await p.close();
 }
 {

@@ -321,14 +321,15 @@ export class JbQueue extends LitElement {
     </div>`;
   }
 
-  /** Minimal Queue tile so tiles-across and tiles/rows can be tested. Themes owns badge, highlight and dimming. */
+  /** #146 Queue tile: cover with a number badge (Up next). Played and playing songs are tight rows across the grid (played dimmed, playing highlighted), so Up next starts high up. Same tap and hold as the row. */
   private tile(it: QueueItem, kind: 'now' | 'next' | 'past', n: number, buf = false) {
     const p = this.press.handlers(it.queue_item_id, it);
     return html`<div class="qt ${kind} ${buf ? 'buf' : ''} ${this.press.held === it.queue_item_id ? 'held' : ''}" data-id=${it.queue_item_id}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
-      ${artTpl(asArt(it), 'big')}
-      <b>${it.media_title}</b><small>${[it.media_artist, it.media_album_name].filter(Boolean).join(' · ')}</small>
+      <div class="tw">${artTpl(asArt(it), 'big')}
+        ${kind === 'next' ? html`<span class="qn">${n}</span>` : nothing}</div>
+      <div class="qtt">${kind === 'now' ? html`<span class="qeq">${icon('eq', 'i eqi')}</span>` : nothing}<b>${it.media_title}</b><small>${[it.media_artist, it.media_album_name].filter(Boolean).join(' · ')}</small></div>
     </div>`;
   }
 
@@ -434,11 +435,29 @@ export class JbQueue extends LitElement {
     .qr { display: grid; grid-template-columns: 28px 48px minmax(0, 1fr) auto; align-items: center; gap: var(--ha-space-3, 12px); min-height: 72px; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-lg, 12px); }
     .qg { display: grid; gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); }
     .qg > h3.eyebrow, .qg > .end { grid-column: 1 / -1; }
-    .qt { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; }
-    .qt .big { width: 100%; height: auto; aspect-ratio: 1; }
-    .qt b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .qg > h3.eyebrow { margin: var(--ha-space-1, 4px) var(--ha-space-2, 8px) 0; }
+    /* #146 Queue tiles: the Library tile look (theme radius, spacing and colours); a number badge on Up next covers */
+    .qt { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-lg, 12px); cursor: pointer; }
+    .qt .tw { position: relative; }
+    .qt .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--ha-border-radius-md, 8px); }
+    .qt .qtt { display: flex; flex-direction: column; min-width: 0; }
+    .qt b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
     .qt small { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .qt.held { background: var(--_chip-sel); }
+    .qn { position: absolute; left: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); min-width: var(--ha-space-7, 28px); height: var(--ha-space-7, 28px); padding: 0 var(--ha-space-2, 8px); box-sizing: border-box;
+      border-radius: var(--ha-border-radius-pill, 9999px); display: grid; place-items: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); font-variant-numeric: tabular-nums;
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg))); color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
+    /* played and playing songs: tight rows across the whole grid (small cover, title beside it) so Up next starts right below; playing is highlighted like the playing row in Rows */
+    .qt.now, .qt.past { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: var(--ha-space-3, 12px); padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); }
+    .qt.now .tw, .qt.past .tw { flex: none; width: calc(var(--_touch-min) + var(--ha-space-4, 16px)); }
+    .qt.now b, .qt.past b { margin-top: 0; }
+    .qt.now { background: var(--_active); color: var(--_on-accent); }
+    .qt.now .qtt { flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--ha-space-2, 8px); align-items: center; }
+    .qt.now .qeq { grid-row: 1 / span 2; display: grid; place-items: center; }
+    .qt.now .qeq .i { width: var(--_icon); height: var(--_icon); }
+    .qt.now b { font-size: var(--ha-font-size-l, 16px); }
+    .qt.now small { color: color-mix(in srgb, var(--_on-accent) 70%, transparent); } /* a tint of the on-primary text colour, as the playing row */
+    .qt.past { opacity: var(--_dim); }
+    .qt.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .qr + .qr { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .qr .th { width: 48px; height: 48px; }
     .n { font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; font-variant-numeric: tabular-nums; }

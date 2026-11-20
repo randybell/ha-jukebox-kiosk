@@ -83,6 +83,8 @@ export const tokens = css`
     --_space-3-5: calc(3.5 * var(--ha-space-1, 4px)); /* 14px */
     /* smallest tap target for any button (Material / HA touch target): buttons may shrink to fit, never below this */
     --_touch-min: 48px;
+    /* 0.9.1 (#146): the narrowest a cover tile may get: two touch targets side by side on the picture plus a gap */
+    --_tile-min: calc(2 * var(--_touch-min) + var(--ha-space-5, 20px));
     /* side padding follows the card's own width (container units), not the window: a half-width card gets half-width padding */
     --_pad: clamp(var(--ha-space-3, 12px), 3cqw, var(--ha-space-9, 36px));
     --_radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));

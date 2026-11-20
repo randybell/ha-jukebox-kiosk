@@ -84,6 +84,8 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     --_space-3-5: calc(3.5 * var(--ha-space-1, 4px)); /* 14px */
     /* smallest tap target for any button (Material / HA touch target): buttons may shrink to fit, never below this */
     --_touch-min: 48px;
+    /* 0.9.1 (#146): the narrowest a cover tile may get: two touch targets side by side on the picture plus a gap */
+    --_tile-min: calc(2 * var(--_touch-min) + var(--ha-space-5, 20px));
     /* side padding follows the card's own width (container units), not the window: a half-width card gets half-width padding */
     --_pad: clamp(var(--ha-space-3, 12px), 3cqw, var(--ha-space-9, 36px));
     --_radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
@@ -295,9 +297,12 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .detail { display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); }
     .nav { display: flex; align-items: center; gap: var(--ha-space-3, 12px); min-width: 0; }
     .grid.lib { display: grid; grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
-    .grid.lib .tile { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
-    .grid.lib .tile .big { width: 100%; height: auto; aspect-ratio: 1; }
-    .grid.lib .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* #146: the Library tile look (theme radius, spacing and colours) */
+    .grid.lib .tile { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-lg, 12px); cursor: pointer; }
+    .grid.lib .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
+    .grid.lib .tile .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--ha-border-radius-md, 8px); }
+    .grid.lib .tile .big.circ { border-radius: var(--ha-border-radius-circle, 50%); }
+    .grid.lib .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
     .back { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px) 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
     .back .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
@@ -582,8 +587,9 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .lts { font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); }
     .lhead { align-items: center; gap: var(--ha-space-4, 16px); overflow: hidden; }
     .lt-title { font-size: clamp(var(--ha-font-size-l, 16px), 3.5cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    /* #117: tiles never get narrower than 116px, so the two 48px cover buttons (heart, open) fit side by side on the picture */
-    .grid { --_tmin: 116px; display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(var(--_tmin), 28cqi, 150px), 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
+    /* #117: tiles never get narrower than two touch targets plus a gap (--_tile-min), so the two cover buttons (heart, open) fit side by side on the picture.
+       #146: the largest auto tile is three touch targets plus a small gap (was a fixed 150px) */
+    .grid { --_tmin: var(--_tile-min); display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(var(--_tmin), 28cqi, calc(3 * var(--_touch-min) + var(--_space-1-5))), 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
     .tile { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; border-radius: var(--ha-border-radius-lg, 12px); padding: var(--ha-space-1, 4px); cursor: pointer; }
     .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .tw { position: relative; }
@@ -642,7 +648,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .disc { display: flex; flex-direction: column; gap: clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-6, 24px)); }
     .drow { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); min-height: 120px; content-visibility: auto; contain-intrinsic-size: auto 260px; }
     .drow h3 { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); }
-    .hs { display: grid; grid-auto-flow: column; grid-auto-columns: clamp(var(--_tmin, 116px), 30cqi, 168px); gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
+    .hs { display: grid; grid-auto-flow: column; grid-auto-columns: clamp(var(--_tmin, var(--_tile-min)), 30cqi, calc(3.5 * var(--_touch-min))); gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
       scroll-snap-type: x proximity; touch-action: pan-x pan-y; padding-bottom: 2px; }
     .hs::-webkit-scrollbar { display: none; }
     .hs .tile { scroll-snap-align: start; }
@@ -951,9 +957,15 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     }
     .sx.kb-hidden .res .scroll { padding-bottom: calc(var(--ha-space-2, 8px) + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
     .grid.lib { display: grid; grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
-    .grid.lib .tile { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
-    .grid.lib .tile .big { width: 100%; height: auto; aspect-ratio: 1; }
-    .grid.lib .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* #146: the Library tile look (theme radius, spacing and colours) */
+    .grid.lib .tile { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-lg, 12px); cursor: pointer; }
+    .grid.lib .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
+    .grid.lib .tile .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--ha-border-radius-md, 8px); }
+    .grid.lib .tile .big.circ { border-radius: var(--ha-border-radius-circle, 50%); }
+    .grid.lib .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
+    .grid.lib .tile[data-group="artists"] b { text-align: center; }
+    .grid.lib .tile .big.gen { display: grid; place-items: center; background: var(--_chip-sel); color: var(--_inactive); }
+    .grid.lib .tile .big.gen .i { width: 40%; height: 40%; }
 
   `],qt("jb-search",Mi);class Ci extends oe{constructor(){super(...arguments),this.value=0,this.disabled=!1,this.label="",this._drag=!1,this._v=0,this.slop=0,this._x0=0,this._y0=0,this._armed=!1,this.down=e=>{if(!(this.disabled||"mouse"===e.pointerType&&0!==e.button)){e.preventDefault(),this._rect=this.getBoundingClientRect(),this._pid=e.pointerId,this._x0=e.clientX,this._y0=e.clientY,this._armed=!0;try{this.setPointerCapture(e.pointerId)}catch{}this.slop>0||(this._drag=!0,this._v=this.at(e),this.emit("jb-input"))}},this.move=e=>{if(e.pointerId===this._pid){if(!this._drag){if(!this._armed)return;const t=Math.abs(e.clientX-this._x0),a=Math.abs(e.clientY-this._y0);if(!(t>=this.slop&&t>a))return void(a>=this.slop&&this.disarm());this._drag=!0}e.preventDefault(),this._v=this.at(e),this.emit("jb-input")}},this.up=e=>{e.pointerId===this._pid&&(this._drag?(this._v=this.at(e),this._drag=!1,this._armed=!1,this._rect=void 0,this.value=this._v,this.emit("jb-change")):this.disarm())},this.cancel=()=>{this._armed=!1,this._drag&&(this._drag=!1,this.value=this._v,this.emit("jb-change"))}}get dragging(){return this._drag}shown(){return Math.max(0,Math.min(1,this._drag?this._v:this.value||0))}at(e){const t=this._rect??this.getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-t.left)/Math.max(1,t.width)))}emit(e){this.dispatchEvent(new CustomEvent(e,{detail:{value:Math.round(100*this._v)/100},bubbles:!0,composed:!0}))}disarm(){this._armed=!1,this._rect=void 0;try{void 0!==this._pid&&this.releasePointerCapture(this._pid)}catch{}}connectedCallback(){super.connectedCallback(),this.addEventListener("pointerdown",this.down),this.addEventListener("pointermove",this.move),this.addEventListener("pointerup",this.up),this.addEventListener("pointercancel",this.cancel),this.addEventListener("lostpointercapture",this.cancel),this.setAttribute("role","slider")}updated(){this.setAttribute("aria-valuenow",String(Math.round(100*this.shown()))),this.setAttribute("aria-label",this.label)}render(){const e=100*this.shown();return I`<div class="t"><div class="f" style="width:${e}%"></div></div><div class="k ${this._drag?"on":""}" style="left:${e}%"></div>`}}function Ti(e,t){let a,i,s,r=0;const o=()=>{r=Date.now(),a=void 0;const t=i;i=void 0,s=t,e(...t)},n=(...e)=>{i=e;const s=t-(Date.now()-r);s<=0?(window.clearTimeout(a),o()):a||(a=window.setTimeout(o,s))};return n.flush=(...e)=>{window.clearTimeout(a),a=void 0,!i&&s&&e.length===s.length&&e.every((e,t)=>e===s[t])||(i=e,o())},n.cancel=()=>{window.clearTimeout(a),a=void 0,i=void 0},n}Ci.properties={value:{type:Number},slop:{type:Number,reflect:!0},disabled:{type:Boolean,reflect:!0},label:{},_drag:{state:!0},_v:{state:!0}},Ci.styles=r`
     /* #117: the hit area never goes under the 48px touch target, whatever a view asks for */
@@ -1367,8 +1379,9 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     </div>`}tile(e,t,a,i=!1){const s=this.press.handlers(e.queue_item_id,e);return I`<div class="qt ${t} ${i?"buf":""} ${this.press.held===e.queue_item_id?"held":""}" data-id=${e.queue_item_id}
         @pointerdown=${s.down} @pointermove=${s.move} @pointerup=${s.up} @pointercancel=${s.cancel} @pointerleave=${s.cancel}
         @contextmenu=${e=>e.preventDefault()}>
-      ${Re(Vs(e),"big")}
-      <b>${e.media_title}</b><small>${[e.media_artist,e.media_album_name].filter(Boolean).join(" · ")}</small>
+      <div class="tw">${Re(Vs(e),"big")}
+        ${"next"===t?I`<span class="qn">${a}</span>`:B}</div>
+      <div class="qtt">${"now"===t?I`<span class="qeq">${de("eq","i eqi")}</span>`:B}<b>${e.media_title}</b><small>${[e.media_artist,e.media_album_name].filter(Boolean).join(" · ")}</small></div>
     </div>`}render(){const e=this._snap,t=e?.items??[],a=e?.current??-1,i=a>=0?t[a]:void 0,s=a>=0?t.slice(a+1):t,r=a>0?t.slice(0,a):[],o=this.queue?.remaining??s.length,n=a>=0?Math.max(0,Math.min(s.length,(this.queue?.locked??a)-a)):0,l=this._q.toLowerCase(),c=this._search?t.map((e,t)=>({it:e,i:t})).filter(({it:e})=>!l||[e.media_title,e.media_artist,e.media_album_name].some(e=>String(e??"").toLowerCase().includes(l))):[];return I`<div class="qx ${this._search?"searching":""}" @keydown=${this.onKey}>
       <div class="head"><h2>Queue</h2><span class="cnt">${o?`${o} up next`:""}</span>
         ${e?.loading?I`<span class="live busy"></span>`:B}
@@ -1452,11 +1465,29 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .qr { display: grid; grid-template-columns: 28px 48px minmax(0, 1fr) auto; align-items: center; gap: var(--ha-space-3, 12px); min-height: 72px; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-lg, 12px); }
     .qg { display: grid; gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); }
     .qg > h3.eyebrow, .qg > .end { grid-column: 1 / -1; }
-    .qt { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; }
-    .qt .big { width: 100%; height: auto; aspect-ratio: 1; }
-    .qt b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .qg > h3.eyebrow { margin: var(--ha-space-1, 4px) var(--ha-space-2, 8px) 0; }
+    /* #146 Queue tiles: the Library tile look (theme radius, spacing and colours); a number badge on Up next covers */
+    .qt { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-lg, 12px); cursor: pointer; }
+    .qt .tw { position: relative; }
+    .qt .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--ha-border-radius-md, 8px); }
+    .qt .qtt { display: flex; flex-direction: column; min-width: 0; }
+    .qt b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
     .qt small { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .qt.held { background: var(--_chip-sel); }
+    .qn { position: absolute; left: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); min-width: var(--ha-space-7, 28px); height: var(--ha-space-7, 28px); padding: 0 var(--ha-space-2, 8px); box-sizing: border-box;
+      border-radius: var(--ha-border-radius-pill, 9999px); display: grid; place-items: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); font-variant-numeric: tabular-nums;
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg))); color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
+    /* played and playing songs: tight rows across the whole grid (small cover, title beside it) so Up next starts right below; playing is highlighted like the playing row in Rows */
+    .qt.now, .qt.past { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: var(--ha-space-3, 12px); padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); }
+    .qt.now .tw, .qt.past .tw { flex: none; width: calc(var(--_touch-min) + var(--ha-space-4, 16px)); }
+    .qt.now b, .qt.past b { margin-top: 0; }
+    .qt.now { background: var(--_active); color: var(--_on-accent); }
+    .qt.now .qtt { flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--ha-space-2, 8px); align-items: center; }
+    .qt.now .qeq { grid-row: 1 / span 2; display: grid; place-items: center; }
+    .qt.now .qeq .i { width: var(--_icon); height: var(--_icon); }
+    .qt.now b { font-size: var(--ha-font-size-l, 16px); }
+    .qt.now small { color: color-mix(in srgb, var(--_on-accent) 70%, transparent); } /* a tint of the on-primary text colour, as the playing row */
+    .qt.past { opacity: var(--_dim); }
+    .qt.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .qr + .qr { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .qr .th { width: 48px; height: 48px; }
     .n { font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; font-variant-numeric: tabular-nums; }

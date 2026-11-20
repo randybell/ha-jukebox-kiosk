@@ -411,9 +411,12 @@ export class JbDetail extends LitElement {
     .detail { display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); }
     .nav { display: flex; align-items: center; gap: var(--ha-space-3, 12px); min-width: 0; }
     .grid.lib { display: grid; grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
-    .grid.lib .tile { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
-    .grid.lib .tile .big { width: 100%; height: auto; aspect-ratio: 1; }
-    .grid.lib .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* #146: the Library tile look (theme radius, spacing and colours) */
+    .grid.lib .tile { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-lg, 12px); cursor: pointer; }
+    .grid.lib .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
+    .grid.lib .tile .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--ha-border-radius-md, 8px); }
+    .grid.lib .tile .big.circ { border-radius: var(--ha-border-radius-circle, 50%); }
+    .grid.lib .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
     .back { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px) 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
     .back .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }

@@ -1023,8 +1023,9 @@ export class JbBrowse extends LitElement {
     .lts { font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); }
     .lhead { align-items: center; gap: var(--ha-space-4, 16px); overflow: hidden; }
     .lt-title { font-size: clamp(var(--ha-font-size-l, 16px), 3.5cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    /* #117: tiles never get narrower than 116px, so the two 48px cover buttons (heart, open) fit side by side on the picture */
-    .grid { --_tmin: 116px; display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(var(--_tmin), 28cqi, 150px), 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
+    /* #117: tiles never get narrower than two touch targets plus a gap (--_tile-min), so the two cover buttons (heart, open) fit side by side on the picture.
+       #146: the largest auto tile is three touch targets plus a small gap (was a fixed 150px) */
+    .grid { --_tmin: var(--_tile-min); display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(var(--_tmin), 28cqi, calc(3 * var(--_touch-min) + var(--_space-1-5))), 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
     .tile { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; border-radius: var(--ha-border-radius-lg, 12px); padding: var(--ha-space-1, 4px); cursor: pointer; }
     .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .tw { position: relative; }
@@ -1083,7 +1084,7 @@ export class JbBrowse extends LitElement {
     .disc { display: flex; flex-direction: column; gap: clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-6, 24px)); }
     .drow { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); min-height: 120px; content-visibility: auto; contain-intrinsic-size: auto 260px; }
     .drow h3 { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); }
-    .hs { display: grid; grid-auto-flow: column; grid-auto-columns: clamp(var(--_tmin, 116px), 30cqi, 168px); gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
+    .hs { display: grid; grid-auto-flow: column; grid-auto-columns: clamp(var(--_tmin, var(--_tile-min)), 30cqi, calc(3.5 * var(--_touch-min))); gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
       scroll-snap-type: x proximity; touch-action: pan-x pan-y; padding-bottom: 2px; }
     .hs::-webkit-scrollbar { display: none; }
     .hs .tile { scroll-snap-align: start; }
