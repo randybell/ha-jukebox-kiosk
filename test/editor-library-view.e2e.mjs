@@ -12,7 +12,8 @@ const J = JSON.stringify;
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 const base = { type: 'custom:jukebox-card', entity: 'media_player.everywhere' };
 const VIEWS = ['view_playlist', 'view_artist', 'view_track', 'view_genre', 'view_radio', 'view_album', 'view_podcast', 'view_audiobook', 'view_queue', 'view_discover', 'view_artist_page', 'view_album_page', 'view_playlist_page', 'view_search'];
-const LABELS = { view_playlist: 'Playlists', view_artist: 'Artists', view_track: 'Tracks', view_genre: 'Genres', view_radio: 'Radio', view_album: 'Albums', view_podcast: 'Podcasts', view_audiobook: 'Audiobooks', view_queue: 'Queue', view_discover: 'Discover', view_artist_page: 'Artist page', view_album_page: 'Album page', view_playlist_page: 'Playlist page', view_search: 'Search results' };
+const NAMES = { view_playlist: 'Playlists', view_artist: 'Artists', view_track: 'Tracks', view_genre: 'Genres', view_radio: 'Radio', view_album: 'Albums', view_podcast: 'Podcasts', view_audiobook: 'Audiobooks', view_queue: 'Queue', view_discover: 'Discover', view_artist_page: 'Artist page', view_album_page: 'Album page', view_playlist_page: 'Playlist page', view_search: 'Search results' };
+const LABELS = Object.fromEntries(Object.entries(NAMES).map(([k, v]) => [k, `Show ${v} as`]));
 const open = async (cfg) => {
   const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width: 900, height: 1500, deviceScaleFactor: 1 });
   await p.goto(`${ROOT}editor.html?fresh=1&cfg=${encodeURIComponent(J(cfg))}`);
@@ -46,7 +47,7 @@ const setNum = async (p, name, value) => { await ev(p, `(() => { const i = ${F}.
   })()`);
   const wantVal = (n) => (['view_playlist', 'view_album', 'view_radio'].includes(n) ? 'tiles' : 'rows');
   const mismatches = VIEWS.filter((n) => !(fields[n].value === wantVal(n) && fields[n].opts.join() === 'rows=Rows,tiles=Tiles' && fields[n].label === LABELS[n])).map((n) => ({ n, got: fields[n], want: { label: LABELS[n], value: wantVal(n) } }));
-  check('each section is a dropdown labelled with the section name, options exactly Rows and Tiles; Playlists, Albums and Radio start as Tiles, the rest as Rows', mismatches.length === 0, J(mismatches.length ? mismatches : { sample: fields.view_playlist, album: fields.view_album, queue: fields.view_queue, labels: Object.fromEntries(VIEWS.map((n) => [n, fields[n].label + '=' + fields[n].value])) }));
+  check('each section is a dropdown labelled in plain words (Show <section> as), options exactly Rows and Tiles; Playlists, Albums and Radio start as Tiles, the rest as Rows', mismatches.length === 0, J(mismatches.length ? mismatches : { sample: fields.view_playlist, album: fields.view_album, queue: fields.view_queue, labels: Object.fromEntries(VIEWS.map((n) => [n, fields[n].label + '=' + fields[n].value])) }));
   check('Tiles across: a number box, shown as 3, labelled only "Tiles across"',
     fields.cols.type === 'number' && fields.cols.value === '3' && fields.cols.label === 'Tiles across', J(fields.cols));
   if (process.env.SHOTS) { await ev(p, `${F}.querySelector('details[data-section=library]').scrollIntoView()`); await p.screenshot({ path: `${process.env.SHOTS}/146-editor-library-views.png` }); }
