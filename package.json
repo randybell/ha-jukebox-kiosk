@@ -1,6 +1,6 @@
 {
   "name": "ha-jukebox-kiosk",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "A touchscreen Jukebox music player for Home Assistant",
   "repository": {
     "type": "git",
