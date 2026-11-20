@@ -63,6 +63,7 @@ class FakeMa:
         self.subs: list[tuple[Any, Any, Any]] = []
         self.sleep_timers: dict[str, float | None] = {}
         self.players: dict[str, dict[str, Any]] = {}
+        self.get_hook: Any = None  # optional awaitable run before players/get
         self.autoplay_key = "autoplay_enabled"  # older MA: "dont_stop_the_music_enabled"; None: no field
         self.active = True
         self.repeat_mode = "off"
@@ -128,6 +129,8 @@ class FakeMa:
         if command == "players/all":
             return [{"player_id": PLAYER_A}, {"player_id": PLAYER_B}]
         if command == "players/get":
+            if self.get_hook is not None:
+                await self.get_hook()
             return self.players.get(kwargs["player_id"])
         if command == "players/sleep_timer/get":
             return self.sleep_timers.get(kwargs["player_id"])

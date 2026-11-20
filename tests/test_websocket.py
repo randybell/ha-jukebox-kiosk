@@ -918,3 +918,31 @@ async def test_subscribe_sleep_timer_skips_unrelated_player_updated(
     await _call(ws, type="unsubscribe_events", subscription=res["id"])
     assert fake_ma.subs == []
 
+async def test_subscribe_sleep_timer_unsub_during_owner_check(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    """Unsubscribing while an owner re-check is in flight must not call remove_listener twice or leave a sub."""
+    import asyncio
+
+    fake_ma.players[PLAYER_A] = {"player_id": PLAYER_A, "synced_to": None, "active_group": None}
+    fake_ma.players[SYNCGROUP] = {"player_id": SYNCGROUP, "synced_to": None, "active_group": None}
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/subscribe_sleep_timer", entity_id=ENTITY_A)
+    assert res["success"]
+    cb, _events, _id_filter = fake_ma.subs[0]
+    gate = asyncio.Event()
+    fake_ma.get_hook = gate.wait
+    fake_ma.players[PLAYER_A] = {"player_id": PLAYER_A, "synced_to": None, "active_group": SYNCGROUP}
+    cb(
+        SimpleNamespace(
+            event=SimpleNamespace(value="player_updated"),
+            object_id=PLAYER_A,
+            data=fake_ma.players[PLAYER_A],
+        )
+    )
+    await asyncio.sleep(0)
+    await _call(ws, type="unsubscribe_events", subscription=res["id"])
+    assert fake_ma.subs == []
+    gate.set()
+    await hass.async_block_till_done()
+    assert fake_ma.subs == []

@@ -818,25 +818,48 @@ async def ws_subscribe_sleep_timer(
     from music_assistant_models.enums import EventType  # noqa: PLC0415
 
     event_filter = (EventType(SLEEP_TIMER_EVENT), EventType.PLAYER_UPDATED)
-    held: dict[str, Any] = {"unsub": None, "ids": None, "groups": {}}
+    held: dict[str, Any] = {"unsub": None, "ids": None, "groups": {}, "closed": False}
+
+    def _close() -> None:
+        if held["closed"]:
+            return
+        held["closed"] = True
+        unsub = held["unsub"]
+        held["unsub"] = None
+        if unsub is not None:
+            unsub()
 
     async def _push() -> None:
+        if held["closed"]:
+            return
         raw = await _send(client, "players/sleep_timer/get", player_id=player_id)
+        if held["closed"]:
+            return
         connection.send_message(
             websocket_api.event_message(msg_id, {**await _sleep_payload(client, player_id, raw), "player_id": player_id})
         )
 
     def _listen(owner_id: str) -> None:
-        if held["unsub"] is not None:
-            held["unsub"]()
+        if held["closed"]:
+            return
+        unsub = held["unsub"]
+        held["unsub"] = None
+        if unsub is not None:
+            unsub()
+        if held["closed"]:
+            return
         ids = _sleep_id_filter(player_id, owner_id)
         held["unsub"] = client.subscribe(_on_event, event_filter, ids)
         held["ids"] = ids
-        connection.subscriptions[msg_id] = held["unsub"]
+        connection.subscriptions[msg_id] = _close
 
     async def _retarget() -> None:
+        if held["closed"]:
+            return
         seen: dict[str, tuple[str | None, str | None]] = {}
         owner_id = await _playback_owner_id(client, player_id, seen)
+        if held["closed"]:
+            return
         held["groups"].update(seen)
         ids = _sleep_id_filter(player_id, owner_id)
         if ids == held["ids"]:
