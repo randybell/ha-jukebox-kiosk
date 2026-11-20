@@ -158,7 +158,7 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   await wait(p, `${BR}.querySelector('.drow')`);
   const cats = await ev(p, `[...${BR}.querySelectorAll('.cats .fc')].map((b) => b.dataset.cat)`);
   check('D1 Discover is the first chip and selected by default', cats[0] === 'discover' && (await ev(p, `${BR}.querySelector('.cats .fc.on')?.dataset.cat`)) === 'discover', J(cats));
-  await wait(p, `[...${BR}.querySelectorAll('.drow')].some((r) => r.querySelector('.hs:not(.skel) .tile'))`);
+  await wait(p, `${BR}.querySelector('.drow[data-loaded] .row')`);
   const rows = await ev(p, `[...${BR}.querySelectorAll('.drow')].map((r) => r.dataset.row)`);
   check('D2 default rows in order (library rows, missing ones skipped)', J(rows) === J(['in_progress', 'recently_played', 'recently_added_albums', 'favorite_playlists', 'favorite_radio', 'random_albums', 'most_played_tracks']), J(rows));
   const its = await maOf(p, 'music/recommendations/items');
@@ -171,14 +171,33 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('D6 Continue listening shows resume progress', rp.length >= 2 && rp.includes('35') && rp.includes('67'), J(rp));
   const n0 = await plays(p);
   await ev(p, `${BR}.querySelector('.scroll').scrollTo({ top: 0 })`); await sleep(100);
+  await tap(p, `${BR}.querySelector('.drow[data-row="recently_added_albums"] .row')`);
+  await wait(p, `${BD}?.querySelector('h2')`);
+  { const tr0 = await ev(p, `${BR}.querySelector('jb-detail').trail?.[0]`); check('D7 album row opens the detail, never plays', (await plays(p)) === n0 && tr0 === 'Library · Discover', J({ tr0, n0, n: await plays(p) })); }
+  await p.close();
+}
+{
+  const p = await open('&tab=browse&lhome=0', { discover: true, library_views: { discover: 'tiles' } });
+  await wait(p, `${BR}.querySelector('.drow')`);
+  await wait(p, `${BR}.querySelector('.drow[data-loaded] .tile')`);
+  const tRows = await ev(p, `[...${BR}.querySelectorAll('.drow')].map((r) => r.dataset.row)`);
+  const tIts = await maOf(p, 'music/recommendations/items');
+  check('D4t tiles: rows load lazily at 800 px tall', tIts.length >= 1 && tIts.length < tRows.length, J(tIts));
+  await ev(p, `${BR}.querySelector('.scroll').scrollTo({ top: 99999 })`);
+  await wait(p, `window.__ws.filter((m) => m.command === 'music/recommendations/items').length >= 7`);
+  check('D4t tiles: scrolling loads the remaining rows', (await maOf(p, 'music/recommendations/items')).length === 7);
+  const tRp = await ev(p, `[...${BR}.querySelectorAll('.drow[data-row="in_progress"] .rp')].map((x) => x.getAttribute('aria-valuenow'))`);
+  check('D6t tiles: Continue listening shows resume progress', tRp.length >= 2 && tRp.includes('35') && tRp.includes('67'), J(tRp));
+  const tN0 = await plays(p);
+  await ev(p, `${BR}.querySelector('.scroll').scrollTo({ top: 0 })`); await sleep(100);
   await tap(p, `${BR}.querySelector('.drow[data-row="recently_added_albums"] .tile')`);
   await wait(p, `${BD}?.querySelector('h2')`);
-  { const tr0 = await ev(p, `${BR}.querySelector('jb-detail').trail?.[0]`); check('D7 album tile opens the detail, never plays', (await plays(p)) === n0 && tr0 === 'Library · Discover', J({ tr0, n0, n: await plays(p) })); }
+  { const tr0 = await ev(p, `${BR}.querySelector('jb-detail').trail?.[0]`); check('D7t tiles: album tile opens the detail, never plays', (await plays(p)) === tN0 && tr0 === 'Library · Discover', J({ tr0, n0: tN0, n: await plays(p) })); }
   await p.close();
 }
 {
   const p = await open('&tab=browse&lhome=0', { discover: ['favorite_radio', 'mock_stream--XXXXXXXX:stations_for_you', 'never_played_tracks', 'no_such_row'] });
-  await wait(p, `${BR}.querySelectorAll('.drow .hs:not(.skel)').length >= 2`, 6000);
+  await wait(p, `${BR}.querySelectorAll('.drow[data-loaded]').length >= 2`, 6000);
   await sleep(300);
   const rows = await ev(p, `[...${BR}.querySelectorAll('.drow')].map((r) => r.dataset.row)`);
   check('D8 custom list: provider:id rows, empty rows hidden, unknown rows skipped', J(rows) === J(['favorite_radio', 'stations_for_you']), J(rows));

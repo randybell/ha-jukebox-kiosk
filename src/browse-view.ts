@@ -360,6 +360,7 @@ export class JbBrowse extends LitElement {
   private onScroll(e: Event) {
     this.press.scrolled();
     const el = e.target as HTMLElement;
+    if (this._cat === DISCOVER_CAT.type) { this.queueNearbyRows(true); return; }
     if (!this._stack.length && !this._lart && el.scrollTop + el.clientHeight > el.scrollHeight - 400) this.load(true);
   }
 
@@ -490,6 +491,21 @@ export class JbBrowse extends LitElement {
       }), { root, rootMargin: '300px 0px' });
     }
     els.forEach((el) => this._io!.observe(el));
+    this.queueNearbyRows();
+  }
+  /** Load a Discover row within 300 px of the scrollport. On scroll, also load the next rows when the list is at the bottom — tall Rows/Tiles lists can hide later `.drow`s from IntersectionObserver (`content-visibility` in a flex `.scroll`). */
+  private queueNearbyRows(fromScroll = false) {
+    if (this._cat !== DISCOVER_CAT.type || this._stack.length || !this._disc?.rows.length) return;
+    const root = this.renderRoot.querySelector('.scroll') as HTMLElement | null;
+    const els = [...this.renderRoot.querySelectorAll<HTMLElement>('.drow[data-key]')].filter((el) => !this._ditems[el.dataset.key!]);
+    if (!els.length) return;
+    if (!root) { els.forEach((el) => this.queueRow(el.dataset.key!)); return; }
+    const rr = root.getBoundingClientRect();
+    const atBottom = fromScroll && root.scrollTop + root.clientHeight > root.scrollHeight - 400;
+    for (const el of els) {
+      const r = el.getBoundingClientRect();
+      if (atBottom || (r.top < rr.bottom + 300 && r.bottom > rr.top - 300)) this.queueRow(el.dataset.key!);
+    }
   }
   private queueRow(key: string) {
     const row = this._disc?.rows.find((r) => r.key === key);
@@ -532,7 +548,7 @@ export class JbBrowse extends LitElement {
             @click=${() => this.retryRow(r.key)}>Retry</button></div>`
           : st?.done ? (libraryViewFor(this.config, 'discover') === 'tiles'
               ? html`<div class="grid lib disc-grid" data-layout="tiles" style=${tilesAcrossStyle(this.config)}>${st.items.map((it) => this.tile(it, it.media_type || 'track', resume))}</div>`
-              : html`<div class="list lib" data-layout="rows">${st.items.map((it) => this.itemRow(it, it.media_type || 'track'))}</div>`)
+              : html`<div class="list lib" data-layout="rows">${st.items.map((it) => this.itemRow(it, it.media_type || 'track', resume))}</div>`)
           : libraryViewFor(this.config, 'discover') === 'tiles'
             ? html`<div class="grid lib disc-grid" data-layout="tiles" aria-hidden="true" style=${tilesAcrossStyle(this.config)}>${[0, 1, 2, 3, 4, 5].map(() => html`<div class="tile"><span class="ar big"></span><b>&nbsp;</b></div>`)}</div>`
             : html`<div class="list lib" data-layout="rows" aria-hidden="true">${[0, 1, 2, 3, 4, 5].map(() => html`<div class="row"><span class="ar"></span><b>&nbsp;</b></div>`)}</div>`}
@@ -740,14 +756,15 @@ export class JbBrowse extends LitElement {
   }
   /** 0.7.20: a Library row for playlists, artists, albums, stations, podcasts and audiobooks: the same small cover as the track rows (no circle),
    *  title, sub line, source badge and heart, and an arrow when a tap opens a page. No action buttons (the tiles had none). Tap and hold are the tile's. */
-  private itemRow(it: MaItem, type: string) {
+  private itemRow(it: MaItem, type: string, resume = false) {
     const p = this.press.handlers(it.uri, { it, type });
     const fav = !!heartType(this.config, type, it);
     const sub = this.sub(it, type);
+    const rf = resume ? resumeFraction(it) : 0;
     return html`<div class="row ir ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type=${type}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
-      ${artTpl(it, 'th')}
+      ${rf ? html`<div class="tw">${artTpl(it, 'th')}<span class="rp" role="progressbar" aria-label="Listened" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(rf * 100)}><i style="width:${(rf * 100).toFixed(1)}%"></i></span></div>` : artTpl(it, 'th')}
       <div class="rt"><b>${it.name}</b>${sub ? html`<small>${sub}</small>` : nothing}</div>
       ${provTpl(it.uri, it.provider, it.media_type ?? type)}
       ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type), 'mo fav') : nothing}
