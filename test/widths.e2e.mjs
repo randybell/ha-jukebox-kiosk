@@ -15,7 +15,7 @@ import { SCENES } from './themes-scenes.mjs';
 const MIN = 48;
 const WIDTHS = (process.env.WIDTHS ?? '768,820,900,960,1024,1180,1280,1366,1440,1600,1920').split(',').map(Number);
 const LIST = (process.env.SCENES ?? 'now,speakers-picker,library-home,lib-playlists-tiles,lib-playlists-rows,lib-tracks-rows,lib-radio,lib-keyboard-123,lib-search-results,detail-album,track-popup,track-popup-moreinfo,station-sheet,queue,queue-popup').split(',');
-const heights = (w) => (w < 768 ? [640, 900] : w < 1024 ? [600, 1000] : [600, 800, 1080]);
+const heights = (w) => (w < 1024 ? [600, 1000] : [600, 800, 1080]);
 const VIEWS = [];
 for (const w of WIDTHS) for (const h of heights(w)) VIEWS.push({ name: `${w}x${h}`, vp: { width: w, height: h } });
 // a card narrower than its window: a half-width card on a 1920x1080 screen (editor-preview widths under 768 are not tested)
