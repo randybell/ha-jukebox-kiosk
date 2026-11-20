@@ -28,7 +28,7 @@ import { FavController } from './heart';
 import { favoriteButtonFor } from './favorites';
 import { shownRepeat, nextRepeat, REPEAT_LABEL, type RepeatMode } from './repeat';
 import { SLEEP_MINUTES, sleepLabel, fmtSleepRemain, remainFromExpires, canMaSleep, parseExpires, type SleepMinutes } from './sleep';
-import { npAutoplayMode } from './autoplay';
+import { autoplayControlMode, canEnableAutoplay } from './autoplay';
 
 const VOL_THROTTLE_MS = 200;
 const HOLD_MS = 4000; // keep optimistic values this long unless the entity confirms sooner
@@ -170,6 +170,9 @@ export class JbNow extends LitElement {
   }
   private toast(t: string) { this._toast = t; window.clearTimeout(this._toastTimer); this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400); }
   private async toggleAutoplay(on: boolean) {
+    const repeat: RepeatMode = this.flag('repeat', shownRepeat(this.ent?.attributes?.repeat));
+    // MA useQueueModes.ts:50: setAutoplay does nothing when turning on while Repeat is one or all.
+    if (on && !canEnableAutoplay(repeat)) return;
     try { await this.queue?.setAutoplay(on); this.toast(on ? 'Autoplay on' : 'Autoplay off'); }
     catch { this.toast("Couldn't change Autoplay"); }
   }
@@ -451,12 +454,14 @@ export class JbNow extends LitElement {
     const more = Math.max(0, (this.queue?.remaining ?? up.length) - 1);
     // Up next · Autoplay text (Themes will remove it): server lists it, MA says it is on, queue not dynamic
     const autoplay = !!this.config._backend?.ext?.autoplay && this._snap?.autoplay === true && !this._snap?.dynamic;
-    const apUri = cur?.media_content_id ?? (a.media_content_id as string | undefined);
-    const apMode = npAutoplayMode(!!this.config._backend?.ext?.autoplay, this._snap, apUri);
+    const apMode = autoplayControlMode(!!this.config._backend?.ext?.autoplay, this._snap, repeat);
     const apOn = this._snap?.autoplay === true;
     const apTpl = apMode === 'hide' ? nothing
       : apMode === 'locked' ? html`<button class="apb on ind" data-action="np-autoplay" tabindex="-1" disabled
           aria-label="Autoplay" title="This queue already keeps playing">${icon('autoplay', 'i xs')}<span>Autoplay</span></button>`
+      : apMode === 'repeat-locked' ? html`<button class="apb ind" data-action="np-autoplay" tabindex="-1" disabled
+          role="switch" aria-checked="false" aria-disabled="true" aria-label="Autoplay"
+          title="Autoplay has been automatically turned off because repeat is on">${icon('autoplay', 'i xs')}<span>Autoplay</span></button>`
       : html`<button class="apb ${apOn ? 'on' : ''}" data-action="np-autoplay" tabindex="-1" aria-pressed=${apOn ? 'true' : 'false'}
           aria-label="Autoplay" title=${apOn ? 'Autoplay is on: more music is added when the queue runs out' : 'Autoplay is off'}
           @pointerdown=${noFocus} @click=${() => this.toggleAutoplay(!apOn)}>${icon('autoplay', 'i xs')}<span>Autoplay</span></button>`;

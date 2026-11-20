@@ -98,6 +98,7 @@ export class KioskBackend implements MaBackend {
       dynamic: typeof r?.dynamic === 'boolean' ? r.dynamic : undefined,
       active: typeof r?.active === 'boolean' ? r.active : undefined,
       currentMediaType: typeof r?.current_media_type === 'string' ? r.current_media_type : undefined,
+      repeat: r?.repeat_mode === 'off' || r?.repeat_mode === 'one' || r?.repeat_mode === 'all' ? r.repeat_mode : undefined,
     };
   }
   async queueAction(entity: string, action: QueueAction, queueItemId: string, queueId?: string) {

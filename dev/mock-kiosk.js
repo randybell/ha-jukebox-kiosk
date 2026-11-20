@@ -145,7 +145,8 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
         const curType = params.get('qtype') || Q.current_media_type || ( /:\/\/radio\//.test(curUri) ? 'radio' : /:\/\/audio_source\//.test(curUri) ? 'audio_source' : 'track');
         return { queue_id: st(ent).attributes.active_queue, current_index: Q.index < 0 ? null : Q.index, index_in_buffer: Q.index < 0 ? null : bufOf(Q),
           current_item_id: curIt?.queue_item_id ?? null, total: Q.items.length, offset: off, items: Q.items.slice(off, off + lim).map(qPub),
-          ...(features.autoplay ? { autoplay: !!Q.autoplay, dynamic: !!(Q.dynamic || params.get('qdyn') === '1'), active: Q.active !== false && params.get('qactive') !== '0', current_media_type: curType } : {}) };
+          ...(features.autoplay ? { autoplay: !!Q.autoplay, dynamic: !!(Q.dynamic || params.get('qdyn') === '1'), active: Q.active !== false && params.get('qactive') !== '0', current_media_type: curType,
+            repeat_mode: ['off', 'one', 'all'].includes(params.get('qrepeat') || st(ent)?.attributes?.repeat) ? (params.get('qrepeat') || st(ent).attributes.repeat) : 'off' } : {}) };
       }
       case 'set_autoplay': {
         if (!features.autoplay) throw err('unauthorized', 'Unauthorized');

@@ -91,8 +91,10 @@ export interface QueueWindow {
   dynamic?: boolean;
   /** MA PlayerQueue.active */
   active?: boolean;
-  /** media_type of the current queue item (radio / audio_source / track / …) */
+  /** media_item.media_type of the current queue item (radio / audio_source / track / …) */
   currentMediaType?: string;
+  /** MA PlayerQueue.repeat_mode */
+  repeat?: string;
 }
 export type QueueAction = 'play' | 'up' | 'down' | 'next' | 'remove';
 export type TrackListType = 'album' | 'artist' | 'playlist' | 'podcast';

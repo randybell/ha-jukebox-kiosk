@@ -22,6 +22,7 @@ interface ApSheet { opts?: AutoplayOptions; view: 'modes' | 'playlists'; busy: s
 const AP_HOLD_MS = 500;
 import { defineElement } from './define';
 import { TEST_HOOKS } from './test-hooks';
+import { autoplayControlMode, canEnableAutoplay } from './autoplay';
 
 const asArt = (q: QueueItem) => ({ name: q.media_title || '?', image: q.media_image });
 
@@ -68,25 +69,33 @@ export class JbQueue extends LitElement {
     this.press.release();
     try { await p; if (ok) this.toast(ok); } catch (e) { this.toast(e instanceof QueueBusy ? e.message : 'Queue action failed'); }
   }
-  /** Autoplay pill: always shown when a kiosk server that lists it, and a known state for this queue.
+  /** Autoplay pill: the same show/hide rules as the Now Playing button (`autoplayControlMode`).
    *  With the autoplay_mode feature a chevron (or a long-press on the pill) opens the style sheet. */
   private autoplayTpl(s: QueueSnapshot | undefined) {
-    if (!this.config?._backend?.ext?.autoplay || typeof s?.autoplay !== 'boolean') return nothing;
-    const on = s.autoplay, dyn = !!s.dynamic, modes = this.apModes;
-    const hold = modes && !dyn ? {
+    const mode = autoplayControlMode(!!this.config?._backend?.ext?.autoplay, s, s?.repeat);
+    if (mode === 'hide') return nothing;
+    const on = s?.autoplay === true, modes = this.apModes, locked = mode === 'locked' || mode === 'repeat-locked';
+    const hold = modes && !locked ? {
       down: () => { this._apHeld = false; window.clearTimeout(this._apHold); this._apHold = window.setTimeout(() => { this._apHeld = true; this.openAp(); }, AP_HOLD_MS); },
       up: () => window.clearTimeout(this._apHold),
     } : { down: () => undefined, up: () => undefined };
-    return html`<span class="apg ${modes ? 'split' : ''}"><button class="ap ${on ? 'on' : ''}" data-action="autoplay" tabindex="-1" aria-pressed=${on ? 'true' : 'false'} ?disabled=${dyn}
-      title=${dyn ? 'This queue already keeps playing' : on ? 'Autoplay is on: more music is added when the queue runs out' : 'Autoplay is off'}
+    const title = mode === 'locked' ? 'This queue already keeps playing'
+      : mode === 'repeat-locked' ? 'Autoplay has been automatically turned off because repeat is on'
+      : on ? 'Autoplay is on: more music is added when the queue runs out' : 'Autoplay is off';
+    const cls = mode === 'locked' ? 'on' : mode === 'repeat-locked' ? '' : (on ? 'on' : '');
+    return html`<span class="apg ${modes ? 'split' : ''}"><button class="ap ${cls}" data-action="autoplay" tabindex="-1"
+      aria-pressed=${mode === 'repeat-locked' ? 'false' : on ? 'true' : 'false'} ?disabled=${locked}
+      aria-disabled=${locked ? 'true' : nothing}
+      title=${title}
       @pointerdown=${(e: PointerEvent) => { noFocus(e); hold.down(); }} @pointerup=${hold.up} @pointerleave=${hold.up} @pointercancel=${hold.up}
       @contextmenu=${(e: Event) => e.preventDefault()}
-      @click=${() => { if (this._apHeld) { this._apHeld = false; return; } this.toggleAutoplay(!on); }}>${icon('autoplay', 'i xs')}Autoplay</button>${modes ? html`<button
-      class="ap apc ${on ? 'on' : ''}" data-action="autoplay-mode" tabindex="-1" aria-label="Autoplay settings" aria-haspopup="dialog" title="Autoplay settings" ?disabled=${dyn}
+      @click=${() => { if (locked || this._apHeld) { this._apHeld = false; return; } this.toggleAutoplay(!on); }}>${icon('autoplay', 'i xs')}Autoplay</button>${modes ? html`<button
+      class="ap apc ${on && !locked ? 'on' : ''}" data-action="autoplay-mode" tabindex="-1" aria-label="Autoplay settings" aria-haspopup="dialog" title="Autoplay settings" ?disabled=${locked}
       @pointerdown=${noFocus} @click=${() => this.openAp()}>${icon('chev', 'i xs')}</button>` : nothing}</span>`;
   }
   private get apModes() { return !!this.config?._backend?.ext?.autoplayMode && !!this.queue?.backend?.autoplayOptions; }
   private async toggleAutoplay(on: boolean) {
+    if (on && !canEnableAutoplay(this._snap?.repeat)) return;
     try { await this.queue?.setAutoplay(on); this.toast(on ? 'Autoplay on' : 'Autoplay off'); }
     catch { this.toast("Couldn't change Autoplay"); }
   }

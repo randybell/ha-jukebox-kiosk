@@ -1,4 +1,4 @@
-// Now Playing Autoplay button (spot A): MA 2.17.297.post3 show/hide, same set_autoplay as the Queue header.
+// Now Playing Autoplay button (spot A) and Queue header pill: MA 2.17.370 show/hide, including the repeat lock.
 // 1024x600 only. Usage: node test/autoplay-np.e2e.mjs
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -23,7 +23,7 @@ const open = async (extra = '') => {
   return p;
 };
 const ap = (p) => ev(p, `(() => { const r = ${NV}; const b = r.querySelector('[data-action="np-autoplay"]');
-  return { has: !!b, pressed: b?.getAttribute('aria-pressed'), disabled: !!b?.disabled, tag: b?.tagName, label: b?.textContent?.replace(/\\s+/g, ' ').trim(),
+  return { has: !!b, pressed: b?.getAttribute('aria-pressed'), checked: b?.getAttribute('aria-checked'), disabled: !!b?.disabled, title: b?.getAttribute('title') || '', tag: b?.tagName, label: b?.textContent?.replace(/\\s+/g, ' ').trim(),
     tb: !!r.querySelector('.tb[aria-label*="Autoplay"]'), inBadges: !!r.querySelector('.badges [data-action="np-autoplay"]') }; })()`);
 const mark = (p) => ev(p, 'window.__mark = (window.__ws || []).length');
 const sets = (p) => p.evaluate(() => (window.__ws || []).slice(window.__mark || 0).filter((m) => m.type === 'set_autoplay' || m.type === 'jukebox_kiosk/set_autoplay').map((m) => ({ type: m.type, e: m.entity_id, on: m.enabled })));
@@ -95,6 +95,37 @@ const sets = (p) => p.evaluate(() => (window.__ws || []).slice(window.__mark || 
   await p.waitForFunction('window.__ready === true'); await sleep(900);
   const a = await ap(p);
   check('NP10 server without the autoplay feature: hidden', !a.has, J(a));
+  await p.close();
+}
+
+
+{
+  const p = await open('&repeat=one');
+  const a = await ap(p);
+  check('NP11 Repeat one: Autoplay is visible, off, and not tappable',
+    a.has && a.disabled === true && a.checked === 'false' && a.pressed !== 'true' && /repeat is on/.test(a.title), J(a));
+  await mark(p);
+  await ev(p, `${NV}.querySelector('[data-action="np-autoplay"]').click()`); await sleep(300);
+  check('NP11b a tap while Repeat is on sends no set_autoplay', (await sets(p)).length === 0, J(await sets(p)));
+  await p.close();
+}
+{
+  const p = await open('&qtype=radio');
+  await ev(p, `__card.shadowRoot.querySelector('.tab[data-tab="queue"]').click()`); await sleep(700);
+  const q = await ev(p, `(() => { const r = ${QV}; const b = r.querySelector('[data-action="autoplay"]'); return { has: !!b }; })()`);
+  check('NP12 Queue header Autoplay is hidden for radio, like Now Playing', q.has === false, J(q));
+  await p.close();
+}
+{
+  const p = await open('&repeat=all');
+  await ev(p, `__card.shadowRoot.querySelector('.tab[data-tab="queue"]').click()`); await sleep(700);
+  const q = await ev(p, `(() => { const r = ${QV}; const b = r.querySelector('[data-action="autoplay"]');
+    return { has: !!b, disabled: !!b?.disabled, pressed: b?.getAttribute('aria-pressed'), title: b?.getAttribute('title') || '', on: b?.classList.contains('on') }; })()`);
+  check('NP13 Queue header follows the repeat lock: visible, off, not tappable',
+    q.has && q.disabled === true && q.pressed === 'false' && !q.on && /repeat is on/.test(q.title), J(q));
+  await mark(p);
+  await ev(p, `${QV}.querySelector('[data-action="autoplay"]').click()`); await sleep(300);
+  check('NP13b a tap on the locked Queue pill sends no set_autoplay', (await sets(p)).length === 0, J(await sets(p)));
   await p.close();
 }
 

@@ -448,6 +448,37 @@ async def test_queue_items_passes_active(hass: HomeAssistant, hass_ws_client: An
     assert r["active"] is False
 
 
+async def test_queue_items_media_type_only_from_media_item(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    """Hide rule follows MA: only current_item.media_item.media_type, not a leftover item media_type."""
+    ws = await _ws(hass_ws_client, user_token[1])
+    item = fake_ma.queue[4]
+    item["media_type"] = "radio"
+    item["media_item"] = {k: v for k, v in item["media_item"].items() if k != "media_type"}
+    r = (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
+    assert "current_media_type" not in r
+    item["media_item"]["media_type"] = "track"
+    r = (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
+    assert r["current_media_type"] == "track"
+    item["media_item"]["media_type"] = "radio"
+    item["media_type"] = "track"
+    r = (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
+    assert r["current_media_type"] == "radio"
+
+
+async def test_queue_items_passes_repeat_mode(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    fake_ma.repeat_mode = "one"
+    r = (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
+    assert r["repeat_mode"] == "one"
+    fake_ma.repeat_mode = "all"
+    r = (await _call(ws, type="jukebox_kiosk/queue_items", entity_id=ENTITY_G))["result"]
+    assert r["repeat_mode"] == "all"
+
+
 async def test_set_autoplay_targets_entity_queue(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
     ws = await _ws(hass_ws_client, user_token[1])
     res = await _call(ws, type="jukebox_kiosk/set_autoplay", entity_id=ENTITY_G, enabled=True)

@@ -64,6 +64,7 @@ class FakeMa:
         self.sleep_timers: dict[str, float | None] = {}
         self.autoplay_key = "autoplay_enabled"  # older MA: "dont_stop_the_music_enabled"; None: no field
         self.active = True
+        self.repeat_mode = "off"
         self.autoplay_error: str | None = None  # raised by player_queues/autoplay when set
         # per-queue Autoplay style config (MA 2.10.9 config/player_queues/*); None = MA without the setting
         self.ap_mode: str | None = "global"
@@ -94,7 +95,7 @@ class FakeMa:
         if command == "player_queues/get":
             q = {"queue_id": kwargs["queue_id"], "current_index": 4, "index_in_buffer": 4,
                  "items": len(self.queue), "current_item": self.queue[4], "is_dynamic": False,
-                 "active": self.active}
+                 "active": self.active, "repeat_mode": self.repeat_mode}
             if self.autoplay_key:
                 q[self.autoplay_key] = True
             return q

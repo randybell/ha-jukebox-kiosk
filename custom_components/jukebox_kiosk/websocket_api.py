@@ -372,10 +372,14 @@ async def ws_queue_items(hass: HomeAssistant, connection: websocket_api.ActiveCo
         extra["dynamic"] = queue["is_dynamic"]
     if isinstance(queue.get("active"), bool):
         extra["active"] = queue["active"]
+    # MA isQueueInfiniteStream reads only current_item.media_item.media_type (helpers.ts:50-54).
     media = current_item.get("media_item") if isinstance(current_item.get("media_item"), dict) else {}
-    mt = media.get("media_type") or current_item.get("media_type")
+    mt = media.get("media_type")
     if isinstance(mt, str) and mt:
         extra["current_media_type"] = mt
+    rm = queue.get("repeat_mode")
+    if rm in ("off", "one", "all"):
+        extra["repeat_mode"] = rm
     connection.send_result(
         msg["id"],
         {
