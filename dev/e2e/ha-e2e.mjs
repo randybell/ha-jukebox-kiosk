@@ -207,17 +207,17 @@ const p = await open('admin');
   check('T3 album detail in Browse lists its 4 tracks', rows);
 }
 const adminLogs = p.__logs.slice();
-// ---------------- 6. phone size shots ----------------
+// ---------------- 6. 1024x600 shots ----------------
 if (shotsAt) {
-  const m = await open('admin', { width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+  const m = await open('admin', { width: 1024, height: 600, hasTouch: true, deviceScaleFactor: 1 });
   for (const [id, name] of [['now', 'now'], ['queue', 'queue'], ['search', 'search'], ['lyrics', 'lyrics']]) {
     await ev(m, `window.__card._tab = '${id}'`); await sleep(900);
     if (id === 'search') { await m.keyboard.type('tone', { delay: 30 }); await sleep(1500); }
-    await shot(m, `${name}-390`);
+    await shot(m, `${name}-1024`);
   }
-  await ev(m, `window.__card._tab = 'now'`); await ev(m, `window.__card._spk = true`); await sleep(900); await shot(m, 'speakers-390');
+  await ev(m, `window.__card._tab = 'now'`); await ev(m, `window.__card._spk = true`); await sleep(900); await shot(m, 'speakers-1024');
   await m.close();
-  for (const vp of [{ width: 1920, height: 1080 }, { width: 390, height: 844 }]) {
+  for (const vp of [{ width: 1920, height: 1080 }, { width: 1024, height: 600 }]) {
     const r = await open('admin', vp, `${HA}/config/repairs`);
     await sleep(5000);
     await r.screenshot({ path: `${shotsAt}/repairs-${vp.width}.png` });

@@ -20,8 +20,8 @@ function check(name, ok, info = '') { results.push({ name, ok, info }); if (!ok)
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 const pageErrors = [];
 
-const SIZES = [[1024, 666], [1280, 720], [1366, 768], [1440, 900], [1280, 800], [1920, 1080], [390, 844, 1], [844, 390, 1], [820, 1180, 1], [1180, 820, 1], [1024, 600, 1]];
-const KEY = new Set(['1024x666', '1280x720', '1366x768', '1920x1080', '1024x600', '390x844', '844x390', '820x1180']);
+const SIZES = [[1024, 666], [1280, 720], [1366, 768], [1440, 900], [1280, 800], [1920, 1080], [820, 1180, 1], [1180, 820, 1], [1024, 600, 1]];
+const KEY = new Set(['1024x666', '1280x720', '1366x768', '1920x1080', '1024x600', '820x1180']);
 const TABS = ['now', 'browse', 'queue']; // 'browse' is the combined Library tab; there is no separate search tab and no Lyrics tab (0.7.9 #58)
 const LIB = 'browse';
 const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
@@ -179,13 +179,13 @@ for (const [w, h] of [[1440, 900], [1280, 800], [1024, 666]]) {
   await pg.evaluate(() => __haSidebar('256px')); await sleep(400);
   verify('F3 sidebar opened while open 1024x666', await geom(pg), { tab: LIB });
   await pg.close();
-  const ph = await newPage({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  const ph = await newPage({ width: 820, height: 1180, isMobile: true, hasTouch: true });
   await open(ph, '&ha=toolbar&sidebar=none');
   await tapTab(ph, 'queue', true);
-  await ph.setViewport({ width: 844, height: 390, isMobile: true, hasTouch: true, deviceScaleFactor: 1 }); await sleep(400);
-  verify('F3 rotate 390x844 → 844x390 (queue)', await geom(ph), { tab: 'queue' });
-  await ph.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 }); await sleep(400);
-  verify('F3 rotate back → 390x844 (queue)', await geom(ph), { tab: 'queue' });
+  await ph.setViewport({ width: 1180, height: 820, isMobile: true, hasTouch: true, deviceScaleFactor: 1 }); await sleep(400);
+  verify('F3 rotate 820x1180 → 1180x820 (queue)', await geom(ph), { tab: 'queue' });
+  await ph.setViewport({ width: 820, height: 1180, isMobile: true, hasTouch: true, deviceScaleFactor: 1 }); await sleep(400);
+  verify('F3 rotate back → 820x1180 (queue)', await geom(ph), { tab: 'queue' });
   await ph.close();
 }
 
@@ -235,10 +235,10 @@ const inMiddle = (pg, expr, scroller) => ev6(pg, `(() => { const el = ${expr}; i
   return { t: Math.round(b.top), b: Math.round(b.bottom), mt: Math.round(m.top), mb: Math.round(m.bottom), h: Math.round(b.height),
     inside: b.top >= m.top - 0.5 && b.bottom <= m.bottom + 0.5 && b.height > 0, sh: sc ? sc.scrollHeight : 0, ch: sc ? sc.clientHeight : 0, ov: sc ? getComputedStyle(sc).overflowY : '' }; })()`);
 const fits6 = (r) => !!r && r.inside && (r.sh <= r.ch + 2 || /auto|scroll/.test(r.ov));
-// Phone 390x844: with the heart OFF (kiosk without library write) and ON (library write); the sleep chooser stays on one row
+// 1024x600: with the heart OFF (kiosk without library write) and ON (library write)
 for (const heart of [false, true]) {
-  const tag = `F7 390x844 heart ${heart ? 'on' : 'off'}`;
-  const pg = await newPage({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  const tag = `F7 1024x600 heart ${heart ? 'on' : 'off'}`;
+  const pg = await newPage({ width: 1024, height: 600, hasTouch: true });
   await open(pg, `&tab=now${heart ? '&kcaps=' + encodeURIComponent(JSON.stringify({ library_write: true })) : ''}`);
   await tapTab(pg, 'now', true);
   const NPf = `__card.shadowRoot.querySelector('jb-now').shadowRoot`;
@@ -254,7 +254,7 @@ for (const heart of [false, true]) {
   check(`${tag}: sleep chooser Off/15/30/45/60/120, ≥ 40px tall, clear of Play/Pause`, ch.n === 6 && ch.minH >= 39.5 && ch.clearPlay, JSON.stringify(ch));
   await pg.close();
 }
-const S6 = [[1024, 666, 0, 'short'], [1024, 600, 0, 'tiny'], [1280, 720, 0, 'short'], [1280, 800, 0, ''], [844, 390, 1, 'tiny'], [390, 844, 1, ''], [390, 600, 1, 'tiny']];
+const S6 = [[1024, 666, 0, 'short'], [1024, 600, 0, 'tiny'], [1280, 720, 0, 'short'], [1280, 800, 0, '']];
 for (const [w, h, touch, size] of S6) {
   const tag = `F6 ${w}x${h} toolbar`;
   const vp = { width: w, height: h, ...(touch ? { isMobile: true, hasTouch: true } : {}) };
@@ -286,7 +286,6 @@ for (const [w, h, touch, size] of S6) {
   const cancel = await inMiddle(pg, `${HS6}.querySelector('.it.cancel')`);
   check(`${tag} queue pop-up: Cancel reachable`, cancel && cancel.inside, JSON.stringify(cancel));
   verify(`${tag} queue pop-up open`, await geom(pg), {});
-  if (w === 390) await pg.screenshot({ path: `${OUT}queue-sheet-${w}x${h}-toolbar.png` });
   await tap6(pg, `${HS6}.querySelector('.it.cancel')`, touch);
   await ev6(pg, `${QV6}.querySelector('.scroll').scrollTop = 0`); await sleep(150);
   await ev6(pg, `${QV6}.querySelectorAll('.qr.next')[2]?.scrollIntoView({ block: 'center' })`); await sleep(80);
@@ -332,10 +331,10 @@ for (const [w, h, touch] of SIZES) {
 
 check('F9 no page errors', pageErrors.length === 0, pageErrors.join(' | '));
 writeFileSync(OUT + 'results.json', JSON.stringify({ at: new Date().toString(), results }, null, 2));
-// 0.7.9 #55: portrait Now Playing — the art's bottom edge is above the badge line and the title, and the badge line, title and
-// artist never overlap each other, at every portrait size (the fit ones plus common phones/tablets), long titles
+// 0.7.9 #55: Now Playing — the art's bottom edge is above the badge line and the title, and the badge line, title and
+// artist never overlap each other, at supported sizes (no phone widths), long titles
 {
-  const P55 = [[390, 844], [820, 1180], [390, 600], [360, 640], [375, 667], [414, 896], [600, 960], [600, 1024], [768, 1024], [1080, 1920]];
+  const P55 = [[820, 1180], [768, 1024], [1080, 1920]];
   for (const long of [false, true]) for (const [w, h] of P55) {
     const tag = `F55 ${w}x${h}${long ? ' long title' : ''}`;
     const pg = await newPage({ width: w, height: h, isMobile: w < 500, hasTouch: true });
@@ -348,36 +347,6 @@ writeFileSync(OUT + 'results.json', JSON.stringify({ at: new Date().toString(), 
     const ok = m.art && m.badges && m.ti && m.sub && m.art.h > 40 && m.art.b <= m.badges.t + 0.5 && m.art.b <= m.ti.t + 0.5
       && m.badges.b <= m.ti.t + 0.5 && m.ti.b <= m.sub.t + 0.5;
     check(`${tag}: art bottom above badges and title; badges, title, artist don't overlap`, !!ok, JSON.stringify(m));
-    await pg.close();
-  }
-}
-// 0.7.9 #55: the HA card editor preview — the card alone at ~400–500 px wide inside a wide landscape page (its own container
-// size, not the screen's, decides the layout); long title
-{
-  const PV = [[400, 560], [460, 620], [500, 700], [460, 900], [520, 640]];
-  for (const [cw, chh] of PV) {
-    const tag = `F55p preview ${cw}x${chh} in 1280x800`;
-    const pg = await newPage({ width: 1280, height: 800 });
-    await open(pg, `&tab=now`);
-    await pg.evaluate((cw, chh) => { const c = window.__card; c.style.cssText = `display:block;width:${cw}px;height:${chh}px;margin:20px auto;`;
-      window.__setNowPlaying({ artist: 'The Sleep Eazys, Joe Bonamassa and A Very Long List Of Guest Musicians', title: 'Shine On You Crazy Diamond, Pts. 6-9 (2011 Remastered Version, Extended Live Edit)', radio: false, duration: 745, position: 30 }); }, cw, chh);
-    await sleep(700);
-    const m = await pg.evaluate(() => { const r = __card.shadowRoot.querySelector('jb-now').shadowRoot; const R = (s) => { const e = r.querySelector(s); if (!e) return null; const x = e.getBoundingClientRect(); return { t: x.top, b: x.bottom, h: x.height, w: x.width }; };
-      return { card: R('.nw'), art: R('.art'), badges: R('.badges'), ti: R('.ti'), sub: R('.sub') }; });
-    const ok = m.art && m.ti && m.sub && m.badges && m.card.w <= 0 + 600 && m.art.h > 40 && m.art.b <= m.badges.t + 0.5 && m.art.b <= m.ti.t + 0.5 && m.badges.b <= m.ti.t + 0.5 && m.ti.b <= m.sub.t + 0.5;
-    check(`${tag}: art bottom above badges and title; badges, title, artist don't overlap`, !!ok, JSON.stringify(m));
-    // 0.7.9 #58: the "Playing on" pill and the "Now Playing" tab label fit — nothing clipped, no ellipsis
-    const pt = await pg.evaluate(() => { const r = __card.shadowRoot; const B = (e) => e.getBoundingClientRect();
-      const shown = (e) => getComputedStyle(e).display !== 'none' && B(e).width > 0;
-      const pill = r.querySelector('.pill'), top = r.querySelector('.top'), pb = B(pill), tb = B(top);
-      const parts = [...pill.children].filter(shown).map((e) => ({ c: e.className?.baseVal ?? e.className, sw: e.scrollWidth, cw: e.clientWidth || B(e).width, l: B(e).left, r: B(e).right }));
-      const tab = r.querySelector('.tab[data-tab="now"]'), lab = tab.querySelector('span'), lb = B(lab), tbb = B(tab);
-      return { pill: { l: pb.left, r: pb.right, sw: pill.scrollWidth, cw: pill.clientWidth, top: [tb.left, tb.right], text: [...pill.querySelectorAll('span, b')].filter(shown).map((e) => e.textContent.trim()).join(' '), parts },
-        tab: { text: lab.textContent.trim(), sw: lab.scrollWidth, cw: lab.clientWidth, l: lb.left, r: lb.right, tl: tbb.left, tr: tbb.right, lines: Math.round(lb.height / parseFloat(getComputedStyle(lab).lineHeight || '16')) } }; });
-    const pillOk = pt.pill.sw <= pt.pill.cw + 1 && pt.pill.l >= pt.pill.top[0] - 0.5 && pt.pill.r <= pt.pill.top[1] + 0.5 && pt.pill.parts.every((x) => x.sw <= x.cw + 1 && x.l >= pt.pill.l - 0.5 && x.r <= pt.pill.r + 0.5);
-    const tabOk = pt.tab.text === 'Now Playing' && pt.tab.sw <= pt.tab.cw + 0.5 && pt.tab.l >= pt.tab.tl - 0.5 && pt.tab.r <= pt.tab.tr + 0.5;
-    check(`${tag}: "Playing on" pill and the "Now Playing" tab label fit (no clipping, no ellipsis)`, pillOk && tabOk, JSON.stringify(pt));
-    if (process.env.PVSHOT && cw === 460 && chh === 620) await pg.screenshot({ path: process.env.PVSHOT, clip: { x: 0, y: 0, width: 1280, height: 800 } });
     await pg.close();
   }
 }

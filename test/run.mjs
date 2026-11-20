@@ -292,15 +292,15 @@ s = await state(page);
 check('6a no input/textarea/contenteditable anywhere in the card', s.editableCount === 0, `editable=${s.editableCount}`);
 check('6b document.activeElement was never an input/textarea (sampled every 25ms + focusin)', s.focusViolations === 0, `focus history: ${s.focusLog.join(' → ')}`);
 
-// ---------- 7. phone (touch): four row icons fit, the title truncates, confirm works by touch ----------
-await open(page, '&latency=60&recents=1', { width: 390, height: 844, hasTouch: true, isMobile: true });
+// ---------- 7. touch at 1024x600: rows have no inline buttons, the title truncates, confirm works by touch ----------
+await open(page, '&latency=60&recents=1', { width: 1024, height: 600, hasTouch: true, isMobile: true });
 for (const c of 'MOCK') {
   const kr = await rectOf(page, keyExpr(keyIdFor(c)));
   await page.touchscreen.tap(kr.x, kr.y); await sleep(30);
 }
 await waitShown(page, 'MOCK');
 await sleep(150);
-await page.screenshot({ path: SHOTS + 'search-390x844.png' });
+await page.screenshot({ path: SHOTS + 'search-1024x600.png' });
 await page.evaluate((sv) => { const row = eval(sv).shadowRoot.querySelector('.grp.tracks .row .rt b'); row.textContent = 'An exceptionally long touchscreen song title that must remain ellipsized beside the queue actions'; }, H.sv);
 const ph = await page.evaluate((r) => {
   const root = eval(r);
@@ -311,14 +311,14 @@ const ph = await page.evaluate((r) => {
     return { h: rr.height, n: row.querySelectorAll('.ra-b').length, right: rr.right, vw: innerWidth, trunc: t.scrollWidth > t.clientWidth, tw: t.clientWidth };
   });
 }, `${H.sv}.shadowRoot`);
-check('7a 390 px: every row has no inline buttons, stays inside the screen and is ≥ 56 px tall', ph.length > 0 && ph.every((x) => x.n === 0 && x.right <= x.vw && x.h >= 56), JSON.stringify(ph.slice(0, 3)));
-check('7b 390 px: long titles truncate', ph.some((x) => x.trunc) && ph.every((x) => x.tw > 60), ph.map((x) => x.tw).join(','));
+check('7a 1024x600: every row has no inline buttons, stays inside the screen and is ≥ 56 px tall', ph.length > 0 && ph.every((x) => x.n === 0 && x.right <= x.vw && x.h >= 56), JSON.stringify(ph.slice(0, 3)));
+check('7b 1024x600: long titles truncate', ph.some((x) => x.trunc) && ph.every((x) => x.tw > 60), ph.map((x) => x.tw).join(','));
 await page.evaluate((e) => eval(e).scrollIntoView({ block: 'center' }), `${H.sv}.shadowRoot.querySelector('.grp.tracks .row')`); await sleep(150);
 r = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.grp.tracks .row .rt')`);
 await holdAt(page, r, true); await sleep(250); // a touch hold opens the row's pop-up; its Play now asks first
 r = await rectOf(page, `${HSX}.querySelector('.it[data-action="replace"]')`);
 await page.touchscreen.tap(r.x, r.y); await sleep(250);
-await page.screenshot({ path: SHOTS + 'replace-confirm-390x844.png' });
+await page.screenshot({ path: SHOTS + 'replace-confirm-1024x600.png' });
 s = await state(page);
 const cf7 = await page.evaluate((r) => eval(r).querySelector('.confirm')?.dataset.kind, `${H.sv}.shadowRoot`);
 r = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.confirm [data-action="cancel"]')`);
@@ -833,11 +833,11 @@ await page.keyboard.press('Escape');
   g = await pg.evaluate((sv) => { const r = eval(sv).shadowRoot; const grp = [...r.querySelectorAll('.grp')].find((x) => /radio/.test(x.className)); return { names: grp ? [...grp.querySelectorAll('b')].map((b) => b.textContent) : [], pv: grp ? [...new Set([...grp.querySelectorAll('.pv')].map((p) => p.textContent.trim()))] : [] }; }, H.sv);
   check('16z Search radio results trimmed + badged Radio', g.names.length > 0 && g.names.every((x) => x === x.trim() && !/\t/.test(x)) && g.pv.join() === 'Radio', JSON.stringify(g));
 
-  // Phone: durations stay visible in rows (moved into the subtitle line so the four row icons fit)
-  await open(pg, '&latency=20&tab=browse&lhome=0', { width: 390, height: 844, isMobile: true, hasTouch: true });
+  // Durations stay visible in rows (moved into the subtitle line)
+  await open(pg, '&latency=20&tab=browse&lhome=0', { width: 1024, height: 600, isMobile: true, hasTouch: true });
   await detail({ media_type: 'album', uri: 'library://album/1448', name: 'Hotel California' }, 'album'); await sleep(400);
   const ph = await pg.evaluate((b) => { const r = eval(b).querySelector('.detail .row'); const du = [...r.querySelectorAll('.du, .du2')].find((e) => getComputedStyle(e).display !== 'none'), pv = r.querySelector('.pv'); return { du: du && getComputedStyle(du).display !== 'none' && du.getBoundingClientRect().width > 0 ? du.textContent.trim() : '', pv: pv ? getComputedStyle(pv).display : 'none', over: r.scrollWidth - r.clientWidth }; }, BDs);
-  check('16za 390px phone: track rows keep the duration (under the title; provider badge hidden), no overflow', ph.du === '6:31' && ph.pv === 'none' && ph.over <= 1, JSON.stringify(ph));
+  check('16za 1024x600: track rows keep the duration under the title, no overflow', ph.du === '6:31' && ph.over <= 1, JSON.stringify(ph));
 
   // public-repo hygiene: fixtures are scrubbed
   const fxText = ['ma-search-sample.json', 'ma-search-sample-radio.json', 'ma-library-radio-sample.json'].map((f) => readFileSync(new URL(`../dev/fixtures/${f}`, import.meta.url), 'utf8')).join('\n');
@@ -1052,59 +1052,59 @@ await page.keyboard.press('Escape');
   cs = await act(async () => { await viaSheet(`${SD}.querySelector('.list.tracks .row')`, 'replace'); await confirm(); });
   check('17zb episode Replace → confirm → play_media with the episode uri and no media_type (MA infers it)', plays(cs).length === 1 && /podcast_episode/.test(plays(cs)[0].data.media_id) && !('media_type' in plays(cs)[0].data), JSON.stringify(plays(cs)[0]?.data));
 
-  // 17zc-ze: phone portrait, touch
-  await open(pg, '&latency=40', { width: 390, height: 844, isMobile: true, hasTouch: true });
+  // 17zc-ze: 1024x600, touch
+  await open(pg, '&latency=40', { width: 1024, height: 600, isMobile: true, hasTouch: true });
   for (const c of 'CHICAGO') { const kr = await rectOf(pg, keyExpr(keyIdFor(c))); await pg.touchscreen.tap(kr.x, kr.y); await sleep(30); }
   await waitShown(pg, 'CHICAGO'); await sleep(150);
-  await pg.screenshot({ path: V32 + 'search-list-390x844.png' });
+  await pg.screenshot({ path: V32 + 'search-list-1024x600.png' });
   cs = await act(() => tapEl(searchTile('artists', 'Chicago'), true), 500); await waitDet();
   d = await det();
   const fit = await pg.evaluate((dd) => { const r = eval(dd); const btns = [...r.querySelectorAll('.da button, .nav .back')].map((b) => b.getBoundingClientRect());
     return { minH: Math.min(...btns.map((b) => b.height)), inside: btns.every((b) => b.left >= 0 && b.right <= innerWidth + 0.5), over: r.querySelector('.scroll').scrollWidth - r.querySelector('.scroll').clientWidth }; }, SD);
-  check('17zc 390x844 touch: artist tap opens the detail, no play; buttons ≥ 40px tall and on screen, no sideways scroll', plays(cs).length === 0 && d.type === 'artist' && fit.minH >= 40 && fit.inside && fit.over <= 1, JSON.stringify(fit));
-  await pg.screenshot({ path: V32 + 'search-artist-detail-390x844.png' });
+  check('17zc 1024x600 touch: artist tap opens the detail, no play; buttons ≥ 40px tall and on screen, no sideways scroll', plays(cs).length === 0 && d.type === 'artist' && fit.minH >= 40 && fit.inside && fit.over <= 1, JSON.stringify(fit));
+  await pg.screenshot({ path: V32 + 'search-artist-detail-1024x600.png' });
   const phRows = await pg.evaluate((dd) => [...eval(dd).querySelectorAll('.detail .row')].map((row) => ({ n: row.querySelectorAll('.ra-b').length, right: row.getBoundingClientRect().right, h: row.getBoundingClientRect().height })), SD);
-  check('17zd 390x844 detail rows: no inline buttons, inside the screen; rows ≥ 56 px', phRows.length > 5 && phRows.every((x) => x.n === 0 && x.right <= 390.5 && x.h >= 56), JSON.stringify(phRows.slice(0, 2)));
+  check('17zd 1024x600 detail rows: no inline buttons, inside the screen; rows ≥ 56 px', phRows.length > 5 && phRows.every((x) => x.n === 0 && x.right <= 1024.5 && x.h >= 56), JSON.stringify(phRows.slice(0, 2)));
   cs = await act(async () => { await tapEl(`${SD}.querySelector('.list.tracks .row .rt')`, true); }, 400);
   const sheetZd = await pg.evaluate((h) => !!eval(h).querySelector('.sh'), HSX);
   const csZd = await act(async () => { await tapEl(`${HSX}.querySelector('.it[data-action="radio"]')`, true); }, 300);
   d = await det();
-  await pg.screenshot({ path: V32 + 'radio-confirm-390x844.png' });
-  check('17zd2 390x844 touch: track row tap opens the pop-up; Start radio → confirmation, nothing sent', cs.length === 0 && csZd.length === 0 && sheetZd && d.confirm === 'radio' && d.menu.length === 0, JSON.stringify({ cs: cs.map((c) => c.s), csZd: csZd.map((c) => c.s), c: d.confirm, sheetZd }));
+  await pg.screenshot({ path: V32 + 'radio-confirm-1024x600.png' });
+  check('17zd2 1024x600 touch: track row tap opens the pop-up; Start radio → confirmation, nothing sent', cs.length === 0 && csZd.length === 0 && sheetZd && d.confirm === 'radio' && d.menu.length === 0, JSON.stringify({ cs: cs.map((c) => c.s), csZd: csZd.map((c) => c.s), c: d.confirm, sheetZd }));
   cs = await act(() => tapEl(`${SD}.querySelector('.confirm [data-action="cancel"]')`, true));
-  check('17zd3 390x844 touch: Cancel sends nothing', cs.length === 0 && !(await det()).confirm);
+  check('17zd3 1024x600 touch: Cancel sends nothing', cs.length === 0 && !(await det()).confirm);
   await tapEl(`${SD}.querySelector('[data-action="back"]')`, true);
   await viaSheet(searchRow('tracks', '25 or 6 to 4'), 'replace', true);
-  await pg.screenshot({ path: V32 + 'replace-confirm-390x844.png' });
+  await pg.screenshot({ path: V32 + 'replace-confirm-1024x600.png' });
   await tapEl(`${SVR}.querySelector('.confirm [data-action="cancel"]')`, true);
-  // Browse: album detail on the phone + 1280
-  for (const vp of [{ width: 390, height: 844, isMobile: true, hasTouch: true }, { width: 1280, height: 800 }]) {
+  // Browse: album detail at 1024x600 and 1280
+  for (const vp of [{ width: 1024, height: 600, isMobile: true, hasTouch: true }, { width: 1280, height: 800 }]) {
     await open(pg, '&latency=40&tab=browse&lhome=0', vp);
     await pg.waitForFunction((b) => eval(b).querySelectorAll('.tile').length > 0, {}, BV);
     await tapEl(`${BV}.querySelector('[data-cat="album"]')`, vp.hasTouch);
     await sleep(300);
     cs = await act(() => tapEl(`[...${BV}.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent === 'Kind of Blue')`, vp.hasTouch), 500);
     const bd = await pg.evaluate((b) => eval(b).querySelector('jb-detail')?.shadowRoot.querySelectorAll('.list.tracks .row').length ?? 0, BV);
-    if (vp.width === 390) check('17ze Browse 390x844: tap album → detail with tracks, no play', plays(cs).length === 0 && bd === 4, `rows=${bd}`);
+    if (vp.width === 1024) check('17ze Browse 1024x600: tap album → detail with tracks, no play', plays(cs).length === 0 && bd === 4, `rows=${bd}`);
     await pg.screenshot({ path: V32 + `browse-album-detail-${vp.width}x${vp.height}.png` });
     await viaSheet(`${BV}.querySelector('jb-detail').shadowRoot.querySelector('.list.tracks .row')`, 'replace', vp.hasTouch);
     await pg.screenshot({ path: V32 + `browse-detail-replace-confirm-${vp.width}x${vp.height}.png` });
     await tapEl(`${BV}.querySelector('jb-detail').shadowRoot.querySelector('.confirm [data-action="cancel"]')`, vp.hasTouch);
   }
-  // Search list screenshot at 1280 + very narrow rows (< 330 px): Replace / Start radio fold into ⋯, still behind the confirmation
+  // Search list screenshot at 1280; Start radio from a search-row pop-up still goes behind the confirmation
   await open(pg, '&latency=40');
   await typeQ('CHICAGO');
   await pg.screenshot({ path: V32 + 'search-list-1280x800.png' });
-  await open(pg, '&latency=40', { width: 320, height: 640, isMobile: true, hasTouch: true });
+  await open(pg, '&latency=40', { width: 1024, height: 600, isMobile: true, hasTouch: true });
   for (const c of 'CHICAGO') { const kr = await rectOf(pg, keyExpr(keyIdFor(c))); await pg.touchscreen.tap(kr.x, kr.y); await sleep(30); }
   await waitShown(pg, 'CHICAGO'); await sleep(150);
   const tr = searchRow('tracks', '25 or 6 to 4');
   const narrow = await pg.evaluate((e) => eval(e).querySelectorAll('.ra-b').length, tr);
-  await pg.screenshot({ path: V32 + 'narrow-search-320x640.png' });
+  await pg.screenshot({ path: V32 + 'search-list-1024x600-touch.png' });
   cs = await act(() => viaSheet(tr, 'radio', true));
   const nKind = await confirmKind(SVR);
   const cs5 = await act(() => tapEl(`${SVR}.querySelector('.confirm [data-action="confirm"]')`, true));
-  check('17zg 320 px: a search row has no inline buttons; its pop-up Start radio → confirmation → radio_mode + replace', narrow === 0 && plays(cs).length === 0 && nKind === 'radio'
+  check('17zg 1024x600: a search row has no inline buttons; its pop-up Start radio → confirmation → radio_mode + replace', narrow === 0 && plays(cs).length === 0 && nKind === 'radio'
     && plays(cs5).length === 1 && plays(cs5)[0].data.radio_mode === true && plays(cs5)[0].data.enqueue === 'replace', `${narrow} kind=${nKind} ${JSON.stringify(plays(cs5)[0]?.data)}`);
   // every play_media this run used a valid HA media_type (the mock rejects anything else)
   const bad = (await all()).filter((c) => c.s === 'play_media' && !['artist', 'album', 'audiobook', 'folder', 'playlist', 'podcast', 'track', 'radio', undefined].includes(c.data.media_type));

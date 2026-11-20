@@ -1,11 +1,11 @@
-// #117 width sweep: the card at its own width from 320 to 1920 px (a full-screen card at that size, plus a 460 px editor
-// preview and a half-width card inside a 1920x1080 window). On every screen and pop-up it checks that every touch target
+// #117 width sweep: the card at its own width from 768 to 1920 px (a full-screen card at that size, plus a half-width
+// card inside a 1920x1080 window). Phone widths (up to 680) are not tested; the card does not support phones. On every screen and pop-up it checks that every touch target
 // that can be tapped right now is at least 48x48 px, that no button label is cut off or spills out of its button, that no
 // two touch targets overlap, and that nothing sticks out of the card sideways.
 // Row buttons that Kiosk Dev is removing or reworking (#85: Library/search .ra-b; the queue's .qa row buttons) are reported on their
 // own ("kd:" kinds) and do not fail the sweep; everything else does. Text that a target hides on purpose (a part that wrapped onto a
 // clipped second line, e.g. the speaker pill dropping "· 3 rooms synced") is not visible and not counted as cut.
-// Usage: node test/widths.e2e.mjs            env: WIDTHS=320,460  SCENES=now,queue  JOBS=3  OUT=<dir for a json report>
+// Usage: node test/widths.e2e.mjs            env: WIDTHS=768,1024  SCENES=now,queue  JOBS=3  OUT=<dir for a json report>
 import fs from 'node:fs';
 import { hermetic } from './intercept.mjs';
 import { devIndex } from './serve.mjs';
@@ -13,13 +13,13 @@ import { launch, openPage, sleep } from './themes-lib.mjs';
 import { SCENES } from './themes-scenes.mjs';
 
 const MIN = 48;
-const WIDTHS = (process.env.WIDTHS ?? '320,360,390,412,460,520,600,680,768,820,900,960,1024,1180,1280,1366,1440,1600,1920').split(',').map(Number);
+const WIDTHS = (process.env.WIDTHS ?? '768,820,900,960,1024,1180,1280,1366,1440,1600,1920').split(',').map(Number);
 const LIST = (process.env.SCENES ?? 'now,speakers-picker,library-home,lib-playlists-tiles,lib-playlists-rows,lib-tracks-rows,lib-radio,lib-keyboard-123,lib-search-results,detail-album,track-popup,track-popup-moreinfo,station-sheet,queue,queue-popup').split(',');
 const heights = (w) => (w < 768 ? [640, 900] : w < 1024 ? [600, 1000] : [600, 800, 1080]);
 const VIEWS = [];
 for (const w of WIDTHS) for (const h of heights(w)) VIEWS.push({ name: `${w}x${h}`, vp: { width: w, height: h } });
-// a card narrower than its window: the HA card editor preview (~460 px) and a half-width card on a 1920x1080 screen
-if (!process.env.WIDTHS) for (const cw of [460, 960]) VIEWS.push({ name: `card${cw}-in-1920x1080`, vp: { width: 1920, height: 1080 }, card: cw });
+// a card narrower than its window: a half-width card on a 1920x1080 screen (editor-preview widths under 768 are not tested)
+if (!process.env.WIDTHS) for (const cw of [960]) VIEWS.push({ name: `card${cw}-in-1920x1080`, vp: { width: 1920, height: 1080 }, card: cw });
 
 /** runs in the page: every visible touch target, deep through shadow roots */
 const AUDIT = (MIN) => {

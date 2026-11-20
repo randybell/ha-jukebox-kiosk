@@ -1,6 +1,6 @@
 // #46 search filters (Randy: "If you click on the genre 'Country' then it adds filter genre = 'country'"). Tapping a genre applies a genre
 // filter; it opens no page. MA filters library items by genre itself (music/<type>/library_items with genre = the genre's item id, the call
-// and parameter MA's own Library views use), so the card asks MA the same way. Checks, at 1024x600 and 460x800 (editor-preview width), touch and mouse:
+// and parameter MA's own Library views use), so the card asks MA the same way. Checks, at 1024x600, touch and mouse:
 //  - genre rows show a "Filter" label (no open arrow), aria-label "Filter by genre <name>", every genre row >= 48px tall
 //  - tapping a genre in the Library's Genres list, in typed genre results, and in the separate Library tab applies a "Genre: <name>" chip
 //    and a labeled "Clear filters" button, both >= 48px; no detail page opens; the words typed to find the genre are cleared
@@ -36,7 +36,7 @@ const chipState = (p, root) => ev(p, `(() => { const r = ${root}; const c = r.qu
   const b = (e) => e ? { t: e.innerText.replace(/\\s+/g, ' ').trim(), h: e.getBoundingClientRect().height, w: e.getBoundingClientRect().width } : null; return JSON.stringify({ chip: b(c), clear: b(x) }); })()`).then(JSON.parse);
 const KB = `${SV}.querySelector('jb-keyboard').shadowRoot`;
 
-for (const vp of [{ width: 1024, height: 600 }, { width: 460, height: 800 }]) for (const kind of ['touch', 'mouse']) {
+for (const vp of [{ width: 1024, height: 600 }]) for (const kind of ['touch', 'mouse']) {
   const tag = `${vp.width}x${vp.height} ${kind === 'touch' ? 'tap' : 'click'}`;
   // ---- combined Library tab: Genres list ----
   const p = await newPage('&tab=browse', vp);

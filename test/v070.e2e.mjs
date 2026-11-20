@@ -196,12 +196,6 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   await wait(k, `${BR}.querySelectorAll('.tile').length > 0`);
   check('D11 backend without discover: chip hidden, library category shown', !(await ev(k, `!!${BR}.querySelector('.fc[data-cat="discover"]')`)) && (await maOf(k, 'music/recommendations')).length === 0);
   await k.close();
-  const m = await open('&tab=browse&lhome=0', { discover: true }, { width: 390, height: 844 });
-  await wait(m, `${BR}.querySelector('.drow .hs:not(.skel) .tile')`);
-  const w = await ev(m, `${BR}.querySelector('.drow .hs .tile').getBoundingClientRect().width`);
-  const ov = await ev(m, `document.documentElement.scrollWidth <= 390`);
-  check('D12 phone: compact tiles, rows scroll sideways, no page overflow', w < 130 && ov, String(w));
-  await m.close();
 }
 // ---------------- 6. Autoplay ("don't stop the music"): the Queue always shows the switch when MA supports it ----------------
 {
@@ -275,15 +269,15 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('AP11 scrim / Escape closes the sheet', await wait(d, `!${QV}.querySelector('.aps')`));
   await d.close();
   // no provider for similar tracks: Similar music is hidden; long-press on the pill opens the sheet without toggling
-  const e = await open('&tab=queue&apsimilar=0&kcaps=' + APM, {}, { width: 390, height: 844, isMobile: true, hasTouch: true });
+  const e = await open('&tab=queue&apsimilar=0&kcaps=' + APM, {}, { width: 1024, height: 600, isMobile: true, hasTouch: true });
   await wait(e, `${QV}.querySelector('.ap')`);
   const r = await e.evaluate((x) => { const b = eval(x).getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; }, `${QV}.querySelector('.ap')`);
   await e.mouse.move(r.x, r.y); await e.mouse.down(); await sleep(700); await e.mouse.up(); await sleep(150);
   await wait(e, `${QV}.querySelectorAll('.aps .apo').length > 0`);
   const m2 = await ev(e, `[...${QV}.querySelectorAll('.aps .apo')].map((b) => b.dataset.mode)`);
-  const bottom = await ev(e, `(() => { const b = ${QV}.querySelector('.aps').getBoundingClientRect(); return Math.round(innerHeight - b.bottom); })()`);
-  check('AP12 phone: long-press opens a bottom sheet, Similar music hidden when MA cannot do it, pill not toggled',
-    J(m2) === J(['auto', 'library', 'playlist']) && (await e.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay').length)) === 0 && bottom < 120, J([m2, bottom]));
+  const sheet = await ev(e, `(() => { const b = ${QV}.querySelector('.aps'); if (!b) return null; const r = b.getBoundingClientRect(); return { h: Math.round(r.height), visible: r.height > 0 && getComputedStyle(b).display !== 'none' }; })()`);
+  check('AP12 long-press opens the Autoplay sheet, Similar music hidden when MA cannot do it, pill not toggled',
+    J(m2) === J(['auto', 'library', 'playlist']) && (await e.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay').length)) === 0 && !!sheet?.visible, J([m2, sheet]));
   await e.close();
 }
 // ---------------- 7. Library home prototype, flag library_home ----------------

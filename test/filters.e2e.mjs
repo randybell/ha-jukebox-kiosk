@@ -1,7 +1,7 @@
 // v0.7 search filters e2e: library-first results (provider copies of library items dropped), "Search in <artist>" scope
 // with its chip, Clear filters, album scope, the empty state, and the Library tab's Filter button + artist filter.
 // Mock data only (dev/mock-hass.js `jjgrey=1`: a public artist name with invented albums / tracks). Runs as the guest
-// (non-admin) user on the HA backend and on the kiosk backend, at 1280x800 and on a 390x844 phone.
+// (non-admin) user on the HA backend and on the kiosk backend, at 1280x800.
 // Usage: (starts its own dev server on a free port; JB_PORT / JB_URL override) node test/filters.e2e.mjs
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -20,8 +20,6 @@ const SD = `${SV}.querySelector('jb-detail')?.shadowRoot`;
 const BR = `__card.shadowRoot.querySelector('jb-browse').shadowRoot`;
 const BD = `${BR}.querySelector('jb-detail')?.shadowRoot`;
 const KB = `${BR}.querySelector('jb-keyboard')?.shadowRoot`;
-const PHONE = { width: 390, height: 844 };
-
 async function open(query = '', cfg = {}, vp = { width: 1280, height: 800 }) {
   const page = await browser.newPage();
   await hermetic(page);
@@ -214,28 +212,6 @@ for (const kiosk of [false, true]) {
   await wait(p, `${BR}.querySelectorAll('.tile').length > 0`);
   check('LB12 search_filters: false → no Filter button in Library', !(await ev(p, `!!${BR}.querySelector('[data-act="filter"]')`)));
   await p.close();
-}
-
-// ---------------- 4. phone ----------------
-{
-  const p = await open('&tab=search', {}, PHONE);
-  await scopeToJJ(p);
-  const fit = await ev(p, `(() => { const s = ${SV}.querySelector('.scope').getBoundingClientRect(); const c = [...${SV}.querySelectorAll('.scope .sc, .scope .fc')].map((e) => e.getBoundingClientRect());
-    return { w: s.width, right: Math.max(...c.map((b) => b.right)), h: Math.min(...c.map((b) => b.height)) }; })()`);
-  check('PH1 phone: the chip row fits 390 px, chips ≥ 40 px tall', fit.right <= 390 && fit.h >= 40, J(fit));
-  check('PH2 phone: the on-screen keyboard stays while scoped', await ev(p, `!!${SV}.querySelector('jb-keyboard') && ${SV}.querySelector('jb-keyboard').getBoundingClientRect().height > 100`));
-  await p.close();
-  const q = await open('&tab=browse&lhome=0', {}, PHONE);
-  await wait(q, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
-  await tap(q, `${BR}.querySelector('.cats .fc[data-cat="track"]')`);
-  await tap(q, `${BR}.querySelector('[data-act="filter"]')`);
-  await wait(q, `${KB}?.querySelector('[data-key="k-L"]')`);
-  for (const k of 'LAN') await tap(q, `${KB}.querySelector('[data-key="k-${k}"]')`);
-  await wait(q, `${BR}.querySelector('.sc[data-scope="text"]')`);
-  const lay = await ev(q, `(() => { const r = (s) => ${BR}.querySelector(s).getBoundingClientRect(); const bar = ${BR}.querySelector('.bar'); return { bar: bar.scrollWidth <= bar.clientWidth + 1,
-    kb: r('jb-keyboard').bottom <= 844 + 1, list: r('.scroll').height, flt: r('[data-act="filter"]').right <= 390 }; })()`);
-  check('PH3 phone Library: Filter button on screen, keyboard inside the viewport, list still visible', lay.kb && lay.flt && lay.list > 120, J(lay));
-  await q.close();
 }
 
 // ---------------- Q60: the idle reset (screensaver) clears the scope / Library filters ----------------

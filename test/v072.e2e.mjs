@@ -57,15 +57,6 @@ const pickSrc = async (p, id) => { await openSrc(p); await tap(p, SRC(id)); };
 const noPopup = (p) => ev(p, `![...${SV}.querySelectorAll('.toast, .confirm, [role=dialog]')].some((e) => e.getBoundingClientRect().width > 0) && !${C}.querySelector('.toast')`);
 
 // ---------------- 1. defaults: one Library tab, no tiles, box + source buttons + 5 buttons ----------------
-for (const [vpName, vp] of [['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }], ['320x640', { width: 320, height: 640, isMobile: true, hasTouch: true }]]) {
-  const p = await open('', {}, vp);
-  await openSrc(p);
-  const g = await ev(p, `(() => { const q = ${SV}.querySelector('.qrow').getBoundingClientRect(), row = ${SV}.querySelector('.srco'), r = row.getBoundingClientRect();
-    const bs = [...row.querySelectorAll('.src')].map((b) => b.getBoundingClientRect()); const kb = ${SV}.querySelector('.kbd')?.getBoundingClientRect();
-    return { gap: Math.round(r.top - q.bottom), tops: new Set(bs.map((b) => Math.round(b.top))).size, minH: Math.min(...bs.map((b) => b.height)), scrolls: row.scrollWidth > row.clientWidth + 1, rowInside: r.right <= innerWidth + 1, resH: Math.round(${SV}.querySelector('.res')?.getBoundingClientRect().height ?? 0), kbTop: Math.round(kb?.top ?? 0) }; })()`);
-  check(`T3d [${vpName}] phone: one horizontally scrolling button row directly under the box, >= 44px`, g.gap >= 0 && g.gap <= 16 && g.tops === 1 && g.minH >= 44 && g.scrolls && g.rowInside, J(g));
-  await p.close();
-}
 for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   const p = await open('', {}, vp);
   await wait(p, `${SV}.querySelectorAll('.lcats .lc').length >= 5`);
@@ -279,8 +270,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
 }
 
 // ---------------- keyboard always open (default) on every size; library_keyboard: tap is the opt-in fallback ----------------
-for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }], ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }],
-  ['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }], ['360x640', { width: 360, height: 640, isMobile: true, hasTouch: true }]]) {
+for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }], ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }]]) {
   const p = await open('&ha=toolbar&sidebar=none', {}, vp);
   await wait(p, `!!${SV}.querySelector('.srct') && ${SV}.querySelectorAll('.lcats .lc').length >= 5`);
   const g = await ev(p, `(() => { const R = (el) => { const b = el?.getBoundingClientRect(); return b && b.height ? { t: b.top, b: b.bottom, l: b.left, r: b.right } : null; };
@@ -297,16 +287,16 @@ for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: t
   await p.close();
 }
 {
-  const t = await open('', { library_keyboard: 'tap' }, { width: 390, height: 844, isMobile: true, hasTouch: true });
+  const t = await open('', { library_keyboard: 'tap' }, { width: 1024, height: 600, isMobile: true, hasTouch: true });
   await wait(t, `${SV}.querySelectorAll('.lcats .lc').length >= 2`);
   const before = await ev(t, `[${SV}.querySelector('.sx').classList.contains('kb-hidden'), !!${SV}.querySelector('.kb-open')]`);
   await tap(t, `${SV}.querySelector('.qbar')`); await sleep(200);
-  check('KB3 library_keyboard: tap (phone fallback): list first with the Keyboard pill, tapping the search box opens the keyboard', J(before) === J([true, true]) && !(await ev(t, `${SV}.querySelector('.sx').classList.contains('kb-hidden')`)), J(before));
+  check('KB3 library_keyboard: tap: list first with the Keyboard pill, tapping the search box opens the keyboard', J(before) === J([true, true]) && !(await ev(t, `${SV}.querySelector('.sx').classList.contains('kb-hidden')`)), J(before));
   await t.close();
 }
 
 // ---------------- 0.7.3: big icon category buttons, compact sources control, Favorites / A–Z corner icons ----------------
-for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }, {}],   ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }, {}], ['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }, {}], ['360x640', { width: 360, height: 640, isMobile: true, hasTouch: true }, {}]]) {
+for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }, {}], ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }, {}]]) {
   const p = await open('&ha=toolbar&sidebar=none', cfg, vp);
   await wait(p, `!!${SV}.querySelector('.srct') && ${SV}.querySelectorAll('.lcats .lc').length >= 5 && !!${SV}.querySelector('.lcorner')`);
   const geo = `(() => { const R = (el) => { const b = el?.getBoundingClientRect(); return b && b.height ? { t: b.top, b: b.bottom, l: b.left, r: b.right, h: b.height } : null; };

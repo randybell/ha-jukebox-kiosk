@@ -8,7 +8,7 @@ const J = JSON.stringify;
 let failures = 0, total = 0;
 function check(name, ok, info = '') { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); }
 const b = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu'] });
-const SIZES = [[1024, 600], [1024, 666], [1280, 720], [1366, 768], [1440, 900], [1280, 800], [1920, 1080], [390, 844], [844, 390], [820, 1180], [1180, 820]];
+const SIZES = [[1024, 600], [1024, 666], [1280, 720], [1366, 768], [1440, 900], [1280, 800], [1920, 1080], [820, 1180], [1180, 820]];
 for (const kiosk of [true, false]) for (const [w, h] of SIZES) {
   const p = await b.newPage(); await hermetic(p); await p.setViewport({ width: w, height: h });
   // an old 0.7.8 search history on the device

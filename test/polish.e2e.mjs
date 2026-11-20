@@ -25,8 +25,8 @@ async function labelGeometry(page, tag, queue = false) {
   }, { tag, queue });
 }
 try {
-  // Required screenshot sizes plus phones to cover touch-label wrapping at the narrow breakpoint.
-  for (const [width, height] of [[1024, 600], [820, 1180], [1920, 1080], [390, 844], [360, 640]]) {
+  // Required screenshot sizes (phones are not supported and are not tested).
+  for (const [width, height] of [[1024, 600], [820, 1180], [1920, 1080]]) {
     const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width, height, deviceScaleFactor: 1 }); const tag = `${width}x${height}`;
     await p.goto(`${BASE}?fresh=1&latency=20&kiosk=1&tab=browse`); await p.waitForFunction('window.__ready === true');
     await p.evaluate(() => __card.shadowRoot.querySelector('jb-search').setQuery('MO'));

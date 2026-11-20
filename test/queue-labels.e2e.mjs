@@ -30,7 +30,7 @@ async function labelsFit(p, root, selector, queue = false, search = false) {
   return { ok: rows.length > 0 && details.every((bs) => bs.length === 3 && bs.map((b) => b.label).join() === want && bs.every((b) => b.w >= 44 && b.h >= 44 && b.left >= b.rowLeft - 1 && b.right <= b.rowRight + 1 && b.top >= b.rowTop - 1 && b.bottom <= b.rowBottom + 1 && b.sw <= b.cw + 1)), sample: details[0], rows: rows.length };
  }, { root, selector, queue, search });
 }
-for (const vp of [{ width: 1024, height: 600 }, { width: 390, height: 844 }, { width: 820, height: 1180 }]) {
+for (const vp of [{ width: 1024, height: 600 }, { width: 820, height: 1180 }]) {
  const tag = `${vp.width}x${vp.height}`; const p = await open(vp);
  await p.evaluate(() => __card.setConfig({ ...__card._config, library_view: 'rows' })); // 0.7.20: Tracks as rows, playlist / artist as tiles (harness legacy default is tiles)
  await tap(p, `${SV}.querySelector('[data-lcat="track"]')`); await p.waitForFunction(`${BR}.querySelectorAll('.list .row[data-type="track"]').length > 0`);

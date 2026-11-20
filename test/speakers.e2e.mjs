@@ -533,11 +533,11 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   const extra = logs.slice(1).flat().filter((m) => !logs[0].includes(m));
   check('B3b a saved large_buttons: no errors and no console warnings beyond what the plain page logs', extra.length === 0 && !logs.flat().some((m) => /large|setConfig|must be true or false/i.test(m)), J({ base: logs[0], extra }));
   await a.close(); await b.close(); await b2.close();
-  const c = await open('&spk=dyn&admin=1', { width: 390, height: 844, isMobile: true, hasTouch: true });
+  const c = await open('&spk=dyn&admin=1', { width: 1024, height: 600, hasTouch: true });
   const pr = await rectOf(c, `__card.shadowRoot.querySelector('.pill')`);
-  check('B4 phone: header status is an icon button ≥ 44 px', pr && pr.w >= 44 && pr.h >= 44, J(pr));
+  check('B4 1024x600: header status is an icon button ≥ 44 px', pr && pr.w >= 44 && pr.h >= 44, J(pr));
   await c.close();
-  for (const vp of [{ width: 1280, height: 600 }, { width: 390, height: 600 }, { width: 1280, height: 420 }]) {
+  for (const vp of [{ width: 1280, height: 600 }, { width: 1280, height: 420 }]) {
     const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}`, vp);
     await openPanel(p); await waitLoaded(p); await sleep(300);
     const r = await ev(p, `(() => { const host = ${SPK}.getBoundingClientRect(); const sh = ${SR}.querySelector('.sheet').getBoundingClientRect(); const b = ${SR}.querySelector('.body'); return { host: [host.top, host.bottom].map(Math.round), sheet: [sh.top, sh.bottom].map(Math.round), sh: b.scrollHeight, ch: b.clientHeight, ov: getComputedStyle(b).overflowY }; })()`);
@@ -645,7 +645,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   p = await openQ(`&admin=1&cfg=${encodeURIComponent(J({ grouping: 'nobody' }))}`);
   check('J11 grouping: nobody → Queue rows still have no action buttons', (await noBtns(p)) === 0);
   await p.close();
-  for (const vp of [{ width: 390, height: 844, isMobile: true, hasTouch: true }, { width: 1920, height: 1080 }, { width: 1280, height: 800 }]) {
+  for (const vp of [{ width: 1920, height: 1080 }, { width: 1280, height: 800 }, { width: 1024, height: 600 }]) {
     p = await openQ('&admin=1', vp);
     const m = await ev(p, `(() => { const r = [...${QV}.querySelectorAll('.qr.next')][2]; const t = r.querySelector('.rt b').getBoundingClientRect();
       return { buttons: r.querySelectorAll('.ra-b, .qa, .acts').length, titleW: Math.round(t.width) }; })()`);
@@ -707,16 +707,6 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   t = (await ev(p, `[...${QV}.querySelectorAll('.qr.past')].map((r) => r.dataset.id)`))[0];
   await playNowPath('icon on a played row (jump back)', p, async () => {
     await qsheet(p, t, 'play');
-    await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
-  }, t);
-  await p.close();
-  // 2. labeled phone Play Now → confirm → play_index
-  p = await openQ('&admin=1', { width: 390, height: 844, isMobile: true, hasTouch: true });
-  t = (await ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`))[4];
-  await playNowPath('labeled phone action (admin, 390x844)', p, async () => {
-    await ev(p, `${QV}.querySelector('.qr[data-id="${t}"]').scrollIntoView({ block: 'center' })`); await sleep(100);
-    await qsheet(p, t, 'play');
-    if (!(await wait(p, `!!${QV}.querySelector('.confirm[data-kind="jump"]')`, 4000))) throw new Error('phone Play Now did not open its confirmation');
     await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   }, t);
   await p.close();
@@ -870,13 +860,13 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
     (await toastT(p)) === BUSY36 && (await ev(p, `${QV}.querySelectorAll('.qr.buf').length`)) === 4, J({ t: await toastT(p) }));
   await p.close();
 
-  // phone: a tap opens the existing pop-up; Play Now still asks first; Remove still offers Undo
-  p = await openQ('&admin=1', { width: 390, height: 844, isMobile: true, hasTouch: true });
+  // a tap opens the existing pop-up; Play Now still asks first; Remove still offers Undo
+  p = await openQ('&admin=1', { width: 1024, height: 600, hasTouch: true });
   const v6 = (await ids(p))[3];
   await ev(p, `${QV}.querySelector('.qr[data-id="${v6}"]').scrollIntoView({ block: 'center' })`); await sleep(80);
   await tap(p, `${QV}.querySelector('.qr[data-id="${v6}"] .rt')`); await sleep(250);
   const sheet = await ev(p, `(() => { const m = ${QHS}.querySelector('.sh'); return m ? { items: [...${QHS}.querySelectorAll('.it')].map((b) => b.dataset.action + ':' + b.textContent.trim()), closeX: !!${QHS}.querySelector('.cls, [data-action="close"]') } : null; })()`);
-  check('D8 phone tap → pop-up: Play Now, Play Next, Move up, Move down, Remove, More Info, Cancel (no close X)',
+  check('D8 tap → pop-up: Play Now, Play Next, Move up, Move down, Remove, More Info, Cancel (no close X)',
     sheet && !sheet.closeX && J(sheet.items) === J(['play:Play Now', 'next:Play Next', 'up:Move up', 'down:Move down', 'remove:Remove', 'more:More Info', 'cancel:Cancel']), J(sheet));
   await tap(p, `${QHS}.querySelector('.it[data-action="play"]')`); await sleep(200);
   const cf = await ev(p, `${QV}.querySelector('.confirm')?.dataset.kind ?? ''`);
@@ -889,7 +879,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await p.close();
 
   // guest: no row buttons; a tap still opens the existing pop-up
-  p = await openQ('', { width: 390, height: 844, isMobile: true, hasTouch: true });
+  p = await openQ('', { width: 1024, height: 600, hasTouch: true });
   const g = (await ids(p))[3];
   const rowBtns = await ev(p, `${QV}.querySelectorAll('.qr .ra-b, .qr .qa, .qr .acts').length`);
   await ev(p, `${QV}.querySelector('.qr[data-id="${g}"]').scrollIntoView({ block: 'center' })`); await sleep(80);
@@ -1133,7 +1123,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await p.close();
 }
 for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping: nobody', `&spk=dyn&admin=1&every=dyn&cfg=${encodeURIComponent(J({ grouping: 'nobody' }))}`], ['fixed mode', '&admin=1']]) {
-  const p = await open(q, { width: 390, height: 844, isMobile: true, hasTouch: true });
+  const p = await open(q, { width: 1024, height: 600, hasTouch: true });
   await sleep(1200);
   const n = await ev(p, `${NOW}.shadowRoot.querySelectorAll('.ra, .spkb').length`);
   const sl = await ev(p, `${NOW}.shadowRoot.querySelectorAll('.vr jb-slider').length`);
@@ -1141,16 +1131,6 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
   check(`N9 ${name}: Now Playing is volume only (no Drop/Add, no Speakers button), sliders stay, no background MA poll`, n === 0 && sl >= 1 && !polling, J({ n, sl, polling }));
   await p.close();
 }
-{
-  // compact at 390x844: one-line room rows, buttons inside the card
-  const p = await open('&spk=dyn&admin=1&every=dyn', { width: 390, height: 844, isMobile: true, hasTouch: true });
-  await wait(p, `${NOW}.shadowRoot.querySelector('.vr[data-entity="${GAR}"] .ra')?.dataset.act === 'drop'`, 4000);
-  const r = await ev(p, `(() => { const s = ${NOW}.shadowRoot, v = s.querySelector('.vol').getBoundingClientRect();
-    return { rows: [...s.querySelectorAll('.rooms .vr')].map((x) => Math.round(x.getBoundingClientRect().height)), inside: [...s.querySelectorAll('.ra, .spkb')].every((b) => { const q = b.getBoundingClientRect(); return q.width >= 30 && q.left >= v.left && q.right <= v.right + 0.5; }) }; })()`);
-  check('N10 390x844: room rows stay one line (≤ 56px) and every button fits inside the volume card', r.rows.length === 3 && r.rows.every((h) => h <= 56) && r.inside, J(r));
-  await p.close();
-}
-
 // ---------------- 0.6.4: quiet status — one small chip top-right, no centred popups for grouping ----------------
 {
   const GSM = 'syncgroup_everywhere', GW = 'wiim_mock_garage';
@@ -1160,7 +1140,7 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
   const geo = (p) => ev(p, `(() => { const c = ${CLOCK}.getBoundingClientRect(), k = __card.getBoundingClientRect(); return { cl: c.left, ct: c.top, cr: c.right, cb: c.bottom, kr: k.right, kw: k.width }; })()`);
   const nChips = (p) => ev(p, `${SR}.querySelectorAll('.st').length`);
   const popups = (p) => ev(p, `(() => { const r = ${SR}; return !!(r.querySelector('.sp-ask') || r.querySelector('.ask-scrim') || r.querySelector('.toast') || r.querySelector('.undo')); })()`);
-  for (const vp of [{ width: 1920, height: 1080 }, { width: 390, height: 844, isMobile: true, hasTouch: true }]) {
+  for (const vp of [{ width: 1920, height: 1080 }]) {
     const tag = `${vp.width}x${vp.height}`;
     const p = await open('&spk=dyn&admin=1&every=dyn&grp=slow', vp);
     await armTimers(p);
@@ -1345,8 +1325,8 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
   await p.close();
 }
 
-// 0.7.8 #50: the labeled Close button at tablet and phone sizes: visible, fits, closes the panel
-for (const vp of [{ width: 1024, height: 600 }, { width: 820, height: 1180, isMobile: true, hasTouch: true }, { width: 390, height: 844, isMobile: true, hasTouch: true }]) {
+// 0.7.8 #50: the labeled Close button at supported sizes: visible, fits, closes the panel
+for (const vp of [{ width: 1024, height: 600 }, { width: 820, height: 1180, isMobile: true, hasTouch: true }]) {
   const tag = `${vp.width}x${vp.height}`;
   const p = await open('&spk=dyn&admin=1', vp);
   await openPanel(p);
