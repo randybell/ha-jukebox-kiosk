@@ -792,8 +792,6 @@ export class JbBrowse extends LitElement {
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       <div class="tw">${artTpl(it, circ ? 'big circ' : 'big')}${provTpl(it.uri, it.provider, it.media_type ?? type)}
-        ${drillable(type, this.config) ? html`<button class="mo open" tabindex="-1" aria-label="Open ${it.name}" @pointerdown=${noFocus}
-          @click=${() => this.openDetail(it, type)}>${icon('open')}</button>` : nothing}
         ${this.tileHeart(it, type)}
         ${rf ? html`<span class="rp" role="progressbar" aria-label="Listened" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(rf * 100)}><i style="width:${(rf * 100).toFixed(1)}%"></i></span>` : nothing}</div>
       <b>${it.name}</b>${this.sub(it, type) ? html`<small>${this.sub(it, type)}</small>` : nothing}
@@ -805,7 +803,7 @@ export class JbBrowse extends LitElement {
     if (!t) return;
     await this.hearts.toggle(it, t); // the outcome shows in the card's top-right status chip
   }
-  /** tile corner heart (top left; the provider badge is bottom left, Open top right) */
+  /** tile corner heart (top left; the provider badge is bottom left) */
   private tileHeart(it: MaItem, type: string) {
     return heartType(this.config, type, it) ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type), 'tfav') : nothing;
   }
@@ -1036,11 +1034,6 @@ export class JbBrowse extends LitElement {
     /* Playlist artwork (including lettering near its lower edge) must not sit behind a provider badge. */
     .tile[data-type="playlist"] .tw .pv { position: static; display: block; margin-top: var(--ha-space-2, 8px); max-width: 100%; }
     .tile[data-type="playlist"] b { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
-    .tw .open { position: absolute; right: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); width: var(--_touch-min); height: var(--_touch-min); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
-      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
-      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
-      color: var(--_fg); }
-    .tw .open .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
     .tw .tfav { position: absolute; left: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); width: var(--_touch-min); height: var(--_touch-min); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);

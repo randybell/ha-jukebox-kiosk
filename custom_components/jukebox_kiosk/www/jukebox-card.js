@@ -460,8 +460,6 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
         @pointerdown=${s.down} @pointermove=${s.move} @pointerup=${s.up} @pointercancel=${s.cancel} @pointerleave=${s.cancel}
         @contextmenu=${e=>e.preventDefault()}>
       <div class="tw">${Re(e,r?"big circ":"big")}${Le(e.uri,e.provider,e.media_type??t)}
-        ${at(t,this.config)?I`<button class="mo open" tabindex="-1" aria-label="Open ${e.name}" @pointerdown=${ge}
-          @click=${()=>this.openDetail(e,t)}>${de("open")}</button>`:B}
         ${this.tileHeart(e,t)}
         ${o?I`<span class="rp" role="progressbar" aria-label="Listened" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(100*o)}><i style="width:${(100*o).toFixed(1)}%"></i></span>`:B}</div>
       <b>${e.name}</b>${this.sub(e,t)?I`<small>${this.sub(e,t)}</small>`:B}
@@ -600,11 +598,6 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     /* Playlist artwork (including lettering near its lower edge) must not sit behind a provider badge. */
     .tile[data-type="playlist"] .tw .pv { position: static; display: block; margin-top: var(--ha-space-2, 8px); max-width: 100%; }
     .tile[data-type="playlist"] b { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
-    .tw .open { position: absolute; right: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); width: var(--_touch-min); height: var(--_touch-min); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
-      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
-      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
-      color: var(--_fg); }
-    .tw .open .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
     .tw .tfav { position: absolute; left: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); width: var(--_touch-min); height: var(--_touch-min); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
