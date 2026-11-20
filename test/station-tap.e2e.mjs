@@ -59,16 +59,19 @@ for (const [tag, idle] of [['[queue has songs]', ''], ['[queue empty]', '&idle=1
     }
     await p.close();
   }
-  // ---- Library Discover strips: Recently played, Favorite radio, Stations for you (the Recently played row at the Library top was removed in 0.7.9) ----
+  // ---- Library Discover: Recently played, Favorite radio, Stations for you (the Recently played row at the Library top was removed in 0.7.9).
+  // Discover is Rows or Tiles (not the 0.9.0 .hs strip); scroll so later rows load. ----
   {
     const p = await open(`&layout=separate&kiosk=1&tab=browse&lhome=0&pods=1&radio=1${idle}&cfg=${encodeURIComponent(J({ discover: ['recently_played', 'favorite_radio', 'mock_stream--XXXXXXXX:stations_for_you'] }))}`);
     const BR = `__card.shadowRoot.querySelector('jb-browse').shadowRoot`;
-    const ok = await p.waitForFunction((b) => [...eval(b).querySelectorAll('.hs .tile')].some((t) => /:\/\/radio\//.test(t.dataset.uri) || t.dataset.type === 'radio'), { timeout: 8000 }, BR).then(() => true, () => false);
-    const strips = await ev(p, `[...${BR}.querySelectorAll('.hs')].map((h, i) => [i, [...h.querySelectorAll('.tile')].filter((t) => /:\\/\\/radio\\//.test(t.dataset.uri) || t.dataset.type === 'radio').length]).filter((x) => x[1])`);
-    check(`${tag} Discover shows station tiles in its strips`, ok && strips.length > 0, J(strips));
-    for (const [i] of strips) {
-      const name = await ev(p, `(${BR}.querySelectorAll('.hs')[${i}].closest('[data-key]')?.dataset.key) || 'strip ${i}'`);
-      await quick(p, tag, `Discover "${name}" station tile`, `[...${BR}.querySelectorAll('.hs')[${i}].querySelectorAll('.tile')].find((t) => /:\\/\\/radio\\//.test(t.dataset.uri) || t.dataset.type === 'radio')`);
+    await p.waitForFunction((b) => !!eval(b).querySelector('.drow[data-loaded]'), { timeout: 8000 }, BR).catch(() => {});
+    await ev(p, `${BR}.querySelector('.scroll')?.scrollTo({ top: 99999 })`);
+    const ok = await p.waitForFunction((b) => [...eval(b).querySelectorAll('.drow[data-loaded] .row, .drow[data-loaded] .tile')].some((t) => /:\/\/radio\//.test(t.dataset.uri) || t.dataset.type === 'radio'), { timeout: 8000 }, BR).then(() => true, () => false);
+    const rows = await ev(p, `[...${BR}.querySelectorAll('.drow[data-loaded]')].map((h, i) => [i, [...h.querySelectorAll('.row, .tile')].filter((t) => /:\\/\\/radio\\//.test(t.dataset.uri) || t.dataset.type === 'radio').length]).filter((x) => x[1])`);
+    check(`${tag} Discover shows stations`, ok && rows.length > 0, J(rows));
+    for (const [i] of rows) {
+      const name = await ev(p, `(${BR}.querySelectorAll('.drow[data-loaded]')[${i}].dataset.row) || 'row ${i}'`);
+      await quick(p, tag, `Discover "${name}" station`, `[...${BR}.querySelectorAll('.drow[data-loaded]')[${i}].querySelectorAll('.row, .tile')].find((t) => /:\\/\\/radio\\//.test(t.dataset.uri) || t.dataset.type === 'radio')`);
     }
     await p.close();
   }
