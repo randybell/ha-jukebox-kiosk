@@ -20,7 +20,7 @@ import { removeFromQueue } from './queue-row-remove';
 import { categoriesOn, resolveCategories, serviceTypes, defaultCategory } from './search-categories';
 import { FavController, heartTpl, heartType } from './heart';
 import { SOURCE_ALL, SOURCE_LIBRARY, sourcesOn, parseSearchProviders, pickerSources, toggleSource, sourcesLabel, splitSources, fromSources, type SearchSource } from './search-sources';
-import { libraryCategories, libraryCatLabel } from './library-home';
+import { libraryCategories, libraryCatLabel, libraryViewFor, tilesAcrossStyle } from './library-home';
 import './browse-view';
 import type { JbBrowse } from './browse-view';
 
@@ -744,11 +744,24 @@ export class JbSearch extends LitElement {
     </div>`;
   }
 
+  private tile(it: MaItem, g: GroupKey) {
+    const type = this.mediaType(it, g);
+    const p = this.press.handlers(it.uri, { it, g });
+    return html`<div class="tile ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-group=${g} data-type=${type}
+        @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
+        @contextmenu=${(e: Event) => e.preventDefault()}>
+      ${g === 'genres' ? html`<span class="ar big gen" aria-hidden="true">${icon('genre')}</span>` : artTpl(it, g === 'artists' ? 'big circ' : 'big')}
+      <b>${it.name}</b>
+    </div>`;
+  }
   private group(g: (typeof GROUPS)[number], items: MaItem[], full: boolean): TemplateResult {
+    const tiles = libraryViewFor(this.config, 'search') === 'tiles';
     return html`<div class="grp ${g.key}">
       <h3>${g.label}<em>${items.length}</em>${!full ? html`<button class="sa" tabindex="-1"
         @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => (this._filter = g.key)}>See all</button>` : nothing}</h3>
-      <div class="list">${this.libRows(items, g.key)}</div>
+      ${tiles
+        ? html`<div class="grid lib" data-layout="tiles" data-group=${g.key} style=${tilesAcrossStyle(this.config)}>${items.map((it) => this.tile(it, g.key))}</div>`
+        : html`<div class="list" data-layout="rows">${this.libRows(items, g.key)}</div>`}
     </div>`;
   }
   /** Library first: "In your library" rows, then "From your providers" (duplicates already removed) */
@@ -1104,6 +1117,10 @@ export class JbSearch extends LitElement {
       .lcats { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .lcats::-webkit-scrollbar { display: none; } .lcats .fc.lc { flex: none; }
     }
     .sx.kb-hidden .res .scroll { padding-bottom: calc(var(--ha-space-2, 8px) + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
+    .grid.lib { display: grid; grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
+    .grid.lib .tile { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
+    .grid.lib .tile .big { width: 100%; height: auto; aspect-ratio: 1; }
+    .grid.lib .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   `];
 }

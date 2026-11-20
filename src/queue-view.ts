@@ -2,7 +2,7 @@ import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { songInfo } from './song-info';
 import { icon } from './icons';
-import { combinedOn, libraryTabLabel } from './library-home';
+import { combinedOn, libraryTabLabel, libraryViewFor, tilesAcrossStyle } from './library-home';
 import { mediaStyles, noFocus, fire, artTpl, provTpl, PressController, swallowNextClick, confirmTpl, isRadioUri, type ConfirmState, type MenuAction } from './shared';
 import './keyboard';
 import type { KeyDetail } from './keyboard';
@@ -312,6 +312,17 @@ export class JbQueue extends LitElement {
     </div>`;
   }
 
+  /** Minimal Queue tile so tiles-across and tiles/rows can be tested. Themes owns badge, highlight and dimming. */
+  private tile(it: QueueItem, kind: 'now' | 'next' | 'past', n: number, buf = false) {
+    const p = this.press.handlers(it.queue_item_id, it);
+    return html`<div class="qt ${kind} ${buf ? 'buf' : ''} ${this.press.held === it.queue_item_id ? 'held' : ''}" data-id=${it.queue_item_id}
+        @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
+        @contextmenu=${(e: Event) => e.preventDefault()}>
+      ${artTpl(asArt(it), 'big')}
+      <b>${it.media_title}</b><small>${[it.media_artist, it.media_album_name].filter(Boolean).join(' · ')}</small>
+    </div>`;
+  }
+
   render() {
     const s = this._snap;
     const items = s?.items ?? [];
@@ -341,6 +352,11 @@ export class JbQueue extends LitElement {
         </div></div>` : html`<div class="scroll panel" @scroll=${() => this.press.scrolled()}>
         ${s?.error ? html`<div class="empty"><b>Queue unavailable</b><span>${s.error}</span></div>`
           : !items.length ? html`<div class="empty"><b>${s?.loading || !s?.at ? 'Loading queue…' : 'The queue is empty'}</b><span>${combinedOn(this.config) ? `Add music from ${libraryTabLabel(this.config)}.` : `Add music from Search or ${libraryTabLabel(this.config)}.`}</span></div>`
+          : libraryViewFor(this.config, 'queue') === 'tiles' ? html`<div class="qg" data-layout="tiles" style=${tilesAcrossStyle(this.config)}>
+              ${past.map((it) => this.tile(it, 'past', 0))}
+              ${now ? html`<h3 class="eyebrow">Now playing</h3>${this.tile(now, 'now', 0)}` : nothing}
+              ${next.length ? html`<h3 class="eyebrow">Up next</h3>${next.map((it, i) => this.tile(it, 'next', i + 1, i < nb))}` : html`<div class="end">End of queue</div>`}
+              ${remaining > next.length ? html`<div class="end">+ ${remaining - next.length} more in Music Assistant</div>` : nothing}</div>`
           : html`
             ${past.map((it) => this.row(it, 'past', 0))}
             ${now ? html`<h3 class="eyebrow">Now playing</h3>${this.row(now, 'now', 0)}` : nothing}
@@ -407,6 +423,13 @@ export class JbQueue extends LitElement {
     h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); margin: var(--ha-space-3, 12px) var(--ha-space-2, 8px) var(--ha-space-2, 8px); }
     h3.eyebrow:first-child { margin-top: 2px; }
     .qr { display: grid; grid-template-columns: 28px 48px minmax(0, 1fr) auto; align-items: center; gap: var(--ha-space-3, 12px); min-height: 72px; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-lg, 12px); }
+    .qg { display: grid; gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); }
+    .qg > h3.eyebrow, .qg > .end { grid-column: 1 / -1; }
+    .qt { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; }
+    .qt .big { width: 100%; height: auto; aspect-ratio: 1; }
+    .qt b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .qt small { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .qt.held { background: var(--_chip-sel); }
     .qr + .qr { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .qr .th { width: 48px; height: 48px; }
     .n { font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; font-variant-numeric: tabular-nums; }

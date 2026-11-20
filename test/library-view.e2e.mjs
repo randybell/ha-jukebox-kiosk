@@ -1,4 +1,5 @@
-// 0.7.20: card options library_view (rows | tiles, default rows) and library_columns (2..6, default 3, tiles only) for the TOP level of every Library section
+// Library tops: leftover library_view still applies until editor save. library_columns is exact tiles across, 1..8 (default 3).
+// #146: per-section library_views; Radio Favorites and Browse share radio; Queue / Discover / pages / search have their own keys.
 // (Playlists, Artists, Tracks, Genres, Radio, Albums, Podcasts, Audiobooks), no circles at the top tier, track tiles with no action buttons.
 // #85: song-row action buttons and show_action_icons are gone; an old YAML value is ignored and the rows stay without buttons. Pages you open
 // (artist / album / playlist) stay rows (their own layout, not library_view). Library search results also have no row buttons. The Queue stays
@@ -55,7 +56,7 @@ const section = async (s, cat) => {
 const layoutOf = (s) => ev(s.p, `(() => { const r = ${s.BR}; const l = [...r.querySelectorAll('.lib')];
   return { layouts: [...new Set(l.map((x) => x.dataset.layout))], tiles: r.querySelectorAll('.lib .tile').length, rows: r.querySelectorAll('.lib .row').length,
     otherTiles: r.querySelectorAll('.tile:not(.lib .tile)').length, circ: r.querySelectorAll('.circ').length, artistTiles: r.querySelectorAll('.tile.artist').length }; })()`);
-// #117: library_columns is the most columns; a narrow grid shows fewer so every tile keeps room for its two 48px buttons (--_tmin)
+// #146: library_columns is exact; the first row shows that many tiles (no auto-fill shrink).
 const cols = (s) => ev(s.p, `(() => { const g = ${s.BR}.querySelector('.grid.lib'); if (!g) return null; const ts = [...g.querySelectorAll('.tile')]; const top = Math.round(ts[0].getBoundingClientRect().top);
   const first = ts.filter((t) => Math.round(t.getBoundingClientRect().top) === top); const w = first.map((t) => Math.round(t.getBoundingClientRect().width));
   return { tracks: getComputedStyle(g).gridTemplateColumns.split(' ').length, first: first.length, wMin: Math.min(...w), wMax: Math.max(...w), gw: Math.round(g.getBoundingClientRect().width), fit: (() => { const cs = getComputedStyle(g), gap = parseFloat(cs.columnGap) || 0, tmin = parseFloat(cs.getPropertyValue('--_tmin')) || 0; return tmin ? Math.max(1, Math.floor((g.clientWidth + gap) / (tmin + gap))) : 99; })(), right: Math.round(Math.max(...first.map((t) => t.getBoundingClientRect().right))), grid: Math.round(g.getBoundingClientRect().right) }; })()`);
@@ -84,17 +85,16 @@ for (const [tag, cfg] of [['default (library_view missing)', {}], ['rows', { lib
   }
 }
 
-// ============ 2. columns: 2 / 3 / 6, default 3, clamping ============
+// ============ 2. columns: exact 1–8, default 3, clamping ============
 {
-  const CASES = [[2, 2], [3, 3], [6, 6], [undefined, 3], [1, 2], [0, 2], [-4, 2], [7, 6], [99, 6], [4.4, 4], [4.6, 5], ['4', 4], ['x', 3], [null, 3], [NaN, 3]];
+  const CASES = [[1, 1], [2, 2], [3, 3], [6, 6], [8, 8], [undefined, 3], [0, 1], [-4, 1], [9, 8], [99, 8], [4.4, 4], [4.6, 5], ['4', 4], ['x', 3], [null, 3], [NaN, 3]];
   for (const [val, want] of CASES) {
     const cfg = { library_view: 'tiles', ...(val === undefined ? {} : { library_columns: val }) };
     const s = await open(cfg);
     await section(s, 'artist');
     const c = await cols(s);
-    const w2 = Math.min(want, c?.fit ?? want);
-    check(`tiles, library_columns ${J(val) ?? 'missing'} → ${want} columns${w2 < want ? ` (${w2} fit this grid)` : ''} (grid tracks ${c?.tracks}, tiles on the first row ${c?.first}, ${c?.wMin}-${c?.wMax}px wide)`,
-      !!c && c.tracks === w2 && c.first === w2 && c.wMax - c.wMin <= 1 && c.right <= c.grid, J(c));
+    check(`tiles, library_columns ${J(val) ?? 'missing'} → exactly ${want} columns (grid tracks ${c?.tracks}, tiles on the first row ${c?.first}, ${c?.wMin}-${c?.wMax}px wide)`,
+      !!c && c.tracks === want && c.first === want && c.wMax - c.wMin <= 1 && c.right <= c.grid, J(c));
     if (SHOTS && [2, 6].includes(val)) { await ev(s.p, `${s.BR}.querySelector('.scroll').scrollTo({ top: 0 })`); await sleep(250); await shot(s.p, `artists-tiles-${val}`); }
     if (SHOTS && val === undefined) { await ev(s.p, `${s.BR}.querySelector('.scroll').scrollTo({ top: 0 })`); await sleep(250); await shot(s.p, `artists-tiles-3`); }
     await s.p.close();
@@ -105,9 +105,8 @@ for (const [tag, cfg] of [['default (library_view missing)', {}], ['rows', { lib
     for (const cat of separate ? ALLG : ALL) {
       await section(s, cat);
       const c = await cols(s);
-      const w5 = Math.min(5, c?.fit ?? 5);
-      if (cat === 'podcast' || cat === 'audiobook') check(`5 columns, ${separate ? 'separate' : 'combined'}, ${NAMES[cat]}: ${c?.tracks} tracks (only ${(await ev(s.p, `${s.BR}.querySelectorAll('.lib .tile').length`))} tiles)`, !!c && c.tracks === w5, J(c));
-      else check(`5 columns, ${separate ? 'separate' : 'combined'}, ${NAMES[cat]}: five on a row${w5 < 5 ? ` (${w5} fit this grid)` : ''}`, !!c && c.tracks === w5 && c.first === w5, J(c));
+      if (cat === 'podcast' || cat === 'audiobook') check(`5 columns, ${separate ? 'separate' : 'combined'}, ${NAMES[cat]}: ${c?.tracks} tracks (only ${(await ev(s.p, `${s.BR}.querySelectorAll('.lib .tile').length`))} tiles)`, !!c && c.tracks === 5, J(c));
+      else check(`5 columns, ${separate ? 'separate' : 'combined'}, ${NAMES[cat]}: exactly five on a row`, !!c && c.tracks === 5 && c.first === 5, J(c));
     }
     await s.p.close();
   }
@@ -255,6 +254,85 @@ for (const [tag, cfg] of [['missing', {}], ['false', { show_action_icons: false 
   const r2 = await ev(p, `(() => { const out = {}; for (const [k, v] of [['library_view', 'tiles'], ['library_view', 'rows'], ['library_view', 'grid'], ['library_view', 5], ['library_columns', 4], ['library_columns', 99], ['library_columns', 'abc'], ['library_columns', null]]) { try { const el = document.createElement('jukebox-card'); el.setConfig({ type: 'custom:jukebox-card', entity: 'media_player.everywhere', [k]: v }); out[k + '=' + v] = 'ok'; } catch (e) { out[k + '=' + v] = e.message; } } return out; })()`);
   check('library_view / library_columns: odd values never stop the card loading', Object.values(r2).every((x) => x === 'ok'), J(r2));
   await p.close();
+}
+
+// ============ 9. #146 per-section library_views, Radio share, Queue / Discover / pages / search ============
+{
+  const s = await open({ library_views: { playlist: 'tiles', artist: 'rows' }, library_columns: 4 });
+  await section(s, 'playlist');
+  const pl = await layoutOf(s);
+  const pc = await cols(s);
+  check('library_views.playlist: tiles uses a 4-column tile grid', J(pl.layouts) === J(['tiles']) && pl.tiles > 0 && pl.rows === 0 && pc?.first === 4 && pc?.tracks === 4, J({ pl, pc }));
+  await section(s, 'artist');
+  const ar = await layoutOf(s);
+  check('library_views.artist: rows stays a list (other sections are independent)', J(ar.layouts) === J(['rows']) && ar.rows > 0 && ar.tiles === 0, J(ar));
+  await s.p.close();
+}
+{
+  // Radio Favorites and Browse share the radio key (library_view fallback also already covered in section 3)
+  const s = await open({ library_views: { radio: 'tiles' }, library_columns: 4 }, { separate: true, extra: '&radioinlib=3' });
+  await section(s, 'radio');
+  const r = await ev(s.p, `(() => { const R = ${s.BR}; return { lib: [...R.querySelectorAll('.lib')].map((x) => x.dataset.layout + ':' + x.dataset.src), first: (() => { const g = R.querySelector('.grid.lib'); if (!g) return 0; const ts = [...g.querySelectorAll('.tile')]; const top = Math.round(ts[0].getBoundingClientRect().top); return ts.filter((t) => Math.round(t.getBoundingClientRect().top) === top).length; })() }; })()`);
+  check('Radio Favorites and Browse both follow library_views.radio: tiles', r.lib.length > 0 && r.lib.every((x) => x.startsWith('tiles:')) && r.first === 4, J(r));
+  await s.p.close();
+}
+{
+  const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width: 1024, height: 600, hasTouch: true });
+  await p.goto(`${BASE}?fresh=1&latency=20&legacy=0&kiosk=1&tab=queue&qbuf=0&admin=1&cfg=${encodeURIComponent(J({ library_views: { queue: 'tiles' }, library_columns: 4 }))}`);
+  await p.waitForFunction('window.__ready === true'); await sleep(900);
+  await wait(p, `__card.shadowRoot.querySelector('jb-queue').shadowRoot.querySelector('.qg')`);
+  const q = await ev(p, `(() => { const R = __card.shadowRoot.querySelector('jb-queue').shadowRoot; const g = R.querySelector('.qg');
+    const ts = [...g.querySelectorAll('.qt.next')]; const top = ts.length ? Math.round(ts[0].getBoundingClientRect().top) : 0;
+    const first = ts.filter((t) => Math.round(t.getBoundingClientRect().top) === top).length;
+    return { layout: g.dataset.layout, tiles: [...g.querySelectorAll('.qt')].length, next: ts.length, rows: R.querySelectorAll('.qr').length, tracks: getComputedStyle(g).gridTemplateColumns.split(' ').length, first }; })()`);
+  check('Queue library_views.queue: tiles shows an exact 4-column tile grid', q.layout === 'tiles' && q.tiles > 0 && q.rows === 0 && q.tracks === 4 && q.first === Math.min(4, q.next), J(q));
+  await p.close();
+}
+{
+  // Discover is a Browse chip when `discover` is on (separate tabs, no tile home), not a library_categories button
+  const openDisc = async (cfg) => {
+    const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width: 1024, height: 600, hasTouch: true });
+    await p.goto(`${BASE}?fresh=1&latency=20&legacy=0&kiosk=1&pods=1&layout=separate&lhome=0&tab=browse&cfg=${encodeURIComponent(J({ discover: true, ...cfg }))}`);
+    await p.waitForFunction('window.__ready === true'); await sleep(900);
+    await wait(p, `${BRS}.querySelector('.cats .fc[data-cat="discover"]')`);
+    await ev(p, `${BRS}.querySelector('.cats .fc[data-cat="discover"]').click()`);
+    await wait(p, `${BRS}.querySelector('.hs, .grid.lib, .list.lib')`); await sleep(500);
+    return p;
+  };
+  const p = await openDisc({});
+  const legacy = await ev(p, `(() => { const R = ${BRS}; return { hs: R.querySelectorAll('.hs').length, grid: R.querySelectorAll('.grid.lib').length, list: R.querySelectorAll('.list.lib').length, layout: R.querySelector('.hs, .grid.lib, .list.lib')?.dataset.layout }; })()`);
+  check('Discover with no key keeps the 0.9.0 horizontal layout', legacy.hs > 0 && legacy.grid === 0, J(legacy));
+  await p.close();
+  const t = await openDisc({ library_views: { discover: 'tiles' }, library_columns: 4 });
+  const d = await ev(t, `(() => { const R = ${BRS}; const g = R.querySelector('.grid.lib'); const ts = g ? [...g.querySelectorAll('.tile')] : []; const top = ts[0] ? Math.round(ts[0].getBoundingClientRect().top) : 0;
+    return { hs: R.querySelectorAll('.hs').length, layout: g?.dataset.layout, tiles: ts.length, tracks: g ? getComputedStyle(g).gridTemplateColumns.split(' ').length : 0, first: ts.filter((t) => Math.round(t.getBoundingClientRect().top) === top).length }; })()`);
+  check('Discover library_views.discover: tiles uses an exact 4-column grid, not the horizontal scroller', d.hs === 0 && d.layout === 'tiles' && d.tiles > 0 && d.tracks === 4 && d.first === Math.min(4, d.tiles), J(d));
+  await t.close();
+  const r = await openDisc({ library_views: { discover: 'rows' } });
+  const rows = await ev(r, `(() => { const R = ${BRS}; return { hs: R.querySelectorAll('.hs').length, layout: R.querySelector('.list.lib')?.dataset.layout, rows: R.querySelectorAll('.list.lib .row').length }; })()`);
+  check('Discover library_views.discover: rows is a list, not the horizontal scroller', rows.hs === 0 && rows.layout === 'rows' && rows.rows > 0, J(rows));
+  await r.close();
+}
+{
+  const s = await open({ library_views: { artist_page: 'tiles' }, library_columns: 4, library_view: 'rows' });
+  await section(s, 'artist');
+  const c = await center(s.p, targetOf(s, 'artist', 'rows')); await tapAt(s.p, 'mouse', c); await wait(s.p, `${s.BR}.querySelector('jb-detail')?.shadowRoot?.querySelector('.grid.lib, .list')`); await sleep(600);
+  const d = await ev(s.p, `(() => { const r = ${s.BR}.querySelector('jb-detail').shadowRoot; const g = r.querySelector('.grid.lib');
+    const ts = g ? [...g.querySelectorAll('.tile')] : []; const top = ts[0] ? Math.round(ts[0].getBoundingClientRect().top) : 0;
+    return { layout: g?.dataset.layout, tiles: ts.length, rows: r.querySelectorAll('.list .row').length, tracks: g ? getComputedStyle(g).gridTemplateColumns.split(' ').length : 0, first: ts.filter((t) => Math.round(t.getBoundingClientRect().top) === top).length }; })()`);
+  check('artist page library_views.artist_page: tiles uses an exact 4-column grid', d.layout === 'tiles' && d.tiles > 0 && d.tracks === 4 && d.first === Math.min(4, d.tiles), J(d));
+  await s.p.close();
+}
+{
+  const s = await open({ library_views: { search: 'tiles' }, library_columns: 4 });
+  const qb = await center(s.p, `${SV}.querySelector('.qbar')`); await s.p.touchscreen.tap(qb.x, qb.y); await sleep(300);
+  for (const ch of 'EAGLES') { const k = await center(s.p, `[...${SV}.querySelector('jb-keyboard').shadowRoot.querySelectorAll('button')].find((x) => x.textContent.trim() === '${ch}')`); await s.p.touchscreen.tap(k.x, k.y); await sleep(100); }
+  await ev(s.p, `${SV}.querySelector('.lcats .lc[data-lcat="artist"]').click()`); await sleep(900);
+  const r = await ev(s.p, `(() => { const R = ${SV}; const g = R.querySelector('.grid.lib');
+    const ts = g ? [...g.querySelectorAll('.tile')] : []; const top = ts[0] ? Math.round(ts[0].getBoundingClientRect().top) : 0;
+    return { layout: g?.dataset.layout, tiles: ts.length, rows: R.querySelectorAll('.list .row').length, tracks: g ? getComputedStyle(g).gridTemplateColumns.split(' ').length : 0, first: ts.filter((t) => Math.round(t.getBoundingClientRect().top) === top).length }; })()`);
+  check('search results library_views.search: tiles uses an exact 4-column grid', r.layout === 'tiles' && r.tiles > 0 && r.tracks === 4 && r.first === Math.min(4, r.tiles), J(r));
+  await s.p.close();
 }
 
 await browser.close();

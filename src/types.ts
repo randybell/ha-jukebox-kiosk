@@ -142,10 +142,11 @@ export interface JukeboxCardConfig {
   library_tiles?: Array<LibraryTileId | { tile: LibraryTileId; label?: string }>;
   /** The Library tab's name (default "Library"). */
   library_label?: string;
-  /** 0.7.20: how the top level of every Library section (Playlists, Artists, Tracks, Genres, Radio, Albums, Podcasts, Audiobooks) is drawn:
-   *  'rows' (default) or 'tiles'. Pages you open (artist, album, playlist), Library search results and the Queue are not affected. */
+  /** Legacy 0.7.20 all-sections rows/tiles. Kept until the editor copies it into `library_views` and removes it. */
   library_view?: 'rows' | 'tiles';
-  /** 0.7.20: columns of tiles when `library_view: tiles`. 2 to 6, default 3 (anything else is clamped; not a number = 3). Ignored for rows. */
+  /** #146: rows or tiles per section (Playlists, Artists, Tracks, Genres, Radio, Queue, Discover, artist/album/playlist pages, search results, and other Library category tops). */
+  library_views?: Partial<Record<string, 'rows' | 'tiles'>>;
+  /** Tiles across the whole card, 1 to 8 (default 3). The card shows exactly that many. Kept when migrating from 0.7.20 (then 2 to 6). */
   library_columns?: number;
   /** Clock and title */
   title?: string;

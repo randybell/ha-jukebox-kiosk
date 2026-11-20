@@ -12,6 +12,7 @@ import {
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem } from './types';
 import type { MaBackend, TrackListType } from './backend/types';
 import { defineElement } from './define';
+import { libraryViewFor, tilesAcrossStyle } from './library-home';
 import { FavController, heartTpl, heartType } from './heart';
 
 /** Track-list `page` is 0..1000. A first page shorter than this is taken as the whole list (no "load more" call). */
@@ -286,6 +287,17 @@ export class JbDetail extends LitElement {
     await this.hearts.toggle(it, t); // the outcome shows in the card's top-right status chip
   }
   private heart(it: MaItem, type: string) { return heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type)); }
+  private pageView() { return libraryViewFor(this.config, ({ artist: 'artist_page', album: 'album_page', playlist: 'playlist_page' } as Record<string, string>)[this.entry?.type ?? ''] ?? ''); }
+  /** Minimal page tile so the artist/album/playlist-page setting can be tested. Themes owns the look. */
+  private tile(it: MaItem, type: string, n?: number, i = 0) {
+    const key = type === 'album' ? 'al|' + it.uri : `${i}|${it.uri}`;
+    const p = this.press.handlers(key, { it, type, key });
+    return html`<div class="tile ${this.press.held === key ? 'held' : ''}" data-uri=${it.uri} data-type=${type}
+        @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
+        @contextmenu=${(e: Event) => e.preventDefault()}>
+      ${artTpl(it, 'big')}<b>${it.name}</b>
+    </div>`;
+  }
   /** Album row inside an artist: tap opens the album; a hold opens the album's pop-up. */
   private albumRow(it: MaItem) {
     const key = 'al|' + it.uri;
@@ -369,10 +381,14 @@ export class JbDetail extends LitElement {
             <button class="sbtn retry" data-action="retry" tabindex="-1" @pointerdown=${noFocus} @click=${() => { e.data = undefined; this.load(e); this.requestUpdate(); }}>Retry</button></div>` : nothing}
           ${d.note ? html`<div class="note src" data-src=${d.src}>${d.note}</div>` : nothing}
           ${type === 'artist' && !d.loading ? html`<h3 class="eyebrow">Albums</h3>${d.albums.length
-            ? html`<div class="list albums">${d.albums.map((a) => this.albumRow(a))}</div>`
+            ? (this.pageView() === 'tiles'
+              ? html`<div class="grid lib albums" data-layout="tiles" style=${tilesAcrossStyle(this.config)}>${d.albums.map((a) => this.tile(a, 'album'))}</div>`
+              : html`<div class="list albums" data-layout="rows">${d.albums.map((a) => this.albumRow(a))}</div>`)
             : html`<div class="empty noalbums"><span>No albums found.</span></div>`}` : nothing}
           ${d.tracks.length ? html`<h3 class="eyebrow">${tracksTitle}${d.src === 'search' ? html` <em>matched by search</em>` : nothing}</h3>
-            <div class="list tracks">${d.tracks.map((t, i) => this.row(t, type === 'album' && d.src === 'kiosk' ? i + 1 : undefined, i))}</div>
+            ${this.pageView() === 'tiles'
+              ? html`<div class="grid lib tracks" data-layout="tiles" style=${tilesAcrossStyle(this.config)}>${d.tracks.map((t, i) => this.tile(t, 'track', type === 'album' && d.src === 'kiosk' ? i + 1 : undefined, i))}</div>`
+              : html`<div class="list tracks" data-layout="rows">${d.tracks.map((t, i) => this.row(t, type === 'album' && d.src === 'kiosk' ? i + 1 : undefined, i))}</div>`}
             ${d.more || d.loadingMore ? html`<button class="sbtn more-t" data-action="more" tabindex="-1" ?disabled=${d.loadingMore} @pointerdown=${noFocus}
               @click=${() => this.loadMoreTracks(false)}>${d.loadingMore ? 'Loading more tracks…' : 'Load more tracks'}</button>` : nothing}`
             : !d.loading && !d.error && !d.note ? html`<div class="empty notracks"><span>No ${type === 'podcast' ? 'episodes' : 'tracks'} found.</span></div>` : nothing}
@@ -394,6 +410,10 @@ export class JbDetail extends LitElement {
     .scroll.panel { background: transparent; }
     .detail { display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); }
     .nav { display: flex; align-items: center; gap: var(--ha-space-3, 12px); min-width: 0; }
+    .grid.lib { display: grid; grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
+    .grid.lib .tile { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
+    .grid.lib .tile .big { width: 100%; height: auto; aspect-ratio: 1; }
+    .grid.lib .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .back { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px) 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
     .back .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }

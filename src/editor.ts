@@ -4,7 +4,7 @@ import { defineElement } from './define';
 import { CATEGORIES, DEFAULT_CATEGORIES } from './search-categories';
 import { LIBRARY_ROWS, DEFAULT_ROWS, rowName } from './discover';
 import { RADIO_MODES, MODE_LABEL } from './radio-browse';
-import { TILES, configuredTiles, LIBRARY_CATS, DEFAULT_LIBRARY_CATEGORIES, libraryCategories, libraryTabLabel, combinedOn, DEFAULT_LIBRARY_VIEW, DEFAULT_LIBRARY_COLUMNS, LIBRARY_COLUMNS_MIN, LIBRARY_COLUMNS_MAX } from './library-home';
+import { TILES, configuredTiles, LIBRARY_CATS, DEFAULT_LIBRARY_CATEGORIES, libraryCategories, libraryTabLabel, combinedOn, DEFAULT_LIBRARY_COLUMNS, LIBRARY_COLUMNS_MIN, LIBRARY_COLUMNS_MAX, EDITOR_VIEW_SECTIONS, LIBRARY_VIEW_MIGRATE_KEYS, editorViewValue, collectLibraryViews } from './library-home';
 
 /**
  * Visual editor built on HA's <ha-form>. YAML remains the reference (see README).
@@ -110,10 +110,8 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
           { value: 'separate', label: 'Separate Library and Search tabs' }]) },
         { name: 'library_label', selector: { text: {} } },
         { name: 'library_categories', selector: { select: { multiple: true, reorder: true, mode: 'list', options: LIBRARY_CATS.map((x) => ({ value: x.id, label: DEFAULT_LIBRARY_CATEGORIES.includes(x.id) ? x.label : `${x.label} (optional)` })) } } },
-        { name: 'library_view', selector: sel([
-          { value: 'rows', label: 'Rows: a list with small covers' },
-          { value: 'tiles', label: 'Tiles: a grid of big covers' }]) },
-        ...(c.library_view === 'tiles' ? [{ name: 'library_columns', selector: { number: { min: 2, max: 6, step: 1, mode: 'box' } } }] : []),
+        ...EDITOR_VIEW_SECTIONS.map((s) => ({ name: `view_${s.id}`, selector: sel([{ value: 'rows', label: 'Rows' }, { value: 'tiles', label: 'Tiles' }]) })),
+        { name: 'library_columns', selector: { number: { min: LIBRARY_COLUMNS_MIN, max: LIBRARY_COLUMNS_MAX, step: 1, mode: 'box' } } },
         { name: 'library_home', selector: { boolean: {} } },
         { name: 'library_tiles', selector: { select: { multiple: true, reorder: true, mode: 'list', options: TILES.map((t) => ({ value: t.id, label: t.optIn ? `${t.label} (optional)` : t.label })) } } },
         { name: 'browse_limit', selector: { number: { min: 10, max: 500, mode: 'box' } } },
@@ -150,8 +148,18 @@ export const LABELS: Record<string, string> = {
   library_layout: 'Library layout',
   library_label: 'Library tab name (empty = Library)',
   library_categories: 'Library category buttons (in this order)',
-  library_view: 'Library lists (every Library button: rows or tiles)',
-  library_columns: 'Tile columns (2 to 6)',
+  library_columns: 'Tiles across',
+  view_playlist: 'Playlists',
+  view_artist: 'Artists',
+  view_track: 'Tracks',
+  view_genre: 'Genres',
+  view_radio: 'Radio',
+  view_queue: 'Queue',
+  view_discover: 'Discover',
+  view_artist_page: 'artist page',
+  view_album_page: 'album page',
+  view_playlist_page: 'playlist page',
+  view_search: 'search results',
   library_home: 'Separate tabs only: open the Library tab on big shortcut tiles',
   library_tiles: 'Separate tabs only: Library tiles (in this order)',
   browse_limit: 'Items per Library page',
@@ -164,7 +172,7 @@ export const LABELS: Record<string, string> = {
 export const SHOWN_DEFAULTS = {
   default_tab: 'now',
   show_lyrics: true, screensaver_lyrics: true, lyrics_seek: true,
-  radio_favorites_only: false, library_home: false, library_view: DEFAULT_LIBRARY_VIEW, library_columns: DEFAULT_LIBRARY_COLUMNS, library_layout: 'combined', search_sources: true, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
+  radio_favorites_only: false, library_home: false, library_columns: DEFAULT_LIBRARY_COLUMNS, library_layout: 'combined', search_sources: true, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
 };
 const roomEntity = (r: RoomConfig | string) => (typeof r === 'string' ? r : r.entity);
 
@@ -230,11 +238,16 @@ export class JukeboxCardEditor extends LitElement {
     if (v.library_label !== undefined && !String(v.library_label ?? '').trim()) delete v.library_label;
     // kept while typing; the card ignores anything but two letters (then HA's country is used)
     if (v.radio_country !== undefined) { const cc = String(v.radio_country ?? '').trim(); if (!cc) delete v.radio_country; else v.radio_country = /^[a-z]{2}$/i.test(cc) ? cc.toLowerCase() : cc; }
-    // 0.7.20: tile columns are whole numbers 2..6 (the card clamps too); not a number = the key is dropped (the card uses 3)
+    // Tiles across: whole numbers 1..8 (the card clamps too); not a number = the key is dropped (the card uses 3)
     if (v.library_columns !== undefined) {
       const n = Math.round(Number(v.library_columns));
       if (Number.isFinite(n) && v.library_columns !== null && v.library_columns !== '') v.library_columns = Math.max(LIBRARY_COLUMNS_MIN, Math.min(LIBRARY_COLUMNS_MAX, n)); else delete v.library_columns;
     }
+    const views = collectLibraryViews(v, prevC);
+    for (const k of LIBRARY_VIEW_MIGRATE_KEYS) delete v[`view_${k}`];
+    delete v.library_view;
+    delete v.library_views;
+    if (views) v.library_views = views;
     if (v.lyrics_offset_ms !== undefined) {
       const n = Math.round(Number(v.lyrics_offset_ms));
       if (Number.isFinite(n)) v.lyrics_offset_ms = Math.max(-5000, Math.min(5000, n)); else delete v.lyrics_offset_ms;
@@ -260,6 +273,9 @@ export class JukeboxCardEditor extends LitElement {
     out.discover = c.discover === true ? [...DEFAULT_ROWS] : Array.isArray(c.discover) ? c.discover : [];
     out.library_tiles = configuredTiles(c).map((t) => t.id);
     out.library_categories = libraryCategories(c);
+    for (const s of EDITOR_VIEW_SECTIONS) out[`view_${s.id}`] = editorViewValue(c, s.id);
+    delete out.library_view;
+    delete out.library_views;
     out.radio_browse = c.radio_browse === true ? [...RADIO_MODES] : Array.isArray(c.radio_browse) ? c.radio_browse : [];
     return out;
   }

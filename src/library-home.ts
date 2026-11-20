@@ -34,19 +34,75 @@ export const combinedOn = (c: Partial<JukeboxCardConfig> | undefined) => c?.libr
 /** Tab label: always "Library" (or `library_label`), with or without the tile home. */
 export const libraryTabLabel = (c: Partial<JukeboxCardConfig> | undefined) => String(c?.library_label ?? '').trim() || 'Library';
 
-/** 0.7.20: the top level of every Library section is drawn as rows or tiles (`library_view`). The default is in this one place. */
+/** rows or tiles. The default is in this one place. */
 export type LibraryView = 'rows' | 'tiles';
 export const DEFAULT_LIBRARY_VIEW: LibraryView = 'rows';
-export const LIBRARY_COLUMNS_MIN = 2, LIBRARY_COLUMNS_MAX = 6, DEFAULT_LIBRARY_COLUMNS = 3;
-/** `library_view`: 'rows' or 'tiles'; anything else (or unset) = the default. */
+export const LIBRARY_COLUMNS_MIN = 1, LIBRARY_COLUMNS_MAX = 8, DEFAULT_LIBRARY_COLUMNS = 3;
+/** Per-section keys shown in the editor (#146). Radio Favorites and Browse share `radio`. */
+export const EDITOR_VIEW_SECTIONS = [
+  { id: 'playlist', label: 'Playlists' },
+  { id: 'artist', label: 'Artists' },
+  { id: 'track', label: 'Tracks' },
+  { id: 'genre', label: 'Genres' },
+  { id: 'radio', label: 'Radio' },
+  { id: 'queue', label: 'Queue' },
+  { id: 'discover', label: 'Discover' },
+  { id: 'artist_page', label: 'artist page' },
+  { id: 'album_page', label: 'album page' },
+  { id: 'playlist_page', label: 'playlist page' },
+  { id: 'search', label: 'search results' },
+] as const;
+export type LibraryViewSection = (typeof EDITOR_VIEW_SECTIONS)[number]['id'] | 'album' | 'podcast' | 'audiobook';
+/** Every section key the old `library_view` is copied into on editor save (editor keys plus other Library category tops). */
+export const LIBRARY_VIEW_MIGRATE_KEYS: readonly LibraryViewSection[] = [
+  ...EDITOR_VIEW_SECTIONS.map((s) => s.id),
+  'album', 'podcast', 'audiobook',
+];
+const LIBRARY_TOPS = new Set<string>(['playlist', 'artist', 'track', 'genre', 'radio', 'album', 'podcast', 'audiobook']);
+const asView = (v: unknown): LibraryView | undefined => (v === 'rows' || v === 'tiles' ? v : undefined);
+/** `library_view`: 'rows' or 'tiles'; anything else (or unset) = the default. Kept as a fallback until the editor copies it into `library_views` and removes it. */
 export const libraryView = (c: Partial<JukeboxCardConfig> | undefined): LibraryView =>
-  c?.library_view === 'rows' || c?.library_view === 'tiles' ? c.library_view : DEFAULT_LIBRARY_VIEW;
-/** `library_columns` clamped to 2..6 (whole numbers); not a number = 3. */
+  asView(c?.library_view) ?? DEFAULT_LIBRARY_VIEW;
+/** Rows or tiles for one section. An explicit `library_views` key wins. Library tops with no key still follow `library_view` so existing setups look the same until the first editor save. Queue, Discover, open pages and search default to rows (Discover keeps its current layout until a key is set). */
+export const libraryViewFor = (c: Partial<JukeboxCardConfig> | undefined, section: string): LibraryView => {
+  const v = asView((c?.library_views as Record<string, unknown> | undefined)?.[section]);
+  if (v) return v;
+  return LIBRARY_TOPS.has(section) ? libraryView(c) : DEFAULT_LIBRARY_VIEW;
+};
+/** True when Discover has no explicit key yet, so the 0.9.0 horizontal rows stay until editor save copies `library_view` in. */
+export const discoverLegacyLayout = (c: Partial<JukeboxCardConfig> | undefined): boolean =>
+  asView((c?.library_views as Record<string, unknown> | undefined)?.discover) === undefined;
+/** What the editor shows: an explicit `library_views` key, else a leftover `library_view` (so save can copy it into every section), else the runtime default. */
+export const editorViewValue = (c: Partial<JukeboxCardConfig> | undefined, section: string): LibraryView =>
+  asView((c?.library_views as Record<string, unknown> | undefined)?.[section]) ?? asView(c?.library_view) ?? libraryViewFor(c, section);
+/** `library_columns` clamped to 1..8 (whole numbers); not a number = 3. The card shows exactly this many tiles across. */
 export function libraryColumns(c: Partial<JukeboxCardConfig> | undefined): number {
   const raw: unknown = c?.library_columns;
   const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
   if (!Number.isFinite(n)) return DEFAULT_LIBRARY_COLUMNS;
   return Math.max(LIBRARY_COLUMNS_MIN, Math.min(LIBRARY_COLUMNS_MAX, Math.round(n)));
+}
+export const tilesAcrossStyle = (c: Partial<JukeboxCardConfig> | undefined) => `--_cols:${libraryColumns(c)}`;
+/** On editor save: copy a leftover `library_view` into every section key (including categories that are off), then drop `library_view`. Merge any `view_*` form fields. Returns undefined when nothing should be written. */
+export function collectLibraryViews(
+  form: Record<string, unknown>,
+  prev: Partial<JukeboxCardConfig> | undefined,
+): Record<string, LibraryView> | undefined {
+  const views: Record<string, LibraryView> = {};
+  const prevViews = (prev?.library_views ?? {}) as Record<string, unknown>;
+  for (const k of LIBRARY_VIEW_MIGRATE_KEYS) {
+    const fromForm = asView(form[`view_${k}`]);
+    const fromPrev = asView(prevViews[k]);
+    if (fromForm) views[k] = fromForm;
+    else if (fromPrev) views[k] = fromPrev;
+  }
+  const leftover = asView(form.library_view) ?? asView(prev?.library_view);
+  if (leftover) {
+    for (const k of LIBRARY_VIEW_MIGRATE_KEYS) if (views[k] === undefined) views[k] = leftover;
+  }
+  const allDefault = !leftover && prev?.library_views === undefined && Object.values(views).every((v) => v === DEFAULT_LIBRARY_VIEW);
+  if (!Object.keys(views).length || allDefault) return undefined;
+  return views;
 }
 
 /** 0.7.2 Library category buttons, in the editor's order. */

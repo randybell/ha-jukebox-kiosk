@@ -21,7 +21,7 @@ import {
   discoverWanted, DEFAULT_ROWS, parseRows, pickRows, parseItems, resumeFraction, memGet, memPut, memClear, ROWS_TTL_MS, ITEMS_TTL_MS, DISCOVER_CONCURRENCY,
   type DiscoverRow,
 } from './discover';
-import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, libraryCategories, libraryView, libraryColumns, type TileId } from './library-home';
+import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, libraryCategories, libraryViewFor, tilesAcrossStyle, discoverLegacyLayout, type TileId } from './library-home';
 import { loadDetail } from './detail-view';
 import { FavController, heartTpl, heartType } from './heart';
 import { PoolCache, libraryFiltered, normText, type ScopePool } from './search-scope';
@@ -530,8 +530,11 @@ export class JbBrowse extends LitElement {
         <h3 class="eyebrow">${r.name}</h3>
         ${st?.error ? html`<div class="note rowerr">${st.error} <button class="fc tog" data-action="row-retry" tabindex="-1" @pointerdown=${noFocus}
             @click=${() => this.retryRow(r.key)}>Retry</button></div>`
-          : st?.done ? html`<div class="hs" @scroll=${() => this.press.scrolled()}>${st.items.map((it) => this.tile(it, it.media_type || 'track', resume))}</div>`
-          : html`<div class="hs skel" aria-hidden="true">${[0, 1, 2, 3, 4, 5].map(() => html`<div class="tile"><span class="ar big"></span><b>&nbsp;</b></div>`)}</div>`}
+          : st?.done ? (discoverLegacyLayout(this.config) ? html`<div class="hs" data-layout="legacy" @scroll=${() => this.press.scrolled()}>${st.items.map((it) => this.tile(it, it.media_type || 'track', resume))}</div>`
+            : libraryViewFor(this.config, 'discover') === 'tiles'
+              ? html`<div class="grid lib disc-grid" data-layout="tiles" style=${tilesAcrossStyle(this.config)}>${st.items.map((it) => this.tile(it, it.media_type || 'track', resume))}</div>`
+              : html`<div class="list lib" data-layout="rows">${st.items.map((it) => this.itemRow(it, it.media_type || 'track'))}</div>`)
+          : html`<div class="${discoverLegacyLayout(this.config) ? 'hs skel' : 'grid lib disc-grid'}" data-layout=${discoverLegacyLayout(this.config) ? 'legacy' : libraryViewFor(this.config, 'discover')} aria-hidden="true" style=${discoverLegacyLayout(this.config) ? nothing : tilesAcrossStyle(this.config)}>${[0, 1, 2, 3, 4, 5].map(() => html`<div class="tile"><span class="ar big"></span><b>&nbsp;</b></div>`)}</div>`}
       </section>`;
     })}</div>`;
   }
@@ -726,10 +729,10 @@ export class JbBrowse extends LitElement {
     if (type === 'playlist') return it.owner ?? '';
     return artistNames(it);
   }
-  /** 0.7.20: the top level of a Library section, as `library_view` says: rows (a list) or tiles (a grid of `library_columns` columns). */
+  /** The top level of a Library section, as `library_views.<section>` (else `library_view`) says: rows or an exact-column tile grid. */
   private libItems(items: MaItem[], type: string, src: string) {
-    if (libraryView(this.config) === 'tiles') {
-      return html`<div class="grid lib ${type}" data-layout="tiles" data-src=${src} style="--_cols:${libraryColumns(this.config)}">${items.map((it) => this.tile(it, type, false, true))}</div>`;
+    if (libraryViewFor(this.config, type) === 'tiles') {
+      return html`<div class="grid lib ${type}" data-layout="tiles" data-src=${src} style=${tilesAcrossStyle(this.config)}>${items.map((it) => this.tile(it, type, false, true))}</div>`;
     }
     return html`<div class="list lib ${type === 'genre' ? 'genres' : type}" data-layout="rows" data-src=${src}>${items.map((it) => (type === 'track' ? this.row(it)
       : type === 'genre' ? this.genreRow(it) : this.itemRow(it, type)))}</div>`;
@@ -1029,9 +1032,8 @@ export class JbBrowse extends LitElement {
     .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto auto; }
     .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
     .tile.artist b { text-align: center; }
-    /* 0.7.20 Library tiles: library_columns fixed columns (2 to 6) instead of as many 150px ones as fit */
-    /* #117: library_columns is the most columns; fewer when a column would go under the tile minimum (auto-fill, no width rule) */
-    .grid.lib { grid-template-columns: repeat(auto-fill, minmax(max(var(--_tmin), calc((100% - (var(--_cols, 3) - 1) * clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px))) / var(--_cols, 3) - 0.5px)), 1fr)); }
+    /* #146: Tiles across is exact (1-8). No auto-fill shrink. */
+    .grid.lib { grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); }
     .row.ir { grid-template-columns: 44px minmax(0, 1fr); grid-auto-flow: column; grid-auto-columns: auto; }
     .tile small { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .list { display: flex; flex-direction: column; }
