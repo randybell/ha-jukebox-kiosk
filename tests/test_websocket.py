@@ -892,3 +892,29 @@ async def test_subscribe_sleep_timer_updates_filter_when_group_changes(
     assert _id_filter_ids(id_filter2) == frozenset({PLAYER_A, SYNCGROUP})
     await _call(ws, type="unsubscribe_events", subscription=res["id"])
     assert fake_ma.subs == []
+
+
+async def test_subscribe_sleep_timer_skips_unrelated_player_updated(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    """A player_updated that does not change synced_to or active_group must not re-query players/get."""
+    fake_ma.players[PLAYER_A] = {"player_id": PLAYER_A, "synced_to": None, "active_group": None}
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/subscribe_sleep_timer", entity_id=ENTITY_A)
+    assert res["success"]
+    cb, _events, _id_filter = fake_ma.subs[0]
+    before = [c for c in fake_ma.calls if c[0] == "players/get"]
+    cb(
+        SimpleNamespace(
+            event=SimpleNamespace(value="player_updated"),
+            object_id=PLAYER_A,
+            data={**fake_ma.players[PLAYER_A], "state": "playing", "volume_level": 0.4},
+        )
+    )
+    await hass.async_block_till_done()
+    after = [c for c in fake_ma.calls if c[0] == "players/get"]
+    assert after == before
+    assert _id_filter_ids(fake_ma.subs[0][2]) == frozenset({PLAYER_A})
+    await _call(ws, type="unsubscribe_events", subscription=res["id"])
+    assert fake_ma.subs == []
+

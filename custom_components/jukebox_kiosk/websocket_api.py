@@ -700,7 +700,7 @@ async def _ma_player(client: Any, player_id: str) -> dict[str, Any] | None:
     return player if isinstance(player, dict) else None
 
 
-async def _playback_owner_id(client: Any, player_id: str) -> str:
+async def _playback_owner_id(client: Any, player_id: str, groups: dict[str, tuple[str | None, str | None]] | None = None) -> str:
     """Return the id of the player that owns this player's playback.
 
     MA `_resolve_playback_owner` (server-dev base.py:581-597): the sync leader, or
@@ -709,18 +709,25 @@ async def _playback_owner_id(client: Any, player_id: str) -> str:
     `player_sleep_timer_updated` use that player's id (sleep_timer.py:183-196,
     168-171).
     """
+    def _note(pid: str, raw: dict[str, Any] | None) -> None:
+        if groups is not None:
+            groups[pid] = _group_fields(raw) or (None, None)
+
     player = await _ma_player(client, player_id)
+    _note(player_id, player)
     if player is None:
         return player_id
     owner_id, owner = player_id, player
     synced_to = owner.get("synced_to")
     if isinstance(synced_to, str) and synced_to:
         leader = await _ma_player(client, synced_to)
+        _note(synced_to, leader)
         if leader is not None:
             owner_id, owner = synced_to, leader
     active_group = owner.get("active_group")
     if isinstance(active_group, str) and active_group:
         group = await _ma_player(client, active_group)
+        _note(active_group, group)
         if group is not None:
             owner_id = active_group
     return owner_id
@@ -729,6 +736,15 @@ async def _playback_owner_id(client: Any, player_id: str) -> str:
 def _sleep_id_filter(player_id: str, owner_id: str) -> str | tuple[str, ...]:
     """The card's player plus its current playback owner, when that owner is someone else."""
     return (player_id, owner_id) if owner_id != player_id else player_id
+
+
+def _group_fields(data: Any) -> tuple[str | None, str | None] | None:
+    """synced_to and active_group from a players/get or player_updated payload, or None if it is not a player dict."""
+    if not isinstance(data, dict):
+        return None
+    def _id(v: Any) -> str | None:
+        return v if isinstance(v, str) and v else None
+    return (_id(data.get("synced_to")), _id(data.get("active_group")))
 
 
 @websocket_api.websocket_command(
@@ -802,7 +818,7 @@ async def ws_subscribe_sleep_timer(
     from music_assistant_models.enums import EventType  # noqa: PLC0415
 
     event_filter = (EventType(SLEEP_TIMER_EVENT), EventType.PLAYER_UPDATED)
-    held: dict[str, Any] = {"unsub": None, "ids": None}
+    held: dict[str, Any] = {"unsub": None, "ids": None, "groups": {}}
 
     async def _push() -> None:
         raw = await _send(client, "players/sleep_timer/get", player_id=player_id)
@@ -819,7 +835,9 @@ async def ws_subscribe_sleep_timer(
         connection.subscriptions[msg_id] = held["unsub"]
 
     async def _retarget() -> None:
-        owner_id = await _playback_owner_id(client, player_id)
+        seen: dict[str, tuple[str | None, str | None]] = {}
+        owner_id = await _playback_owner_id(client, player_id, seen)
+        held["groups"].update(seen)
         ids = _sleep_id_filter(player_id, owner_id)
         if ids == held["ids"]:
             return
@@ -830,11 +848,21 @@ async def ws_subscribe_sleep_timer(
     def _on_event(event: Any) -> None:
         name = str(getattr(getattr(event, "event", None), "value", getattr(event, "event", "")))
         if name == "player_updated":
+            fields = _group_fields(getattr(event, "data", None))
+            if fields is None:
+                return
+            oid = getattr(event, "object_id", None)
+            if isinstance(oid, str) and held["groups"].get(oid) == fields:
+                return
+            if isinstance(oid, str):
+                held["groups"][oid] = fields
             hass.async_create_task(_retarget())
         elif name == SLEEP_TIMER_EVENT:
             hass.async_create_task(_push())
 
-    _listen(await _playback_owner_id(client, player_id))
+    seed: dict[str, tuple[str | None, str | None]] = {}
+    _listen(await _playback_owner_id(client, player_id, seed))
+    held["groups"].update(seed)
     connection.send_result(msg_id, {"player_id": player_id})
 
 
