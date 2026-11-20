@@ -4,6 +4,10 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.9.2 — 2026-11-20
+
+- On Now Playing, the Autoplay button is now called **Radio - Autoplay**. It is no longer greyed out while Repeat is on or when Music Assistant keeps the queue going by itself: tapping it always switches Music Assistant's Autoplay on or off. It is still hidden while a radio station or other live stream plays, when the queue isn't active, or when Music Assistant doesn't offer Autoplay. The Queue's Autoplay button hasn't changed.
+
 ## 0.9.1 — 2026-11-20
 
 - Each part of the card now has its own Rows or Tiles choice: each Library button (Playlists, Artists, Tracks, Genres, Radio, Albums, Podcasts and Audiobooks), the Queue, Discover, artist pages, album pages, playlist pages and search results. In the editor these are the Show … as settings. On a new setup, Playlists, Albums and Radio start as Tiles; everything else starts as Rows. (#146)
