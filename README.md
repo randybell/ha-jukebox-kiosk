@@ -463,7 +463,7 @@ Entity ids in the [configuration example](#configuration) are examples. The defa
 
 *(0.9.0)* `show_action_icons` and `coerce_repeat_one` are gone. An old config that still has either one loads without an error; the keys are ignored, and the editor does not write them back.
 
-The visual editor shows on-screen wording only. Top: **Player** and **Room volume sliders**. **Display**: Start tab (the bar's names: Now Playing, Library, Queue, plus Search in the separate layout), screensaver, screensaver lyrics. **Speakers** (see [Speakers](#speakers-050)). **Lyrics**: lyrics on/off, press-and-hold to jump, timing. **Search** and **Library** sections; in Library, the **Show … as** settings (Rows or Tiles for each part) come after the category buttons, then **Tiles across**. There is no Lyrics tab and no Autoplay switch (Now Playing and the Queue show the Autoplay button whenever Music Assistant supports it). Quiet hours were removed in 0.7.9.
+The visual editor shows on-screen wording only. Top: **Player** and **Room volume sliders**. **Display**: Start tab (the bar's names: Now Playing, Library, Queue, plus Search in the separate layout), screensaver, screensaver lyrics. **Speakers** (see [Speakers](#speakers-050)). **Lyrics**: lyrics on/off, press-and-hold to jump, timing. **Search** and **Library** sections; in Library, the **Show … as** settings (Rows or Tiles for each part) come after the category buttons, then **Tiles across**. There is no Lyrics tab and no Autoplay switch (Now Playing and the Queue show the Autoplay button when Music Assistant allows it (see Autoplay)). Quiet hours were removed in 0.7.9.
 
 
 ## Known issues
