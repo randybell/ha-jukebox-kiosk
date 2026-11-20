@@ -509,7 +509,7 @@ export class JbNow extends LitElement {
             @pointerdown=${noFocus} @click=${() => this.setSleep(m as SleepMinutes)}>${SLEEP_LABEL[m]}</button>`)}
           ${sleepOn ? html`<button class="sp cx" tabindex="-1" data-min="0" @pointerdown=${noFocus} @click=${() => this.setSleep(0)}>Cancel sleep timer</button>` : nothing}
         </div>` : sleepOn ? html`<div class="sleep-strip cd-only" aria-live="polite">
-          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${sleepChip}
+          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${sleepModeText ?? `Sleep timer ${sleepChip}`}
             @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon', 'i xs')}${sleepChip}</button>
         </div>` : nothing}
       </div>

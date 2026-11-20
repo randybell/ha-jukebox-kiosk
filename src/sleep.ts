@@ -56,9 +56,9 @@ export function fmtSleepRemain(secs: number): string {
   return h ? `${p2(h)}:${p2(m)}:${p2(ss)}` : `${p2(m)}:${p2(ss)}`;
 }
 
-/** Countdown chip text, e.g. "Sleep 29:41". */
+/** Countdown chip text: just the time beside the moon icon, as MA's indicator, e.g. "29:41". */
 export function sleepLabel(secs: number): string {
-  return `Sleep ${fmtSleepRemain(secs)}`;
+  return fmtSleepRemain(secs);
 }
 
 /** Seconds left until a unix (UTC) expiry timestamp; 0 when unset or past. */

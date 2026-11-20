@@ -1077,7 +1077,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
           role="switch" aria-checked="false" aria-disabled="true" aria-label="Autoplay"
           title="Autoplay has been automatically turned off because repeat is on">${de("autoplay","i xs")}<span>Autoplay</span></button>`:I`<button class="apb ${x?"on":""}" data-action="np-autoplay" tabindex="-1" aria-pressed=${x?"true":"false"}
           aria-label="Autoplay" title=${x?"Autoplay is on: more music is added when the queue runs out":"Autoplay is off"}
-          @pointerdown=${ge} @click=${()=>this.toggleAutoplay(!x)}>${de("autoplay","i xs")}<span>Autoplay</span></button>`,$=this.isFav(),q=this.canFav(),S=this.sleepRemain(),z=function(e,t,a=Date.now()/1e3){return!!$s(t)||zs(e,a)>0}(this._sleepExpires,this._sleepMode),A=S?void 0:function(e,t){if("end_of_chapter"===e)return"End of chapter";if("end_of_item"!==e)return;const a=String(t??"").toLowerCase();return"track"===a?"End of track":"podcast_episode"===a?"End of episode":"audiobook"===a?"End of audiobook":"End of current item"}(this._sleepMode,this._snap?.currentMediaType),M=A??`Sleep ${Ss(S)}`;const C=(e,t,a,i,s,r=!1,o=!1)=>I`<button class="tb ${e} ${s?"on":""}" tabindex="-1" aria-label=${a} title=${a} aria-pressed=${void 0===s?B:s?"true":"false"}
+          @pointerdown=${ge} @click=${()=>this.toggleAutoplay(!x)}>${de("autoplay","i xs")}<span>Autoplay</span></button>`,$=this.isFav(),q=this.canFav(),S=this.sleepRemain(),z=function(e,t,a=Date.now()/1e3){return!!$s(t)||zs(e,a)>0}(this._sleepExpires,this._sleepMode),A=S?void 0:function(e,t){if("end_of_chapter"===e)return"End of chapter";if("end_of_item"!==e)return;const a=String(t??"").toLowerCase();return"track"===a?"End of track":"podcast_episode"===a?"End of episode":"audiobook"===a?"End of audiobook":"End of current item"}(this._sleepMode,this._snap?.currentMediaType),M=A??Ss(S);const C=(e,t,a,i,s,r=!1,o=!1)=>I`<button class="tb ${e} ${s?"on":""}" tabindex="-1" aria-label=${a} title=${a} aria-pressed=${void 0===s?B:s?"true":"false"}
         ?disabled=${o} @pointerdown=${ge} @click=${i}>${de(t)}${r?I`<i class="dot"></i>`:B}</button>`,T=!i&&!1!==this.config.show_lyrics&&!!this.lyrics,j=this._sleepOpen?I`<div class="slx" data-action="sleep-close" @pointerdown=${this.sleepAway}></div>`:B;return I`<div class="nw ${i?"idle":""} ${this._sleepOpen?"sl-open":""}" data-state=${e?.state??"unknown"}>${j}
       <div class="art ${T&&this._overlay?"lyr-on":""}">
         ${n?me(n,I`<img src=${n} alt="" draggable="false" @load=${()=>Ce(o,r,n)}
@@ -1103,7 +1103,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
             @pointerdown=${ge} @click=${()=>this.setSleep(e)}>${ks[e]}</button>`)}
           ${z?I`<button class="sp cx" tabindex="-1" data-min="0" @pointerdown=${ge} @click=${()=>this.setSleep(0)}>Cancel sleep timer</button>`:B}
         </div>`:z?I`<div class="sleep-strip cd-only" aria-live="polite">
-          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${M}
+          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${A??`Sleep timer ${M}`}
             @pointerdown=${ge} @click=${()=>this.toggleSleepOpen()}>${de("moon","i xs")}${M}</button>
         </div>`:B}
       </div>

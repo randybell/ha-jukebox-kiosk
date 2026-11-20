@@ -56,7 +56,9 @@ check('SL5 set 30 → players/sleep_timer/set {player_id: unique_id, seconds:180
   ma.some((x) => x.c === 'players/sleep_timer/set' && x.d.seconds === 1800 && x.d.player_id === 'syncgroup_everywhere'), J(ma));
 check('SL6 chooser closes after pick', !(await ev(`${NP}.querySelector('.sleep-strip:not(.cd-only)')`)));
 const cd7 = await ev(`(${NP}.querySelector('.sp.sleep-cd') || { textContent: '' }).textContent.trim()`);
-check('SL7 countdown chip shows Sleep MM:SS (MA format, zero-padded)', /^Sleep \d{2}:\d{2}$/.test(cd7), cd7);
+const cd7l = await ev(`(${NP}.querySelector('.sp.sleep-cd') || { getAttribute: () => '' }).getAttribute('aria-label')`);
+const cd7moon = await ev(`!!${NP}.querySelector('.sp.sleep-cd svg, .sp.sleep-cd ha-icon, .sp.sleep-cd .i')`);
+check('SL7 countdown chip shows just MM:SS beside the moon (MA indicator, zero-padded), labelled Sleep timer', /^\d{2}:\d{2}$/.test(cd7) && cd7moon && /^Sleep timer \d{2}:\d{2}$/.test(cd7l), J({ cd7, cd7l, cd7moon }));
 check('SL8 moon button is on while timer runs', await ev(`!!${NP}.querySelector('.ab.slp.on')`));
 
 await tap(`${NP}.querySelector('.ab.slp')`);
@@ -96,7 +98,7 @@ await sleep(300);
 await ev(`(() => { window.__sleepTimers.set('syncgroup_everywhere', Date.now()/1000 + 2700); window.__kioskPushSleep('media_player.everywhere'); })()`);
 await sleep(300);
 const liveCd = await ev(`(${NP}.querySelector('.sp.sleep-cd') || { textContent: '' }).textContent.trim()`);
-check('SL10e live sleep event updates the countdown chip', /^Sleep \d{2}:\d{2}$/.test(liveCd), liveCd);
+check('SL10e live sleep event updates the countdown chip', /^\d{2}:\d{2}$/.test(liveCd), liveCd);
 await ev(`(() => { window.__sleepTimers.delete('syncgroup_everywhere'); window.__kioskPushSleep('media_player.everywhere'); })()`);
 await sleep(300);
 check('SL10f live clear event removes the countdown chip', !(await ev(`${NP}.querySelector('.sp.sleep-cd')`)));
@@ -112,7 +114,7 @@ await sleep(300);
 const nMa = await ev(`(window.__maLog || []).filter((x) => String(x.command).startsWith('players/sleep_timer/')).length`);
 check('SL11 native backend does not call MA sleep_timer', nMa === 0, String(nMa));
 const cd12 = await ev(`(${NP}.querySelector('.sp.sleep-cd') || { textContent: '' }).textContent.trim()`);
-check('SL12 native does not start a card-side countdown', !/^Sleep \d+:\d{2}$/.test(cd12), cd12);
+check('SL12 native does not start a card-side countdown', !/^\d+:\d{2}$/.test(cd12), cd12);
 
 await ev(`(() => { const n = __card.shadowRoot.querySelector('jb-now'); n._sleepExpires = Date.now()/1000 + 0.6; n._sleepMins = 15; n.requestUpdate(); })()`);
 await sleep(1200);

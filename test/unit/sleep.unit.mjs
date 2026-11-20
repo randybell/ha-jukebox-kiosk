@@ -20,7 +20,7 @@ check('S3 fmtSleepRemain 1781 → 29:41', S.fmtSleepRemain(1781) === '29:41', S.
 check('S4 fmtSleepRemain floors and clamps negative', S.fmtSleepRemain(-3) === '00:00' && S.fmtSleepRemain(59.9) === '00:59');
 check('S4b fmtSleepRemain MA format: 45:00, 05:03, 01:00:00, 01:59:59', S.fmtSleepRemain(2700) === '45:00' && S.fmtSleepRemain(303) === '05:03' && S.fmtSleepRemain(3600) === '01:00:00' && S.fmtSleepRemain(7199) === '01:59:59');
 check('S4c SLEEP_LABEL is MA\'s preset words', [15, 30, 45, 60, 120].map((m) => S.SLEEP_LABEL[m]).join('|') === '15 minutes|30 minutes|45 minutes|1 hour|2 hours');
-check('S5 sleepLabel wraps fmt', S.sleepLabel(1781) === 'Sleep 29:41');
+check('S5 sleepLabel wraps fmt', S.sleepLabel(1781) === '29:41');
 check('S6 remainFromExpires null/0/past → 0', S.remainFromExpires(null) === 0 && S.remainFromExpires(0) === 0 && S.remainFromExpires(100, 200) === 0);
 check('S7 remainFromExpires future', Math.abs(S.remainFromExpires(1100, 1000) - 100) < 0.001);
 check('S8 canMaSleep true only when sleepTimerSet is a function',
