@@ -1090,8 +1090,12 @@ export class JbBrowse extends LitElement {
     .hs .tile { scroll-snap-align: start; }
     .hs.skel .ar { background: var(--_chip-bg) !important; } .hs.skel b { background: var(--_chip-bg); border-radius: var(--ha-border-radius-md, 8px); width: 70%; }
     .rowerr { display: flex; align-items: center; gap: var(--ha-space-2, 8px); } .rowerr .fc { min-height: var(--_touch-min); }
-    .rp { position: absolute; left: 8px; right: 8px; bottom: 6px; height: 4px; border-radius: 2px; background: var(--_chip-sel); overflow: hidden; }
-    .rp i { display: block; height: 100%; background: var(--_active); }
+    /* 0.9.1: Continue listening progress readable on any artwork: the theme colour fill on a card-surface track with a card-surface rim and a hairline, sizes from theme spacing */
+    .rp { position: absolute; left: var(--ha-space-1, 4px); right: var(--ha-space-1, 4px); bottom: var(--ha-space-1, 4px); height: var(--ha-space-2, 8px); box-sizing: border-box;
+      border-radius: var(--ha-border-radius-pill, 9999px); background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      border: var(--ha-border-width-md, 2px) solid var(--ha-card-background, var(--card-background-color, var(--_bg))); box-shadow: 0 0 0 var(--ha-border-width-sm, 1px) var(--_surface-border); overflow: hidden; }
+    .rp i { display: block; height: 100%; border-radius: inherit; background: var(--_active); }
+    .tw:has(.rp) .pv { bottom: calc(2 * var(--ha-space-1, 4px) + var(--ha-space-2, 8px)); } /* the source badge sits just above the progress bar */
     /* #117 kept as a container query on the card's own width (a content choice): a narrow row drops its provider badge and
        uses 40px art so the title keeps its room; every size above it is fluid */
     @container np (max-width: 520px) {
