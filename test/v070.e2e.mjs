@@ -241,11 +241,11 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('AP4 tap → jukebox_kiosk/set_autoplay {enabled: true}, pill on, no raw ma command',
     sent.length === 1 && sent[0].on === true && /^media_player\./.test(sent[0].e) && (await maOf(c, 'player_queues/autoplay')).length === 0, J(sent));
   await tap(c, `__card.shadowRoot.querySelector('.tab[data-tab="now"]')`);
-  const ind = await wait(c, `/Autoplay/.test(${NV}.querySelector('.upn')?.textContent ?? '')`);
+  const ind = await wait(c, `${NV}.querySelector('[data-action="np-autoplay"][aria-pressed="true"]')`) && !/Autoplay/.test(await ev(c, `${NV}.querySelector('.upn')?.textContent ?? ''`));
   const ap = await ev(c, `(() => { const b = ${NV}.querySelector('[data-action="np-autoplay"]');
     return { has: !!b, pressed: b?.getAttribute('aria-pressed'), disabled: !!b?.disabled, tb: !!${NV}.querySelector('.tb[aria-label*="Autoplay"]'),
       upn: ${NV}.querySelector('.upn')?.textContent?.replace(/\s+/g, ' ') }; })()`);
-  check('AP5 Now Playing: spot A Autoplay button (same state as the Queue pill), Up next still says Autoplay, no 7th transport button',
+  check('AP5 Now Playing: spot A Autoplay button (same state as the Queue pill), Up next no longer says Autoplay, no 7th transport button',
     ind && ap.has && ap.pressed === 'true' && !ap.disabled && !ap.tb, J(ap));
 
   await c.close();
