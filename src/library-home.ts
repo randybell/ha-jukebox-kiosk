@@ -50,10 +50,10 @@ export const EDITOR_VIEW_SECTIONS = [
   { id: 'audiobook', label: 'Audiobooks' },
   { id: 'queue', label: 'Queue' },
   { id: 'discover', label: 'Discover' },
-  { id: 'artist_page', label: 'artist page' },
-  { id: 'album_page', label: 'album page' },
-  { id: 'playlist_page', label: 'playlist page' },
-  { id: 'search', label: 'search results' },
+  { id: 'artist_page', label: 'Artist page' },
+  { id: 'album_page', label: 'Album page' },
+  { id: 'playlist_page', label: 'Playlist page' },
+  { id: 'search', label: 'Search results' },
 ] as const;
 export type LibraryViewSection = (typeof EDITOR_VIEW_SECTIONS)[number]['id'];
 /** Library category tops. An existing leftover `library_view` is still read for these at runtime; nothing is copied between keys. */

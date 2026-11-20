@@ -12,7 +12,7 @@ const J = JSON.stringify;
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 const base = { type: 'custom:jukebox-card', entity: 'media_player.everywhere' };
 const VIEWS = ['view_playlist', 'view_artist', 'view_track', 'view_genre', 'view_radio', 'view_album', 'view_podcast', 'view_audiobook', 'view_queue', 'view_discover', 'view_artist_page', 'view_album_page', 'view_playlist_page', 'view_search'];
-const LABELS = { view_playlist: 'Playlists', view_artist: 'Artists', view_track: 'Tracks', view_genre: 'Genres', view_radio: 'Radio', view_album: 'Albums', view_podcast: 'Podcasts', view_audiobook: 'Audiobooks', view_queue: 'Queue', view_discover: 'Discover', view_artist_page: 'artist page', view_album_page: 'album page', view_playlist_page: 'playlist page', view_search: 'search results' };
+const LABELS = { view_playlist: 'Playlists', view_artist: 'Artists', view_track: 'Tracks', view_genre: 'Genres', view_radio: 'Radio', view_album: 'Albums', view_podcast: 'Podcasts', view_audiobook: 'Audiobooks', view_queue: 'Queue', view_discover: 'Discover', view_artist_page: 'Artist page', view_album_page: 'Album page', view_playlist_page: 'Playlist page', view_search: 'Search results' };
 const open = async (cfg) => {
   const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width: 900, height: 1500, deviceScaleFactor: 1 });
   await p.goto(`${ROOT}editor.html?fresh=1&cfg=${encodeURIComponent(J(cfg))}`);
