@@ -19,7 +19,7 @@ export const DEV_ELEMENT_NAMES = [
   'jb-now',
 ];
 
-const PICKER = "name: 'Jukebox', description:";
+const PICKER = "name: 'Jukebox Kiosk', description:";
 const PICKER_DEV = "name: 'Jukebox Card (DEV)', description:";
 
 export function applyDevPreview(code) {

@@ -13,8 +13,9 @@ defineElement('jb-now', JbNow);
 html\`<jb-now></jb-now><jb-lyrics class="ovl"></jb-lyrics>\`;
 this.renderRoot.querySelector('jb-lyrics.ovl');
 this.renderRoot.querySelector('jb-browse');
+this.renderRoot?.querySelector('jb-search[combined]');
 const OVERLAY_KEY = 'jukebox-card:lyrics-overlay:v1';
-(window as any).customCards.push({ type: 'jukebox-card', name: 'Jukebox', description: 'Kiosk' });
+(window as any).customCards.push({ type: 'jukebox-card', name: 'Jukebox Kiosk', description: 'Kiosk' });
 console.warn('[jukebox-card] queue refresh failed');
 .lib jb-browse { flex: 1; }
 `;
@@ -24,6 +25,7 @@ check('editor is jukebox-card-editor-dev', out.includes("defineElement('jukebox-
 check('card is jukebox-card-dev, not jukebox-card-dev-editor', out.includes("defineElement('jukebox-card-dev', JukeboxCard)") && !out.includes('jukebox-card-dev-editor'));
 check('jb-now tags gain the suffix', out.includes('<jb-now-dev></jb-now-dev>'));
 check('querySelector tag with a class gains the suffix', out.includes("querySelector('jb-lyrics-dev.ovl')"));
+check('attribute selector gains the suffix', out.includes("querySelector('jb-search-dev[combined]')"));
 check('storage keys that start with the card name stay put', out.includes("'jukebox-card:lyrics-overlay:v1'"));
 check('picker name is Jukebox Card (DEV)', out.includes("name: 'Jukebox Card (DEV)', description:"));
 check('picker type is the dev element', out.includes("type: 'jukebox-card-dev'"));
