@@ -1,4 +1,4 @@
-// Now Playing Autoplay button (spot A) and Queue header pill: MA 2.17.370 show/hide, including the repeat lock.
+// Now Playing Autoplay button (spot A) is always a toggle when shown; Queue header pill still follows autoplayControlMode locks.
 // 1024x600 only. Usage: node test/autoplay-np.e2e.mjs
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -27,12 +27,16 @@ const ap = (p) => ev(p, `(() => { const r = ${NV}; const b = r.querySelector('[d
     tb: !!r.querySelector('.tb[aria-label*="Autoplay"]'), inBadges: !!r.querySelector('.badges [data-action="np-autoplay"]') }; })()`);
 const mark = (p) => ev(p, 'window.__mark = (window.__ws || []).length');
 const sets = (p) => p.evaluate(() => (window.__ws || []).slice(window.__mark || 0).filter((m) => m.type === 'set_autoplay' || m.type === 'jukebox_kiosk/set_autoplay').map((m) => ({ type: m.type, e: m.entity_id, on: m.enabled })));
+const mouseTapAp = async (p) => {
+  const c = await ev(p, `(() => { const b = ${NV}.querySelector('[data-action="np-autoplay"]'); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await p.mouse.click(c.x, c.y);
+};
 
 {
   const p = await open();
   const a = await ap(p);
   check('NP1 default track queue, autoplay off: toggle at spot A (badges), off, not a transport button',
-    a.has && a.inBadges && a.pressed === 'false' && !a.disabled && a.label === 'Autoplay' && !a.tb, J(a));
+    a.has && a.inBadges && a.pressed === 'false' && !a.disabled && a.label === 'Radio - Autoplay' && !a.tb, J(a));
   await mark(p);
   await ev(p, `${NV}.querySelector('[data-action="np-autoplay"]').click()`); await sleep(400);
   const a2 = await ap(p);
@@ -73,10 +77,12 @@ const sets = (p) => p.evaluate(() => (window.__ws || []).slice(window.__mark || 
 {
   const p = await open('&qdyn=1');
   const a = await ap(p);
-  check('NP8 dynamic queue: shown, not tappable', a.has && a.disabled === true, J(a));
+  check('NP8 dynamic queue: shown, on or off from autoplay state, and tappable', a.has && a.disabled === false && a.label === 'Radio - Autoplay', J(a));
   await mark(p);
-  await ev(p, `${NV}.querySelector('[data-action="np-autoplay"]').click()`); await sleep(300);
-  check('NP8b a tap on the dynamic indicator sends no set_autoplay', (await sets(p)).length === 0, J(await sets(p)));
+  await mouseTapAp(p); await sleep(300);
+  const sent = await sets(p);
+  check('NP8b a real pointer tap on a dynamic queue sends set_autoplay',
+    sent.length === 1 && typeof sent[0].on === 'boolean' && /^media_player\./.test(sent[0].e), J(sent));
   await p.close();
 }
 {
@@ -102,11 +108,13 @@ const sets = (p) => p.evaluate(() => (window.__ws || []).slice(window.__mark || 
 {
   const p = await open('&repeat=one');
   const a = await ap(p);
-  check('NP11 Repeat one: Autoplay is visible, off, and not tappable',
-    a.has && a.disabled === true && a.checked === 'false' && a.pressed !== 'true' && /repeat is on/.test(a.title), J(a));
+  check('NP11 Repeat one: Autoplay is visible and tappable',
+    a.has && a.disabled === false && a.label === 'Radio - Autoplay', J(a));
   await mark(p);
-  await ev(p, `${NV}.querySelector('[data-action="np-autoplay"]').click()`); await sleep(300);
-  check('NP11b a tap while Repeat is on sends no set_autoplay', (await sets(p)).length === 0, J(await sets(p)));
+  await mouseTapAp(p); await sleep(300);
+  const sent = await sets(p);
+  check('NP11b a real pointer tap while Repeat is on sends set_autoplay',
+    sent.length === 1 && typeof sent[0].on === 'boolean' && /^media_player\./.test(sent[0].e), J(sent));
   await p.close();
 }
 {
@@ -129,11 +137,11 @@ const sets = (p) => p.evaluate(() => (window.__ws || []).slice(window.__mark || 
   await p.close();
 }
 {
-  // HA repeat off, MA queue repeat one: both controls follow the queue (as MA does)
+  // HA repeat off, MA queue repeat one: Now Playing stays a toggle; Queue header still follows the lock
   const p = await open('&repeat=off&qrepeat=one');
   const a = await ap(p);
-  check('NP14 Now Playing repeat lock follows MA queue repeat_mode, not HA state',
-    a.has && a.disabled === true && /repeat is on/.test(a.title), J(a));
+  check('NP14 Now Playing stays tappable when MA queue repeat_mode is one',
+    a.has && a.disabled === false && a.label === 'Radio - Autoplay', J(a));
   await ev(p, `__card.shadowRoot.querySelector('.tab[data-tab="queue"]').click()`); await sleep(700);
   const q = await ev(p, `(() => { const b = ${QV}.querySelector('[data-action="autoplay"]');
     return { has: !!b, disabled: !!b?.disabled, title: b?.getAttribute('title') || '' }; })()`);
