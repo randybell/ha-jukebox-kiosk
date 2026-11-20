@@ -1,7 +1,6 @@
 // v0.7 search filters e2e: library-first results (provider copies of library items dropped), "Search in <artist>" scope
 // with its chip, Clear filters, album scope, the empty state, and the Library tab's Filter button + artist filter.
-// Mock data only (dev/mock-hass.js `jjgrey=1`: a public artist name with invented albums / tracks). Runs as the guest
-// (non-admin) user on the HA backend and on the kiosk backend, at 1280x800.
+// Mock data only (dev/mock-hass.js `jjgrey=1`: a public artist name with invented albums / tracks). Runs on the HA backend and on the kiosk backend, at 1280x800.
 // Usage: (starts its own dev server on a free port; JB_PORT / JB_URL override) node test/filters.e2e.mjs
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';

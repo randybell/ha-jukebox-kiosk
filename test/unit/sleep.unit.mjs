@@ -27,6 +27,27 @@ check('S9 parseExpires number', S.parseExpires(1700000000) === 1700000000);
 check('S10 parseExpires null/junk', S.parseExpires(null) === null && S.parseExpires('x') === null && S.parseExpires(0) === null);
 check('S11 parseExpires object shape (sleep_timer_expires_at)', S.parseExpires({ sleep_timer_expires_at: 42 }) === 42 && S.parseExpires({ sleep_timer_expires_at: 0 }) === null);
 check('S12 parseExpires kiosk {expires_at} shape', S.parseExpires({ expires_at: 99, player_id: 'p' }) === 99 && S.parseExpires({ expires_at: null }) === null);
+check('S13 chooser labels are MA\'s exact strings (en.json sleep_timer_preset)',
+  S.SLEEP_LABEL?.[15] === '15 minutes' && S.SLEEP_LABEL?.[30] === '30 minutes' && S.SLEEP_LABEL?.[45] === '45 minutes'
+  && S.SLEEP_LABEL?.[60] === '1 hour' && S.SLEEP_LABEL?.[120] === '2 hours', JSON.stringify(S.SLEEP_LABEL));
+check('S14 end of item with no expiry is active, duration-only with no expiry is not',
+  S.sleepIsActive(null, 'end_of_item') === true && S.sleepIsActive(null, 'end_of_chapter') === true
+  && S.sleepIsActive(null, 'duration') === false && S.sleepIsActive(null) === false
+  && S.sleepIsActive(2000, 'duration', 1000) === true && S.sleepIsActive(500, undefined, 1000) === false);
+check('S15 mode labels match MA en.json sleep_timer_end_of_item / end_of_chapter',
+  S.sleepModeLabel('end_of_item', 'track') === 'End of track'
+  && S.sleepModeLabel('end_of_item', 'podcast_episode') === 'End of episode'
+  && S.sleepModeLabel('end_of_item', 'audiobook') === 'End of audiobook'
+  && S.sleepModeLabel('end_of_item', 'radio') === 'End of current item'
+  && S.sleepModeLabel('end_of_item') === 'End of current item'
+  && S.sleepModeLabel('end_of_chapter', 'audiobook') === 'End of chapter'
+  && S.sleepModeLabel('duration', 'track') === undefined
+  && S.sleepModeLabel(undefined) === undefined);
+check('S16 parseSleepMode reads mode from the kiosk payload',
+  S.parseSleepMode({ expires_at: null, mode: 'end_of_item' }) === 'end_of_item'
+  && S.parseSleepMode({ expires_at: 99, mode: 'end_of_chapter' }) === 'end_of_chapter'
+  && S.parseSleepMode({ expires_at: 99 }) === undefined
+  && S.parseSleepMode({ mode: 'nope' }) === undefined);
 
 console.log(`\n${total - failures}/${total} passed`);
 process.exit(failures ? 1 : 0);

@@ -8,6 +8,45 @@ import type { MaBackend } from './backend/types';
 /** Chooser durations in minutes (Off is 0). MA's five presets. */
 export const SLEEP_MINUTES = [15, 30, 45, 60, 120] as const;
 export type SleepMinutes = 0 | (typeof SLEEP_MINUTES)[number];
+/** MA frontend en.json `sleep_timer_preset` (2.17.297.post3 and 2.17.370). */
+export const SLEEP_LABEL: Record<(typeof SLEEP_MINUTES)[number], string> = {
+  15: '15 minutes',
+  30: '30 minutes',
+  45: '45 minutes',
+  60: '1 hour',
+  120: '2 hours',
+};
+
+/** MA `SleepTimerMode` (server 2.11 / frontend 2.17.370). */
+export type SleepTimerMode = 'duration' | 'end_of_item' | 'end_of_chapter';
+
+export const isEndOfContentMode = (mode?: string | null): mode is 'end_of_item' | 'end_of_chapter' =>
+  mode === 'end_of_item' || mode === 'end_of_chapter';
+
+/** MA `sleepTimerActive` (`sleep_timer.ts:64-68`): end-of-item/chapter is on even with no expiry. */
+export function sleepIsActive(expiresAt: number | null | undefined, mode?: string | null, nowSec = Date.now() / 1000): boolean {
+  if (isEndOfContentMode(mode)) return true;
+  return remainFromExpires(expiresAt, nowSec) > 0;
+}
+
+/** MA `endOfContentLabel` + en.json `sleep_timer_end_of_item.*` / `sleep_timer_end_of_chapter`. */
+export function sleepModeLabel(mode?: string | null, mediaType?: string): string | undefined {
+  if (mode === 'end_of_chapter') return 'End of chapter';
+  if (mode !== 'end_of_item') return undefined;
+  const t = String(mediaType ?? '').toLowerCase();
+  if (t === 'track') return 'End of track';
+  if (t === 'podcast_episode') return 'End of episode';
+  if (t === 'audiobook') return 'End of audiobook';
+  return 'End of current item';
+}
+
+export function parseSleepMode(raw: unknown): SleepTimerMode | undefined {
+  if (raw && typeof raw === 'object' && 'mode' in (raw as object)) {
+    const m = (raw as { mode: unknown }).mode;
+    if (m === 'duration' || m === 'end_of_item' || m === 'end_of_chapter') return m;
+  }
+  return undefined;
+}
 
 /** Remaining seconds → "M:SS" (tabular). */
 export function fmtSleepRemain(secs: number): string {

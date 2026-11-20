@@ -27,7 +27,7 @@ import { defineElement } from './define';
 import { FavController } from './heart';
 import { favoriteButtonFor } from './favorites';
 import { shownRepeat, nextRepeat, REPEAT_LABEL, type RepeatMode } from './repeat';
-import { SLEEP_MINUTES, sleepLabel, fmtSleepRemain, remainFromExpires, canMaSleep, parseExpires, type SleepMinutes } from './sleep';
+import { SLEEP_MINUTES, SLEEP_LABEL, sleepLabel, fmtSleepRemain, remainFromExpires, canMaSleep, parseExpires, parseSleepMode, sleepIsActive, sleepModeLabel, isEndOfContentMode, type SleepMinutes, type SleepTimerMode } from './sleep';
 import { autoplayControlMode, canEnableAutoplay } from './autoplay';
 
 const VOL_THROTTLE_MS = 200;
@@ -39,7 +39,7 @@ export class JbNow extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, queue: { attribute: false }, active: { type: Boolean }, lyrics: { attribute: false }, spk: { attribute: false },
     _overlay: { state: true }, _tick: { state: true }, _snap: { state: true }, _toast: { state: true },
-    _sleepOpen: { state: true }, _sleepExpires: { state: true }, _sleepMins: { state: true },
+    _sleepOpen: { state: true }, _sleepExpires: { state: true }, _sleepMins: { state: true }, _sleepMode: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
@@ -64,6 +64,7 @@ export class JbNow extends LitElement {
   private _sleepExpires: number | null = null;
   /** last chosen duration (0 = Off); drives the chooser highlight */
   private _sleepMins: SleepMinutes = 0;
+  private _sleepMode: SleepTimerMode | undefined;
   private _sleepSyncing = false;
   private _unsub?: () => void;
   private vol = new Map<string, Pending<number>>();
@@ -253,17 +254,22 @@ export class JbNow extends LitElement {
   private _sleepUnsub?: () => void;
   private _sleepWatchEnt?: string;
   private sleepRemain() { return remainFromExpires(this._sleepExpires); }
-  private applySleepExpires(exp: number | null) {
-    if (exp !== this._sleepExpires) {
-      this._sleepExpires = exp;
-      if (!exp) this._sleepMins = 0;
-      else if (!this._sleepMins) {
-        const rem = remainFromExpires(exp);
-        this._sleepMins = (SLEEP_MINUTES as readonly number[]).find((m) => Math.abs(rem - m * 60) < 90) as SleepMinutes
-          ?? (SLEEP_MINUTES as readonly number[]).reduce((best, m) => Math.abs(rem - m * 60) < Math.abs(rem - best * 60) ? m : best, 15) as SleepMinutes;
-      }
-      this.requestUpdate();
+  private applySleepExpires(exp: number | null, mode?: SleepTimerMode) {
+    const modeIn = mode !== undefined ? mode : this._sleepMode;
+    if (exp === this._sleepExpires && modeIn === this._sleepMode) return;
+    this._sleepExpires = exp;
+    this._sleepMode = modeIn;
+    if (isEndOfContentMode(modeIn)) this._sleepMins = 0;
+    else if (!exp) this._sleepMins = 0;
+    else if (!this._sleepMins) {
+      const rem = remainFromExpires(exp);
+      this._sleepMins = (SLEEP_MINUTES as readonly number[]).find((m) => Math.abs(rem - m * 60) < 90) as SleepMinutes
+        ?? (SLEEP_MINUTES as readonly number[]).reduce((best, m) => Math.abs(rem - m * 60) < Math.abs(rem - best * 60) ? m : best, 15) as SleepMinutes;
     }
+    this.requestUpdate();
+  }
+  private applySleepPayload(raw: unknown) {
+    this.applySleepExpires(parseExpires(raw), parseSleepMode(raw));
   }
   private unwatchSleep() {
     this._sleepUnsub?.(); this._sleepUnsub = undefined; this._sleepWatchEnt = undefined;
@@ -277,7 +283,7 @@ export class JbNow extends LitElement {
     this._sleepWatchEnt = ent;
     void this.syncSleepFromMa();
     const start = this._sleepWatchEnt;
-    be!.subscribeSleepTimer?.(ent, (ev) => { this.applySleepExpires(parseExpires(ev)); }).then((off) => {
+    be!.subscribeSleepTimer?.(ent, (ev) => { this.applySleepPayload(ev); }).then((off) => {
       if (this._sleepWatchEnt === start && this.isConnected) this._sleepUnsub = off;
       else off();
     }).catch((e) => {
@@ -295,13 +301,13 @@ export class JbNow extends LitElement {
     this._sleepSyncing = true;
     try {
       const raw = await be!.sleepTimerGet!(this.eid);
-      this.applySleepExpires(parseExpires(raw));
+      this.applySleepPayload(raw);
     } catch (e) {
       console.warn('[jukebox-card] sleep_timer_get failed', e);
     } finally { this._sleepSyncing = false; }
   }
   private onSleepExpired() {
-    this._sleepExpires = null; this._sleepMins = 0; this._sleepOpen = false;
+    this._sleepExpires = null; this._sleepMins = 0; this._sleepMode = undefined; this._sleepOpen = false;
     this.requestUpdate();
   }
   /** Top-right status for sleep set/cancel. Skipped on a narrow card (the CSS narrow layout, which sets --_narrow): the Sleep M:SS
@@ -322,11 +328,12 @@ export class JbNow extends LitElement {
     try {
       if (minutes === 0) {
         await be!.sleepTimerClear!(this.eid);
-        this._sleepExpires = null; this._sleepMins = 0;
+        this._sleepExpires = null; this._sleepMins = 0; this._sleepMode = undefined;
         this.sleepStatus('Sleep timer off');
       } else {
         const raw = await be!.sleepTimerSet!(this.eid, minutes * 60);
         this._sleepExpires = parseExpires(raw) ?? (Date.now() / 1000 + minutes * 60);
+        this._sleepMode = parseSleepMode(raw) ?? 'duration';
         this._sleepMins = minutes;
         this.sleepStatus(`Sleep in ${minutes} min`);
       }
@@ -468,7 +475,9 @@ export class JbNow extends LitElement {
     const favOn = this.isFav();
     const showFav = this.canFav();
     const sleepRem = this.sleepRemain();
-    const sleepOn = sleepRem > 0;
+    const sleepOn = sleepIsActive(this._sleepExpires, this._sleepMode);
+    const sleepModeText = !sleepRem ? sleepModeLabel(this._sleepMode, this._snap?.currentMediaType) : undefined;
+    const sleepChip = sleepModeText ?? sleepLabel(sleepRem);
     const tb = (cls: string, ic: string, label: string, fn: () => void, on?: boolean, dot = false, dis = false) =>
       html`<button class="tb ${cls} ${on ? 'on' : ''}" tabindex="-1" aria-label=${label} title=${label} aria-pressed=${on === undefined ? nothing : on ? 'true' : 'false'}
         ?disabled=${dis} @pointerdown=${noFocus} @click=${fn}>${icon(ic)}${dot ? html`<i class="dot"></i>` : nothing}</button>`;
@@ -489,19 +498,19 @@ export class JbNow extends LitElement {
           <button class="ab stg" tabindex="-1" aria-label="Full screen" @pointerdown=${noFocus}
             @click=${() => fire(this, 'jukebox-stage', { open: true })}>${icon('fullscreen')}</button>`}
           <!-- #42: the sleep timer lives in the artwork corner (always shown, also when idle), away from Play/Pause -->
-          <button class="ab slp ${sleepOn || this._sleepOpen ? 'on' : ''}" tabindex="-1" aria-label=${sleepOn ? `Sleep timer ${fmtSleepRemain(sleepRem)}` : 'Sleep timer'}
-            title=${sleepOn ? `Sleep timer ${fmtSleepRemain(sleepRem)}` : 'Sleep timer'} aria-pressed=${sleepOn || this._sleepOpen ? 'true' : 'false'}
+          <button class="ab slp ${sleepOn || this._sleepOpen ? 'on' : ''}" tabindex="-1" aria-label=${sleepOn ? (sleepModeText ?? `Sleep timer ${fmtSleepRemain(sleepRem)}`) : 'Sleep timer'}
+            title=${sleepOn ? (sleepModeText ?? `Sleep timer ${fmtSleepRemain(sleepRem)}`) : 'Sleep timer'} aria-pressed=${sleepOn || this._sleepOpen ? 'true' : 'false'}
             @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon')}</button>
         </div>
         ${this._sleepOpen ? html`<div class="sleep-strip" role="group" aria-label="Sleep timer">
-          <button class="sp ${this._sleepMins === 0 ? 'on' : ''}" tabindex="-1" aria-pressed=${this._sleepMins === 0 ? 'true' : 'false'}
+          <button class="sp ${!sleepOn && this._sleepMins === 0 ? 'on' : ''}" tabindex="-1" aria-pressed=${!sleepOn && this._sleepMins === 0 ? 'true' : 'false'}
             @pointerdown=${noFocus} @click=${() => this.setSleep(0)}>Off</button>
           ${SLEEP_MINUTES.map((m) => html`<button class="sp ${this._sleepMins === m ? 'on' : ''}" tabindex="-1"
             aria-pressed=${this._sleepMins === m ? 'true' : 'false'}
-            @pointerdown=${noFocus} @click=${() => this.setSleep(m as SleepMinutes)}>${m}</button>`)}
+            @pointerdown=${noFocus} @click=${() => this.setSleep(m as SleepMinutes)}>${SLEEP_LABEL[m]}</button>`)}
         </div>` : sleepOn ? html`<div class="sleep-strip cd-only" aria-live="polite">
-          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${sleepLabel(sleepRem)}
-            @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon', 'i xs')}${sleepLabel(sleepRem)}</button>
+          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${sleepChip}
+            @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon', 'i xs')}${sleepChip}</button>
         </div>` : nothing}
       </div>
       <div class="info">

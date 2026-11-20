@@ -62,6 +62,7 @@ class FakeMa:
         self.queue = [_qi(n) for n in range(10)]
         self.subs: list[tuple[Any, Any, Any]] = []
         self.sleep_timers: dict[str, float | None] = {}
+        self.players: dict[str, dict[str, Any]] = {}
         self.autoplay_key = "autoplay_enabled"  # older MA: "dont_stop_the_music_enabled"; None: no field
         self.active = True
         self.repeat_mode = "off"
@@ -126,6 +127,8 @@ class FakeMa:
                     "dynamic_members": {"value": True}, "secret_thing": {"value": "x"}}}
         if command == "players/all":
             return [{"player_id": PLAYER_A}, {"player_id": PLAYER_B}]
+        if command == "players/get":
+            return self.players.get(kwargs["player_id"])
         if command == "players/sleep_timer/get":
             return self.sleep_timers.get(kwargs["player_id"])
         if command == "players/sleep_timer/set":

@@ -47,7 +47,7 @@ await tap(`${NP}.querySelector('.ab.slp')`);
 await sleep(150);
 const opts = await ev(`${NP}.querySelectorAll('.sleep-strip .sp').length`);
 const labels = await ev(`[...${NP}.querySelectorAll('.sleep-strip .sp')].map((b) => b.textContent.trim())`);
-check('SL4 chooser opens with Off, 15, 30, 45, 60, 120', opts === 6 && J(labels) === J(['Off', '15', '30', '45', '60', '120']), J({ opts, labels }));
+check('SL4 chooser opens with Off and MA\'s five labels (15 minutes … 1 hour, 2 hours)', opts === 6 && J(labels) === J(['Off', '15 minutes', '30 minutes', '45 minutes', '1 hour', '2 hours']), J({ opts, labels }));
 
 await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[2]`); // 30
 await sleep(400);

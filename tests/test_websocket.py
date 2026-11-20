@@ -762,6 +762,19 @@ async def test_sleep_timer_get_and_clear(
     assert ("players/sleep_timer/clear", {"player_id": SYNCGROUP}) in fake_ma.calls
 
 
+async def test_sleep_timer_get_end_of_item_has_mode_and_no_expiry(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    """A timer set in MA to stop at the end of the song has no expiry; pass the mode through."""
+    fake_ma.sleep_timers[SYNCGROUP] = None
+    fake_ma.players[SYNCGROUP] = {"sleep_timer_mode": "end_of_item"}
+    ws = await _ws(hass_ws_client, user_token[1])
+    got = await _call(ws, type="jukebox_kiosk/sleep_timer_get", entity_id=ENTITY_G)
+    assert got["success"] and got["result"]["expires_at"] is None and got["result"]["mode"] == "end_of_item"
+    assert got["result"]["player_id"] == SYNCGROUP
+    assert ("players/get", {"player_id": SYNCGROUP}) in fake_ma.calls
+
+
 async def test_sleep_timer_set_needs_positive_seconds(
     hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
 ) -> None:
@@ -783,7 +796,7 @@ async def test_subscribe_sleep_timer_push(
     res = await _call(ws, type="jukebox_kiosk/subscribe_sleep_timer", entity_id=ENTITY_A)
     assert res["success"] and res["result"]["player_id"] == PLAYER_A
     cb, events, id_filter = fake_ma.subs[0]
-    assert id_filter is None and {e.value for e in events} == {"player_sleep_timer_updated"}
+    assert id_filter == PLAYER_A and {e.value for e in events} == {"player_sleep_timer_updated"}
     cb(SimpleNamespace(event=SimpleNamespace(value="player_sleep_timer_updated"), object_id=SYNCGROUP, data=1_700_000_500))
     await hass.async_block_till_done()
     ev = await ws.receive_json()
