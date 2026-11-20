@@ -128,6 +128,19 @@ const sets = (p) => p.evaluate(() => (window.__ws || []).slice(window.__mark || 
   check('NP13b a tap on the locked Queue pill sends no set_autoplay', (await sets(p)).length === 0, J(await sets(p)));
   await p.close();
 }
+{
+  // HA repeat off, MA queue repeat one: both controls follow the queue (as MA does)
+  const p = await open('&repeat=off&qrepeat=one');
+  const a = await ap(p);
+  check('NP14 Now Playing repeat lock follows MA queue repeat_mode, not HA state',
+    a.has && a.disabled === true && /repeat is on/.test(a.title), J(a));
+  await ev(p, `__card.shadowRoot.querySelector('.tab[data-tab="queue"]').click()`); await sleep(700);
+  const q = await ev(p, `(() => { const b = ${QV}.querySelector('[data-action="autoplay"]');
+    return { has: !!b, disabled: !!b?.disabled, title: b?.getAttribute('title') || '' }; })()`);
+  check('NP14b Queue header is locked from the same MA queue repeat_mode',
+    q.has && q.disabled === true && /repeat is on/.test(q.title), J(q));
+  await p.close();
+}
 
 await browser.close();
 console.log(`\n${total - failures}/${total} autoplay-np checks passed`);

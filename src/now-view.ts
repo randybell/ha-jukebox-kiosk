@@ -171,9 +171,8 @@ export class JbNow extends LitElement {
   }
   private toast(t: string) { this._toast = t; window.clearTimeout(this._toastTimer); this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400); }
   private async toggleAutoplay(on: boolean) {
-    const repeat: RepeatMode = this.flag('repeat', shownRepeat(this.ent?.attributes?.repeat));
-    // MA useQueueModes.ts:50: setAutoplay does nothing when turning on while Repeat is one or all.
-    if (on && !canEnableAutoplay(repeat)) return;
+    // MA useQueueModes.ts:50: setAutoplay does nothing when turning on while Repeat is one or all. Use the queue's repeat_mode, as MA and the Queue header do.
+    if (on && !canEnableAutoplay(this._snap?.repeat)) return;
     try { await this.queue?.setAutoplay(on); this.toast(on ? 'Autoplay on' : 'Autoplay off'); }
     catch { this.toast("Couldn't change Autoplay"); }
   }
@@ -461,7 +460,7 @@ export class JbNow extends LitElement {
     const more = Math.max(0, (this.queue?.remaining ?? up.length) - 1);
     // Up next · Autoplay text (Themes will remove it): server lists it, MA says it is on, queue not dynamic
     const autoplay = !!this.config._backend?.ext?.autoplay && this._snap?.autoplay === true && !this._snap?.dynamic;
-    const apMode = autoplayControlMode(!!this.config._backend?.ext?.autoplay, this._snap, repeat);
+    const apMode = autoplayControlMode(!!this.config._backend?.ext?.autoplay, this._snap, this._snap?.repeat);
     const apOn = this._snap?.autoplay === true;
     const apTpl = apMode === 'hide' ? nothing
       : apMode === 'locked' ? html`<button class="apb on ind" data-action="np-autoplay" tabindex="-1" disabled
