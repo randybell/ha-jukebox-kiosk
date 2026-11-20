@@ -1423,7 +1423,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .cnt { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); }
     .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_muted); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
-    .ap.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
+    .ap.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); } /* same active treatment as Now Playing .apb.on */
     .ap:disabled { color: var(--_disabled); border-color: var(--_disabled); cursor: default; } /* #113: HA disabled colours, not an ad-hoc opacity */
     .apg { margin-left: auto; align-self: center; display: inline-flex; }
     .apg .ap { margin-left: 0; }
