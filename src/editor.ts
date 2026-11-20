@@ -4,7 +4,7 @@ import { defineElement } from './define';
 import { CATEGORIES, DEFAULT_CATEGORIES } from './search-categories';
 import { LIBRARY_ROWS, DEFAULT_ROWS, rowName } from './discover';
 import { RADIO_MODES, MODE_LABEL } from './radio-browse';
-import { TILES, configuredTiles, LIBRARY_CATS, DEFAULT_LIBRARY_CATEGORIES, libraryCategories, libraryTabLabel, combinedOn, DEFAULT_LIBRARY_COLUMNS, LIBRARY_COLUMNS_MIN, LIBRARY_COLUMNS_MAX, EDITOR_VIEW_SECTIONS, LIBRARY_VIEW_MIGRATE_KEYS, editorViewValue, collectLibraryViews } from './library-home';
+import { TILES, configuredTiles, LIBRARY_CATS, DEFAULT_LIBRARY_CATEGORIES, libraryCategories, libraryTabLabel, combinedOn, DEFAULT_LIBRARY_COLUMNS, LIBRARY_COLUMNS_MIN, LIBRARY_COLUMNS_MAX, EDITOR_VIEW_SECTIONS, editorViewValue, collectLibraryViews } from './library-home';
 
 /**
  * Visual editor built on HA's <ha-form>. YAML remains the reference (see README).
@@ -154,6 +154,9 @@ export const LABELS: Record<string, string> = {
   view_track: 'Tracks',
   view_genre: 'Genres',
   view_radio: 'Radio',
+  view_album: 'Albums',
+  view_podcast: 'Podcasts',
+  view_audiobook: 'Audiobooks',
   view_queue: 'Queue',
   view_discover: 'Discover',
   view_artist_page: 'artist page',
@@ -244,8 +247,10 @@ export class JukeboxCardEditor extends LitElement {
       if (Number.isFinite(n) && v.library_columns !== null && v.library_columns !== '') v.library_columns = Math.max(LIBRARY_COLUMNS_MIN, Math.min(LIBRARY_COLUMNS_MAX, n)); else delete v.library_columns;
     }
     const views = collectLibraryViews(v, prevC);
-    for (const k of LIBRARY_VIEW_MIGRATE_KEYS) delete v[`view_${k}`];
-    delete v.library_view;
+    for (const s of EDITOR_VIEW_SECTIONS) delete v[`view_${s.id}`];
+    // Leave leftover library_view alone in saved configs (do not copy or delete it).
+    if (prevC && Object.prototype.hasOwnProperty.call(prevC, 'library_view')) v.library_view = prevC.library_view;
+    else delete v.library_view;
     delete v.library_views;
     if (views) v.library_views = views;
     if (v.lyrics_offset_ms !== undefined) {

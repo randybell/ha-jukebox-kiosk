@@ -1,5 +1,6 @@
-// Library tops: leftover library_view still applies until editor save. library_columns is exact tiles across, 1..8 (default 3).
-// #146: per-section library_views; Radio Favorites and Browse share radio; Queue / Discover / pages / search have their own keys.
+// Library tops: an existing leftover library_view is still read at runtime (no copying). library_columns is exact tiles across, 1..8 (default 3).
+// #146: per-section library_views, including Albums, Podcasts and Audiobooks; Radio Favorites and Browse share radio; Queue / Discover / pages / search have their own keys.
+// New installs (no library_view, no library_views): Playlists, Albums and Radio start as Tiles; every other section starts as Rows, including Discover (a list, not the sideways strip).
 // (Playlists, Artists, Tracks, Genres, Radio, Albums, Podcasts, Audiobooks), no circles at the top tier, track tiles with no action buttons.
 // #85: song-row action buttons and show_action_icons are gone; an old YAML value is ignored and the rows stay without buttons. Pages you open
 // (artist / album / playlist) stay rows (their own layout, not library_view). Library search results also have no row buttons. The Queue stays
@@ -65,22 +66,27 @@ const targetOf = (s, cat, view, i = 1) => view === 'tiles'
   : `[...${s.BR}.querySelectorAll('.lib .row')][${i}].querySelector('.rt')`;
 const outcome = (p, BR) => ev(p, `({ sheet: !!${HS}.querySelector('.sh'), station: !!__card._station, detail: !!${BR}.querySelector('jb-detail'), menu: !!${BR}.querySelector('.menu') })`);
 
-// ============ 1. rows vs tiles on every section; default = rows ============
-for (const [tag, cfg] of [['default (library_view missing)', {}], ['rows', { library_view: 'rows' }], ['tiles', { library_view: 'tiles' }], ['invalid value falls back to rows', { library_view: 'grid' }]]) {
-  const want = tag === 'tiles' ? 'tiles' : 'rows';
+// ============ 1. rows vs tiles on every section; new-install defaults and leftover library_view ============
+const defaultWant = (cat) => (['playlist', 'album', 'radio'].includes(cat) ? 'tiles' : 'rows');
+for (const [tag, cfg, wantOf] of [
+  ['default (no library_view)', {}, defaultWant],
+  ['leftover library_view: rows', { library_view: 'rows' }, () => 'rows'],
+  ['leftover library_view: tiles', { library_view: 'tiles' }, () => 'tiles'],
+  ['invalid library_view uses new-install defaults', { library_view: 'grid' }, defaultWant],
+]) {
   for (const separate of [false, true]) {
     const s = await open(cfg, { separate });
     for (const cat of separate ? ALLG : ALL) {
+      const want = wantOf(cat);
       await section(s, cat);
       const l = await layoutOf(s);
       const ok = J(l.layouts) === J([want]) && (want === 'tiles' ? l.tiles > 0 && l.rows === 0 : l.rows > 0 && l.tiles === 0) && l.otherTiles === 0;
       check(`${tag}, ${separate ? 'separate tabs' : 'combined tab'}, ${NAMES[cat]}: top level is ${want} (${l.tiles} tiles, ${l.rows} rows)`, ok, J(l));
       check(`${tag}, ${separate ? 'separate tabs' : 'combined tab'}, ${NAMES[cat]}: no circles anywhere in the list`, l.circ === 0 && l.artistTiles === 0, J(l));
     }
-    if (!separate && tag !== 'invalid value falls back to rows' && SHOTS) {
-      for (const cat of ALL) { await section(s, cat); await ev(s.p, `${s.BR}.querySelector('.scroll').scrollTo({ top: 0 })`); await sleep(250); await shot(s.p, `${NAMES[cat].toLowerCase()}-${want}`); }
+    if (!separate && tag.startsWith('leftover library_view') && SHOTS) {
+      for (const cat of ALL) { await section(s, cat); await ev(s.p, `${s.BR}.querySelector('.scroll').scrollTo({ top: 0 })`); await sleep(250); await shot(s.p, `${NAMES[cat].toLowerCase()}-${wantOf(cat)}`); }
     }
-    if (separate && tag !== 'invalid value falls back to rows' && SHOTS) { await section(s, 'genre'); await shot(s.p, `genres-${want}`); }
     await s.p.close();
   }
 }
@@ -299,10 +305,14 @@ for (const [tag, cfg] of [['missing', {}], ['false', { show_action_icons: false 
     await wait(p, `${BRS}.querySelector('.hs, .grid.lib, .list.lib')`); await sleep(500);
     return p;
   };
-  const p = await openDisc({});
-  const legacy = await ev(p, `(() => { const R = ${BRS}; return { hs: R.querySelectorAll('.hs').length, grid: R.querySelectorAll('.grid.lib').length, list: R.querySelectorAll('.list.lib').length, layout: R.querySelector('.hs, .grid.lib, .list.lib')?.dataset.layout }; })()`);
-  check('Discover with no key keeps the 0.9.0 horizontal layout', legacy.hs > 0 && legacy.grid === 0, J(legacy));
-  await p.close();
+  const d0 = await openDisc({});
+  const def = await ev(d0, `(() => { const r = ${BRS}; return { hs: r.querySelectorAll('.drow .hs').length, layout: r.querySelector('.drow .lib')?.dataset.layout, rows: r.querySelectorAll('.drow .list .row').length, tiles: r.querySelectorAll('.drow .grid .tile').length }; })()`);
+  check('Discover with no key is Rows (a list), not the 0.9.0 sideways strip', def.hs === 0 && def.layout === 'rows' && def.rows > 0 && def.tiles === 0, J(def));
+  await d0.close();
+  const dL = await openDisc({ library_view: 'tiles' });
+  const leftover = await ev(dL, `(() => { const r = ${BRS}; return { hs: r.querySelectorAll('.drow .hs').length, layout: r.querySelector('.drow .lib')?.dataset.layout, rows: r.querySelectorAll('.drow .list .row').length }; })()`);
+  check('leftover library_view does not change Discover (still Rows, not the sideways strip)', leftover.hs === 0 && leftover.layout === 'rows' && leftover.rows > 0, J(leftover));
+  await dL.close();
   const t = await openDisc({ library_views: { discover: 'tiles' }, library_columns: 4 });
   const d = await ev(t, `(() => { const R = ${BRS}; const g = R.querySelector('.grid.lib'); const ts = g ? [...g.querySelectorAll('.tile')] : []; const top = ts[0] ? Math.round(ts[0].getBoundingClientRect().top) : 0;
     return { hs: R.querySelectorAll('.hs').length, layout: g?.dataset.layout, tiles: ts.length, tracks: g ? getComputedStyle(g).gridTemplateColumns.split(' ').length : 0, first: ts.filter((t) => Math.round(t.getBoundingClientRect().top) === top).length }; })()`);

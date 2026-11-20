@@ -11,9 +11,8 @@ const check = (name, ok, info = '') => { total++; if (!ok) failures++; console.l
 const J = JSON.stringify;
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 const base = { type: 'custom:jukebox-card', entity: 'media_player.everywhere' };
-const VIEWS = ['view_playlist', 'view_artist', 'view_track', 'view_genre', 'view_radio', 'view_queue', 'view_discover', 'view_artist_page', 'view_album_page', 'view_playlist_page', 'view_search'];
-const LABELS = { view_playlist: 'Playlists', view_artist: 'Artists', view_track: 'Tracks', view_genre: 'Genres', view_radio: 'Radio', view_queue: 'Queue', view_discover: 'Discover', view_artist_page: 'artist page', view_album_page: 'album page', view_playlist_page: 'playlist page', view_search: 'search results' };
-const MIGRATE = [...VIEWS.map((n) => n.slice(5)), 'album', 'podcast', 'audiobook'];
+const VIEWS = ['view_playlist', 'view_artist', 'view_track', 'view_genre', 'view_radio', 'view_album', 'view_podcast', 'view_audiobook', 'view_queue', 'view_discover', 'view_artist_page', 'view_album_page', 'view_playlist_page', 'view_search'];
+const LABELS = { view_playlist: 'Playlists', view_artist: 'Artists', view_track: 'Tracks', view_genre: 'Genres', view_radio: 'Radio', view_album: 'Albums', view_podcast: 'Podcasts', view_audiobook: 'Audiobooks', view_queue: 'Queue', view_discover: 'Discover', view_artist_page: 'artist page', view_album_page: 'album page', view_playlist_page: 'playlist page', view_search: 'search results' };
 const open = async (cfg) => {
   const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width: 900, height: 1500, deviceScaleFactor: 1 });
   await p.goto(`${ROOT}editor.html?fresh=1&cfg=${encodeURIComponent(J(cfg))}`);
@@ -31,7 +30,7 @@ const setNum = async (p, name, value) => { await ev(p, `(() => { const i = ${F}.
   const p = await open(base);
   const l = await lib(p);
   check('no master library_view field', !l.includes('library_view') && !l.includes('library_views'), J(l));
-  check('the 11 section fields sit right after the category buttons, before Tiles across',
+  check('the 14 section fields sit right after the category buttons, before Tiles across',
     VIEWS.every((n, i) => l.indexOf(n) === l.indexOf('library_categories') + 1 + i) && l.indexOf('library_columns') === l.indexOf(VIEWS.at(-1)) + 1, J(l));
   check('Tiles across is always shown (rows by default)', l.includes('library_columns'), J(l));
   const fields = await ev(p, `(() => { const out = {};
@@ -45,20 +44,21 @@ const setNum = async (p, name, value) => { await ev(p, `(() => { const i = ${F}.
     out.cols = { label: c.querySelector('span').textContent.trim(), type: i.type, value: i.value, min: i.min, max: i.max, desc: [...c.querySelectorAll('span, p, small, .ha-form-help, .helper')].map((x) => x.textContent.trim()) };
     return out;
   })()`);
-  const mismatches = VIEWS.filter((n) => !(fields[n].value === 'rows' && fields[n].opts.join() === 'rows=Rows,tiles=Tiles' && fields[n].label === LABELS[n])).map((n) => ({ n, got: fields[n], want: LABELS[n] }));
-  check('each section is a dropdown labelled with the SOW name, shown as Rows, options exactly Rows and Tiles (no descriptions)', mismatches.length === 0, J(mismatches.length ? mismatches : { sample: fields.view_playlist, labels: Object.fromEntries(VIEWS.map((n) => [n, fields[n].label])) }));
+  const wantVal = (n) => (['view_playlist', 'view_album', 'view_radio'].includes(n) ? 'tiles' : 'rows');
+  const mismatches = VIEWS.filter((n) => !(fields[n].value === wantVal(n) && fields[n].opts.join() === 'rows=Rows,tiles=Tiles' && fields[n].label === LABELS[n])).map((n) => ({ n, got: fields[n], want: { label: LABELS[n], value: wantVal(n) } }));
+  check('each section is a dropdown labelled with the section name, options exactly Rows and Tiles; Playlists, Albums and Radio start as Tiles, the rest as Rows', mismatches.length === 0, J(mismatches.length ? mismatches : { sample: fields.view_playlist, album: fields.view_album, queue: fields.view_queue, labels: Object.fromEntries(VIEWS.map((n) => [n, fields[n].label + '=' + fields[n].value])) }));
   check('Tiles across: a number box, shown as 3, labelled only "Tiles across"',
     fields.cols.type === 'number' && fields.cols.value === '3' && fields.cols.label === 'Tiles across', J(fields.cols));
   if (process.env.SHOTS) { await ev(p, `${F}.querySelector('details[data-section=library]').scrollIntoView()`); await p.screenshot({ path: `${process.env.SHOTS}/146-editor-library-views.png` }); }
   await ev(p, `__changes.length = 0`);
-  await pick(p, 'view_playlist', 'tiles');
+  await pick(p, 'view_playlist', 'rows');
   const c1 = await lastChange(p);
-  check('choosing Tiles on Playlists writes library_views.playlist: tiles and does not write library_view',
-    c1.library_views?.playlist === 'tiles' && !('library_view' in c1) && !VIEWS.some((n) => n in c1), J(c1));
+  check('choosing Rows on Playlists writes library_views.playlist: rows (differs from the Tiles default) and does not write library_view',
+    c1.library_views?.playlist === 'rows' && !('library_view' in c1) && !VIEWS.some((n) => n in c1), J(c1));
   await ev(p, `__changes.length = 0`);
   await setNum(p, 'library_columns', 5);
   const c2 = await lastChange(p);
-  check('typing 5 writes library_columns: 5, Playlists stay tiles', c2.library_columns === 5 && c2.library_views?.playlist === 'tiles', J(c2));
+  check('typing 5 writes library_columns: 5, Playlists stay rows', c2.library_columns === 5 && c2.library_views?.playlist === 'rows', J(c2));
   await setNum(p, 'library_columns', 9);
   check('typing 9 is clamped to 8', (await lastChange(p)).library_columns === 8, J(await lastChange(p)));
   await setNum(p, 'library_columns', 0);
@@ -71,14 +71,14 @@ const setNum = async (p, name, value) => { await ev(p, `(() => { const i = ${F}.
 }
 {
   const p = await open({ ...base, library_view: 'tiles', library_columns: 4 });
-  const v = await ev(p, `({ playlist: ${F}.querySelector('[data-name=view_playlist] select').value, queue: ${F}.querySelector('[data-name=view_queue] select').value, cols: ${F}.querySelector('[data-name=library_columns] input').value })`);
-  check('YAML library_view: tiles + library_columns: 4 load as Tiles / 4 (including Queue, which will be migrated on save)', v.playlist === 'tiles' && v.queue === 'tiles' && v.cols === '4', J(v));
+  const v = await ev(p, `({ playlist: ${F}.querySelector('[data-name=view_playlist] select').value, album: ${F}.querySelector('[data-name=view_album] select').value, artist: ${F}.querySelector('[data-name=view_artist] select').value, queue: ${F}.querySelector('[data-name=view_queue] select').value, discover: ${F}.querySelector('[data-name=view_discover] select').value, cols: ${F}.querySelector('[data-name=library_columns] input').value })`);
+  check('YAML library_view: tiles + library_columns: 4: Library tops show Tiles (leftover), Queue and Discover stay Rows (their defaults), columns 4',
+    v.playlist === 'tiles' && v.album === 'tiles' && v.artist === 'tiles' && v.queue === 'rows' && v.discover === 'rows' && v.cols === '4', J(v));
   await ev(p, `__changes.length = 0`);
   await ev(p, `(() => { const i = ${F}.querySelector('[data-name=screensaver_lyrics] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
   const c = await lastChange(p);
-  const every = MIGRATE.every((k) => c.library_views?.[k] === 'tiles');
-  check('an unrelated edit migrates leftover library_view into every section key (including off categories), deletes library_view, keeps columns',
-    every && !('library_view' in c) && c.library_columns === 4 && c.screensaver_lyrics === false, J(c));
+  check('an unrelated edit leaves leftover library_view alone and does not copy it into library_views, keeps columns',
+    c.library_view === 'tiles' && !('library_views' in c) && c.library_columns === 4 && c.screensaver_lyrics === false, J(c));
   await p.close();
 }
 {

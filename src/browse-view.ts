@@ -21,7 +21,7 @@ import {
   discoverWanted, DEFAULT_ROWS, parseRows, pickRows, parseItems, resumeFraction, memGet, memPut, memClear, ROWS_TTL_MS, ITEMS_TTL_MS, DISCOVER_CONCURRENCY,
   type DiscoverRow,
 } from './discover';
-import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, libraryCategories, libraryViewFor, tilesAcrossStyle, discoverLegacyLayout, type TileId } from './library-home';
+import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, libraryCategories, libraryViewFor, tilesAcrossStyle, type TileId } from './library-home';
 import { loadDetail } from './detail-view';
 import { FavController, heartTpl, heartType } from './heart';
 import { PoolCache, libraryFiltered, normText, type ScopePool } from './search-scope';
@@ -530,11 +530,12 @@ export class JbBrowse extends LitElement {
         <h3 class="eyebrow">${r.name}</h3>
         ${st?.error ? html`<div class="note rowerr">${st.error} <button class="fc tog" data-action="row-retry" tabindex="-1" @pointerdown=${noFocus}
             @click=${() => this.retryRow(r.key)}>Retry</button></div>`
-          : st?.done ? (discoverLegacyLayout(this.config) ? html`<div class="hs" data-layout="legacy" @scroll=${() => this.press.scrolled()}>${st.items.map((it) => this.tile(it, it.media_type || 'track', resume))}</div>`
-            : libraryViewFor(this.config, 'discover') === 'tiles'
+          : st?.done ? (libraryViewFor(this.config, 'discover') === 'tiles'
               ? html`<div class="grid lib disc-grid" data-layout="tiles" style=${tilesAcrossStyle(this.config)}>${st.items.map((it) => this.tile(it, it.media_type || 'track', resume))}</div>`
               : html`<div class="list lib" data-layout="rows">${st.items.map((it) => this.itemRow(it, it.media_type || 'track'))}</div>`)
-          : html`<div class="${discoverLegacyLayout(this.config) ? 'hs skel' : 'grid lib disc-grid'}" data-layout=${discoverLegacyLayout(this.config) ? 'legacy' : libraryViewFor(this.config, 'discover')} aria-hidden="true" style=${discoverLegacyLayout(this.config) ? nothing : tilesAcrossStyle(this.config)}>${[0, 1, 2, 3, 4, 5].map(() => html`<div class="tile"><span class="ar big"></span><b>&nbsp;</b></div>`)}</div>`}
+          : libraryViewFor(this.config, 'discover') === 'tiles'
+            ? html`<div class="grid lib disc-grid" data-layout="tiles" aria-hidden="true" style=${tilesAcrossStyle(this.config)}>${[0, 1, 2, 3, 4, 5].map(() => html`<div class="tile"><span class="ar big"></span><b>&nbsp;</b></div>`)}</div>`
+            : html`<div class="list lib" data-layout="rows" aria-hidden="true">${[0, 1, 2, 3, 4, 5].map(() => html`<div class="row"><span class="ar"></span><b>&nbsp;</b></div>`)}</div>`}
       </section>`;
     })}</div>`;
   }
