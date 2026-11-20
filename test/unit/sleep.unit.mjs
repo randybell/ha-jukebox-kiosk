@@ -15,9 +15,11 @@ let failures = 0, total = 0;
 function check(name, ok, info = '') { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); }
 
 check('S1 SLEEP_MINUTES is 15, 30, 45, 60, 120', S.SLEEP_MINUTES.join(',') === '15,30,45,60,120', String(S.SLEEP_MINUTES));
-check('S2 fmtSleepRemain 0 → 0:00', S.fmtSleepRemain(0) === '0:00');
+check('S2 fmtSleepRemain 0 → 00:00 (MA formatDuration)', S.fmtSleepRemain(0) === '00:00');
 check('S3 fmtSleepRemain 1781 → 29:41', S.fmtSleepRemain(1781) === '29:41', S.fmtSleepRemain(1781));
-check('S4 fmtSleepRemain floors and clamps negative', S.fmtSleepRemain(-3) === '0:00' && S.fmtSleepRemain(59.9) === '0:59');
+check('S4 fmtSleepRemain floors and clamps negative', S.fmtSleepRemain(-3) === '00:00' && S.fmtSleepRemain(59.9) === '00:59');
+check('S4b fmtSleepRemain MA format: 45:00, 05:03, 01:00:00, 01:59:59', S.fmtSleepRemain(2700) === '45:00' && S.fmtSleepRemain(303) === '05:03' && S.fmtSleepRemain(3600) === '01:00:00' && S.fmtSleepRemain(7199) === '01:59:59');
+check('S4c SLEEP_LABEL is MA\'s preset words', [15, 30, 45, 60, 120].map((m) => S.SLEEP_LABEL[m]).join('|') === '15 minutes|30 minutes|45 minutes|1 hour|2 hours');
 check('S5 sleepLabel wraps fmt', S.sleepLabel(1781) === 'Sleep 29:41');
 check('S6 remainFromExpires null/0/past → 0', S.remainFromExpires(null) === 0 && S.remainFromExpires(0) === 0 && S.remainFromExpires(100, 200) === 0);
 check('S7 remainFromExpires future', Math.abs(S.remainFromExpires(1100, 1000) - 100) < 0.001);

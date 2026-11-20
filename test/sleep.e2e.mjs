@@ -47,52 +47,56 @@ await tap(`${NP}.querySelector('.ab.slp')`);
 await sleep(150);
 const opts = await ev(`${NP}.querySelectorAll('.sleep-strip .sp').length`);
 const labels = await ev(`[...${NP}.querySelectorAll('.sleep-strip .sp')].map((b) => b.textContent.trim())`);
-check('SL4 chooser opens with Off and MA\'s five labels (15 minutes … 1 hour, 2 hours)', opts === 6 && J(labels) === J(['Off', '15 minutes', '30 minutes', '45 minutes', '1 hour', '2 hours']), J({ opts, labels }));
+check('SL4 chooser opens with MA\'s 15 minutes, 30 minutes, 45 minutes, 1 hour, 2 hours (no Cancel while off)', opts === 5 && J(labels) === J(['15 minutes', '30 minutes', '45 minutes', '1 hour', '2 hours']), J({ opts, labels }));
 
-await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[2]`); // 30
+await tap(`${NP}.querySelector('.sleep-strip .sp[data-min="30"]')`); // 30 minutes
 await sleep(400);
 const ma = await ev(`window.__maLog.filter((x) => String(x.command).startsWith('players/sleep_timer/')).map((x) => ({ c: x.command, d: x.data }))`);
 check('SL5 set 30 → players/sleep_timer/set {player_id: unique_id, seconds:1800}',
   ma.some((x) => x.c === 'players/sleep_timer/set' && x.d.seconds === 1800 && x.d.player_id === 'syncgroup_everywhere'), J(ma));
 check('SL6 chooser closes after pick', !(await ev(`${NP}.querySelector('.sleep-strip:not(.cd-only)')`)));
 const cd7 = await ev(`(${NP}.querySelector('.sp.sleep-cd') || { textContent: '' }).textContent.trim()`);
-check('SL7 countdown chip shows Sleep M:SS', /^Sleep \d+:\d{2}$/.test(cd7), cd7);
+check('SL7 countdown chip shows Sleep MM:SS (MA format, zero-padded)', /^Sleep \d{2}:\d{2}$/.test(cd7), cd7);
 check('SL8 moon button is on while timer runs', await ev(`!!${NP}.querySelector('.ab.slp.on')`));
 
 await tap(`${NP}.querySelector('.ab.slp')`);
 await sleep(100);
-await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[0]`); // Off
+const run = await ev(`(() => { const R = ${NP}; const cx = R.querySelector('.sleep-strip .sp.cx'); const st = R.querySelector('.sleep-strip .sl-st');
+  return { cx: cx?.textContent.trim(), red: cx ? (() => { const pr = document.createElement('span'); pr.style.color = 'var(--error-color)'; R.querySelector('.art').appendChild(pr); const want = getComputedStyle(pr).color; pr.remove(); return getComputedStyle(cx).color === want; })() : false,
+    h: cx?.getBoundingClientRect().height ?? 0, st: st?.textContent.trim() }; })()`);
+check('SL8b while running: red Cancel sleep timer (≥ 48px) and Stops in MM:SS', run.cx === 'Cancel sleep timer' && run.h >= 47.5 && /^Stops in \d{2}:\d{2}$/.test(run.st ?? '') && run.red, J(run));
+await tap(`${NP}.querySelector('.sleep-strip .sp.cx')`); // Cancel
 await sleep(400);
 const ma2 = await ev(`window.__maLog.filter((x) => x.command === 'players/sleep_timer/clear')`);
-check('SL9 Off → players/sleep_timer/clear with unique_id', ma2.length >= 1 && ma2.every((x) => x.data.player_id === 'syncgroup_everywhere'), J(ma2));
-check('SL10 countdown gone after Off', !(await ev(`${NP}.querySelector('.sp.sleep-cd')`)));
+check('SL9 Cancel → players/sleep_timer/clear with unique_id', ma2.length >= 1 && ma2.every((x) => x.data.player_id === 'syncgroup_everywhere'), J(ma2));
+check('SL10 countdown gone after Cancel', !(await ev(`${NP}.querySelector('.sp.sleep-cd')`)));
 
 const chip = async () => ev(`__card.shadowRoot.querySelector('jb-speakers')?.shadowRoot?.querySelector('.st .ct')?.textContent?.trim() ?? ''`);
 await tap(`${NP}.querySelector('.ab.slp')`); await sleep(100);
-await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[2]`); // 30
+await tap(`${NP}.querySelector('.sleep-strip .sp[data-min="30"]')`); // 30 minutes
 await sleep(400);
-check('SL10b large (1024): status chip shows Sleep in 30 min', /Sleep in 30 min/.test(await chip()), await chip());
+check('SL10b large (1024): status chip shows Stops in 30:00 (MA wording)', /Stops in (30:00|29:5\d)/.test(await chip()), await chip());
 await tap(`${NP}.querySelector('.ab.slp')`); await sleep(100);
-await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[0]`); // Off
+await tap(`${NP}.querySelector('.sleep-strip .sp.cx')`); // Cancel
 await sleep(300);
 check('SL10c large: status chip shows Sleep timer off', /Sleep timer off/.test(await chip()), await chip());
 
 // Player id is the registry unique_id, not a stale active_queue
 await ev(`(() => { window.__uniqueIds['media_player.everywhere'] = 'syncgroup_everywhere'; window.__hass.states['media_player.everywhere'].attributes.active_queue = 'other_queue'; })()`);
 await tap(`${NP}.querySelector('.ab.slp')`); await sleep(100);
-await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[1]`); // 15
+await tap(`${NP}.querySelector('.sleep-strip .sp[data-min="15"]')`); // 15 minutes
 await sleep(400);
 const maPid = await ev(`window.__maLog.filter((x) => x.command === 'players/sleep_timer/set').map((x) => x.data.player_id)`);
 check('SL10d set uses unique_id even when active_queue is a different queue', maPid.at(-1) === 'syncgroup_everywhere', J(maPid));
 await tap(`${NP}.querySelector('.ab.slp')`); await sleep(100);
-await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[0]`); // Off
+await tap(`${NP}.querySelector('.sleep-strip .sp.cx')`); // Cancel
 await sleep(300);
 
 // Live player_sleep_timer_updated: countdown follows a push without opening the moon
 await ev(`(() => { window.__sleepTimers.set('syncgroup_everywhere', Date.now()/1000 + 2700); window.__kioskPushSleep('media_player.everywhere'); })()`);
 await sleep(300);
 const liveCd = await ev(`(${NP}.querySelector('.sp.sleep-cd') || { textContent: '' }).textContent.trim()`);
-check('SL10e live sleep event updates the countdown chip', /^Sleep \d+:\d{2}$/.test(liveCd), liveCd);
+check('SL10e live sleep event updates the countdown chip', /^Sleep \d{2}:\d{2}$/.test(liveCd), liveCd);
 await ev(`(() => { window.__sleepTimers.delete('syncgroup_everywhere'); window.__kioskPushSleep('media_player.everywhere'); })()`);
 await sleep(300);
 check('SL10f live clear event removes the countdown chip', !(await ev(`${NP}.querySelector('.sp.sleep-cd')`)));
@@ -103,7 +107,7 @@ await page.waitForFunction('window.__ready === true');
 await sleep(500);
 await tap(`${NP}.querySelector('.ab.slp')`);
 await sleep(100);
-await tap(`${NP}.querySelectorAll('.sleep-strip .sp')[1]`); // 15
+await tap(`${NP}.querySelector('.sleep-strip .sp[data-min="15"]')`); // 15 minutes
 await sleep(300);
 const nMa = await ev(`(window.__maLog || []).filter((x) => String(x.command).startsWith('players/sleep_timer/')).length`);
 check('SL11 native backend does not call MA sleep_timer', nMa === 0, String(nMa));

@@ -334,7 +334,7 @@ export class JbNow extends LitElement {
         this._sleepExpires = parseExpires(raw) ?? (Date.now() / 1000 + minutes * 60);
         this._sleepMode = parseSleepMode(raw) ?? 'duration';
         this._sleepMins = minutes;
-        this.sleepStatus(`Sleep in ${minutes} min`);
+        this.sleepStatus(`Stops in ${fmtSleepRemain(this.sleepRemain())}`); // MA's "Stops in {0}"
       }
       this._sleepOpen = false;
       this.requestUpdate();
@@ -501,12 +501,13 @@ export class JbNow extends LitElement {
             title=${sleepOn ? (sleepModeText ?? `Sleep timer ${fmtSleepRemain(sleepRem)}`) : 'Sleep timer'} aria-pressed=${sleepOn || this._sleepOpen ? 'true' : 'false'}
             @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon')}</button>
         </div>
-        ${this._sleepOpen ? html`<div class="sleep-strip" role="group" aria-label="Sleep timer">
-          <button class="sp ${!sleepOn && this._sleepMins === 0 ? 'on' : ''}" tabindex="-1" aria-pressed=${!sleepOn && this._sleepMins === 0 ? 'true' : 'false'}
-            @pointerdown=${noFocus} @click=${() => this.setSleep(0)}>Off</button>
-          ${SLEEP_MINUTES.map((m) => html`<button class="sp ${this._sleepMins === m ? 'on' : ''}" tabindex="-1"
-            aria-pressed=${this._sleepMins === m ? 'true' : 'false'}
+        ${this._sleepOpen ? html`<div class="sleep-strip ma" role="group" aria-label="Sleep timer">
+          <!-- 0.9.1 (#44): Music Assistant's own choices and words; while a timer runs, "Stops in" and a red Cancel (as MA's menu) -->
+          ${sleepOn ? html`<div class="sl-row"><span class="sl-st" aria-live="polite">${sleepModeText ?? `Stops in ${fmtSleepRemain(sleepRem)}`}</span></div>` : nothing}
+          ${SLEEP_MINUTES.map((m) => html`<button class="sp ${sleepOn && this._sleepMins === m ? 'on' : ''}" tabindex="-1" data-min=${m}
+            aria-pressed=${sleepOn && this._sleepMins === m ? 'true' : 'false'}
             @pointerdown=${noFocus} @click=${() => this.setSleep(m as SleepMinutes)}>${SLEEP_LABEL[m]}</button>`)}
+          ${sleepOn ? html`<button class="sp cx" tabindex="-1" data-min="0" @pointerdown=${noFocus} @click=${() => this.setSleep(0)}>Cancel sleep timer</button>` : nothing}
         </div>` : sleepOn ? html`<div class="sleep-strip cd-only" aria-live="polite">
           <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${sleepChip}
             @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon', 'i xs')}${sleepChip}</button>
@@ -593,6 +594,14 @@ export class JbNow extends LitElement {
     /* Cover overlay buttons sit on the picture: an HA icon button (no shadow, theme icon colour) on the ha-card surface, so the icon stays readable on any cover */
     .art .sleep-strip .sp { color: var(--_fg); }
     .art .sleep-strip .sp.on { color: var(--_active); border-color: var(--_active); }
+    /* 0.9.1 (#44): MA's worded choices wrap to the right over the cover; Cancel in the theme's error colour; the "Stops in" line on the card surface */
+    .art .sleep-strip.ma { gap: var(--ha-space-2, 8px); --_sp-in: var(--_ab-inset); }
+    .art .sleep-strip.ma .sp { padding: 0 var(--ha-space-4, 16px); }
+    .art .sleep-strip.ma .sp.cx { color: var(--error-color); border-color: var(--error-color); }
+    .art .sleep-strip.ma .sl-row { flex-basis: 100%; display: flex; justify-content: flex-end; }
+    .art .sleep-strip.ma .sl-st { display: inline-flex; align-items: center; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg))); color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+      font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); font-variant-numeric: tabular-nums; }
     .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); color: var(--_fg); }
     .badges { display: flex; align-items: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; }
     .apb { margin-left: auto; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px);

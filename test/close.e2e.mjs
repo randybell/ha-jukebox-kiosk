@@ -106,7 +106,7 @@ const isPill = (x, h = 48) => !!x && x.text === 'Close' && x.svg === 0 && x.h >=
   check('X17 a tap on the album art also closes them', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)) && (await media(p, n2)).length === 0);
   await tap(p, `${NOW}.querySelector('.ab.slp')`); await sleep(200);
   await tap(p, `${NOW}.querySelector('.sleep-strip .sp')`); await sleep(300);
-  check('X18 picking a choice still works (Off) and closes them', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)));
+  check('X18 picking a choice still works (15 minutes) and closes them', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)));
   await tap(p, `${NOW}.querySelector('.ab.slp')`); await sleep(200); await esc(p);
   check('X19 Esc closes the sleep choices', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)));
   // lyrics on the art: tap anywhere (unchanged) and now Esc

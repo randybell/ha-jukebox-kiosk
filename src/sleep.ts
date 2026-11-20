@@ -48,11 +48,12 @@ export function parseSleepMode(raw: unknown): SleepTimerMode | undefined {
   return undefined;
 }
 
-/** Remaining seconds → "M:SS" (tabular). */
+/** Remaining seconds → Music Assistant's formatDuration: "MM:SS" under an hour, "HH:MM:SS" from an hour, every part zero-padded (45:00, 01:59:59). */
 export function fmtSleepRemain(secs: number): string {
   const s = Math.max(0, Math.floor(secs));
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, '0')}`;
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  return h ? `${p2(h)}:${p2(m)}:${p2(ss)}` : `${p2(m)}:${p2(ss)}`;
 }
 
 /** Countdown chip text, e.g. "Sleep 29:41". */
