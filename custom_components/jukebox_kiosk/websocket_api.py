@@ -691,6 +691,46 @@ async def _sleep_payload(client: Any, player_id: str, raw: Any) -> dict[str, Any
     return out
 
 
+async def _ma_player(client: Any, player_id: str) -> dict[str, Any] | None:
+    """Return players/get as a dict, or None if the command fails or the result is not a player."""
+    try:
+        player = await _send(client, "players/get", player_id=player_id)
+    except Exception:
+        return None
+    return player if isinstance(player, dict) else None
+
+
+async def _playback_owner_id(client: Any, player_id: str) -> str:
+    """Return the id of the player that owns this player's playback.
+
+    MA `_resolve_playback_owner` (server-dev base.py:581-597): the sync leader, or
+    the group player capturing that leader. 2.10.12 `_get_player_with_redirect`
+    (controller.py:3169-3191) is the same two steps. Sleep commands and
+    `player_sleep_timer_updated` use that player's id (sleep_timer.py:183-196,
+    168-171).
+    """
+    player = await _ma_player(client, player_id)
+    if player is None:
+        return player_id
+    owner_id, owner = player_id, player
+    synced_to = owner.get("synced_to")
+    if isinstance(synced_to, str) and synced_to:
+        leader = await _ma_player(client, synced_to)
+        if leader is not None:
+            owner_id, owner = synced_to, leader
+    active_group = owner.get("active_group")
+    if isinstance(active_group, str) and active_group:
+        group = await _ma_player(client, active_group)
+        if group is not None:
+            owner_id = active_group
+    return owner_id
+
+
+def _sleep_id_filter(player_id: str, owner_id: str) -> str | tuple[str, ...]:
+    """The card's player plus its current playback owner, when that owner is someone else."""
+    return (player_id, owner_id) if owner_id != player_id else player_id
+
+
 @websocket_api.websocket_command(
     {probatio.Required("type"): f"{DOMAIN}/sleep_timer_get", probatio.Required("entity_id"): str}
 )
@@ -753,12 +793,16 @@ async def ws_subscribe_sleep_timer(
 ) -> None:
     """Push the entity's current sleep expiry whenever a player_sleep_timer_updated event fires.
 
-    The subscription is filtered to this entity's player. The handler re-gets the timer
-    for that player id.
+    The subscription is filtered to this entity's player plus its current playback
+    owner (the id MA emits on). The filter is updated when the group changes.
     """
     _e, _policy, client = _context(hass)
     player_id = player_id_for_entity(hass, msg["entity_id"])
     msg_id = msg["id"]
+    from music_assistant_models.enums import EventType  # noqa: PLC0415
+
+    event_filter = (EventType(SLEEP_TIMER_EVENT), EventType.PLAYER_UPDATED)
+    held: dict[str, Any] = {"unsub": None, "ids": None}
 
     async def _push() -> None:
         raw = await _send(client, "players/sleep_timer/get", player_id=player_id)
@@ -766,14 +810,31 @@ async def ws_subscribe_sleep_timer(
             websocket_api.event_message(msg_id, {**await _sleep_payload(client, player_id, raw), "player_id": player_id})
         )
 
+    def _listen(owner_id: str) -> None:
+        if held["unsub"] is not None:
+            held["unsub"]()
+        ids = _sleep_id_filter(player_id, owner_id)
+        held["unsub"] = client.subscribe(_on_event, event_filter, ids)
+        held["ids"] = ids
+        connection.subscriptions[msg_id] = held["unsub"]
+
+    async def _retarget() -> None:
+        owner_id = await _playback_owner_id(client, player_id)
+        ids = _sleep_id_filter(player_id, owner_id)
+        if ids == held["ids"]:
+            return
+        _listen(owner_id)
+        await _push()
+
     @callback
-    def _on_event(_event: Any) -> None:
-        hass.async_create_task(_push())
+    def _on_event(event: Any) -> None:
+        name = str(getattr(getattr(event, "event", None), "value", getattr(event, "event", "")))
+        if name == "player_updated":
+            hass.async_create_task(_retarget())
+        elif name == SLEEP_TIMER_EVENT:
+            hass.async_create_task(_push())
 
-    from music_assistant_models.enums import EventType  # noqa: PLC0415
-
-    unsub = client.subscribe(_on_event, (EventType(SLEEP_TIMER_EVENT),), player_id)
-    connection.subscriptions[msg_id] = unsub
+    _listen(await _playback_owner_id(client, player_id))
     connection.send_result(msg_id, {"player_id": player_id})
 
 

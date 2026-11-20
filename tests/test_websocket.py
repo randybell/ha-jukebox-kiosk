@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -796,11 +797,98 @@ async def test_subscribe_sleep_timer_push(
     res = await _call(ws, type="jukebox_kiosk/subscribe_sleep_timer", entity_id=ENTITY_A)
     assert res["success"] and res["result"]["player_id"] == PLAYER_A
     cb, events, id_filter = fake_ma.subs[0]
-    assert id_filter == PLAYER_A and {e.value for e in events} == {"player_sleep_timer_updated"}
+    assert id_filter == PLAYER_A and {e.value for e in events} == {"player_sleep_timer_updated", "player_updated"}
     cb(SimpleNamespace(event=SimpleNamespace(value="player_sleep_timer_updated"), object_id=SYNCGROUP, data=1_700_000_500))
     await hass.async_block_till_done()
     ev = await ws.receive_json()
     assert ev["type"] == "event" and ev["event"] == {"expires_at": 1_700_000_500, "player_id": PLAYER_A}
     assert ("players/sleep_timer/get", {"player_id": PLAYER_A}) in fake_ma.calls
+    await _call(ws, type="unsubscribe_events", subscription=res["id"])
+    assert fake_ma.subs == []
+
+
+def _id_filter_ids(id_filter: Any) -> frozenset[str]:
+    if id_filter is None:
+        return frozenset()
+    if isinstance(id_filter, str):
+        return frozenset({id_filter})
+    return frozenset(id_filter)
+
+
+async def test_sleep_timer_get_without_sleep_timer_mode(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    """MA 2.10.12 players/get has no sleep_timer_mode; no expiry means Off, no mode, no error."""
+    fake_ma.sleep_timers[PLAYER_A] = None
+    fake_ma.players[PLAYER_A] = {
+        "player_id": PLAYER_A,
+        "synced_to": None,
+        "active_group": None,
+    }
+    ws = await _ws(hass_ws_client, user_token[1])
+    got = await _call(ws, type="jukebox_kiosk/sleep_timer_get", entity_id=ENTITY_A)
+    assert got["success"]
+    assert got["result"] == {"expires_at": None, "player_id": PLAYER_A}
+    assert "mode" not in got["result"]
+    assert ("players/get", {"player_id": PLAYER_A}) in fake_ma.calls
+
+
+async def test_subscribe_sleep_timer_includes_playback_owner(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    """Filter is the card's player plus the playback owner MA emits on (sleep_timer.py:168-171).
+
+    Owner is _resolve_playback_owner (base.py:581-597): sync leader, then the group
+    capturing that leader.
+    """
+    fake_ma.players[PLAYER_A] = {"player_id": PLAYER_A, "synced_to": PLAYER_B, "active_group": None}
+    fake_ma.players[PLAYER_B] = {"player_id": PLAYER_B, "synced_to": None, "active_group": SYNCGROUP}
+    fake_ma.players[SYNCGROUP] = {"player_id": SYNCGROUP, "synced_to": None, "active_group": None}
+    fake_ma.sleep_timers[PLAYER_A] = 1_700_000_500
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/subscribe_sleep_timer", entity_id=ENTITY_A)
+    assert res["success"] and res["result"]["player_id"] == PLAYER_A
+    cb, events, id_filter = fake_ma.subs[0]
+    assert _id_filter_ids(id_filter) == frozenset({PLAYER_A, SYNCGROUP})
+    assert "player_sleep_timer_updated" in {e.value for e in events}
+    cb(
+        SimpleNamespace(
+            event=SimpleNamespace(value="player_sleep_timer_updated"),
+            object_id=SYNCGROUP,
+            data=1_700_000_500,
+        )
+    )
+    await hass.async_block_till_done()
+    ev = await ws.receive_json()
+    assert ev["type"] == "event" and ev["event"] == {"expires_at": 1_700_000_500, "player_id": PLAYER_A}
+    assert ("players/sleep_timer/get", {"player_id": PLAYER_A}) in fake_ma.calls
+    await _call(ws, type="unsubscribe_events", subscription=res["id"])
+    assert fake_ma.subs == []
+
+
+async def test_subscribe_sleep_timer_updates_filter_when_group_changes(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    """When the player joins a group, the filter picks up the new playback owner."""
+    fake_ma.players[PLAYER_A] = {"player_id": PLAYER_A, "synced_to": None, "active_group": None}
+    fake_ma.players[SYNCGROUP] = {"player_id": SYNCGROUP, "synced_to": None, "active_group": None}
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/subscribe_sleep_timer", entity_id=ENTITY_A)
+    assert res["success"]
+    _cb, events, id_filter = fake_ma.subs[0]
+    assert _id_filter_ids(id_filter) == frozenset({PLAYER_A})
+    assert "player_updated" in {e.value for e in events}
+    fake_ma.players[PLAYER_A] = {"player_id": PLAYER_A, "synced_to": None, "active_group": SYNCGROUP}
+    _cb(
+        SimpleNamespace(
+            event=SimpleNamespace(value="player_updated"),
+            object_id=PLAYER_A,
+            data=fake_ma.players[PLAYER_A],
+        )
+    )
+    await hass.async_block_till_done()
+    assert len(fake_ma.subs) == 1
+    _, _, id_filter2 = fake_ma.subs[0]
+    assert _id_filter_ids(id_filter2) == frozenset({PLAYER_A, SYNCGROUP})
     await _call(ws, type="unsubscribe_events", subscription=res["id"])
     assert fake_ma.subs == []

@@ -48,6 +48,10 @@ check('S16 parseSleepMode reads mode from the kiosk payload',
   && S.parseSleepMode({ expires_at: 99, mode: 'end_of_chapter' }) === 'end_of_chapter'
   && S.parseSleepMode({ expires_at: 99 }) === undefined
   && S.parseSleepMode({ mode: 'nope' }) === undefined);
+check('S17 MA 2.10.12: no sleep_timer_mode and no expiry is Off, no invented label',
+  S.sleepIsActive(null) === false && S.sleepIsActive(null, undefined) === false
+  && S.sleepIsActive(null, null) === false && S.sleepModeLabel(undefined) === undefined
+  && S.sleepModeLabel(null) === undefined && S.parseSleepMode({ expires_at: null }) === undefined);
 
 console.log(`\n${total - failures}/${total} passed`);
 process.exit(failures ? 1 : 0);
