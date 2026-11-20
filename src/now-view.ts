@@ -27,7 +27,7 @@ import { defineElement } from './define';
 import { FavController } from './heart';
 import { favoriteButtonFor } from './favorites';
 import { shownRepeat, nextRepeat, REPEAT_LABEL, type RepeatMode } from './repeat';
-import { SLEEP_MINUTES, sleepLabel, fmtSleepRemain, remainFromExpires, sleepPlayerId, canMaSleep, parseExpires, type SleepMinutes } from './sleep';
+import { SLEEP_MINUTES, sleepLabel, fmtSleepRemain, remainFromExpires, canMaSleep, parseExpires, type SleepMinutes } from './sleep';
 
 const VOL_THROTTLE_MS = 200;
 const HOLD_MS = 4000; // keep optimistic values this long unless the entity confirms sooner
@@ -63,7 +63,6 @@ export class JbNow extends LitElement {
   private _sleepExpires: number | null = null;
   /** last chosen duration (0 = Off); drives the chooser highlight */
   private _sleepMins: SleepMinutes = 0;
-  private _sleepLocal?: number; // card-side setTimeout handle
   private _sleepSyncing = false;
   private _unsub?: () => void;
   private vol = new Map<string, Pending<number>>();
@@ -83,6 +82,7 @@ export class JbNow extends LitElement {
       if (this.ent?.state === 'playing' || this._sleepExpires) this._tick++;
       if (this._sleepExpires && remainFromExpires(this._sleepExpires) <= 0) this.onSleepExpired();
     }, 1000);
+    this.watchSleep();
   }
   /** 0.7.9 #59: the speaker list scrolls inside its own area when it doesn't fit (0.8.8: only the rooms scroll, the lead row stays fixed); mark the edges so the "More speakers" hint and fades show */
   private _volEl?: HTMLElement;
@@ -109,7 +109,7 @@ export class JbNow extends LitElement {
     super.disconnectedCallback();
     this._volRo?.disconnect(); this._volRo = undefined; this._volEl = undefined;
     window.clearInterval(this._timer);
-    window.clearTimeout(this._sleepLocal);
+    this.unwatchSleep();
     this._unsub?.(); this._unsub = undefined; this._spkUnsub?.(); this._spkUnsub = undefined;
   }
   protected willUpdate(ch: PropertyValues) {
@@ -118,6 +118,7 @@ export class JbNow extends LitElement {
       this._spkUnsub?.();
       this._spkUnsub = this.spk?.onState(() => { const k = this.spkKey(); if (k !== this._spkKey) { this._spkKey = k; this.requestUpdate(); } }) as any;
     }
+    if (ch.has('config') || ch.has('hass')) this.watchSleep();
   }
   /** Re-render only when an entity we draw changed. */
   protected shouldUpdate(ch: PropertyValues) {
@@ -240,39 +241,59 @@ export class JbNow extends LitElement {
     });
   }
 
-  // ---------- sleep timer (MA players/sleep_timer/* when be.send is available; else card-side pause) ----------
+  // ---------- sleep timer (kiosk jukebox_kiosk/sleep_timer_* → MA players/sleep_timer/*) ----------
+  private _sleepUnsub?: () => void;
+  private _sleepWatchEnt?: string;
   private sleepRemain() { return remainFromExpires(this._sleepExpires); }
+  private applySleepExpires(exp: number | null) {
+    if (exp !== this._sleepExpires) {
+      this._sleepExpires = exp;
+      if (!exp) this._sleepMins = 0;
+      else if (!this._sleepMins) {
+        const rem = remainFromExpires(exp);
+        this._sleepMins = (SLEEP_MINUTES as readonly number[]).find((m) => Math.abs(rem - m * 60) < 90) as SleepMinutes
+          ?? (SLEEP_MINUTES as readonly number[]).reduce((best, m) => Math.abs(rem - m * 60) < Math.abs(rem - best * 60) ? m : best, 15) as SleepMinutes;
+      }
+      this.requestUpdate();
+    }
+  }
+  private unwatchSleep() {
+    this._sleepUnsub?.(); this._sleepUnsub = undefined; this._sleepWatchEnt = undefined;
+  }
+  private watchSleep() {
+    const be = this.config?._backend;
+    const ent = this.eid;
+    if (!this.isConnected || !canMaSleep(be) || !ent) { this.unwatchSleep(); return; }
+    if (this._sleepWatchEnt === ent) return;
+    this.unwatchSleep();
+    this._sleepWatchEnt = ent;
+    void this.syncSleepFromMa();
+    const start = this._sleepWatchEnt;
+    be!.subscribeSleepTimer?.(ent, (ev) => { this.applySleepExpires(parseExpires(ev)); }).then((off) => {
+      if (this._sleepWatchEnt === start && this.isConnected) this._sleepUnsub = off;
+      else off();
+    }).catch((e) => {
+      console.warn('[jukebox-card] subscribe_sleep_timer failed', e);
+      if (this._sleepWatchEnt === start) this._sleepWatchEnt = undefined;
+    });
+  }
   private toggleSleepOpen() {
     this._sleepOpen = !this._sleepOpen;
     if (this._sleepOpen) void this.syncSleepFromMa();
   }
   private async syncSleepFromMa() {
     const be = this.config?._backend;
-    if (!canMaSleep(be) || this._sleepSyncing) return;
-    const pid = sleepPlayerId(this.eid, this.hass);
-    if (!pid) return;
+    if (!canMaSleep(be) || this._sleepSyncing || !this.eid) return;
     this._sleepSyncing = true;
     try {
-      const raw = await be!.send('players/sleep_timer/get', { player_id: pid });
-      const exp = parseExpires(raw);
-      if (exp !== this._sleepExpires) {
-        this._sleepExpires = exp;
-        if (!exp) this._sleepMins = 0;
-        else if (!this._sleepMins) {
-          const rem = remainFromExpires(exp);
-          this._sleepMins = (SLEEP_MINUTES as readonly number[]).find((m) => Math.abs(rem - m * 60) < 90) as SleepMinutes
-            ?? (SLEEP_MINUTES as readonly number[]).reduce((best, m) => Math.abs(rem - m * 60) < Math.abs(rem - best * 60) ? m : best, 15) as SleepMinutes;
-        }
-        this.requestUpdate();
-      }
+      const raw = await be!.sleepTimerGet!(this.eid);
+      this.applySleepExpires(parseExpires(raw));
     } catch (e) {
-      console.warn('[jukebox-card] sleep_timer/get failed', e);
+      console.warn('[jukebox-card] sleep_timer_get failed', e);
     } finally { this._sleepSyncing = false; }
   }
   private onSleepExpired() {
-    window.clearTimeout(this._sleepLocal); this._sleepLocal = undefined;
     this._sleepExpires = null; this._sleepMins = 0; this._sleepOpen = false;
-    // MA route: the server already stopped the player. Card-side fallback pauses below via the timeout.
     this.requestUpdate();
   }
   /** Top-right status for sleep set/cancel. Skipped on a narrow card (the CSS narrow layout, which sets --_narrow): the Sleep M:SS
@@ -282,50 +303,33 @@ export class JbNow extends LitElement {
     if (nw && getComputedStyle(nw).getPropertyValue('--_narrow').trim() === '1') return;
     status(this, msg);
   }
-  /** minutes 0 = Off. Uses MA sleep_timer when available so it survives the screen sleeping. */
+  /** minutes 0 = Off. Uses MA sleep_timer (kiosk commands resolve the player id). */
   async setSleep(minutes: SleepMinutes) {
     const be = this.config?._backend;
-    const pid = sleepPlayerId(this.eid, this.hass);
-    window.clearTimeout(this._sleepLocal); this._sleepLocal = undefined;
-    if (canMaSleep(be) && pid) {
-      try {
-        if (minutes === 0) {
-          await be!.send('players/sleep_timer/clear', { player_id: pid });
-          this._sleepExpires = null; this._sleepMins = 0;
-          this.sleepStatus('Sleep timer off');
-        } else {
-          const raw = await be!.send('players/sleep_timer/set', { player_id: pid, seconds: minutes * 60 });
-          this._sleepExpires = parseExpires(raw) ?? (Date.now() / 1000 + minutes * 60);
-          this._sleepMins = minutes;
-          this.sleepStatus(`Sleep in ${minutes} min`);
-        }
-        this._sleepOpen = false;
-        this.requestUpdate();
-        return;
-      } catch (e) {
-        console.warn('[jukebox-card] sleep_timer failed; using card-side timer', e);
-        // fall through to card-side
-      }
+    if (!canMaSleep(be) || !this.eid) {
+      this._sleepOpen = false;
+      this.requestUpdate();
+      return;
     }
-    // Card-side fallback: local countdown + media_pause when time is up
-    if (minutes === 0) {
-      this._sleepExpires = null; this._sleepMins = 0;
-      this.sleepStatus('Sleep timer off');
-    } else {
-      const secs = minutes * 60;
-      this._sleepExpires = Date.now() / 1000 + secs;
-      this._sleepMins = minutes;
-      this._sleepLocal = window.setTimeout(() => {
-        this._sleepLocal = undefined;
+    try {
+      if (minutes === 0) {
+        await be!.sleepTimerClear!(this.eid);
         this._sleepExpires = null; this._sleepMins = 0;
-        this.flags.set('state', { v: 'paused', t: Date.now() });
-        this.call('media_player', 'media_pause', {}, this.eid);
-        this.requestUpdate();
-      }, secs * 1000);
-      this.sleepStatus(`Sleep in ${minutes} min`);
+        this.sleepStatus('Sleep timer off');
+      } else {
+        const raw = await be!.sleepTimerSet!(this.eid, minutes * 60);
+        this._sleepExpires = parseExpires(raw) ?? (Date.now() / 1000 + minutes * 60);
+        this._sleepMins = minutes;
+        this.sleepStatus(`Sleep in ${minutes} min`);
+      }
+      this._sleepOpen = false;
+      this.requestUpdate();
+    } catch (e) {
+      console.warn('[jukebox-card] sleep_timer failed', e);
+      this.toast('That did not work. Check the player.');
+      this._sleepOpen = false;
+      this.requestUpdate();
     }
-    this._sleepOpen = false;
-    this.requestUpdate();
   }
 
   // ---------- progress ----------

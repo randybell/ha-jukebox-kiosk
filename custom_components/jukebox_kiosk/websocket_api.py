@@ -35,6 +35,7 @@ from .const import (
     PLAYER_ARG_KEYS,
     PLAYER_LIST_ARG_KEYS,
     QUEUE_EVENTS,
+    SLEEP_TIMER_EVENT,
     QUEUE_LIMIT_MAX,
     RESERVED_ARG_KEYS,
     SEARCH_PROVIDER_TYPES,
@@ -46,7 +47,7 @@ from .const import (
     todo_verify_commands,
 )
 from .permissions import Policy, allowed_classes, check_class, check_entity, is_guest
-from .players import PlayerNotFound, entity_for_player, queue_id_for_entity
+from .players import PlayerNotFound, entity_for_player, player_id_for_entity, queue_id_for_entity
 
 if TYPE_CHECKING:
     from music_assistant_client import MusicAssistantClient
@@ -653,6 +654,110 @@ async def ws_subscribe_queue(
     connection.send_result(msg_id, {"queue_id": queue_id})
 
 
+def _expires_payload(raw: Any) -> dict[str, Any]:
+    """Shape MA's sleep_timer get/set return (unix seconds or None) for the card."""
+    exp = raw if isinstance(raw, (int, float)) and raw > 0 else None
+    return {"expires_at": exp}
+
+
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/sleep_timer_get", probatio.Required("entity_id"): str}
+)
+@websocket_api.async_response
+@_wrap
+async def ws_sleep_timer_get(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Return the MA sleep timer expiry for the entity's player (registry unique_id)."""
+    _e, policy, client = _context(hass)
+    user = connection.user
+    check_class(user, policy, PermClass.READ)
+    check_entity(user, msg["entity_id"], control=False)
+    player_id = player_id_for_entity(hass, msg["entity_id"])
+    raw = await _send(client, "players/sleep_timer/get", player_id=player_id)
+    connection.send_result(msg["id"], {**_expires_payload(raw), "player_id": player_id})
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/sleep_timer_set",
+        probatio.Required("entity_id"): str,
+        probatio.Required("seconds"): int,
+    }
+)
+@websocket_api.async_response
+@_wrap
+async def ws_sleep_timer_set(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Set the MA sleep timer for the entity's player (registry unique_id)."""
+    _e, policy, client = _context(hass)
+    user = connection.user
+    check_class(user, policy, PermClass.PLAYBACK)
+    check_entity(user, msg["entity_id"], control=True)
+    seconds = msg["seconds"]
+    if not isinstance(seconds, int) or seconds <= 0:
+        raise KioskError("invalid_args", "seconds must be greater than zero")
+    player_id = player_id_for_entity(hass, msg["entity_id"])
+    raw = await _send(client, "players/sleep_timer/set", player_id=player_id, seconds=seconds)
+    connection.send_result(msg["id"], {**_expires_payload(raw), "player_id": player_id})
+
+
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/sleep_timer_clear", probatio.Required("entity_id"): str}
+)
+@websocket_api.async_response
+@_wrap
+async def ws_sleep_timer_clear(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Clear the MA sleep timer for the entity's player (registry unique_id)."""
+    _e, policy, client = _context(hass)
+    user = connection.user
+    check_class(user, policy, PermClass.PLAYBACK)
+    check_entity(user, msg["entity_id"], control=True)
+    player_id = player_id_for_entity(hass, msg["entity_id"])
+    await _send(client, "players/sleep_timer/clear", player_id=player_id)
+    connection.send_result(msg["id"], {"expires_at": None, "player_id": player_id})
+
+
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/subscribe_sleep_timer", probatio.Required("entity_id"): str}
+)
+@websocket_api.async_response
+@_wrap
+async def ws_subscribe_sleep_timer(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Push the entity's current sleep expiry whenever a player_sleep_timer_updated event fires.
+
+    Events are emitted on the redirected playback owner. The handler re-gets the timer
+    for this entity's player id so a group-owner redirect still updates the card.
+    """
+    _e, policy, client = _context(hass)
+    user = connection.user
+    check_class(user, policy, PermClass.READ)
+    check_entity(user, msg["entity_id"], control=False)
+    player_id = player_id_for_entity(hass, msg["entity_id"])
+    msg_id = msg["id"]
+
+    async def _push() -> None:
+        raw = await _send(client, "players/sleep_timer/get", player_id=player_id)
+        connection.send_message(
+            websocket_api.event_message(msg_id, {**_expires_payload(raw), "player_id": player_id})
+        )
+
+    @callback
+    def _on_event(_event: Any) -> None:
+        hass.async_create_task(_push())
+
+    from music_assistant_models.enums import EventType  # noqa: PLC0415
+
+    unsub = client.subscribe(_on_event, (EventType(SLEEP_TIMER_EVENT),), None)
+    connection.subscriptions[msg_id] = unsub
+    connection.send_result(msg_id, {"player_id": player_id})
+
+
 HANDLERS = (
     ws_capabilities,
     ws_ma,
@@ -665,6 +770,10 @@ HANDLERS = (
     ws_favorite_current,
     ws_unfavorite_current,
     ws_subscribe_queue,
+    ws_sleep_timer_get,
+    ws_sleep_timer_set,
+    ws_sleep_timer_clear,
+    ws_subscribe_sleep_timer,
 )
 
 

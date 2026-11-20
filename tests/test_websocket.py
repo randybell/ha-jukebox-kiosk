@@ -697,3 +697,59 @@ async def test_command_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(wsa.KioskError) as err:
         await wsa._send(SlowClient(), "music/search")
     assert err.value.code == "timeout"
+
+
+async def test_sleep_timer_set_uses_registry_player_id(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    """Set sends the entity's unique_id even when active_queue is another player's queue."""
+    hass.states.async_set(ENTITY_A, "idle", {"active_queue": SYNCGROUP})
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/sleep_timer_set", entity_id=ENTITY_A, seconds=1800)
+    assert res["success"]
+    assert res["result"]["player_id"] == PLAYER_A
+    assert res["result"]["expires_at"] == 1_700_000_000 + 1800
+    assert ("players/sleep_timer/set", {"player_id": PLAYER_A, "seconds": 1800}) in fake_ma.calls
+
+
+async def test_sleep_timer_get_and_clear(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    fake_ma.sleep_timers[SYNCGROUP] = 1_700_000_123
+    ws = await _ws(hass_ws_client, user_token[1])
+    got = await _call(ws, type="jukebox_kiosk/sleep_timer_get", entity_id=ENTITY_G)
+    assert got["success"] and got["result"] == {"expires_at": 1_700_000_123, "player_id": SYNCGROUP}
+    cleared = await _call(ws, type="jukebox_kiosk/sleep_timer_clear", entity_id=ENTITY_G)
+    assert cleared["success"] and cleared["result"]["expires_at"] is None and cleared["result"]["player_id"] == SYNCGROUP
+    assert ("players/sleep_timer/clear", {"player_id": SYNCGROUP}) in fake_ma.calls
+
+
+async def test_sleep_timer_set_needs_positive_seconds(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/sleep_timer_set", entity_id=ENTITY_G, seconds=0)
+    assert not res["success"] and res["error"]["code"] == "invalid_args"
+    assert not any(c[0] == "players/sleep_timer/set" for c in fake_ma.calls)
+
+
+async def test_subscribe_sleep_timer_push(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    from types import SimpleNamespace
+
+    fake_ma.sleep_timers[PLAYER_A] = 1_700_000_500
+    # entity's active_queue is a different player; events may fire on the redirected owner
+    hass.states.async_set(ENTITY_A, "idle", {"active_queue": SYNCGROUP})
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/subscribe_sleep_timer", entity_id=ENTITY_A)
+    assert res["success"] and res["result"]["player_id"] == PLAYER_A
+    cb, events, id_filter = fake_ma.subs[0]
+    assert id_filter is None and {e.value for e in events} == {"player_sleep_timer_updated"}
+    cb(SimpleNamespace(event=SimpleNamespace(value="player_sleep_timer_updated"), object_id=SYNCGROUP, data=1_700_000_500))
+    await hass.async_block_till_done()
+    ev = await ws.receive_json()
+    assert ev["type"] == "event" and ev["event"] == {"expires_at": 1_700_000_500, "player_id": PLAYER_A}
+    assert ("players/sleep_timer/get", {"player_id": PLAYER_A}) in fake_ma.calls
+    await _call(ws, type="unsubscribe_events", subscription=res["id"])
+    assert fake_ma.subs == []

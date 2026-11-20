@@ -133,6 +133,11 @@ export interface MaBackend {
   searchProviders?(): Promise<any>;
   /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. */
   subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;
+  /** MA sleep timer for the entity, using the entity's MA player id. Kiosk only. */
+  sleepTimerGet?(entity: string): Promise<unknown>;
+  sleepTimerSet?(entity: string, seconds: number): Promise<unknown>;
+  sleepTimerClear?(entity: string): Promise<unknown>;
+  subscribeSleepTimer?(entity: string, cb: (ev: { expires_at?: number | null; player_id?: string }) => void): Promise<() => void>;
 }
 
 /** {context, response: {response: X}} / {response: X} / X  ->  X */

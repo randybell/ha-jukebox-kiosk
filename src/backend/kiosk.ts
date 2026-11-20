@@ -144,4 +144,19 @@ export class KioskBackend implements MaBackend {
     const unsub = await conn.subscribeMessage(cb, { type: `${KIOSK_DOMAIN}/subscribe_queue`, entity_id: entity });
     return () => { void Promise.resolve(unsub()).catch(() => undefined); };
   }
+  sleepTimerGet(entity: string) {
+    return this.ws({ type: 'sleep_timer_get', entity_id: entity });
+  }
+  sleepTimerSet(entity: string, seconds: number) {
+    return this.ws({ type: 'sleep_timer_set', entity_id: entity, seconds });
+  }
+  sleepTimerClear(entity: string) {
+    return this.ws({ type: 'sleep_timer_clear', entity_id: entity });
+  }
+  async subscribeSleepTimer(entity: string, cb: (ev: { expires_at?: number | null; player_id?: string }) => void) {
+    const conn = this.hass.connection;
+    if (!conn?.subscribeMessage) throw new BackendError('unsupported', 'no websocket subscriptions');
+    const unsub = await conn.subscribeMessage(cb, { type: `${KIOSK_DOMAIN}/subscribe_sleep_timer`, entity_id: entity });
+    return () => { void Promise.resolve(unsub()).catch(() => undefined); };
+  }
 }

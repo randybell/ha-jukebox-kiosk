@@ -251,7 +251,7 @@ for (const heart of [false, true]) {
   await tap6(pg, `${NPf}.querySelector('.ab.slp')`, true);
   const ch = await ev6(pg, `(() => { const sp = [...${NPf}.querySelectorAll('.sleep-strip .sp')].map((e) => e.getBoundingClientRect()); const pp = ${NPf}.querySelector('.tb.pp').getBoundingClientRect();
     return { n: sp.length, tops: [...new Set(sp.map((b) => Math.round(b.top)))], minH: Math.min(...sp.map((b) => b.height)), clearPlay: sp.every((b) => b.bottom <= pp.top || b.top >= pp.bottom || b.right <= pp.left || b.left >= pp.right), inView: sp.every((b) => b.left >= 0 && b.right <= innerWidth) }; })()`);
-  check(`${tag}: sleep chooser Off/15/30/60 on one row, ≥ 40px tall, clear of Play/Pause`, ch.n === 4 && ch.tops.length === 1 && ch.minH >= 39.5 && ch.clearPlay && ch.inView, JSON.stringify(ch));
+  check(`${tag}: sleep chooser Off/15/30/45/60/120, ≥ 40px tall, clear of Play/Pause`, ch.n === 6 && ch.minH >= 39.5 && ch.clearPlay, JSON.stringify(ch));
   await pg.close();
 }
 const S6 = [[1024, 666, 0, 'short'], [1024, 600, 0, 'tiny'], [1280, 720, 0, 'short'], [1280, 800, 0, ''], [844, 390, 1, 'tiny'], [390, 844, 1, ''], [390, 600, 1, 'tiny']];

@@ -61,8 +61,8 @@ const wait = (page, fn, timeout = 5000) => page.waitForFunction(fn, { timeout, p
 const ev = (page, expr) => page.evaluate((e) => eval(e), expr);
 const calls = (page) => page.evaluate(() => window.__calls.map(({ t, ...c }) => c));
 const ma = (page, cmd) => page.evaluate((cmd) => window.__maLog.filter((x) => !cmd || x.command === cmd), cmd);
-// reads (players/all, config/players/get, player_queues/get) are left out: only commands that change something
-const maCmds = (page) => page.evaluate(() => window.__maLog.map((x) => x.command).filter((c) => !['players/all', 'config/players/get', 'player_queues/get'].includes(c)));
+// reads (players/all, config/players/get, player_queues/get, players/sleep_timer/get) are left out: only commands that change something
+const maCmds = (page) => page.evaluate(() => window.__maLog.map((x) => x.command).filter((c) => !['players/all', 'config/players/get', 'player_queues/get', 'players/sleep_timer/get'].includes(c)));
 const events = (page) => page.evaluate(() => window.__maEvents.map((e) => e.type ?? e[0] ?? e));
 // 0.6.4: every grouping message is the one top-right status chip (.st); a question is a chip with an action (.st.ask),
 // or the 0.6.3 dialog (.sp-ask) with confirm_drop: true or for the card's Start guard
@@ -201,9 +201,9 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
     allJoins.push(...(await joins(p)));
     return { p, c, m };
   };
-  // the queue tab's buffer read (player_queues/get, admins only: it gates the row actions) and the dynamic panel's
-  // group-config read (config/players/get) are not counted here
-  const page_ma = (p) => p.evaluate(() => window.__maLog.map((x) => x.command).filter((c) => c !== 'player_queues/get' && c !== 'config/players/get'));
+  // the queue tab's buffer read (player_queues/get), the dynamic panel's group-config read (config/players/get),
+  // and the Now Playing sleep-timer read (players/sleep_timer/get) are not counted here
+  const page_ma = (p) => p.evaluate(() => window.__maLog.map((x) => x.command).filter((c) => c !== 'player_queues/get' && c !== 'config/players/get' && c !== 'players/sleep_timer/get'));
   const a = await seq(null);
   const b = await seq({ speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow' });
   check('R1 default config = fixed mode: no Music Assistant players/* calls at all (not even players/all)', a.m.length === 0, J(a.m));

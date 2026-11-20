@@ -60,6 +60,7 @@ class FakeMa:
         self.server_info = SimpleNamespace(schema_version=44)
         self.queue = [_qi(n) for n in range(10)]
         self.subs: list[tuple[Any, Any, Any]] = []
+        self.sleep_timers: dict[str, float | None] = {}
         self.autoplay_key = "autoplay_enabled"  # older MA: "dont_stop_the_music_enabled"; None: no field
         self.autoplay_error: str | None = None  # raised by player_queues/autoplay when set
         # per-queue Autoplay style config (MA 2.10.9 config/player_queues/*); None = MA without the setting
@@ -121,6 +122,15 @@ class FakeMa:
                     "dynamic_members": {"value": True}, "secret_thing": {"value": "x"}}}
         if command == "players/all":
             return [{"player_id": PLAYER_A}, {"player_id": PLAYER_B}]
+        if command == "players/sleep_timer/get":
+            return self.sleep_timers.get(kwargs["player_id"])
+        if command == "players/sleep_timer/set":
+            exp = 1_700_000_000 + int(kwargs["seconds"])
+            self.sleep_timers[kwargs["player_id"]] = exp
+            return exp
+        if command == "players/sleep_timer/clear":
+            self.sleep_timers[kwargs["player_id"]] = None
+            return None
         return {"ok": command}
 
     def subscribe(self, cb: Any, event_filter: Any = None, id_filter: Any = None) -> Any:

@@ -156,16 +156,21 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   // players/sleep_timer/* — server-side expiry (unix seconds). Survives screen sleep like live MA.
   const sleepTimers = (window.__sleepTimers = new Map()); // player_id -> expires_at
   const sleepTask = new Map(); // player_id -> timeout id
+  function notifySleep(pid, expires) {
+    if (typeof window.__onSleepTimer === 'function') window.__onSleepTimer(pid, expires);
+  }
   function clearSleep(pid) {
     const t = sleepTask.get(pid); if (t) clearTimeout(t); sleepTask.delete(pid); sleepTimers.delete(pid);
+    notifySleep(pid, null);
   }
   function armSleep(pid, seconds) {
-    clearSleep(pid);
+    const t = sleepTask.get(pid); if (t) clearTimeout(t); sleepTask.delete(pid); sleepTimers.delete(pid);
     const expires = Date.now() / 1000 + seconds;
     sleepTimers.set(pid, expires);
     sleepTask.set(pid, setTimeout(() => {
       sleepTask.delete(pid); sleepTimers.delete(pid);
-      // live MA stops the player; mirror with players/cmd/stop semantics
+      notifySleep(pid, null);
+      // live MA stops the player; mirror with players/cmd/stop semantics (cmd_stop)
       try {
         if (G[pid]) stopGroup(pid, 'sleep_timer');
         else if (NAME[pid]) release(pid, undefined, 'sleep_timer');
@@ -177,6 +182,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
         syncHa(); commit();
       } catch (err) { console.warn('mock sleep expire', err); }
     }, seconds * 1000));
+    notifySleep(pid, expires);
     return expires;
   }
 

@@ -5,7 +5,8 @@ import { createV07 } from './mock-v07.js';
 // kcaps=<json> overrides capability flags (e.g. {"queue_edit":false,"lyrics":false}); kfail=<type> makes that message type
 // throw. Every message is logged in window.__ws ({type, ...}). Placeholder ids only.
 //   jukebox_kiosk/capabilities, /ma {command,args} (music/favorites/* need kcaps library_write, like the library class), /queue_items, /item_tracks,
-//   /favorite_current, /unfavorite_current, /subscribe_queue, /set_autoplay, /autoplay_options, /set_autoplay_mode
+//   /favorite_current, /unfavorite_current, /subscribe_queue, /set_autoplay, /autoplay_options, /set_autoplay_mode,
+//   /sleep_timer_get, /sleep_timer_set, /sleep_timer_clear, /subscribe_sleep_timer
 // The /ma allowlist mirrors const.py MA_COMMANDS; metadata/get_track_lyrics refuses library tracks like the server.
 const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|players\/sleep_timer\/(get|set|clear)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item)|browse|recommendations|recommendations\/items|recently_played_items|genres\/overview|genres\/tracks|genres\/library_items|(tracks|albums|artists|playlists)\/library_items|in_progress_items)|metadata\/get_track_lyrics)$/;
 // #46: music/<type>/library_items with genre = <genre item id> (MA's genre filter) is answered by mock-v07 too
@@ -29,7 +30,19 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
   const v07 = createV07({ params, catalog, sleep });
   const log = (window.__ws = []);
   const subs = new Map(); // id -> {entity, cb}
+  const sleepSubs = new Map(); // id -> {entity, cb}
   let sid = 0;
+  const playerIdFor = (ent) => (window.__uniqueIds && window.__uniqueIds[ent]) || (ent === 'media_player.everywhere' ? 'syncgroup_everywhere' : st(ent)?.attributes?.active_queue);
+  window.__uniqueIds = window.__uniqueIds || { 'media_player.everywhere': 'syncgroup_everywhere' };
+  window.__playerIdFor = playerIdFor;
+  const pushSleep = (entity) => {
+    const pid = playerIdFor(entity);
+    const raw = (window.__sleepTimers && window.__sleepTimers.has(pid)) ? window.__sleepTimers.get(pid) : null;
+    for (const s of sleepSubs.values()) if (s.entity === entity) s.cb({ expires_at: raw ?? null, player_id: pid });
+  };
+  window.__onSleepTimer = () => { for (const s of sleepSubs.values()) pushSleep(s.entity); };
+  window.__kioskSleepSubs = () => [...sleepSubs.values()].map((s) => s.entity);
+  window.__kioskPushSleep = (entity = 'media_player.everywhere') => pushSleep(entity);
   const kcaps = params.get('kcaps') ? JSON.parse(params.get('kcaps')) : {};
   const kfail = params.get('kfail') ?? '';
   const features = { ...FEATURES, ...kcaps };
@@ -180,12 +193,35 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
         const Q = QS[msg.entity_id]; const cur = Q?.items[Q.index]; if (cur) cur._t.favorite = false; commit();
         return null;
       }
+      case 'sleep_timer_get': {
+        const pid = playerIdFor(msg.entity_id);
+        if (!pid) throw err('not_found', `${msg.entity_id} is not a Music Assistant player`);
+        const raw = await maCmd('players/sleep_timer/get', { player_id: pid });
+        return { expires_at: raw ?? null, player_id: pid };
+      }
+      case 'sleep_timer_set': {
+        const pid = playerIdFor(msg.entity_id);
+        if (!pid) throw err('not_found', `${msg.entity_id} is not a Music Assistant player`);
+        const raw = await maCmd('players/sleep_timer/set', { player_id: pid, seconds: msg.seconds });
+        return { expires_at: raw ?? null, player_id: pid };
+      }
+      case 'sleep_timer_clear': {
+        const pid = playerIdFor(msg.entity_id);
+        if (!pid) throw err('not_found', `${msg.entity_id} is not a Music Assistant player`);
+        await maCmd('players/sleep_timer/clear', { player_id: pid });
+        return { expires_at: null, player_id: pid };
+      }
       default: throw err('unknown_command', `Unknown command ${type}`);
     }
   }
   const connection = {
     sendMessagePromise: callWS,
     async subscribeMessage(cb, msg) {
+      if (msg.type === 'jukebox_kiosk/subscribe_sleep_timer') {
+        log.push({ ...structuredClone(msg), type: 'subscribe_sleep_timer' });
+        const id = ++sid; sleepSubs.set(id, { entity: msg.entity_id, cb });
+        return async () => { sleepSubs.delete(id); };
+      }
       if (msg.type !== 'jukebox_kiosk/subscribe_queue') throw err('unknown_command', msg.type);
       log.push({ ...structuredClone(msg), type: 'subscribe_queue' });
       if (!features.queue_push) throw err('unauthorized', 'Unauthorized');
