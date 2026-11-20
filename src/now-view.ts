@@ -594,11 +594,12 @@ export class JbNow extends LitElement {
     /* Cover overlay buttons sit on the picture: an HA icon button (no shadow, theme icon colour) on the ha-card surface, so the icon stays readable on any cover */
     .art .sleep-strip .sp { color: var(--_fg); }
     .art .sleep-strip .sp.on { color: var(--_active); border-color: var(--_active); }
-    /* 0.9.1 (#44): MA's worded choices wrap to the right over the cover; Cancel in the theme's error colour; the "Stops in" line on the card surface */
-    .art .sleep-strip.ma { gap: var(--ha-space-2, 8px); --_sp-in: var(--_ab-inset); }
-    .art .sleep-strip.ma .sp { padding: 0 var(--ha-space-4, 16px); }
-    .art .sleep-strip.ma .sp.cx { color: var(--error-color); border-color: var(--error-color); }
-    .art .sleep-strip.ma .sl-row { flex-basis: 100%; display: flex; justify-content: flex-end; }
+    /* 0.9.1 (#44): MA's worded choices in a tidy three-across grid over the top of the cover, one label per button on one line;
+       Cancel (theme error colour) and the "Stops in" line each take a whole row, on the card surface */
+    .art .sleep-strip.ma { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ha-space-2, 8px); --_sp-in: var(--_ab-inset); }
+    .art .sleep-strip.ma .sp { width: 100%; padding: 0 var(--ha-space-2, 8px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .art .sleep-strip.ma .sp.cx { grid-column: 1 / -1; color: var(--error-color); border-color: var(--error-color); }
+    .art .sleep-strip.ma .sl-row { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
     .art .sleep-strip.ma .sl-st { display: inline-flex; align-items: center; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       background: var(--ha-card-background, var(--card-background-color, var(--_bg))); color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); font-variant-numeric: tabular-nums; }
