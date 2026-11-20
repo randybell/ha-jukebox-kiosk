@@ -1077,34 +1077,35 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
           role="switch" aria-checked="false" aria-disabled="true" aria-label="Autoplay"
           title="Autoplay has been automatically turned off because repeat is on">${de("autoplay","i xs")}<span>Autoplay</span></button>`:I`<button class="apb ${x?"on":""}" data-action="np-autoplay" tabindex="-1" aria-pressed=${x?"true":"false"}
           aria-label="Autoplay" title=${x?"Autoplay is on: more music is added when the queue runs out":"Autoplay is off"}
-          @pointerdown=${ge} @click=${()=>this.toggleAutoplay(!x)}>${de("autoplay","i xs")}<span>Autoplay</span></button>`,$=this.isFav(),q=this.canFav(),S=this.sleepRemain(),z=function(e,t,a=Date.now()/1e3){return!!$s(t)||zs(e,a)>0}(this._sleepExpires,this._sleepMode),A=S?void 0:function(e,t){if("end_of_chapter"===e)return"End of chapter";if("end_of_item"!==e)return;const a=String(t??"").toLowerCase();return"track"===a?"End of track":"podcast_episode"===a?"End of episode":"audiobook"===a?"End of audiobook":"End of current item"}(this._sleepMode,this._snap?.currentMediaType),M=A??Ss(S);const C=(e,t,a,i,s,r=!1,o=!1)=>I`<button class="tb ${e} ${s?"on":""}" tabindex="-1" aria-label=${a} title=${a} aria-pressed=${void 0===s?B:s?"true":"false"}
-        ?disabled=${o} @pointerdown=${ge} @click=${i}>${de(t)}${r?I`<i class="dot"></i>`:B}</button>`,T=!i&&!1!==this.config.show_lyrics&&!!this.lyrics,j=this._sleepOpen?I`<div class="slx" data-action="sleep-close" @pointerdown=${this.sleepAway}></div>`:B;return I`<div class="nw ${i?"idle":""} ${this._sleepOpen?"sl-open":""}" data-state=${e?.state??"unknown"}>${j}
-      <div class="art ${T&&this._overlay?"lyr-on":""}">
+          @pointerdown=${ge} @click=${()=>this.toggleAutoplay(!x)}>${de("autoplay","i xs")}<span>Autoplay</span></button>`,$=this.isFav(),q=this.canFav(),S=this.sleepRemain(),z=As(this.config?._backend),A=function(e,t,a=Date.now()/1e3){return!!$s(t)||zs(e,a)>0}(this._sleepExpires,this._sleepMode),M=S?void 0:function(e,t){if("end_of_chapter"===e)return"End of chapter";if("end_of_item"!==e)return;const a=String(t??"").toLowerCase();return"track"===a?"End of track":"podcast_episode"===a?"End of episode":"audiobook"===a?"End of audiobook":"End of current item"}(this._sleepMode,this._snap?.currentMediaType),C=M??Ss(S);const T=(e,t,a,i,s,r=!1,o=!1)=>I`<button class="tb ${e} ${s?"on":""}" tabindex="-1" aria-label=${a} title=${a} aria-pressed=${void 0===s?B:s?"true":"false"}
+        ?disabled=${o} @pointerdown=${ge} @click=${i}>${de(t)}${r?I`<i class="dot"></i>`:B}</button>`,j=!i&&!1!==this.config.show_lyrics&&!!this.lyrics,E=this._sleepOpen?I`<div class="slx" data-action="sleep-close" @pointerdown=${this.sleepAway}></div>`:B;return I`<div class="nw ${i?"idle":""} ${this._sleepOpen?"sl-open":""}" data-state=${e?.state??"unknown"}>${E}
+      <div class="art ${j&&this._overlay?"lyr-on":""}">
         ${n?me(n,I`<img src=${n} alt="" draggable="false" @load=${()=>Ce(o,r,n)}
             @error=${()=>{Me(o,r,n),this.requestUpdate()}} />`):I`<span class="ph">${de("disc")}</span>`}
-        ${T&&this._overlay?I`<jb-lyrics class="ovl" mode="overlay" @jukebox-lyrics-tap=${()=>{this._overlay=!1,Ls(!1)}} .hass=${this.hass} .config=${this.config} .store=${this.lyrics}
+        ${j&&this._overlay?I`<jb-lyrics class="ovl" mode="overlay" @jukebox-lyrics-tap=${()=>{this._overlay=!1,Ls(!1)}} .hass=${this.hass} .config=${this.config} .store=${this.lyrics}
           ?active=${this.active}></jb-lyrics>`:B}
-        ${j}
+        ${E}
         <div class="art-btns">
-          ${i?B:I`${T?I`<button class="ab lyr ${this._overlay?"on":""}" tabindex="-1" aria-label="Lyrics" aria-pressed=${this._overlay?"true":"false"}
+          ${i?B:I`${j?I`<button class="ab lyr ${this._overlay?"on":""}" tabindex="-1" aria-label="Lyrics" aria-pressed=${this._overlay?"true":"false"}
             @pointerdown=${ge} @click=${this.toggleOverlay}>${de("lyrics")}</button>`:B}
           <button class="ab stg" tabindex="-1" aria-label="Full screen" @pointerdown=${ge}
             @click=${()=>Oe(this,"jukebox-stage",{open:!0})}>${de("fullscreen")}</button>`}
-          <!-- #42: the sleep timer lives in the artwork corner (always shown, also when idle), away from Play/Pause -->
-          <button class="ab slp ${z||this._sleepOpen?"on":""}" tabindex="-1" aria-label=${z?A??`Sleep timer ${Ss(S)}`:"Sleep timer"}
-            title=${z?A??`Sleep timer ${Ss(S)}`:"Sleep timer"} aria-pressed=${z||this._sleepOpen?"true":"false"}
-            @pointerdown=${ge} @click=${()=>this.toggleSleepOpen()}>${de("moon")}</button>
+          <!-- #42: the sleep timer lives in the artwork corner (also when idle), away from Play/Pause.
+               Hidden when the backend cannot send MA players/sleep_timer/* (plain MA / native). -->
+          ${z?I`<button class="ab slp ${A||this._sleepOpen?"on":""}" tabindex="-1" aria-label=${A?M??`Sleep timer ${Ss(S)}`:"Sleep timer"}
+            title=${A?M??`Sleep timer ${Ss(S)}`:"Sleep timer"} aria-pressed=${A||this._sleepOpen?"true":"false"}
+            @pointerdown=${ge} @click=${()=>this.toggleSleepOpen()}>${de("moon")}</button>`:B}
         </div>
-        ${this._sleepOpen?I`<div class="sleep-strip ma" role="group" aria-label="Sleep timer">
+        ${z&&this._sleepOpen?I`<div class="sleep-strip ma" role="group" aria-label="Sleep timer">
           <!-- 0.9.1 (#44): Music Assistant's own choices and words; while a timer runs, "Stops in" and a red Cancel (as MA's menu) -->
-          ${z?I`<div class="sl-row"><span class="sl-st" aria-live="polite">${A??`Stops in ${Ss(S)}`}</span></div>`:B}
-          ${xs.map(e=>I`<button class="sp ${z&&this._sleepMins===e?"on":""}" tabindex="-1" data-min=${e}
-            aria-pressed=${z&&this._sleepMins===e?"true":"false"}
+          ${A?I`<div class="sl-row"><span class="sl-st" aria-live="polite">${M??`Stops in ${Ss(S)}`}</span></div>`:B}
+          ${xs.map(e=>I`<button class="sp ${A&&this._sleepMins===e?"on":""}" tabindex="-1" data-min=${e}
+            aria-pressed=${A&&this._sleepMins===e?"true":"false"}
             @pointerdown=${ge} @click=${()=>this.setSleep(e)}>${ks[e]}</button>`)}
-          ${z?I`<button class="sp cx" tabindex="-1" data-min="0" @pointerdown=${ge} @click=${()=>this.setSleep(0)}>Cancel sleep timer</button>`:B}
-        </div>`:z?I`<div class="sleep-strip cd-only" aria-live="polite">
-          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${A??`Sleep timer ${M}`}
-            @pointerdown=${ge} @click=${()=>this.toggleSleepOpen()}>${de("moon","i xs")}${M}</button>
+          ${A?I`<button class="sp cx" tabindex="-1" data-min="0" @pointerdown=${ge} @click=${()=>this.setSleep(0)}>Cancel sleep timer</button>`:B}
+        </div>`:z&&A?I`<div class="sleep-strip cd-only" aria-live="polite">
+          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${M??`Sleep timer ${C}`}
+            @pointerdown=${ge} @click=${()=>this.toggleSleepOpen()}>${de("moon","i xs")}${C}</button>
         </div>`:B}
       </div>
       <div class="info">
@@ -1119,12 +1120,12 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
           <span class="tr">${u?Ee(u):"radio"!==t.media_content_type&&u?"":"LIVE"}</span>
         </div>
         <div class="tp">
-          ${C("sh","shuffle","Shuffle queue",()=>this.toggleShuffle(),h,h)}
-          ${C("pr","prev","Previous",()=>this.prev())}
-          ${C("pp",c?"pause":"play",c?"Pause":"Play",()=>this.playPause())}
-          ${C("nx","next","Next",()=>this.next())}
-          ${C("rp","one"===d?"repeatone":"repeat",ws[d],()=>this.cycleRepeat(),"off"!==d,"off"!==d)}
-          ${q?C("fv",$?"heart":"heartline",$?"Remove from favorites":"Add to favorites",()=>this.toggleFavorite(),$,!1,i):B}
+          ${T("sh","shuffle","Shuffle queue",()=>this.toggleShuffle(),h,h)}
+          ${T("pr","prev","Previous",()=>this.prev())}
+          ${T("pp",c?"pause":"play",c?"Pause":"Play",()=>this.playPause())}
+          ${T("nx","next","Next",()=>this.next())}
+          ${T("rp","one"===d?"repeatone":"repeat",ws[d],()=>this.cycleRepeat(),"off"!==d,"off"!==d)}
+          ${q?T("fv",$?"heart":"heartline",$?"Remove from favorites":"Add to favorites",()=>this.toggleFavorite(),$,!1,i):B}
         </div>
         ${g?I`<button class="upn panel" tabindex="-1" @pointerdown=${ge} @click=${()=>Oe(this,"jukebox-nav",{tab:"queue"})}>
             <span class="eyebrow">Up next</span><b>${g.media_title}</b>${Le(g.media_content_id)}

@@ -474,6 +474,7 @@ export class JbNow extends LitElement {
     const favOn = this.isFav();
     const showFav = this.canFav();
     const sleepRem = this.sleepRemain();
+    const canSleep = canMaSleep(this.config?._backend);
     const sleepOn = sleepIsActive(this._sleepExpires, this._sleepMode);
     const sleepModeText = !sleepRem ? sleepModeLabel(this._sleepMode, this._snap?.currentMediaType) : undefined;
     const sleepChip = sleepModeText ?? sleepLabel(sleepRem);
@@ -496,19 +497,20 @@ export class JbNow extends LitElement {
             @pointerdown=${noFocus} @click=${this.toggleOverlay}>${icon('lyrics')}</button>` : nothing}
           <button class="ab stg" tabindex="-1" aria-label="Full screen" @pointerdown=${noFocus}
             @click=${() => fire(this, 'jukebox-stage', { open: true })}>${icon('fullscreen')}</button>`}
-          <!-- #42: the sleep timer lives in the artwork corner (always shown, also when idle), away from Play/Pause -->
-          <button class="ab slp ${sleepOn || this._sleepOpen ? 'on' : ''}" tabindex="-1" aria-label=${sleepOn ? (sleepModeText ?? `Sleep timer ${fmtSleepRemain(sleepRem)}`) : 'Sleep timer'}
+          <!-- #42: the sleep timer lives in the artwork corner (also when idle), away from Play/Pause.
+               Hidden when the backend cannot send MA players/sleep_timer/* (plain MA / native). -->
+          ${canSleep ? html`<button class="ab slp ${sleepOn || this._sleepOpen ? 'on' : ''}" tabindex="-1" aria-label=${sleepOn ? (sleepModeText ?? `Sleep timer ${fmtSleepRemain(sleepRem)}`) : 'Sleep timer'}
             title=${sleepOn ? (sleepModeText ?? `Sleep timer ${fmtSleepRemain(sleepRem)}`) : 'Sleep timer'} aria-pressed=${sleepOn || this._sleepOpen ? 'true' : 'false'}
-            @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon')}</button>
+            @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon')}</button>` : nothing}
         </div>
-        ${this._sleepOpen ? html`<div class="sleep-strip ma" role="group" aria-label="Sleep timer">
+        ${canSleep && this._sleepOpen ? html`<div class="sleep-strip ma" role="group" aria-label="Sleep timer">
           <!-- 0.9.1 (#44): Music Assistant's own choices and words; while a timer runs, "Stops in" and a red Cancel (as MA's menu) -->
           ${sleepOn ? html`<div class="sl-row"><span class="sl-st" aria-live="polite">${sleepModeText ?? `Stops in ${fmtSleepRemain(sleepRem)}`}</span></div>` : nothing}
           ${SLEEP_MINUTES.map((m) => html`<button class="sp ${sleepOn && this._sleepMins === m ? 'on' : ''}" tabindex="-1" data-min=${m}
             aria-pressed=${sleepOn && this._sleepMins === m ? 'true' : 'false'}
             @pointerdown=${noFocus} @click=${() => this.setSleep(m as SleepMinutes)}>${SLEEP_LABEL[m]}</button>`)}
           ${sleepOn ? html`<button class="sp cx" tabindex="-1" data-min="0" @pointerdown=${noFocus} @click=${() => this.setSleep(0)}>Cancel sleep timer</button>` : nothing}
-        </div>` : sleepOn ? html`<div class="sleep-strip cd-only" aria-live="polite">
+        </div>` : canSleep && sleepOn ? html`<div class="sleep-strip cd-only" aria-live="polite">
           <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${sleepModeText ?? `Sleep timer ${sleepChip}`}
             @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon', 'i xs')}${sleepChip}</button>
         </div>` : nothing}

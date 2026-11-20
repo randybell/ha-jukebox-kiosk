@@ -103,18 +103,16 @@ await ev(`(() => { window.__sleepTimers.delete('syncgroup_everywhere'); window._
 await sleep(300);
 check('SL10f live clear event removes the countdown chip', !(await ev(`${NP}.querySelector('.sp.sleep-cd')`)));
 
-// Native backend: no kiosk sleep commands, no card-side setTimeout + media_pause fallback
+// Native backend (plain Music Assistant, no jukebox_kiosk): cannot send players/sleep_timer/*, so the control is hidden
 await page.goto(`${BASE}?fresh=1&latency=20&tab=now&kiosk=0`);
 await page.waitForFunction('window.__ready === true');
 await sleep(500);
-await tap(`${NP}.querySelector('.ab.slp')`);
-await sleep(100);
-await tap(`${NP}.querySelector('.sleep-strip .sp[data-min="15"]')`); // 15 minutes
-await sleep(300);
+check('SL11 native (plain MA) does not show the sleep moon', !(await ev(`${NP}.querySelector('.ab.slp')`)));
+check('SL11b native has no sleep chooser', !(await ev(`${NP}.querySelector('.sleep-strip')`)));
 const nMa = await ev(`(window.__maLog || []).filter((x) => String(x.command).startsWith('players/sleep_timer/')).length`);
-check('SL11 native backend does not call MA sleep_timer', nMa === 0, String(nMa));
+check('SL12 native does not call MA sleep_timer', nMa === 0, String(nMa));
 const cd12 = await ev(`(${NP}.querySelector('.sp.sleep-cd') || { textContent: '' }).textContent.trim()`);
-check('SL12 native does not start a card-side countdown', !/^\d+:\d{2}$/.test(cd12), cd12);
+check('SL12b native does not start a card-side countdown', !/^\d+:\d{2}$/.test(cd12), cd12);
 
 await ev(`(() => { const n = __card.shadowRoot.querySelector('jb-now'); n._sleepExpires = Date.now()/1000 + 0.6; n._sleepMins = 15; n.requestUpdate(); })()`);
 await sleep(1200);
