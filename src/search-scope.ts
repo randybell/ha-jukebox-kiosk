@@ -13,12 +13,23 @@ export interface Scope {
   artist?: MaItem;
   /** artist › album: only that album's tracks */
   album?: MaItem;
+  /** #46: a genre filter (tapping a genre). Music Assistant filters library items by genre itself (music/<type>/library_items
+   *  with `genre` = the genre's item id, as its own Library views do), so this scope's items come from MA, not from client matching. */
+  genre?: MaItem;
 }
-export interface ScopePool { albums: MaItem[]; tracks: MaItem[] }
+export interface ScopePool { albums: MaItem[]; tracks: MaItem[]; artists?: MaItem[] }
+/** A genre's MA item id (genre: int in music/<type>/library_items): item_id, or the last part of library://genre/<id>. */
+export function genreId(g: MaItem): number {
+  const raw = (g as any).item_id ?? String(g.uri ?? '').split('/').pop();
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : NaN;
+}
 
 /** Caps per scope pool (ONN tablet: a big discography must not make every keystroke slow). */
 export const POOL_MAX_TRACKS = 200;
 export const POOL_MAX_ALBUMS = 60;
+export interface PoolCaps { albums: number; tracks: number }
+export const POOL_CAPS: PoolCaps = { albums: POOL_MAX_ALBUMS, tracks: POOL_MAX_TRACKS };
 export const POOL_TTL_MS = 10 * 60 * 1000;
 export const POOL_MAX_ENTRIES = 8;
 
@@ -98,6 +109,12 @@ const TYPE_OF: Partial<Record<GroupKey, string>> = { artists: 'artist', albums: 
 /** Scoped results for a query: the pool filtered by the query, then `extra` (MA's search) items by the artist, library first. */
 export function scopedResults(scope: Scope, pool: ScopePool, q: string, extra: SearchResults = {}, limit = 50): SearchResults {
   const a = scope.artist, al = scope.album;
+  if (scope.genre) {
+    // the pool is already this genre's library items (MA did the genre filter); only the typed words are matched here
+    const by = (xs: MaItem[] | undefined, t: string) => libraryFirst((xs ?? []).map((x) => ({ ...x, media_type: x.media_type || t }))
+      .filter((it) => matchesQuery(t === 'track' ? it : { ...it, album: null }, q))).items.slice(0, Math.max(limit, 1));
+    return { artists: by(pool.artists, 'artist'), albums: by(pool.albums, 'album'), tracks: by(pool.tracks, 'track') };
+  }
   const keep = (it: MaItem) => (!a || byArtist(a)(it)) && (!al || onAlbum(al)(it)) && matchesQuery(it, q);
   const tracks = [...pool.tracks, ...(extra.tracks ?? [])].map((x) => ({ ...x, media_type: x.media_type || 'track' })).filter(keep);
   const out: SearchResults = { tracks: libraryFirst(tracks).items.slice(0, Math.max(limit, 1)) };
@@ -109,17 +126,17 @@ export function scopedResults(scope: Scope, pool: ScopePool, q: string, extra: S
   return out;
 }
 /** Display name of a scope ("JJ Grey", or "Porch Light" for an album scope). */
-export const scopeName = (s: Scope | null | undefined) => s?.album?.name ?? s?.artist?.name ?? '';
-export const scopeKey = (s: Scope | null | undefined) => (s ? `${s.artist?.uri ?? ''}>${s.album?.uri ?? ''}` : '');
+export const scopeName = (s: Scope | null | undefined) => s?.genre?.name ?? s?.album?.name ?? s?.artist?.name ?? '';
+export const scopeKey = (s: Scope | null | undefined) => (s ? `${s.artist?.uri ?? ''}>${s.album?.uri ?? ''}${s.genre ? `#${s.genre.uri}` : ''}` : '');
 
 /** Small LRU + TTL cache of scope pools, with in-flight sharing (two keystrokes never fetch the same artist twice). */
 export class PoolCache {
   private m = new Map<string, { at: number; p: Promise<ScopePool> }>();
-  constructor(private now: () => number = () => Date.now(), private ttl = POOL_TTL_MS, private max = POOL_MAX_ENTRIES) {}
+  constructor(private now: () => number = () => Date.now(), private ttl = POOL_TTL_MS, private max = POOL_MAX_ENTRIES, private caps: PoolCaps = POOL_CAPS) {}
   get(key: string, load: () => Promise<ScopePool>): Promise<ScopePool> {
     const e = this.m.get(key);
     if (e && this.now() - e.at <= this.ttl) { this.m.delete(key); this.m.set(key, e); return e.p; }
-    const p = load().then(capPool);
+    const p = load().then((x) => capPool(x, this.caps));
     const ent = { at: this.now(), p };
     this.m.delete(key); this.m.set(key, ent);
     p.catch(() => { if (this.m.get(key) === ent) this.m.delete(key); });
@@ -127,12 +144,13 @@ export class PoolCache {
     return p;
   }
   /** seed from an already loaded artist / album page (no extra calls) */
-  put(key: string, pool: ScopePool) { this.m.delete(key); this.m.set(key, { at: this.now(), p: Promise.resolve(capPool(pool)) }); }
+  put(key: string, pool: ScopePool) { this.m.delete(key); this.m.set(key, { at: this.now(), p: Promise.resolve(capPool(pool, this.caps)) }); }
   has(key: string) { const e = this.m.get(key); return !!e && this.now() - e.at <= this.ttl; }
   clear() { this.m.clear(); }
   get size() { return this.m.size; }
 }
-export const capPool = (p: ScopePool): ScopePool => ({ albums: (p.albums ?? []).slice(0, POOL_MAX_ALBUMS), tracks: (p.tracks ?? []).slice(0, POOL_MAX_TRACKS) });
+export const capPool = (p: ScopePool, caps: PoolCaps = POOL_CAPS): ScopePool => ({ albums: (p.albums ?? []).slice(0, caps.albums), tracks: (p.tracks ?? []).slice(0, caps.tracks),
+  ...(p.artists ? { artists: p.artists.slice(0, caps.albums) } : {}) });
 
 /** Library tab filters (v0.7): one category's items narrowed by an artist scope, the text filter and Favorites.
  *  Library items only, duplicates dropped (get_library + the artist page can list the same album twice). */

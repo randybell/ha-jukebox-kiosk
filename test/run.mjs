@@ -173,7 +173,12 @@ const confirmOf = () => page.evaluate((r) => { const c = eval(r).querySelector('
 // bring a result into view (the results list scrolls under the black footer) before a real pointer tap
 async function see(expr) { await page.evaluate((e) => eval(e)?.scrollIntoView({ block: 'center' }), expr); await sleep(120); }
 async function clickEl0(expr) { await see(expr); const r = await rectOf(page, expr); if (!r || !r.w) throw new Error('not visible: ' + expr); if (r.hold) await holdAt(page, r); else await page.mouse.click(r.x, r.y); await sleep(150); }
-const rowIcon = (row, act) => `${row}.querySelector('.ra-b[data-act="${act}"]')`;
+// #85: rows have no inline buttons; a press-and-hold on a row opens its pop-up, and `act` is that pop-up's action
+async function sheetAct(row, act) {
+  await see(row); const r0 = await rectOf(page, `${row}.querySelector('.rt')`);
+  await holdAt(page, r0); await sleep(250);
+  await clickEl0(`${HSX}.querySelector('.it[data-action="${act}"]')`);
+}
 // layout: every result group is a list of rows; 4 distinct icons, 48 px targets, rows ≥ 56 px
 const lay = await page.evaluate((r) => {
   const root = eval(r);
@@ -187,14 +192,8 @@ const lay = await page.evaluate((r) => {
   };
 }, SVR);
 check('4a every result group renders as a list of rows (no tiles)', lay.tiles === 0 && lay.groups.length >= 3 && lay.groups.every(([, n]) => n > 0), JSON.stringify(lay.groups));
-// 0.7.9 #35: search results: Add to queue, Play Next, Play Now (+ Start radio), no Remove
-check('4b track row: visible Add to queue / Play Next / Play Now labels in fixed order, no Remove; Start radio stays labeled inline or in More; rows ≥ 56 px',
-  lay.icons.filter((i) => ['add', 'next', 'replace', 'remove'].includes(i.act)).map((i) => i.act).join() === 'add,next,replace' && lay.icons.filter((i) => ['add', 'next', 'replace'].includes(i.act)).map((i) => i.title).join() === 'Add to queue,Play Next,Play Now' && lay.icons.every((i) => i.h >= 44 && i.label && i.title) && lay.minRow >= 56,
-  `minRow=${lay.minRow} ` + lay.icons.map((i) => `${i.act}:${i.w}x${i.h} "${i.label}"`).join(' | '));
-check('4b2 visible queue action wording is identical, not icon-only', await page.evaluate((r) => {
-  const labels = [...eval(r).querySelectorAll('.grp.tracks .row')].map((row) => [...row.querySelectorAll('.ra-b[data-act]')].filter((b) => b.getBoundingClientRect().width).map((b) => b.querySelector('span')?.textContent));
-  return labels.length > 0 && labels.every((x) => x.slice(0, 3).join() === 'Add to queue,Play Next,Play Now');
-}, SVR));
+// #85: search rows carry no inline play or queue buttons; rows are still ≥ 56 px
+check('4b track row: no inline play or queue buttons; rows ≥ 56 px', lay.icons.length === 0 && lay.minRow >= 56, `minRow=${lay.minRow} buttons=${lay.icons.length}`);
 // row tap on a track: 0.7.13 (issue 78) it opens the same pop-up as a hold (it used to only highlight the row); nothing plays, no old menu
 await see(firstRow);
 let r = await rectOf(page, `${firstRow}.querySelector('.rt')`);
@@ -210,10 +209,10 @@ s = await state(page);
 const sh4 = await page.evaluate((h) => !!eval(h).querySelector('.sh'), HSX);
 check('4d long-press on a row does not play; (0.7.10) it opens the large row sheet', s.playCalls.length === 0 && sh4, `sheet=${sh4}`);
 await page.keyboard.press('Escape'); await sleep(120);
-await clickEl0(rowIcon(firstRow, 'add'));
+await sheetAct(firstRow, 'add');
 s = await state(page);
 check('4e Add to queue adds at the end (enqueue add) right away; there is no Remove in search results', s.playCalls.length === 1 && s.playCalls[0].data.enqueue === 'add' && !(await page.evaluate((e) => !!eval(e).querySelector('.ra-b[data-act="remove"]'), firstRow)), JSON.stringify(s.playCalls.map((c) => c.data)));
-await clickEl0(rowIcon(firstRow, 'replace'));
+await sheetAct(firstRow, 'replace');
 let cf = await confirmOf();
 s = await state(page);
 check('4f Replace queue opens a confirmation and sends nothing yet', cf?.kind === 'replace' && cf.role === 'alertdialog' && /Replace the current queue\?/.test(cf.text) && /clears what's playing for everyone/.test(cf.text) && s.playCalls.length === 1, JSON.stringify(cf));
@@ -221,20 +220,20 @@ await page.screenshot({ path: SHOTS + 'v032/replace-confirm-1280x800.png' });
 await clickEl0(`${SVR}.querySelector('.confirm [data-action="cancel"]')`);
 s = await state(page);
 check('4g Cancel closes the confirmation and sends nothing', !(await confirmOf()) && s.playCalls.length === 1, `plays=${s.playCalls.length}`);
-await clickEl0(rowIcon(firstRow, 'replace'));
+await sheetAct(firstRow, 'replace');
 await clickEl0(`${SVR}.querySelector('.confirm [data-action="confirm"]')`);
 s = await state(page);
 check('4h Replace → confirm sends enqueue replace', s.playCalls.length === 2 && s.playCalls[1].data.enqueue === 'replace' && !s.playCalls[1].data.radio_mode, JSON.stringify(s.playCalls[1]?.data));
-await clickEl0(rowIcon(firstRow, 'radio')); // 0.7.9 #35b: Start radio is a visible button on search rows (no More)
+await sheetAct(firstRow, 'radio');
 cf = await confirmOf();
 const beforeRadio = (await state(page)).playCalls.length;
 check('4i Start radio opens a radio-worded confirmation, nothing sent yet', cf?.kind === 'radio' && /Start radio from/.test(cf.text) && /replaces the current queue for everyone/.test(cf.text) && beforeRadio === 2, JSON.stringify(cf));
 await clickEl0(`${SVR}.querySelector('.confirm [data-action="cancel"]')`);
 check('4j Start radio → Cancel sends nothing', (await state(page)).playCalls.length === 2);
-await clickEl0(rowIcon(firstRow, 'radio')); // 0.7.9 #35b: Start radio is a visible button on search rows (no More)
+await sheetAct(firstRow, 'radio');
 await page.keyboard.press('Escape'); await sleep(80);
 check('4k Escape closes the confirmation without sending', !(await confirmOf()) && (await state(page)).playCalls.length === 2 && (await state(page)).query === 'MOCK');
-await clickEl0(rowIcon(firstRow, 'radio')); // 0.7.9 #35b: Start radio is a visible button on search rows (no More)
+await sheetAct(firstRow, 'radio');
 await clickEl0(`${SVR}.querySelector('.confirm [data-action="confirm"]')`);
 s = await state(page);
 // tap an artist row → detail view, never play_media
@@ -248,9 +247,9 @@ const DET = `${H.sv}.shadowRoot.querySelector('jb-detail')`;
 const det4 = await page.evaluate((d) => { const el = eval(d); const x = el?.shadowRoot.querySelector('.detail'); return x ? { uri: x.dataset.uri, type: x.dataset.type, rows: x.querySelectorAll('.list.tracks .row').length } : null; }, DET);
 check('4l Search: tap artist does not call play_media', (await state(page)).playCalls.length === before4, `plays ${before4} → ${(await state(page)).playCalls.length}`);
 check('4m Search: tap artist opens its detail (top tracks)', det4 && det4.uri === artistUri && det4.type === 'artist' && det4.rows > 0, JSON.stringify(det4));
-check('4m2 Search artist detail: visible Play Next / Play Now / Remove labels', await page.evaluate((d) => {
+check('4m2 Search artist detail: track rows carry no inline play or queue buttons', await page.evaluate((d) => {
   const rows = [...eval(d).shadowRoot.querySelectorAll('.list.tracks .row')];
-  return rows.length > 0 && rows.every((r) => [...r.querySelectorAll('.ra-b[data-act]')].filter((b) => b.getBoundingClientRect().width && ['next', 'replace', 'remove'].includes(b.dataset.act)).map((b) => b.querySelector('span')?.textContent).join() === 'Play Next,Play Now,Remove');
+  return rows.length > 0 && rows.every((r) => r.querySelectorAll('.ra-b').length === 0);
 }, DET));
 await clickEl0(`${DET}.shadowRoot.querySelector('[data-action="back"]')`);
 check('4n Back returns to the results', !(await page.evaluate((d) => !!eval(d), DET)) && (await state(page)).rows > 0);
@@ -293,31 +292,33 @@ s = await state(page);
 check('6a no input/textarea/contenteditable anywhere in the card', s.editableCount === 0, `editable=${s.editableCount}`);
 check('6b document.activeElement was never an input/textarea (sampled every 25ms + focusin)', s.focusViolations === 0, `focus history: ${s.focusLog.join(' → ')}`);
 
-// ---------- 7. phone (touch): four row icons fit, the title truncates, confirm works by touch ----------
-await open(page, '&latency=60&recents=1', { width: 390, height: 844, hasTouch: true, isMobile: true });
+// ---------- 7. touch at 1024x600: rows have no inline buttons, the title truncates, confirm works by touch ----------
+await open(page, '&latency=60&recents=1', { width: 1024, height: 600, hasTouch: true, isMobile: true });
 for (const c of 'MOCK') {
   const kr = await rectOf(page, keyExpr(keyIdFor(c)));
   await page.touchscreen.tap(kr.x, kr.y); await sleep(30);
 }
 await waitShown(page, 'MOCK');
 await sleep(150);
-await page.screenshot({ path: SHOTS + 'search-390x844.png' });
+await page.screenshot({ path: SHOTS + 'search-1024x600.png' });
 await page.evaluate((sv) => { const row = eval(sv).shadowRoot.querySelector('.grp.tracks .row .rt b'); row.textContent = 'An exceptionally long touchscreen song title that must remain ellipsized beside the queue actions'; }, H.sv);
 const ph = await page.evaluate((r) => {
   const root = eval(r);
-  return [...root.querySelectorAll('.grp .row')].map((row) => {
+  // 0.9.0: genre rows (Genres is a search filter again) have no row buttons, like the Library's genre rows
+  return [...root.querySelectorAll('.grp:not(.genres) .row')].map((row) => {
     const rr = row.getBoundingClientRect();
-    const bs = [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width).map((b) => b.getBoundingClientRect());
     const t = row.querySelector('.rt b');
-    return { h: rr.height, n: bs.length, min: Math.min(...bs.map((b) => Math.min(b.width, b.height))), inside: bs.every((b) => b.left >= rr.left - 0.5 && b.right <= rr.right + 0.5 && Math.abs(b.top - bs[0].top) < 1), right: rr.right, vw: innerWidth, trunc: t.scrollWidth > t.clientWidth, tw: t.clientWidth };
+    return { h: rr.height, n: row.querySelectorAll('.ra-b').length, right: rr.right, vw: innerWidth, trunc: t.scrollWidth > t.clientWidth, tw: t.clientWidth };
   });
 }, `${H.sv}.shadowRoot`);
-check('7a 390 px: every row keeps its icons ≥ 44 px on one line inside the row (no clipping / wrapping)', ph.length > 0 && ph.every((x) => x.n >= 3 && x.min >= 44 && x.inside && x.right <= x.vw && x.h >= 56), JSON.stringify(ph.slice(0, 3)));
-check('7b 390 px: long titles truncate instead of pushing the icons', ph.some((x) => x.trunc) && ph.every((x) => x.tw > 60), ph.map((x) => x.tw).join(','));
+check('7a 1024x600: every row has no inline buttons, stays inside the screen and is ≥ 56 px tall', ph.length > 0 && ph.every((x) => x.n === 0 && x.right <= x.vw && x.h >= 56), JSON.stringify(ph.slice(0, 3)));
+check('7b 1024x600: long titles truncate', ph.some((x) => x.trunc) && ph.every((x) => x.tw > 60), ph.map((x) => x.tw).join(','));
 await page.evaluate((e) => eval(e).scrollIntoView({ block: 'center' }), `${H.sv}.shadowRoot.querySelector('.grp.tracks .row')`); await sleep(150);
-r = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.grp.tracks .row .ra-b[data-act="replace"]')`);
-await holdAt(page, r, true); await sleep(150);
-await page.screenshot({ path: SHOTS + 'replace-confirm-390x844.png' });
+r = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.grp.tracks .row .rt')`);
+await holdAt(page, r, true); await sleep(250); // a touch hold opens the row's pop-up; its Play now asks first
+r = await rectOf(page, `${HSX}.querySelector('.it[data-action="replace"]')`);
+await page.touchscreen.tap(r.x, r.y); await sleep(250);
+await page.screenshot({ path: SHOTS + 'replace-confirm-1024x600.png' });
 s = await state(page);
 const cf7 = await page.evaluate((r) => eval(r).querySelector('.confirm')?.dataset.kind, `${H.sv}.shadowRoot`);
 r = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.confirm [data-action="cancel"]')`);
@@ -362,16 +363,17 @@ await clickEl(page, `${NP}.querySelector('.tb.pp')`);           // (optimistic p
 await clickEl(page, `${NP}.querySelector('.tb.pr')`);
 await clickEl(page, `${NP}.querySelector('.tb.nx')`);
 await clickEl(page, `${NP}.querySelector('.tb.sh')`);
-for (let i = 0; i < 4; i++) { await clickEl(page, `${NP}.querySelector('.tb.rp')`); await sleep(150); }
+for (let i = 0; i < 2; i++) { await clickEl(page, `${NP}.querySelector('.tb.rp')`); await sleep(150); }
 let cs = actions(await calls(page, n0));
 const tp = cs.map((c) => `${c.s}${c.data.shuffle !== undefined ? ':' + c.data.shuffle : ''}${c.data.repeat ? ':' + c.data.repeat : ''}`);
-check('9a transport: pause, play, prev, next, shuffle_set, repeat_set off→all→off→all→off (0.6.5: never one)', tp.join(',') === 'media_pause,media_play,media_previous_track,media_next_track,shuffle_set:true,repeat_set:all,repeat_set:off,repeat_set:all,repeat_set:off', tp.join(','));
+check('9a transport: pause, play, prev, next, shuffle_set, repeat_set off→all→off (no repeat-one step)', tp.join(',') === 'media_pause,media_play,media_previous_track,media_next_track,shuffle_set:true,repeat_set:all,repeat_set:off', tp.join(','));
 check('9b every transport call targets media_player.everywhere only', cs.every((c) => tgt(c) === EV), [...new Set(cs.map(tgt))].join(' | '));
 s = await page.evaluate((np) => { const r = eval(np); return { sh: r.querySelector('.tb.sh').classList.contains('on'), dot: !!r.querySelector('.tb.sh .dot'), rp: r.querySelector('.tb.rp').classList.contains('on') }; }, NP);
 check('9c shuffle on shows white + dot; repeat off is inactive', s.sh && s.dot && !s.rp, JSON.stringify(s));
-// ---------- 9r. 0.6.5 repeat is a queue setting: off ↔ all ("Repeat queue"), a player on 'one' ----------
+// ---------- 9r. #139 repeat follows Music Assistant: off → all → one, a player on 'one' is shown as one ----------
 {
   const REPEAT_D = 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z';
+  const REPEAT_ONE_D = 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z';
   const rpBtn = (pg) => pg.evaluate((np) => { const b = eval(np).querySelector('.tb.rp'), h = eval(np).querySelector('.tb.sh'); return { on: b.classList.contains('on'), pressed: b.getAttribute('aria-pressed'), label: b.getAttribute('aria-label'), title: b.title, d: b.querySelector('path')?.getAttribute('d'), sh: h.getAttribute('aria-label') }; }, NP);
   const reps = (cs) => cs.filter((c) => c.s === 'repeat_set');
   const pg = await browser.newPage();
@@ -379,37 +381,37 @@ check('9c shuffle on shows white + dot; repeat off is inactive', s.sh && s.dot &
   await hermetic(pg);
   await open(pg, '&latency=20&tab=now&repeat=one');
   let b = await rpBtn(pg);
-  check('9r1 player on repeat one is shown as repeat queue (on, normal repeat icon, label/tooltip "Repeat queue"); shuffle labelled "Shuffle queue"',
-    b.on && b.pressed === 'true' && b.label === 'Repeat queue' && b.title === 'Repeat queue' && b.d === REPEAT_D && b.sh === 'Shuffle queue', JSON.stringify(b));
+  check('9r1 player on repeat one is shown as Repeat single track (on, repeat-one icon); shuffle labelled "Shuffle queue"',
+    b.on && b.pressed === 'true' && b.label === 'Repeat single track' && b.title === 'Repeat single track' && b.d === REPEAT_ONE_D && b.sh === 'Shuffle queue', JSON.stringify(b));
   let r = reps(await calls(pg));
-  check('9r2 nothing is sent before the debounce', r.length === 0, JSON.stringify(r));
   await sleep(2000);
   r = reps(await calls(pg));
-  check('9r3 state one → exactly one repeat_set {repeat: all} on the active player', r.length === 1 && r[0].data.repeat === 'all' && tgt(r[0]) === EV, JSON.stringify(r));
-  check('9r4 the player is now on all, still shown as on', (await pg.evaluate(() => window.__hass.states['media_player.everywhere'].attributes.repeat)) === 'all' && (await rpBtn(pg)).on);
+  check('9r2 a player on one is left as one: nothing is sent', r.length === 0, JSON.stringify(r));
+  check('9r3 the player stays on one, still shown as on', (await pg.evaluate(() => window.__hass.states['media_player.everywhere'].attributes.repeat)) === 'one' && (await rpBtn(pg)).on);
   let n1 = await ncalls(pg);
   await clickEl(pg, `${NP}.querySelector('.tb.rp')`); await sleep(150);
   await clickEl(pg, `${NP}.querySelector('.tb.rp')`); await sleep(150);
-  check('9r5 taps after the fix toggle off → all (no one)', reps(await calls(pg, n1)).map((c) => c.data.repeat).join() === 'off,all');
+  check('9r4 taps from one cycle off → all', reps(await calls(pg, n1)).map((c) => c.data.repeat).join() === 'off,all');
 
-  // MA keeps reporting one (repeat_set ignored) and many state updates arrive: still one send, no loop
+  // MA keeps reporting one and many state updates arrive: still nothing sent
   await open(pg, '&latency=20&tab=now&repeat=one&stickyrepeat=1');
   for (let i = 0; i < 25; i++) { await pg.evaluate((i) => window.__setAttrs('media_player.everywhere', { repeat: 'one', media_position: 10 + i, media_position_updated_at: new Date().toISOString() }), i); await sleep(120); }
   await pg.evaluate(() => window.__setAttrs('media_player.everywhere', { repeat: 'all' })); await sleep(50);
-  await pg.evaluate(() => window.__setAttrs('media_player.everywhere', { repeat: 'one' })); await sleep(2200);
+  await pg.evaluate(() => window.__setAttrs('media_player.everywhere', { repeat: 'one' })); await sleep(500);
   r = reps(await calls(pg));
-  check('9r6 player stuck on one (25 updates over 3 s, then all→one again) → still exactly one repeat_set all (no loop)', r.length === 1 && r[0].data.repeat === 'all', JSON.stringify(r.map((c) => c.data)));
+  check('9r5 player stuck on one (25 updates, then all→one again) → nothing sent', r.length === 0, JSON.stringify(r.map((c) => c.data)));
   b = await rpBtn(pg);
-  check('9r7 a stuck one is still drawn as repeat queue', b.on && b.d === REPEAT_D);
+  check('9r6 a stuck one is drawn as Repeat single track', b.on && b.label === 'Repeat single track' && b.d === REPEAT_ONE_D);
 
-  // coerce_repeat_one: false → shown as all, nothing sent; a tap turns it off
+  // an old coerce_repeat_one: false in the config is ignored; one is still shown as one, a tap turns it off
   await open(pg, `&latency=20&tab=now&repeat=one&cfg=${encodeURIComponent(JSON.stringify({ coerce_repeat_one: false }))}`);
-  await sleep(2200);
-  check('9r8 coerce_repeat_one false → nothing sent, shown as repeat queue', reps(await calls(pg)).length === 0 && (await rpBtn(pg)).on);
+  await sleep(500);
+  b = await rpBtn(pg);
+  check('9r7 old coerce_repeat_one: false is ignored: nothing sent, shown as Repeat single track', reps(await calls(pg)).length === 0 && b.on && b.label === 'Repeat single track', JSON.stringify(b));
   await clickEl(pg, `${NP}.querySelector('.tb.rp')`); await sleep(150);
-  check('9r9 coerce off: a tap sends repeat_set off', reps(await calls(pg)).map((c) => c.data.repeat).join() === 'off');
+  check('9r8 a tap from one sends repeat_set off', reps(await calls(pg)).map((c) => c.data.repeat).join() === 'off');
 
-  // queue-level only: shuffle / repeat (and the coerce) go to the active target, never to member speakers
+  // queue-level only: shuffle / repeat go to the active target, never to member speakers; members on 'one' are not rewritten
   await open(pg, '&latency=20&tab=now&spk=dyn&admin=1&target=media_player.indoor');
   const active = await pg.evaluate(() => __card._config.entity);
   n1 = await ncalls(pg);
@@ -418,10 +420,10 @@ check('9c shuffle on shows white + dot; repeat off is inactive', s.sh && s.dot &
   await pg.evaluate(() => { for (const id of ['media_player.living_room', 'media_player.kitchen', 'media_player.garage', 'media_player.everywhere']) window.__setAttrs(id, { repeat: 'one' }); });
   await sleep(300);
   await pg.evaluate(() => window.__setAttrs('media_player.indoor', { repeat: 'one' }));
-  await sleep(2200);
+  await sleep(500);
   cs = (await calls(pg, n1)).filter((c) => c.s === 'repeat_set' || c.s === 'shuffle_set');
-  check('9r10 dynamic target Indoor: shuffle_set, repeat_set and the repeat-one fix target only the active queue player (never members or other groups)',
-    active === 'media_player.indoor' && cs.length === 3 && cs.every((c) => tgt(c) === 'media_player.indoor') && cs.map((c) => `${c.s}:${c.data.shuffle ?? c.data.repeat}`).join() === 'shuffle_set:true,repeat_set:all,repeat_set:all',
+  check('9r9 dynamic target Indoor: shuffle_set and repeat_set target only the active queue player (never members or other groups); a member on one is not rewritten',
+    active === 'media_player.indoor' && cs.length === 2 && cs.every((c) => tgt(c) === 'media_player.indoor') && cs.map((c) => `${c.s}:${c.data.shuffle ?? c.data.repeat}`).join() === 'shuffle_set:true,repeat_set:all',
     `${active} ${JSON.stringify(cs.map((c) => [c.s, c.data, tgt(c)]))}`);
   await pg.close();
 }
@@ -503,11 +505,15 @@ const qcall = async (fn) => { const n = await ncalls(page); await fn(); await sl
 // queue edits: the MA player_queues/* commands the card sent through jukebox_kiosk/ma
 const qwcall = async (fn) => { const n = await nws(page); await fn(); await sleep(250); return (await wsSince(page, n)).filter((m) => m.type === 'ma' && /^player_queues\/(move_item|delete_item|play_index)$/.test(m.command)); };
 const qrow = (id) => `${QV}.querySelector('.qr[data-id="${id}"]')`;
-let a1 = await qwcall(() => clickEl(page, `${qrow(id2)}.querySelector('.qa[data-action="up"]')`));
-let a2 = await qwcall(() => clickEl(page, `${qrow(id2)}.querySelector('.qa[data-action="down"]')`));
-async function qmenu(id, action) { await clickEl(page, `${qrow(id)}.querySelector('.qa.mo')`); await sleep(100); await clickEl(page, `${QV}.querySelector('.menu .mi[data-action="${action}"]')`); }
-let a3 = await qwcall(() => qmenu(id3, 'next'));
-let a4 = await qwcall(() => qmenu(id3, 'remove'));
+const QHS = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`;
+async function qsheet(id, action) {
+  await clickEl(page, `${qrow(id)}.querySelector('.rt')`); await sleep(200);
+  await clickEl(page, `${QHS}.querySelector('.it[data-action="${action}"]')`);
+}
+let a1 = await qwcall(() => qsheet(id2, 'up'));
+let a2 = await qwcall(() => qsheet(id2, 'down'));
+let a3 = await qwcall(() => qsheet(id3, 'next'));
+let a4 = await qwcall(() => qsheet(id3, 'remove'));
 const qs = (a) => a.map((m) => `${m.command} ${JSON.stringify(m.args)}`).join(',');
 const QID = await page.evaluate(() => window.__hass.states['media_player.everywhere'].attributes.active_queue);
 const mv11 = (a, id, shift) => a.length === 1 && a[0].command === 'player_queues/move_item' && a[0].args.queue_id === QID && a[0].args.queue_item_id === id && a[0].args.pos_shift === shift;
@@ -518,18 +524,20 @@ s = await page.evaluate((q) => [...eval(q).querySelectorAll('.qr.next')].map((e)
 check('11c queue list reflects the moves (removed item gone)', !s.includes(id3) && s.length === 12, `${s.length} rows`);
 await open(page, '&latency=20&tab=queue&admin=1');
 await page.waitForFunction((q) => eval(q).querySelectorAll('.qr.next').length > 3, {}, QV);
-const queueLabels = await page.evaluate((q) => [...eval(q).querySelectorAll('.qr.next .acts')].map((a) =>
-  [...a.querySelectorAll('.ra-b[data-act]')].map((b) => `${b.dataset.act}:${b.querySelector('span')?.textContent}`).join()), QV);
-check('11f Queue rows use the same visible queue labels in the same order', queueLabels.length > 0 && queueLabels.every((x) => x === 'next:Play Next,replace:Play Now,remove:Remove'), JSON.stringify(queueLabels.slice(0, 2)));
+const noRowBtns = await page.evaluate((q) => [...eval(q).querySelectorAll('.qr')].every((r) => r.querySelectorAll('.ra-b, .qa, .acts').length === 0), QV);
+await clickEl(page, `${QV}.querySelector('.qr.next .rt')`); await sleep(200);
+const queueLabels = await page.evaluate((h) => [...eval(h).querySelectorAll('.it')].map((b) => `${b.dataset.action}:${b.textContent.trim()}`), QHS);
+check('11f Queue rows have no action buttons; the pop-up lists Play Now, Play Next, Move up, Move down, Remove, More Info, Cancel', noRowBtns && queueLabels.join() === 'play:Play Now,next:Play Next,up:Move up,down:Move down,remove:Remove,more:More Info,cancel:Cancel', JSON.stringify({ noRowBtns, queueLabels }));
+await clickEl(page, `${QHS}.querySelector('.it.cancel')`);
 await clickEl(page, `${QV}.querySelector('[data-action="queue-search"]')`);
 await page.waitForFunction((q) => eval(q).querySelector('.qkbd')?.shadowRoot.querySelector('.kb'), {}, QV);
 const qkey = (id) => `[...${QV}.querySelector('.qkbd').shadowRoot.querySelectorAll('[data-key="${id}"]')].find((b) => b.getBoundingClientRect().width > 0)`;
 for (const c of 'PORC') await clickEl(page, qkey(`k-${c}`));
-s = await page.evaluate((q) => ({ query: eval(q).querySelector('.qsq').dataset.query, rows: [...eval(q).querySelectorAll('.qr.sr')].map((r) => ({ id: r.dataset.id, title: r.querySelector('b')?.textContent, buttons: [...r.querySelectorAll('.ra-b')].map((b) => b.querySelector('span')?.textContent), remove: r.querySelector('[data-action="remove"]')?.disabled })) }), QV);
-check('11g Queue search filters inline, keyboard stays open, every match has a labeled Remove', s.query === 'PORC' && s.rows.length === 1 && /Porcelain/.test(s.rows[0].title) && s.rows[0].buttons.join() === 'Play Next,Play Now,Remove' && s.rows[0].remove === false, JSON.stringify(s));
+s = await page.evaluate((q) => ({ query: eval(q).querySelector('.qsq').dataset.query, rows: [...eval(q).querySelectorAll('.qr.sr')].map((r) => ({ id: r.dataset.id, title: r.querySelector('b')?.textContent, buttons: r.querySelectorAll('.ra-b, .qa, .acts').length })), kb: !!eval(q).querySelector('.qkbd') }), QV);
+check('11g Queue search filters inline, keyboard stays open, matches have no row buttons', s.query === 'PORC' && s.rows.length === 1 && /Porcelain/.test(s.rows[0].title) && s.rows[0].buttons === 0 && s.kb, JSON.stringify(s));
 const removedId = s.rows[0]?.id;
-a4 = await qwcall(() => clickEl(page, `${QV}.querySelector('.qr.sr [data-action="remove"]')`));
-check('11h labeled Remove in Queue search removes that item', rm11(a4, removedId) && await page.evaluate((q) => eval(q).querySelectorAll('.qr.sr').length === 0 && !!eval(q).querySelector('[data-action="undo"]'), QV), qs(a4));
+a4 = await qwcall(() => qsheet(removedId, 'remove'));
+check('11h Remove in the Queue search pop-up removes that item', rm11(a4, removedId) && await page.evaluate((q) => eval(q).querySelectorAll('.qr.sr').length === 0 && !!eval(q).querySelector('[data-action="undo"]'), QV), qs(a4));
 await clickEl(page, `${QV}.querySelector('[data-action="queue-search"]')`);
 check('11i Queue search closes back to the complete queue', await page.evaluate((q) => !eval(q).querySelector('.qsx') && eval(q).querySelectorAll('.qr.next').length > 0, QV));
 // An already-buffered item cannot be removed; search still renders its labeled, disabled Remove.
@@ -538,17 +546,22 @@ await page.waitForFunction((q) => eval(q).querySelectorAll('.qr.next').length > 
 await clickEl(page, `${QV}.querySelector('[data-action="queue-search"]')`);
 await page.waitForFunction((q) => eval(q).querySelector('.qkbd')?.shadowRoot.querySelector('.kb'), {}, QV);
 for (const c of 'TEAR') await clickEl(page, qkey(`k-${c}`));
-s = await page.evaluate((q) => ({ query: eval(q).querySelector('.qsq').dataset.query, rows: [...eval(q).querySelectorAll('.qr.sr')].map((r) => ({ title: r.querySelector('b')?.textContent, remove: r.querySelector('[data-action="remove"]')?.disabled, label: r.querySelector('[data-action="remove"] span')?.textContent })) }), QV);
-check('11j buffered search match keeps labeled Remove disabled', s.query === 'TEAR' && s.rows.length === 1 && s.rows[0].title === 'Teardrop' && s.rows[0].remove && s.rows[0].label === 'Remove', JSON.stringify(s));
+s = await page.evaluate((q) => ({ query: eval(q).querySelector('.qsq').dataset.query, rows: [...eval(q).querySelectorAll('.qr.sr')].map((r) => ({ id: r.dataset.id, title: r.querySelector('b')?.textContent, buttons: r.querySelectorAll('.ra-b, .qa, .acts').length })) }), QV);
+await clickEl(page, `${QV}.querySelector('.qr.sr .rt')`); await sleep(200);
+const bufSheet = await page.evaluate((h) => { const b = eval(h).querySelector('.it[data-action="remove"]'); return { id: b?.dataset.action, label: b?.textContent.trim(), off: b?.getAttribute('aria-disabled') === 'true' }; }, QHS);
+check('11j buffered search match has no row buttons; the pop-up lists Remove grayed', s.query === 'TEAR' && s.rows.length === 1 && s.rows[0].title === 'Teardrop' && s.rows[0].buttons === 0 && bufSheet.label === 'Remove' && bufSheet.off, JSON.stringify({ s, bufSheet }));
+await clickEl(page, `${QHS}.querySelector('.it.cancel')`);
 await open(page, '&latency=20&tab=queue&admin=1');
 await page.waitForFunction((q) => eval(q).querySelectorAll('.qr.next').length > 3, {}, QV);
-// 0.7.8 #40: a tap on a Queue row does nothing (use the row's play icon): no service call, no playback, no queue change
+// 0.7.13: a tap on a Queue row opens the pop-up and sends nothing
 const order0 = await page.evaluate((q) => ({ now: eval(q).querySelector('.qr.now')?.dataset.id, ids: [...eval(q).querySelectorAll('.qr.next')].map((r) => r.dataset.id) }), QV);
 let a5 = [...await qwcall(() => clickEl(page, `${qrow(id1)}.querySelector('.rt')`))];
-check('11d tap a row does nothing: no service call (no play_queue_item, no queue command)', a5.length === 0, qs(a5));
-await sleep(900);
+const sheetOpen = await page.evaluate((h) => !!eval(h).querySelector('.sh'), QHS);
+check('11d tap a row opens the pop-up and sends no queue command', sheetOpen && a5.length === 0, qs(a5) + ' sheet=' + sheetOpen);
 s = await page.evaluate((q) => ({ now: eval(q).querySelector('.qr.now')?.dataset.id, ids: [...eval(q).querySelectorAll('.qr.next')].map((r) => r.dataset.id) }), QV);
 check('11e after the tap, the same item is still playing and the queue order is unchanged', s.now === order0.now && s.now !== id1 && JSON.stringify(s.ids) === JSON.stringify(order0.ids), JSON.stringify({ before: order0, after: s }));
+await page.keyboard.press('Escape'); await sleep(200);
+check('11e2 physical Esc closes the Queue pop-up and plays nothing', !(await page.evaluate((h) => !!eval(h).querySelector('.sh'), QHS)) && JSON.stringify(s.ids) === JSON.stringify(order0.ids));
 
 // ---------- 12. browse ----------
 await open(page, '&latency=20&tab=browse&lhome=0');
@@ -564,9 +577,9 @@ const setView = (v) => page.evaluate((x) => __card.setConfig({ ...__card._config
 await setView('rows');
 await clickEl(page, `${BV}.querySelector('[data-cat="track"]')`);
 await page.waitForFunction((b) => eval(b).querySelectorAll('.list .row[data-type="track"]').length > 0, {}, BV);
-check('12h1 Library songs: visible Play Next / Play Now / Remove labels (no icon-only row actions)', await page.evaluate((b) => {
+check('12h1 Library songs: rows carry no inline play or queue buttons', await page.evaluate((b) => {
   const rows = [...eval(b).querySelectorAll('.list .row[data-type="track"]')];
-  return rows.length > 0 && rows.every((r) => [...r.querySelectorAll('.ra-b[data-act]')].filter((x) => x.getBoundingClientRect().width).filter((x) => ['next', 'replace', 'remove'].includes(x.dataset.act)).map((x) => x.querySelector('span')?.textContent).join() === 'Play Next,Play Now,Remove');
+  return rows.length > 0 && rows.every((r) => r.querySelectorAll('.ra-b').length === 0);
 }, BV));
 await setView('tiles');
 await clickEl(page, `${BV}.querySelector('[data-cat="playlist"]')`);
@@ -576,9 +589,9 @@ const BD = `${BV}.querySelector('jb-detail')?.shadowRoot`;
 let b1 = await qcall(async () => { const r = await rectOf(page, `${tile0} .ta, ${tile0}`); await page.mouse.click(r.x - r.w / 4, r.y - r.h / 4); await sleep(250); });
 const bdet = await page.evaluate((d) => { const x = eval(d)?.querySelector('.detail'); return x ? { uri: x.dataset.uri, type: x.dataset.type, rows: x.querySelectorAll('.list.tracks .row').length } : null; }, BD);
 check('12d Browse: tap a playlist tile does not call play_media', !b1.some((c) => c.s === 'play_media'), b1.map((c) => `${c.d}.${c.s}`).join(','));
-check('12h2 Library playlist detail: visible Play Next / Play Now / Remove labels', await page.evaluate((d) => {
+check('12h2 Library playlist detail: track rows carry no inline play or queue buttons', await page.evaluate((d) => {
   const rows = [...eval(d)?.querySelectorAll('.list.tracks .row') ?? []];
-  return rows.length > 0 && rows.every((r) => [...r.querySelectorAll('.ra-b[data-act]')].filter((b) => b.getBoundingClientRect().width && ['next', 'replace', 'remove'].includes(b.dataset.act)).map((b) => b.querySelector('span')?.textContent).join() === 'Play Next,Play Now,Remove');
+  return rows.length > 0 && rows.every((r) => r.querySelectorAll('.ra-b').length === 0);
 }, BD));
 check('12i Browse: tap opens the playlist detail (jukebox_kiosk/item_tracks page 1)', bdet && bdet.uri === t0uri && bdet.type === 'playlist' && bdet.rows > 0 && (await wsSince(page)).some((m) => m.type === 'item_tracks' && m.page === 1 && m.uri === t0uri), JSON.stringify(bdet));
 await clickEl(page, `${BD}.querySelector('[data-action="back"]')`);
@@ -624,8 +637,9 @@ check('12h tap a track row in the detail → opens the pop-up (jb-hold-sheet), n
 await page.keyboard.press('Escape'); await sleep(400);
 const after12h = await page.evaluate((d, h) => ({ sheet: !!eval(h).querySelector('.sh'), held: eval(d).querySelector('.list.tracks .row').classList.contains('held') }), BD, HSX);
 check('12h Esc closes the pop-up and clears the row highlight', !after12h.sheet && !after12h.held, JSON.stringify(after12h));
-b4 = await qcall(() => clickEl(page, `${BD}.querySelector('.list.tracks .row .ra-b[data-act="next"]')`));
-check('12k detail row Play next icon → play_media track enqueue next', b4.length === 1 && b4[0].data.media_type === 'track' && b4[0].data.enqueue === 'next' && tgt(b4[0]) === EV, JSON.stringify(b4[0]?.data));
+await clickEl(page, `${BD}.querySelector('.list.tracks .row .rt')`); await sleep(250);
+b4 = await qcall(() => clickEl(page, `${HSX}.querySelector('.it[data-action="next"]')`));
+check('12k detail row pop-up Play next → play_media track enqueue next', b4.length === 1 && b4[0].data.media_type === 'track' && b4[0].data.enqueue === 'next' && tgt(b4[0]) === EV, JSON.stringify(b4[0]?.data));
 
 // ---------- 13. real sample + radio hidden in Search ----------
 await open(page, '&latency=20&real=1');
@@ -690,11 +704,13 @@ await sleep(700);
 s = await page.evaluate(() => { const a = __card.shadowRoot.querySelector('ha-card').getBoundingClientRect(); return { scale: __card.dataset.scale, h: a.height, w: a.width, bottom: a.bottom }; });
 check('15j 1920x1080 → scale 1.35, card exactly fills the viewport', s.scale === '1.35' && Math.abs(s.h - 1080) < 2 && Math.abs(s.w - 1920) < 2, JSON.stringify(s));
 await see(firstRow);
-r = await rectOf(page, `${firstRow}.querySelector('.ra-b[data-act="replace"]')`);
-await holdAt(page, r); await sleep(150);
+r = await rectOf(page, `${firstRow}.querySelector('.rt')`);
+await holdAt(page, r); await sleep(250); // the row's pop-up (its Play now asks first)
+r = await rectOf(page, `${HSX}.querySelector('.it[data-action="replace"]')`);
+await page.mouse.click(r.x, r.y); await sleep(250);
 const mr = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.confirm')`);
 const mb = await rectOf(page, `${H.sv}.shadowRoot.querySelector('.confirm [data-action="confirm"]')`);
-check('15k 1920x1080: a zoomed row icon is hit by a real click; the confirmation is centred and on screen', r.w >= 60 && mr && Math.abs(mr.x - 960) < 4 && mr.y - mr.h / 2 > 0 && mr.y + mr.h / 2 < 1080 && Math.abs(mr.y - 540) < 60 && mb.h >= 60 && (await state(page)).playCalls.length === 0, `btn ${JSON.stringify(r)} confirm ${JSON.stringify(mr)}`);
+check('15k 1920x1080: a zoomed pop-up action is hit by a real click; the confirmation is centred and on screen', r.w >= 60 && mr && Math.abs(mr.x - 960) < 4 && mr.y - mr.h / 2 > 0 && mr.y + mr.h / 2 < 1080 && Math.abs(mr.y - 540) < 60 && mb.h >= 60 && (await state(page)).playCalls.length === 0, `btn ${JSON.stringify(r)} confirm ${JSON.stringify(mr)}`);
 await page.keyboard.press('Escape');
 
 // =================== 0.3.1: live API shapes (queue window, player art, radio) ===================
@@ -779,6 +795,8 @@ await page.keyboard.press('Escape');
   check('16t null station image → theme-coloured placeholder, no fixed-colour picture (0.8.1); a dead logo (404) is hidden so the placeholder shows', hr && hr.img === '' && deadHidden, `${hr?.img.slice(0, 30)} dead=${deadImg} hidden=${deadHidden}`);
   const st = g.tiles.find((t) => t.name === 'Arrow Classic Rock');
   const stEl = `[...${BR}.shadowRoot.querySelectorAll('.tile')].find((x) => x.dataset.uri === '${st?.uri}')`;
+  // 0.9.0 (#109): the tile sat on the list's bottom edge at 1280x800, so the tap could land 1px under the list; bring it into view first
+  await pg.evaluate((e) => eval(e).scrollIntoView({ block: 'center' }), stEl); await sleep(250);
   let pr = await pq(async () => { const r = await rectOf(pg, stEl); await pg.mouse.click(r.x - r.w / 4, r.y - r.h / 4); });
   await sleep(300);
   const ST = `__card.shadowRoot.querySelector('jb-station').shadowRoot`;
@@ -791,6 +809,7 @@ await page.keyboard.press('Escape');
   a = await artState();
   check('16v Now Playing shows the station (title trimmed) with its art', /Arrow Classic Rock/.test(await pg.evaluate(() => __card.shadowRoot.querySelector('jb-now').shadowRoot.textContent)) && !!a.now, a.now.slice(0, 40));
   await pg.evaluate(() => { __card.shadowRoot.querySelector('[data-tab="browse"]').click(); }); await sleep(300);
+  await pg.evaluate((e) => eval(e).scrollIntoView({ block: 'center' }), `${BR}.shadowRoot.querySelector('.tile')`); await sleep(250); // the 16zc tap scrolled the list
   let r0 = await rectOf(pg, `${BR}.shadowRoot.querySelector('.tile')`);
   await pg.mouse.move(r0.x - r0.w / 4, r0.y - r0.h / 4); await pg.mouse.down(); await sleep(650); await pg.mouse.up(); await sleep(150);
   let mi = await pg.evaluate((h) => [...eval(h).querySelectorAll('.it')].map((e) => e.dataset.action), HSX);
@@ -814,11 +833,11 @@ await page.keyboard.press('Escape');
   g = await pg.evaluate((sv) => { const r = eval(sv).shadowRoot; const grp = [...r.querySelectorAll('.grp')].find((x) => /radio/.test(x.className)); return { names: grp ? [...grp.querySelectorAll('b')].map((b) => b.textContent) : [], pv: grp ? [...new Set([...grp.querySelectorAll('.pv')].map((p) => p.textContent.trim()))] : [] }; }, H.sv);
   check('16z Search radio results trimmed + badged Radio', g.names.length > 0 && g.names.every((x) => x === x.trim() && !/\t/.test(x)) && g.pv.join() === 'Radio', JSON.stringify(g));
 
-  // Phone: durations stay visible in rows (moved into the subtitle line so the four row icons fit)
-  await open(pg, '&latency=20&tab=browse&lhome=0', { width: 390, height: 844, isMobile: true, hasTouch: true });
+  // Durations stay visible in rows (moved into the subtitle line)
+  await open(pg, '&latency=20&tab=browse&lhome=0', { width: 1024, height: 600, isMobile: true, hasTouch: true });
   await detail({ media_type: 'album', uri: 'library://album/1448', name: 'Hotel California' }, 'album'); await sleep(400);
   const ph = await pg.evaluate((b) => { const r = eval(b).querySelector('.detail .row'); const du = [...r.querySelectorAll('.du, .du2')].find((e) => getComputedStyle(e).display !== 'none'), pv = r.querySelector('.pv'); return { du: du && getComputedStyle(du).display !== 'none' && du.getBoundingClientRect().width > 0 ? du.textContent.trim() : '', pv: pv ? getComputedStyle(pv).display : 'none', over: r.scrollWidth - r.clientWidth }; }, BDs);
-  check('16za 390px phone: track rows keep the duration (under the title; provider badge hidden), no overflow', ph.du === '6:31' && ph.pv === 'none' && ph.over <= 1, JSON.stringify(ph));
+  check('16za 1024x600: track rows keep the duration under the title, no overflow', ph.du === '6:31' && ph.over <= 1, JSON.stringify(ph));
 
   // public-repo hygiene: fixtures are scrubbed
   const fxText = ['ma-search-sample.json', 'ma-search-sample-radio.json', 'ma-library-radio-sample.json'].map((f) => readFileSync(new URL(`../dev/fixtures/${f}`, import.meta.url), 'utf8')).join('\n');
@@ -850,7 +869,8 @@ await page.keyboard.press('Escape');
   const tapEl = async (expr, touch = false) => { await pg.evaluate((e) => eval(e)?.scrollIntoView({ block: 'nearest' }), expr); await sleep(60); const r = await rectOf(pg, expr); if (!r || !r.w) throw new Error('not visible: ' + expr); if (r.hold) await holdAt(pg, r, touch); else if (touch) await pg.touchscreen.tap(r.x, r.y); else await pg.mouse.click(r.x, r.y, { delay: 40 }); await sleep(200); };
   const searchRow = (g, name) => `[...${SV}.shadowRoot.querySelectorAll('.grp.${g} .row')].find((e) => e.querySelector('b')?.textContent === ${JSON.stringify(name)})`;
   const searchTile = (g, name) => `${searchRow(g, name)}?.querySelector('.rt')`; // the row body (not its icons)
-  const icon = (row, a) => `${row}?.querySelector('.ra-b[data-act="${a}"]')`;
+  // #85: rows have no inline buttons; a press-and-hold on the row opens its pop-up, whose actions are the same
+  const viaSheet = async (row, a, touch = false) => { await pg.evaluate((e) => eval(e)?.scrollIntoView({ block: 'center' }), row); await sleep(150); const r = await rectOf(pg, `${row}.querySelector('.rt')`); await holdAt(pg, r, touch); await sleep(250); await tapEl(`${HSX}.querySelector('.it[data-action="${a}"]')`, touch); };
   const confirmKind = (root) => pg.evaluate((r) => eval(r)?.querySelector('.confirm')?.dataset.kind ?? null, root);
   const SVR = `${SV}.shadowRoot`;
   const detBtn = (a) => `${SD}.querySelector('.da [data-action="${a}"]')`;
@@ -914,19 +934,19 @@ await page.keyboard.press('Escape');
   const after17k = await pg.evaluate((h, e) => ({ sheet: !!eval(h).querySelector('.sh'), held: eval(e).classList.contains('held') }), HSX, row0);
   check('17k2 physical Esc closes the pop-up and clears the row highlight', !after17k.sheet && !after17k.held, JSON.stringify(after17k));
   const seen = [];
-  for (const a of ['next']) { cs = await act(() => tapEl(icon(row0, a))); seen.push(plays(cs).map((c) => `${c.data.media_type}:${c.data.enqueue}:${c.data.media_id === row0uri}`).join()); }
-  cs = await act(() => tapEl(icon(row0, 'replace')));
+  for (const a of ['next']) { cs = await act(() => viaSheet(row0, a)); seen.push(plays(cs).map((c) => `${c.data.media_type}:${c.data.enqueue}:${c.data.media_id === row0uri}`).join()); }
+  cs = await act(() => viaSheet(row0, 'replace'));
   const kRep = (await det()).confirm; seen.push(`pre:${cs.length}`);
   await pg.screenshot({ path: V32 + 'detail-replace-confirm-1280x800.png' });
   cs = await act(() => confirm()); seen.push(plays(cs).map((c) => `${c.data.media_type}:${c.data.enqueue}:${!!c.data.radio_mode}`).join());
-  cs = await act(async () => { if (await pg.evaluate((e) => !!eval(e)?.getBoundingClientRect().width, icon(row0, 'radio'))) await tapEl(icon(row0, 'radio')); else { await tapEl(icon(row0, 'more')); await tapEl(`${SD}.querySelector('.menu .mi[data-action="radio"]')`); } }); seen.push(`pre:${cs.length}`);
+  cs = await act(() => viaSheet(row0, 'radio')); seen.push(`pre:${cs.length}`);
   cs = await act(() => confirm()); seen.push(plays(cs).map((c) => `${c.data.media_type}:${c.data.enqueue}:${!!c.data.radio_mode}`).join());
-  check('17l detail track icons → Play Next at once; Play Now + radio only after confirm', kRep === 'replace' && seen.join('|') === 'track:next:true|pre:0|track:replace:false|pre:0|track:replace:true', seen.join('|'));
+  check('17l detail track pop-up → Play Next at once; Play Now + radio only after confirm', kRep === 'replace' && seen.join('|') === 'track:next:true|pre:0|track:replace:false|pre:0|track:replace:true', seen.join('|'));
   cs = await act(async () => { await tapEl(detBtn('play')); await confirm(false); });
   check('17l2 header Play → Cancel sends nothing', cs.length === 0 && !(await det()).confirm, cs.map((c) => c.s).join());
   // album row icons in an artist: queue the album without opening it
-  cs = await act(() => tapEl(icon(albumRow('Chicago X'), 'next')));
-  check('17l3 artist album row Play next → play_media album enqueue next, stays on the artist', plays(cs).length === 1 && plays(cs)[0].data.media_type === 'album' && plays(cs)[0].data.enqueue === 'next' && (await det()).type === 'artist', JSON.stringify(plays(cs)[0]?.data));
+  cs = await act(() => viaSheet(albumRow('Chicago X'), 'next'));
+  check('17l3 artist album row pop-up Play next → play_media album enqueue next, stays on the artist', plays(cs).length === 1 && plays(cs)[0].data.media_type === 'album' && plays(cs)[0].data.enqueue === 'next' && (await det()).type === 'artist', JSON.stringify(plays(cs)[0]?.data));
   await pg.screenshot({ path: V32 + 'artist-detail-rows-1280x800.png' });
 
   // 17m: back to the results restores their scroll; a playlist row opens its detail
@@ -950,7 +970,7 @@ await page.keyboard.press('Escape');
   await open(pg, '&latency=400&playlat=400');
   await typeQ('CHICAGO');
   await tapEl(searchTile('albums', 'Chicago X')); await waitDet();
-  cs = await act(async () => { const r = await rectOf(pg, icon(`${SD}.querySelector('.list.tracks .row')`, 'next')); await pg.mouse.click(r.x, r.y); await sleep(60); await pg.mouse.click(r.x, r.y); }, 900);
+  cs = await act(async () => { const rw = await rectOf(pg, `${SD}.querySelector('.list.tracks .row .rt')`); await holdAt(pg, rw); await sleep(250); const r = await rectOf(pg, `${HSX}.querySelector('.it[data-action="next"]')`); await pg.mouse.click(r.x, r.y); await sleep(60); await pg.mouse.click(r.x, r.y); }, 900);
   check('17q double tap on Play Next (slow MA) → a single play_media', plays(cs).length === 1, plays(cs).map((c) => c.data.enqueue).join());
 
   // 17r: stale race — slow album, Back, other album: the slow reply must not land in the wrong view
@@ -1009,17 +1029,12 @@ await page.keyboard.press('Escape');
   const stName = await pg.evaluate(() => __card.shadowRoot.querySelector('jb-station').shadowRoot.querySelector('.nm')?.textContent.trim() ?? '');
   check('17y Search: tap a station row → nothing played, no menu; the station sheet opens (name trimmed of tabs)', plays(cs).length === 0 && menu.length === 0 && stName === 'WXRT Chicago 93.1 FM', JSON.stringify({ menu, stName }));
   await tapEl(`__card.shadowRoot.querySelector('jb-station').shadowRoot.querySelector('[data-action="close"]')`);
-  check('17y2 (0.7.9 #35) radio rows: only Play (replace); podcasts add+next+replace; playlists/artists/albums/tracks add+next+replace+radio; no Remove',
-    radioIcons.radio.every((x) => x === 'replace') && radioIcons.podcasts.every((x) => x === 'add+next+replace')
-    && ['playlists', 'artists', 'albums', 'tracks'].every((g) => radioIcons[g].length && radioIcons[g].every((x) => x === 'add+next+replace+radio')), JSON.stringify(radioIcons));
-  // 0.7.9 #35b: no search row has a More button; a podcast row's three buttons sit together at the row's end (no empty slot)
-  const geo35b = await pg.evaluate((sv) => { const r = eval(sv).shadowRoot; const pod = r.querySelector('.grp.podcasts .row'), tr = r.querySelector('.grp.tracks .row');
-    const end = (row) => { const bs = [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width); return { n: bs.length, right: Math.round(row.getBoundingClientRect().right - bs[bs.length - 1].getBoundingClientRect().right), gaps: bs.slice(1).map((b, i) => Math.round(b.getBoundingClientRect().left - bs[i].getBoundingClientRect().right)) }; };
-    return { more: r.querySelectorAll('.row .ra-more').length, pod: end(pod), tr: end(tr) }; }, SV);
-  check('17y3 (0.7.9 #35b) search rows: no More; podcast row ends flush like a song row (3 buttons, same gaps, no empty slot)', geo35b.more === 0 && geo35b.pod.n === 3 && geo35b.tr.n === 4
-    && Math.abs(geo35b.pod.right - geo35b.tr.right) <= 1 && geo35b.pod.gaps.every((g) => g <= Math.max(...geo35b.tr.gaps) + 1), JSON.stringify(geo35b));
+  check('17y2 no search row (radio, podcasts, playlists, artists, albums, tracks) has inline play or queue buttons (#85)',
+    Object.values(radioIcons).every((g) => g.length && g.every((x) => x === '')), JSON.stringify(radioIcons));
+  const geo35b = await pg.evaluate((sv) => eval(sv).shadowRoot.querySelectorAll('.row .ra-b, .row .ra-more').length, SV);
+  check('17y3 search rows: no buttons at the end of any row', geo35b === 0, String(geo35b));
   // 0.7.9 #37: the queue has songs, so the station asks first ("This will replace your queue"); Replace plays it
-  cs = await act(() => tapEl(icon(stRow, 'replace')));
+  cs = await act(async () => { await tapEl(`${stRow}.querySelector('.rt')`); await tapEl(`__card.shadowRoot.querySelector('jb-station').shadowRoot.querySelector('[data-action="play"]')`); }); // the row opens the station sheet; its Play asks first
   const stAsk = plays(cs).length === 0 && await pg.evaluate(() => !!__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('.confirm[data-kind=station]'));
   check('17z0 station Play asks first when the queue has songs, nothing played yet', stAsk);
   cs = await act(() => tapEl(`__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('[data-action="confirm"]')`));
@@ -1033,67 +1048,64 @@ await page.keyboard.press('Escape');
   check('17za podcast → episodes detail via jukebox_kiosk/item_tracks, no play', plays(cs).length === 0 && d.type === 'podcast' && d.tracks.length === 4 && (await pg.evaluate(() => structuredClone(window.__ws))).some((m) => m.type === 'item_tracks' && /podcast/.test(m.uri)), JSON.stringify(d));
   const epIcons = await pg.evaluate((dd) => [...eval(dd).querySelectorAll('.list.tracks .row')].map((r) => [...r.querySelectorAll('.ra-b:not(.ra-more)')].map((b) => b.dataset.act).join('+')), SD);
   const podRadio = await pg.evaluate((dd) => !!eval(dd).querySelector('.da [data-action="radio"]'), SD);
-  check('17za2 podcast detail: episodes have no Start radio icon, header has no Start radio', epIcons.length === 4 && epIcons.every((x) => x === 'next+replace+remove') && !podRadio, JSON.stringify(epIcons));
-  cs = await act(async () => { await tapEl(icon(`${SD}.querySelector('.list.tracks .row')`, 'replace')); await confirm(); });
+  check('17za2 podcast detail: episodes have no inline buttons, header has no Start radio', epIcons.length === 4 && epIcons.every((x) => x === '') && !podRadio, JSON.stringify(epIcons));
+  cs = await act(async () => { await viaSheet(`${SD}.querySelector('.list.tracks .row')`, 'replace'); await confirm(); });
   check('17zb episode Replace → confirm → play_media with the episode uri and no media_type (MA infers it)', plays(cs).length === 1 && /podcast_episode/.test(plays(cs)[0].data.media_id) && !('media_type' in plays(cs)[0].data), JSON.stringify(plays(cs)[0]?.data));
 
-  // 17zc-ze: phone portrait, touch
-  await open(pg, '&latency=40', { width: 390, height: 844, isMobile: true, hasTouch: true });
+  // 17zc-ze: 1024x600, touch
+  await open(pg, '&latency=40', { width: 1024, height: 600, isMobile: true, hasTouch: true });
   for (const c of 'CHICAGO') { const kr = await rectOf(pg, keyExpr(keyIdFor(c))); await pg.touchscreen.tap(kr.x, kr.y); await sleep(30); }
   await waitShown(pg, 'CHICAGO'); await sleep(150);
-  await pg.screenshot({ path: V32 + 'search-list-390x844.png' });
+  await pg.screenshot({ path: V32 + 'search-list-1024x600.png' });
   cs = await act(() => tapEl(searchTile('artists', 'Chicago'), true), 500); await waitDet();
   d = await det();
   const fit = await pg.evaluate((dd) => { const r = eval(dd); const btns = [...r.querySelectorAll('.da button, .nav .back')].map((b) => b.getBoundingClientRect());
     return { minH: Math.min(...btns.map((b) => b.height)), inside: btns.every((b) => b.left >= 0 && b.right <= innerWidth + 0.5), over: r.querySelector('.scroll').scrollWidth - r.querySelector('.scroll').clientWidth }; }, SD);
-  check('17zc 390x844 touch: artist tap opens the detail, no play; buttons ≥ 40px tall and on screen, no sideways scroll', plays(cs).length === 0 && d.type === 'artist' && fit.minH >= 40 && fit.inside && fit.over <= 1, JSON.stringify(fit));
-  await pg.screenshot({ path: V32 + 'search-artist-detail-390x844.png' });
-  const phRows = await pg.evaluate((dd) => [...eval(dd).querySelectorAll('.detail .row')].map((row) => { const rr = row.getBoundingClientRect(); const bs = [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width).map((b) => b.getBoundingClientRect());
-    return { n: bs.length, min: Math.min(...bs.map((b) => Math.min(b.width, b.height))), inside: bs.every((b) => b.right <= rr.right + 0.5 && b.right <= innerWidth && Math.abs(b.top - bs[0].top) < 1), h: rr.height }; }), SD);
-  check('17zd 390x844 detail rows: 4 icons ≥ 44 px, one line, inside the screen; rows ≥ 56 px', phRows.length > 5 && phRows.every((x) => x.n === 4 && x.min >= 44 && x.inside && x.h >= 56), JSON.stringify(phRows.slice(0, 2)));
+  check('17zc 1024x600 touch: artist tap opens the detail, no play; buttons ≥ 40px tall and on screen, no sideways scroll', plays(cs).length === 0 && d.type === 'artist' && fit.minH >= 40 && fit.inside && fit.over <= 1, JSON.stringify(fit));
+  await pg.screenshot({ path: V32 + 'search-artist-detail-1024x600.png' });
+  const phRows = await pg.evaluate((dd) => [...eval(dd).querySelectorAll('.detail .row')].map((row) => ({ n: row.querySelectorAll('.ra-b').length, right: row.getBoundingClientRect().right, h: row.getBoundingClientRect().height })), SD);
+  check('17zd 1024x600 detail rows: no inline buttons, inside the screen; rows ≥ 56 px', phRows.length > 5 && phRows.every((x) => x.n === 0 && x.right <= 1024.5 && x.h >= 56), JSON.stringify(phRows.slice(0, 2)));
   cs = await act(async () => { await tapEl(`${SD}.querySelector('.list.tracks .row .rt')`, true); }, 400);
   const sheetZd = await pg.evaluate((h) => !!eval(h).querySelector('.sh'), HSX);
   const csZd = await act(async () => { await tapEl(`${HSX}.querySelector('.it[data-action="radio"]')`, true); }, 300);
   d = await det();
-  await pg.screenshot({ path: V32 + 'radio-confirm-390x844.png' });
-  check('17zd2 390x844 touch: track row tap opens the pop-up; Start radio → confirmation, nothing sent', cs.length === 0 && csZd.length === 0 && sheetZd && d.confirm === 'radio' && d.menu.length === 0, JSON.stringify({ cs: cs.map((c) => c.s), csZd: csZd.map((c) => c.s), c: d.confirm, sheetZd }));
+  await pg.screenshot({ path: V32 + 'radio-confirm-1024x600.png' });
+  check('17zd2 1024x600 touch: track row tap opens the pop-up; Start radio → confirmation, nothing sent', cs.length === 0 && csZd.length === 0 && sheetZd && d.confirm === 'radio' && d.menu.length === 0, JSON.stringify({ cs: cs.map((c) => c.s), csZd: csZd.map((c) => c.s), c: d.confirm, sheetZd }));
   cs = await act(() => tapEl(`${SD}.querySelector('.confirm [data-action="cancel"]')`, true));
-  check('17zd3 390x844 touch: Cancel sends nothing', cs.length === 0 && !(await det()).confirm);
+  check('17zd3 1024x600 touch: Cancel sends nothing', cs.length === 0 && !(await det()).confirm);
   await tapEl(`${SD}.querySelector('[data-action="back"]')`, true);
-  await tapEl(icon(searchRow('tracks', '25 or 6 to 4'), 'replace'), true);
-  await pg.screenshot({ path: V32 + 'replace-confirm-390x844.png' });
+  await viaSheet(searchRow('tracks', '25 or 6 to 4'), 'replace', true);
+  await pg.screenshot({ path: V32 + 'replace-confirm-1024x600.png' });
   await tapEl(`${SVR}.querySelector('.confirm [data-action="cancel"]')`, true);
-  // Browse: album detail on the phone + 1280
-  for (const vp of [{ width: 390, height: 844, isMobile: true, hasTouch: true }, { width: 1280, height: 800 }]) {
+  // Browse: album detail at 1024x600 and 1280
+  for (const vp of [{ width: 1024, height: 600, isMobile: true, hasTouch: true }, { width: 1280, height: 800 }]) {
     await open(pg, '&latency=40&tab=browse&lhome=0', vp);
     await pg.waitForFunction((b) => eval(b).querySelectorAll('.tile').length > 0, {}, BV);
     await tapEl(`${BV}.querySelector('[data-cat="album"]')`, vp.hasTouch);
     await sleep(300);
     cs = await act(() => tapEl(`[...${BV}.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent === 'Kind of Blue')`, vp.hasTouch), 500);
     const bd = await pg.evaluate((b) => eval(b).querySelector('jb-detail')?.shadowRoot.querySelectorAll('.list.tracks .row').length ?? 0, BV);
-    if (vp.width === 390) check('17ze Browse 390x844: tap album → detail with tracks, no play', plays(cs).length === 0 && bd === 4, `rows=${bd}`);
+    if (vp.width === 1024) check('17ze Browse 1024x600: tap album → detail with tracks, no play', plays(cs).length === 0 && bd === 4, `rows=${bd}`);
     await pg.screenshot({ path: V32 + `browse-album-detail-${vp.width}x${vp.height}.png` });
-    await tapEl(`${BV}.querySelector('jb-detail').shadowRoot.querySelector('.list.tracks .row .ra-b[data-act="replace"]')`, vp.hasTouch);
+    await viaSheet(`${BV}.querySelector('jb-detail').shadowRoot.querySelector('.list.tracks .row')`, 'replace', vp.hasTouch);
     await pg.screenshot({ path: V32 + `browse-detail-replace-confirm-${vp.width}x${vp.height}.png` });
     await tapEl(`${BV}.querySelector('jb-detail').shadowRoot.querySelector('.confirm [data-action="cancel"]')`, vp.hasTouch);
   }
-  // Search list screenshot at 1280 + very narrow rows (< 330 px): Replace / Start radio fold into ⋯, still behind the confirmation
+  // Search list screenshot at 1280; Start radio from a search-row pop-up still goes behind the confirmation
   await open(pg, '&latency=40');
   await typeQ('CHICAGO');
   await pg.screenshot({ path: V32 + 'search-list-1280x800.png' });
-  await open(pg, '&latency=40', { width: 320, height: 640, isMobile: true, hasTouch: true });
+  await open(pg, '&latency=40', { width: 1024, height: 600, isMobile: true, hasTouch: true });
   for (const c of 'CHICAGO') { const kr = await rectOf(pg, keyExpr(keyIdFor(c))); await pg.touchscreen.tap(kr.x, kr.y); await sleep(30); }
   await waitShown(pg, 'CHICAGO'); await sleep(150);
   const tr = searchRow('tracks', '25 or 6 to 4');
-  const narrow = await pg.evaluate((e) => { const row = eval(e); return [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width).map((b) => `${b.dataset.act}:${Math.round(b.getBoundingClientRect().width)}`).join(); }, tr);
-  // 0.7.9 #35b: no More on search rows; Start radio is the fourth visible button, labels on one line
-  const nMenu = await pg.evaluate((e) => { const row = eval(e), rr = row.getBoundingClientRect(); return [...row.querySelectorAll('.ra-b')].filter((b) => b.getBoundingClientRect().width).every((b) => { const r = b.getBoundingClientRect(), sp = b.querySelector('span'); return r.left >= rr.left - 1 && r.right <= rr.right + 1 && sp && sp.getClientRects().length === 1; }) ? 'fits' : 'overflow'; }, tr);
-  await pg.screenshot({ path: V32 + 'narrow-search-320x640.png' });
-  cs = await act(() => tapEl(icon(tr, 'radio'), true));
+  const narrow = await pg.evaluate((e) => eval(e).querySelectorAll('.ra-b').length, tr);
+  await pg.screenshot({ path: V32 + 'search-list-1024x600-touch.png' });
+  cs = await act(() => viaSheet(tr, 'radio', true));
   const nKind = await confirmKind(SVR);
   const cs5 = await act(() => tapEl(`${SVR}.querySelector('.confirm [data-action="confirm"]')`, true));
-  check('17zg 320 px (0.7.9 #35b): labeled Add to queue / Play Next / Play Now / Start radio visible and inside the row, no More; Start radio → confirmation → radio_mode + replace', narrow.split(',').map((x) => x.split(':')[0]).join() === 'add,next,replace,radio' && nMenu === 'fits' && plays(cs).length === 0 && nKind === 'radio'
-    && plays(cs5).length === 1 && plays(cs5)[0].data.radio_mode === true && plays(cs5)[0].data.enqueue === 'replace', `${narrow} menu=${nMenu} kind=${nKind} ${JSON.stringify(plays(cs5)[0]?.data)}`);
+  check('17zg 1024x600: a search row has no inline buttons; its pop-up Start radio → confirmation → radio_mode + replace', narrow === 0 && plays(cs).length === 0 && nKind === 'radio'
+    && plays(cs5).length === 1 && plays(cs5)[0].data.radio_mode === true && plays(cs5)[0].data.enqueue === 'replace', `${narrow} kind=${nKind} ${JSON.stringify(plays(cs5)[0]?.data)}`);
   // every play_media this run used a valid HA media_type (the mock rejects anything else)
   const bad = (await all()).filter((c) => c.s === 'play_media' && !['artist', 'album', 'audiobook', 'folder', 'playlist', 'podcast', 'track', 'radio', undefined].includes(c.data.media_type));
   check('17zf play_media media_type always valid (or omitted)', bad.length === 0, JSON.stringify(bad));

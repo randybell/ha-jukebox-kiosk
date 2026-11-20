@@ -50,15 +50,17 @@ const clearPlays = (p) => ev(p, `window.__calls = window.__calls.filter((c) => !
   const row = `${SV}.shadowRoot.querySelector('.row[data-uri="${st}"]')`;
   await ev(p, `${row}.scrollIntoView({ block: 'center' })`); await sleep(80);
   const acts = await ev(p, `[...${row}.querySelectorAll('.ra-b:not(.fav)')].map((b) => b.dataset.act)`);
-  check('RR1 search radio row: only replace (Play Now)', J(acts) === J(['replace']), J(acts));
+  check('RR1 search radio row: no inline buttons (#85)', acts.length === 0, J(acts));
   await clearPlays(p);
-  await tap(p, `${row}.querySelector('[data-act=replace]')`); await sleep(250);
+  await tap(p, `${row}.querySelector('.rt')`); // a tap opens the station sheet; its Play replaces
+  await wait(p, `!!${ST}?.shadowRoot?.querySelector('[data-action=play]')`);
+  await tap(p, `${ST}.shadowRoot.querySelector('[data-action=play]')`); await sleep(250);
   const asked = await replace(p);
   const pl = await plays(p);
-  check('RR2 search Play Now → asks (queue has songs), Replace → enqueue replace, media_type radio', asked && pl.length === 1 && pl[0].enqueue === 'replace' && pl[0].media_type === 'radio' && pl[0].media_id === st && !('radio_mode' in pl[0]), J(pl));
+  check('RR2 search row → station sheet Play → asks (queue has songs), Replace → enqueue replace, media_type radio', asked && pl.length === 1 && pl[0].enqueue === 'replace' && pl[0].media_type === 'radio' && pl[0].media_id === st && !('radio_mode' in pl[0]), J(pl));
   // song row still has next
   const songActs = await ev(p, `(() => { const r = [...${SV}.shadowRoot.querySelectorAll('.row')].find((x) => x.dataset.group === 'tracks'); return r ? [...r.querySelectorAll('.ra-b:not(.ra-more)')].map((b) => b.dataset.act) : null; })()`);
-  check('RR3 (0.7.9 #35) search song row: add+next+replace(+radio), no remove', songActs && J(songActs.slice(0, 3)) === J(['add', 'next', 'replace']) && !songActs.includes('remove'), J(songActs));
+  check('RR3 search song row: no inline buttons (#85)', songActs && songActs.length === 0, J(songActs));
   await p.close();
 }
 
@@ -107,13 +109,15 @@ const clearPlays = (p) => ev(p, `window.__calls = window.__calls.filter((c) => !
   await wait(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].some((r) => r.dataset.group === 'playlists')`);
   await sleep(150);
   const prow = await ev(p, `(() => { const r = [...${SV}.shadowRoot.querySelectorAll('.row')].find((x) => x.dataset.group === 'playlists'); return r ? { uri: r.dataset.uri, acts: [...r.querySelectorAll('.ra-b:not(.ra-more)')].map((b) => b.dataset.act) } : null; })()`);
-  check('RR7 (0.7.9 #35) search playlist row: add+next+replace+radio, no remove', prow && J(prow.acts) === J(['add', 'next', 'replace', 'radio']), J(prow));
+  check('RR7 search playlist row: no inline buttons (#85)', prow && prow.acts.length === 0, J(prow));
   await clearPlays(p);
   const rowSel = `${SV}.shadowRoot.querySelector('.row[data-uri="${prow.uri}"]')`;
   await ev(p, `${rowSel}.scrollIntoView({block:'center'})`); await sleep(80);
-  await tap(p, `${rowSel}.querySelector('[data-act=next]')`); await sleep(250);
+  { const r = await ev(p, `(() => { const b = ${rowSel}.querySelector('.rt').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+    await p.mouse.move(r.x, r.y); await p.mouse.down(); await sleep(650); await p.mouse.up(); await sleep(250); } // a hold opens the item's pop-up
+  await tap(p, `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot.querySelector('.it[data-action=next]')`); await sleep(250);
   const pl = await plays(p);
-  check('RR8 playlist Play Next still enqueue next', pl.length === 1 && pl[0].enqueue === 'next' && pl[0].media_type === 'playlist', J(pl));
+  check('RR8 playlist pop-up Play next still enqueues next', pl.length === 1 && pl[0].enqueue === 'next' && pl[0].media_type === 'playlist', J(pl));
   await p.close();
 }
 

@@ -3,7 +3,7 @@ import { tokens, base } from './styles';
 import { icon } from './icons';
 import { mediaStyles, noFocus, roomsOf, fire } from './shared';
 import { throttle } from './slider';
-import { sendVolume } from './vol-send';
+import { sendVolume, sendMute } from './vol-send';
 import './slider';
 import type { HomeAssistant, JukeboxCardConfig, PresetConfig } from './types';
 import { SpeakerError, timeouts, type SpeakerStore } from './speakers/ma';
@@ -26,6 +26,7 @@ import { AskHold } from './speakers/ask-hold';
 interface Ask { title: string; sub?: string; lines: string[]; ok: string; danger?: boolean; resolve: (ok: boolean) => void }
 export type { InlineRoomState as InlineRoom } from './speakers/model';
 import type { InlineRoomState as InlineRoom } from './speakers/model';
+import { TEST_HOOKS } from './test-hooks';
 interface Undo { label: string; run: () => Promise<void> }
 /** the top-right status chip: info (auto-hides ~4 s), busy (until replaced), error, ask (an action button + dismiss) */
 type ChipKind = 'info' | 'busy' | 'error' | 'ask';
@@ -37,7 +38,7 @@ const CHIP_MS = 4000;
 const ERROR_MS = 6000;
 const ASK_MS = 6000;
 const BUSY_MS = 15000;
-const ms = (k: string, d: number) => Number((window as any)[k] ?? d);
+const ms = (k: string, d: number) => (TEST_HOOKS ? Number((window as any)[k] ?? d) : d);
 const chipMs = (kind: ChipKind, undo: boolean) => kind === 'busy' ? BUSY_MS : kind === 'error' ? ms('__jbErrorMs', ERROR_MS) : kind === 'ask' ? ms('__jbAskMs', ASK_MS)
   : undo ? ms('__jbUndoMs', UNDO_MS) : ms('__jbChipMs', CHIP_MS);
 const HOLD_MS = 4000;
@@ -212,9 +213,6 @@ export class JbSpeakers extends LitElement {
   }
   private volOf(id: string) { return this.held(this.vol, id, Number(this.hass?.states[id]?.attributes?.volume_level ?? 0), (x, y) => Math.abs(x - y) < 0.011); }
   private mutedOf(id: string) { return this.held(this.mute, id, !!this.hass?.states[id]?.attributes?.is_volume_muted, (x, y) => x === y); }
-  private callVol(id: string, service: string, data: Record<string, any>) {
-    return this.hass!.callService('media_player', service, data, { entity_id: id }).catch(() => this.fail('That did not work. Check the speaker.'));
-  }
   private sendVol(id: string, v: number) { return sendVolume(this.hass, id, v).catch(() => this.fail('That did not work. Check the speaker.')); }
   private sender(id: string) {
     let s = this.senders.get(id);
@@ -230,7 +228,7 @@ export class JbSpeakers extends LitElement {
   private toggleMute(id: string) {
     const v = !this.mutedOf(id);
     this.mute.set(id, { v, t: Date.now() }); this.requestUpdate();
-    void this.callVol(id, 'volume_mute', { is_volume_muted: v });
+    void sendMute(this.hass, id, v).catch(() => this.fail('That did not work. Check the speaker.'));
   }
 
   /* ---------------- grouping ---------------- */
@@ -549,92 +547,93 @@ export class JbSpeakers extends LitElement {
     .sp-scrim { z-index: 1; background: var(--_scrim); -webkit-backdrop-filter: var(--_scrim-filter); backdrop-filter: var(--_scrim-filter); }
     .sheet { position: absolute; z-index: 2; display: flex; flex-direction: column; background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow);
       left: 0; right: 0; bottom: 0; max-height: min(100%, var(--_popup-max-h)); border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; padding-bottom: env(safe-area-inset-bottom); overflow: hidden; }
-    .sh { display: flex; align-items: center; gap: 12px; padding: 16px 16px 12px 20px; border-bottom: 1px solid var(--_divider); }
+    .sh { display: flex; align-items: center; gap: var(--ha-space-3, 12px); padding: var(--ha-space-4, 16px) var(--ha-space-4, 16px) var(--ha-space-3, 12px) var(--ha-space-5, 20px); border-bottom: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .ht { display: flex; flex-direction: column; min-width: 0; flex: 1; }
     .ht .eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
     .tn { font-family: var(--_font-display); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ht small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); }
     /* 0.7.8 #50: a labeled Close button (was a small X), high contrast, sized like the card's other buttons */
-    .x { height: 48px; min-width: 88px; padding: 0 20px; display: grid; place-items: center; border-radius: 999px; flex: none;
+    .x { height: 48px; min-width: 88px; padding: 0 var(--ha-space-5, 20px); display: grid; place-items: center; border-radius: var(--ha-border-radius-pill, 9999px); flex: none;
       background: var(--_active); color: var(--_on-accent); font: inherit; font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; }
     .x:active { transform: scale(.96); background: var(--_chip-sel); }
-    .body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 20px 20px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
-    .banner { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: 10px 14px; border-radius: 12px; border: 1px solid var(--_divider); background: var(--_chip-bg); }
-    .blk { display: flex; flex-direction: column; gap: 8px; }
+    .body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--ha-space-3, 12px) var(--ha-space-5, 20px) var(--ha-space-5, 20px); display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); scrollbar-width: none; }
+    .banner { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-lg, 12px); border: var(--ha-border-width-sm, 1px) solid var(--_divider); background: var(--_chip-bg); }
+    .blk { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); }
     .eyebrow.sm { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-    .chip { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--_surface-border);
+    .chips { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); }
+    .chip { position: relative; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); }
-    .chip .i { width: 18px; height: 18px; }
+    .chip .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .chip.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
-    .chip.busy { opacity: .6; }
+    .chip.busy { opacity: var(--_dim); }
     .chip:active { transform: scale(.97); }
-    .chip .live { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .chip .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
     .mix { display: flex; flex-direction: column; }
-    .rooms { display: flex; flex-direction: column; border-top: 1px solid var(--_divider); }
-    .vr { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "m n a" "s s v"; align-items: center; column-gap: 8px; padding: 8px 0; }
-    .vr + .vr { border-top: 1px solid var(--_divider); }
+    /* #117: rooms fill as many 320px columns as the panel has room for (one in the drawer and the phone sheet, two in a wide drawer), no width rule;
+       every row draws its own top divider so one or two columns look the same */
+    .rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); column-gap: var(--ha-space-6, 24px); }
+    .rooms > .vr { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
+    .vr { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "m n a" "s s v"; align-items: center; column-gap: var(--ha-space-2, 8px); padding: var(--ha-space-2, 8px) 0; }
+    .vr + .vr { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .vr.main { grid-template-areas: "m n n" "s s v"; }
-    .vm { grid-area: m; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; color: var(--_active); margin-left: -8px; }
-    .vm .i { width: 22px; height: 22px; }
+    /* #117: a 48px mute target; the extra reaches into the panel margin so the icon stays where it was */
+    .vm { grid-area: m; width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_active); margin-left: calc(-1 * var(--ha-space-3, 12px)); }
+    .vm .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     .vn { grid-area: n; display: flex; flex-direction: column; min-width: 0; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
     .vn b, .vn small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vn small { font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .vr.out .vn b { color: var(--_muted); }
     .vr.out .vm { color: var(--_inactive); }
-    .vr.pending { opacity: .7; }
+    .vr.pending { opacity: var(--_dim); }
     .vs { grid-area: s; --_slider-h: 7px; --_slider-knob: 22px; --_slider-hit: 40px; }
     .vv { grid-area: v; width: 34px; text-align: right; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
     .vv::after { content: attr(data-v); }
-    .vr.off { opacity: .5; }
-    .act { grid-area: a; height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); white-space: nowrap;
+    .vr.off { opacity: var(--_dim); }
+    .act { grid-area: a; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); white-space: nowrap;
       max-width: 52cqw; overflow: hidden; text-overflow: ellipsis; }
     .act.join { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
     .act.take { border-style: dashed; }
     .act.blocked, .act.idle { color: var(--_inactive); border-color: var(--_divider); }
-    .act:disabled { opacity: .4; }
+    .act:disabled { color: var(--_disabled); border-color: var(--_disabled); } /* #113: HA disabled colours */
     /* 0.6.4 status chip: top-right of the middle area, right under the header clock (never over it); it replaces the
        0.6.3 centred toast and the bottom Undo bar. With the panel open it moves left of the panel's close button. */
     .st { position: absolute; z-index: 12; top: 10px; right: var(--_pad); max-width: min(400px, calc(100% - 2 * var(--_pad))); min-height: 40px;
-      display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 14px; border-radius: var(--ha-border-radius-sm, 4px); pointer-events: auto;
+      display: flex; align-items: center; gap: var(--ha-space-2, 8px); padding: var(--ha-space-1, 4px) var(--ha-space-1, 4px) var(--ha-space-1, 4px) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-sm, 4px); pointer-events: auto;
       /* ha-toast styling: neutral loud fill, on-neutral text */
       --_fg: var(--ha-color-on-neutral-loud); --_muted: var(--ha-color-on-neutral-loud);
-      background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); border: 0; box-shadow: var(--ha-box-shadow-l, none); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2);
+      background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); border: 0; box-shadow: var(--wa-shadow-l, var(--ha-box-shadow-l, none)); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2);
       animation: stin 160ms ease both; }
-    .st.info, .st.busy { padding-right: 14px; } .st.info:has(.ca), .st.busy:has(.ca) { padding-right: 4px; }
-    .st .ct { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 0; }
+    .st.info, .st.busy { padding-right: var(--ha-space-4, 16px); } .st.info:has(.ca), .st.busy:has(.ca) { padding-right: var(--ha-space-1, 4px); }
+    .st .ct { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: var(--ha-space-2, 8px) 0; }
     .st.wrap .ct { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
     .st .sep { font-style: normal; color: var(--_muted); margin: 0 -2px; }
-    .st .ca { position: relative; flex: none; height: 34px; padding: 0 14px; border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
+    .st .ca { position: relative; flex: none; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
     .st .ca::before, .st .cx::before { content: ""; position: absolute; inset: -6px -4px; }
-    .st .cx { position: relative; flex: none; height: 34px; padding: 0 14px; display: grid; place-items: center; border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); } /* #51: labeled Close (was an X) */
-    .st .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--_active); animation: stpulse 1s ease-in-out infinite alternate; }
+    .st .cx { position: relative; flex: none; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); display: grid; place-items: center; border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); } /* #51: labeled Close (was an X) */
+    .st .dot { flex: none; width: 8px; height: 8px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); animation: stpulse 1s ease-in-out infinite alternate; }
     .st.error { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
     .st.error .si { color: var(--text-primary-color, #fff); flex: none; } .st.error .ca { background: var(--text-primary-color, #fff); color: var(--error-color); } .st.error .cx { background: var(--text-primary-color, #fff); color: var(--error-color); }
     @keyframes stin { from { opacity: 0; transform: translateY(-6px); } }
     @keyframes stpulse { from { opacity: .35; } }
-    :host([open]) .st { right: 116px; top: 14px; max-width: min(360px, calc(100% - 116px - var(--_pad))); } /* #50: left of the labeled Close button */
-    @container spk (max-width: 640px) { :host([open]) .st { right: var(--_pad); top: 10px; } }
-    @container spk (max-width: 640px) and (max-height: 560px) { :host([open]) .st { right: 116px; top: 6px; max-width: calc(100% - 116px - var(--_pad)); } }
+    /* #50: left of the labeled Close button. #117: the room it leaves is the Close button's own width plus the header's right padding and gap, not a guessed 116px */
+    :host { --_st-x: calc(var(--ha-space-4, 16px) + 88px + var(--ha-space-3, 12px)); }
+    :host([open]) .st { right: var(--_st-x); top: var(--_space-3-5); max-width: min(360px, calc(100% - var(--_st-x) - var(--_pad))); }
+    @container spk (max-width: 640px) { :host([open]) .st { right: var(--_pad); top: var(--_space-2-5); } }
+    @container spk (max-width: 640px) and (max-height: 560px) { :host([open]) .st { right: var(--_st-x); top: var(--_space-1-5); max-width: calc(100% - var(--_st-x) - var(--_pad)); } }
     .confirm { z-index: 10; max-height: min(100cqh, var(--_popup-max-h)); overflow-y: auto; }
     /* the panel only knows the card's own height (not the viewport): short cards get tighter rows; max height stays the shared dialog ceiling */
     .sh { flex: none; }
     @container spk (max-height: 560px) {
-      .sh { padding-top: 8px; padding-bottom: 6px; } .tn { font-size: var(--ha-font-size-l, 16px); }
-      .body { padding-top: 8px; gap: 10px; } .vr { padding: 4px 0; } .chip { height: 40px; }
+      .sh { padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px); } .tn { font-size: var(--ha-font-size-l, 16px); }
+      .body { padding-top: var(--ha-space-2, 8px); gap: var(--ha-space-2, 8px); } .vr { padding: var(--ha-space-1, 4px) 0; }
     }
     .ask-scrim { z-index: 9; }
-    .tk { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: var(--ha-font-size-m, 14px); color: var(--_fg); }
+    .tk { margin: 0; padding-left: var(--ha-space-5, 20px); display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-m, 14px); color: var(--_fg); }
     .sp-ask.danger .cbtn.ok { background: var(--_active); color: var(--_on-accent); }
-    /* tablet: right drawer */
+    /* tablet: right drawer. #117 kept as a container query on the card's own width (structural): the panel is a bottom sheet below this
+       and a right-hand drawer from here; the drawer then widens with the card (clamp) */
     @container spk (min-width: 641px) {
-      .sheet { left: auto; top: 0; bottom: 0; right: 0; width: min(440px, 92cqw); max-height: min(100%, var(--_popup-max-h)); border-radius: var(--_dialog-radius) 0 0 var(--_dialog-radius); border-width: 0 0 0 var(--_card-border-width, 1px); box-shadow: var(--_dialog-shadow); }
-    }
-    /* wide (1280+, incl. 1080p after the card's zoom): wider drawer, two-column rooms */
-    @container spk (min-width: 1200px) {
-      .sheet { width: min(760px, 58cqw); }
-      .rooms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
-      .vr + .vr { border-top: 0; } .rooms .vr { border-bottom: 1px solid var(--_divider); }
+      .sheet { left: auto; top: 0; bottom: 0; right: 0; width: clamp(min(440px, 92cqw), 58cqw, 760px); max-height: min(100%, var(--_popup-max-h)); border-radius: var(--_dialog-radius) 0 0 var(--_dialog-radius); border-width: 0 0 0 var(--_card-border-width, 1px); box-shadow: var(--_dialog-shadow); }
     }
     @media (prefers-reduced-motion: reduce) { .chip:active { transform: none; } .st, .st .dot { animation: none; } }
   `];

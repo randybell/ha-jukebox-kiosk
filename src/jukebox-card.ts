@@ -1,7 +1,6 @@
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
-import { ensureFonts } from './fonts';
 import './search-view';
 import './now-view';
 import './browse-view';
@@ -10,27 +9,27 @@ import './editor';
 import './lyrics/lyrics-view';
 import { LyricsStore, type LyricsStatus } from './lyrics/store';
 import { QueueModel } from './queue-model';
-import { roomsOf, playerArt, ART, hash, isRadioUri } from './shared';
+import { roomsOf, nowArt, songKey, artReady, ART, hash, isRadioUri } from './shared';
 import './speakers-view';
 import './station-sheet';
 import './station-confirm';
 import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
-import { canGroup, canJumpQueue, targetsOf, targetMa, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
+import { canGroup, targetsOf, targetMa, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
 /** the screensaver's reduced-motion class (.rm) follows the browser setting */
 const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { firstMusicAssistantPlayer } from './ma-player';
+import { formatTime, formatDateWeekdayDay, startMinuteClock } from './datetime';
 import { pickBackend, createBackend, type MaBackend } from './backend';
 import { defineElement } from './define';
 import { libraryTabLabel, combinedOn } from './library-home';
 import { FavStore } from './favorites';
-import { RepeatOneGuard } from './repeat';
 import './hold-sheet';
 import { volDown, volFlush, setVolDown, onVolState, connected } from './vol-send';
 import type { HoldSheet, JbHoldSheet } from './hold-sheet';
 
-export const VERSION = '0.8.6';
+export const VERSION = '0.9.2';
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'now', label: 'Now Playing', icon: 'disc' },
   { id: 'browse', label: 'Browse', icon: 'browse' },
@@ -43,6 +42,12 @@ const TARGET_KEY = 'jukebox-card:target:v1';
 const bool = (v: unknown) => v === undefined || typeof v === 'boolean';
 const num = (v: unknown, lo: number, hi: number) => v === undefined || (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi);
 /** Screensaver status line for lyrics states that have nothing to show (shown only when screensaver lyrics are on). */
+/**
+ * #120 screen-size numbers for the `scale: auto` option (types.ts `scale`). The card is laid out for a DESIGN_W x DESIGN_H box; on a screen at
+ * least SCALE_FROM times that box (both ways) the whole card is zoomed up, in SCALE_STEP steps, never past SCALE_MAX. `scale: <number>` skips this.
+ */
+const DESIGN_W = 1420, DESIGN_H = 800;
+const SCALE_FROM = 1.15, SCALE_MAX = 1.8, SCALE_STEP = 0.05;
 /** Fit-to-panel: never shorter than this (px). Below it the card keeps this height and the page scrolls, as a regular card would. */
 const FIT_MIN = 320;
 /** Short-viewport compaction thresholds for the fitted card height (px). */
@@ -59,8 +64,6 @@ function validateSpeakers(c: JukeboxCardConfig) {
   oneOf('guest_access', ['volume', 'none']);
   oneOf('leader_drop', ['block', 'allow']);
   if (!bool(c.confirm_drop)) throw new Error('jukebox-card: confirm_drop must be true or false.');
-  if (!bool(c.coerce_repeat_one)) throw new Error('jukebox-card: coerce_repeat_one must be true or false.');
-  if (!bool(c.show_action_icons)) throw new Error('jukebox-card: show_action_icons must be true or false.');
   if (c.grouping_users !== undefined && (!Array.isArray(c.grouping_users) || !c.grouping_users.every((u) => typeof u === 'string')))
     throw new Error('jukebox-card: grouping_users must be a list of user names or ids.');
   if (c.targets !== undefined) {
@@ -93,7 +96,7 @@ export class JukeboxCard extends LitElement {
   private _config!: JukeboxCardConfig;
   private _tab: TabId = 'now';
   private _now = new Date();
-  private _clock?: number;
+  private _clockStop?: () => void;
   private _qcount = 0;
   /** current queue item's (https) image, the art fallback when the player has no relative entity_picture(_local) */
   private _qart = '';
@@ -155,11 +158,6 @@ export class JukeboxCard extends LitElement {
   readonly favs = new FavStore();
   /** Music Assistant backend (kiosk / native), shared by queue, lyrics, speakers and the views */
   backend?: MaBackend;
-  /** 0.6.5 coerce_repeat_one: a player on repeat 'one' gets one repeat_set 'all' per detection (debounced, never a loop) */
-  readonly repeatGuard = new RepeatOneGuard({
-    send: (entity) => this.hass?.callService('media_player', 'repeat_set', { repeat: 'all' }, { entity_id: entity }),
-    allowed: (entity) => this.mayCoerceRepeat(entity),
-  });
   private _bkey = '';
   private _bunsub?: () => void;
   private _push?: { key: string; off?: () => void };
@@ -193,7 +191,7 @@ export class JukeboxCard extends LitElement {
     validateSpeakers(config);
     const first = !this._config;
     this._base = {
-      accent: 'mono', limit: 8,
+      limit: 8,
       screensaver_minutes: 10, ...config, _favs: this.favs, _stationGuard: this.stationGuard,
     };
     this._config = this.effective();
@@ -207,10 +205,9 @@ export class JukeboxCard extends LitElement {
     if (!this.tabs().some((t) => t.id === this._tab)) this._tab = 'now';
     this.lyrics.enabled = this._config.show_lyrics !== false;
     this.syncBackend(true);
-    this.queue.readsBuffer = () => !!this._config && canJumpQueue(this._config, this.hass?.user);
+    this.queue.readsBuffer = () => !!this._config;
     this.queue.entity = this._config.entity!;
     this.queue.limitAfter = this._config.queue_limit ?? 200;
-    ensureFonts(this._config.font_base);
     this.armIdle();
   }
   /**
@@ -323,7 +320,9 @@ export class JukeboxCard extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this._clock = window.setInterval(() => (this._now = new Date()), 15000);
+    // #107: the clock (top bar and screensaver) updates exactly on each minute boundary
+    this._clockStop?.(); this._now = new Date();
+    this._clockStop = startMinuteClock((now) => (this._now = now));
     // Belt and braces: if anything editable ever takes focus inside the card, drop it so no OS keyboard opens.
     this.renderRoot?.addEventListener?.('focusin', this.onFocusIn as EventListener);
     this._lunsub ??= this.lyrics.subscribe((st) => { if (st.status !== this._lstatus) { this._lstatus = st.status; this.requestUpdate(); } });
@@ -371,7 +370,7 @@ export class JukeboxCard extends LitElement {
     this._vunsub?.(); this._vunsub = undefined;
     this._conn?.removeEventListener?.('ready', this.onConnReady); this._conn?.removeEventListener?.('disconnected', this.onConnDown); this._conn = undefined;
     super.disconnectedCallback();
-    window.clearInterval(this._clock); window.clearTimeout(this._idleTimer);
+    this._clockStop?.(); this._clockStop = undefined; window.clearTimeout(this._idleTimer);
     this._qunsub?.();
     this._sunsub?.(); this._sunsub = undefined; window.clearTimeout(this._lostTimer);
     this._lunsub?.(); this._lunsub = undefined;
@@ -390,7 +389,6 @@ export class JukeboxCard extends LitElement {
     this.removeEventListener('jukebox-sheet', this.onSheet as EventListener);
     this.removeEventListener('jukebox-station-close', this.onStationClose as EventListener);
     this.speakers.stopPolling();
-    this.repeatGuard.dispose();
     document.removeEventListener('fullscreenchange', this.onFsChange);
     document.removeEventListener('webkitfullscreenchange', this.onFsChange);
     window.removeEventListener('keydown', this.onKeyCap, true);
@@ -464,10 +462,12 @@ export class JukeboxCard extends LitElement {
   protected updated() {
     if (!this._spkEl) { const el = this.renderRoot.querySelector('jb-speakers') as HTMLElement | null; if (el) this._spkEl = el; }
   }
-  /** Now-playing art for the screensaver (see playerArt: never an absolute entity_picture). */
+  /** Now-playing art for the screensaver and full screen (see playerArtSources: never an absolute entity_picture;
+   *  #147: a source that failed for this song is skipped, then the queue picture, then '' for the no-art look). */
   private art() {
-    const ent = this._config?.entity ? this.hass?.states[this._config.entity] : undefined;
-    return playerArt(ent?.attributes, this.queue.currentItem);
+    const id = this._config?.entity ?? '';
+    const ent = id ? this.hass?.states[id] : undefined;
+    return nowArt(id, ent?.attributes, this.queue.currentItem);
   }
   /** Large-screen scale: the layout is designed around ~1280x800; on bigger panels zoom it so art/text grow instead of spreading thin. */
   private _scale = 1;
@@ -476,7 +476,7 @@ export class JukeboxCard extends LitElement {
     const w = this.clientWidth, h = this.clientHeight;
     let z = 1;
     if (typeof c.scale === 'number' && c.scale > 0) z = c.scale;
-    else if (w && h) { const auto = Math.min(w / 1420, h / 800); z = auto >= 1.15 ? Math.min(1.8, Math.round(auto * 20) / 20) : 1; }
+    else if (w && h) { const auto = Math.min(w / DESIGN_W, h / DESIGN_H); z = auto >= SCALE_FROM ? Math.min(SCALE_MAX, Math.round(auto / SCALE_STEP) / Math.round(1 / SCALE_STEP)) : 1; }
     if (z === this._scale) return;
     this._scale = z;
     this.style.setProperty('--_z', String(z));
@@ -500,6 +500,8 @@ export class JukeboxCard extends LitElement {
 
   // ---------- child events ----------
   private onPlayed = () => this.queue.refreshSoon(800);
+  /** The hold pop-up's Cancel path (same as Cancel or Esc): no action is sent. */
+  private closeSheet() { ((this.renderRoot as ShadowRoot).querySelector('jb-hold-sheet') as JbHoldSheet | null)?.close(); }
   /** tablist keyboard support (roving tabindex): ←/→/Home/End select a tab and move the focus ring with it */
   private onTabKey = (e: KeyboardEvent) => {
     const ids = this.tabs().map((t) => t.id), n = ids.length;
@@ -507,6 +509,7 @@ export class JukeboxCard extends LitElement {
     if (e.key === 'ArrowRight') i = (i + 1) % n; else if (e.key === 'ArrowLeft') i = (i - 1 + n) % n;
     else if (e.key === 'Home') i = 0; else if (e.key === 'End') i = n - 1; else return;
     e.preventDefault();
+    this.closeSheet();
     this._tab = ids[i]; this._spk = false;
     this.updateComplete.then(() => (this.renderRoot.querySelector(`.tab[data-tab="${ids[i]}"]`) as HTMLElement | null)?.focus());
   };
@@ -535,6 +538,9 @@ export class JukeboxCard extends LitElement {
     this._tab = t;
     // v0.7 Library home: the Search tile (and Genres) open Search ready to type, optionally on a category chip
     const cat = e.detail?.category === 'genres' ? 'genre' : e.detail?.category;
+    // #46: a genre tapped in the separate Library tab filters the Search tab by it
+    const genre = e.detail?.genre;
+    if (genre) { this.updateComplete.then(() => ((comb ? this.libHost() : this.renderRoot.querySelector('jb-search')) as any)?.applyGenre?.(genre)); return; }
     if (comb) this.updateComplete.then(() => this.libHost()?.focusSearch?.(cat));
     else if (t === 'search' && e.detail?.focus) this.updateComplete.then(() => (this.renderRoot.querySelector('jb-search') as any)?.focusSearch?.(e.detail?.category));
   };
@@ -574,7 +580,7 @@ export class JukeboxCard extends LitElement {
   /** #37: Esc on the station confirm wins over everything (capture, registered before the tabs' own key handlers) */
   private onKeyCap = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && this._stAsk) { e.preventDefault(); e.stopImmediatePropagation(); this.stAnswer(false); }
-    else if (e.key === 'Escape' && this._sheet) { e.preventDefault(); e.stopImmediatePropagation(); ((this.renderRoot as ShadowRoot).querySelector('jb-hold-sheet') as JbHoldSheet | null)?.close(); }
+    else if (e.key === 'Escape' && this._sheet) { e.preventDefault(); e.stopImmediatePropagation(); this.closeSheet(); }
   };
   private onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && this._saver === 'on') this.ambClose(e, 'saver');
@@ -612,26 +618,10 @@ export class JukeboxCard extends LitElement {
       this.speakers.hass = this.hass;
       const id = this._config.entity!;
       const a = this.hass.states[id], b = old?.states[id];
-      if (a !== b || !old) this.repeatGuard.observe(id, a?.attributes?.repeat, this._config.coerce_repeat_one !== false);
       if (!old) this.queue.refreshSoon(0);
       else if (a !== b && (a?.state !== b?.state || a?.attributes?.media_content_id !== b?.attributes?.media_content_id
         || a?.attributes?.media_title !== b?.attributes?.media_title || a?.attributes?.shuffle !== b?.attributes?.shuffle)) this.queue.refreshSoon();
     }
-  }
-  /**
-   * Only for the player this card controls, and only for a user with Playback permission: on the kiosk backend that
-   * is the playback class from jukebox_kiosk/capabilities (if the server never answered, nothing is sent); the other
-   * backends have no permission classes, so HA's own service permissions apply.
-   */
-  private async mayCoerceRepeat(entity: string): Promise<boolean> {
-    if (!this.hass || this._config?.coerce_repeat_one === false || this._config?.entity !== entity) return false;
-    const be = this.backend;
-    if (be?.kind === 'kiosk') {
-      await be.ready;
-      const now = this.backend;
-      return now === be && !!(be as any).info && be.caps.queuePlay;
-    }
-    return true;
   }
   /** dynamic mode: a remembered target missing from hass.states is forgotten once, with a notice (it used to fall back silently) */
   private dropLostTarget() {
@@ -687,9 +677,9 @@ export class JukeboxCard extends LitElement {
     return true;
   }
 
+  /** #107: HA's own time format (profile language, 12/24-hour setting, time zone). */
   private timeStr() {
-    const lang = this.hass?.locale?.language || this.hass?.language || undefined;
-    try { return this._now.toLocaleTimeString(lang, { hour: 'numeric', minute: '2-digit' }); }
+    try { return formatTime(this._now, this.hass); }
     catch { return this._now.toLocaleTimeString(); }
   }
 
@@ -702,21 +692,23 @@ export class JukeboxCard extends LitElement {
     const at = ent?.attributes ?? {};
     const playing = ent?.state === 'playing' || ent?.state === 'paused';
     const pic = playing ? this.art() : undefined;
-    const lang = this.hass?.locale?.language || this.hass?.language || undefined;
+    // #147: the background has no error event: the art is loaded once per song first (until then the plain background
+    // shows, as while any picture loads); a failure re-renders with the next source, or the no-art look when none is left.
+    const picOk = !!pic && artReady(c.entity ?? '', songKey(at), pic, () => this.requestUpdate());
     const ls = this.lyrics.state.status;
     const lyrOn = playing && c.show_lyrics !== false && c.screensaver_lyrics !== false;
     const lyr = lyrOn && (ls === 'synced' || ls === 'plain');
     // No lyrics to show: a small, quiet status line instead, inside the drifting block so it moves with the burn-in shift.
     const status = lyrOn ? SAVER_LYRICS_STATUS[ls] : undefined;
     let date = '';
-    try { date = this._now.toLocaleDateString(lang, { weekday: 'long', month: 'long', day: 'numeric' }); } catch { /* */ }
+    try { date = formatDateWeekdayDay(this._now, this.hass); } catch { /* */ }
     const state = use === 'saver' ? this._saver : this._stageOut ? 'waking' : 'on';
     const title = playing ? at.media_title : undefined;
     const swallow = (e: Event) => { e.preventDefault(); e.stopPropagation(); };
     return html`<div class="amb ${use} ${state}" role="button" aria-label="Close" data-use=${use}
         @pointerdown=${(e: Event) => this.ambClose(e, use)} @pointerup=${swallow} @click=${swallow}>
       ${playing && title ? pic
-        ? html`<div class="sv-bg" style=${`background-image:url("${pic.replace(/"/g, '%22')}")`}></div>`
+        ? html`<div class="sv-bg" style=${picOk ? `background-image:url("${pic.replace(/"/g, '%22')}")` : ''}></div>`
         : html`<div class="sv-bg noart" style=${`background:${ART[hash(String(title)) % ART.length]}`}></div>` : nothing}
       <div class="sv-drift ${lyr ? 'has-ly' : ''}">
         <div class="sv-clock">${this.timeStr()}</div>
@@ -764,14 +756,14 @@ export class JukeboxCard extends LitElement {
     const view = (id: TabId, child: unknown) => html`<div class="view" data-view=${id} ?hidden=${this._tab !== id}>${child}</div>`;
     const c = this._config, h = this.hass, q = this.queue, tabs = this.tabs();
     return html`
-      <ha-card class="app ${prefersReducedMotion() ? 'rm' : ''}" style="${c.height ? `--_height:${c.height};` : ''}${c.show_action_icons !== true ? '--_ra-display:none;' : ''}">
+      <ha-card class="app ${prefersReducedMotion() ? 'rm' : ''}" style="${c.height ? `--_height:${c.height};` : ''}">
         <header class="top">
           <div class="brand">${icon('disc', 'i brand-i')}<span>${c.title ?? 'Jukebox'}</span></div>
           <button class="pill" title=${c.entity!} tabindex="-1" aria-label="${pre} ${name}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk ? 'true' : 'false'}
             @pointerdown=${(e: PointerEvent) => e.preventDefault()}
-            @click=${() => (this._spk = !this._spk)}>${icon('group', 'i xs')}<span class="pl">${pre}</span><span class="pn">${name}</span>${dyn
+            @click=${() => { this.closeSheet(); this._spk = !this._spk; }}>${icon('group', 'i xs')}<span class="pt"><span class="pnm"><span class="pl">${pre}</span> <span class="pn">${name}</span></span> ${dyn
               ? html`<b>· ${!ent && this.hass ? 'not found' : ent?.state === 'buffering' ? 'regrouping…' : live ? `${live} speaker${live === 1 ? '' : 's'}` : 'idle'}</b>`
-              : rooms ? html`<b>· ${rooms} room${rooms === 1 ? '' : 's'} synced</b>` : nothing}${icon('chev', 'i xs pc')}</button>
+              : rooms ? html`<b>· ${rooms} room${rooms === 1 ? '' : 's'} synced</b>` : nothing}</span>${icon('chev', 'i xs pc')}</button>
           ${volDown() ? html`<span class="lost" role="status" data-status="reconnecting">Reconnecting to Home Assistant…</span>`
             : this._lost ? html`<span class="lost" role="status">${this._lost}</span>` : nothing}
           <div class="spacer"></div>
@@ -789,14 +781,14 @@ export class JukeboxCard extends LitElement {
             .cancel=${() => this.stAnswer(false)}></jb-station-confirm>
           <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null}></jb-station>
           <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver}></jb-speakers>
+          <jb-hold-sheet .state=${this._sheet}></jb-hold-sheet>
         </main>
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
           ${tabs.map((t) => html`<button class="tab ${this._tab === t.id ? 'active' : ''}" role="tab" tabindex=${this._tab === t.id ? '0' : '-1'} data-tab=${t.id}
               aria-selected=${this._tab === t.id ? 'true' : 'false'}
-              @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { if (t.id === 'browse' && this._tab === 'browse') { const lh = this.libHost(); if (lh) lh.home(); else (this.renderRoot.querySelector('jb-browse') as any)?.goHome?.(); } this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
+              @pointerdown=${(e: PointerEvent) => e.preventDefault()} @click=${() => { this.closeSheet(); if (t.id === 'browse' && this._tab === 'browse') { const lh = this.libHost(); if (lh) lh.home(); else (this.renderRoot.querySelector('jb-browse') as any)?.goHome?.(); } this._tab = t.id; this._spk = false; }}>${icon(t.icon)}<span>${t.label}</span>${t.id === 'queue' && this._qcount
                 ? html`<em class="badge">${this._qcount > 99 ? '99+' : this._qcount}</em>` : nothing}</button>`)}
         </nav>
-        <jb-hold-sheet .state=${this._sheet}></jb-hold-sheet>
         ${this._stage ? this.renderAmbient('stage') : nothing}
         ${this._saver ? this.renderAmbient('saver') : nothing}
       </ha-card>`;
@@ -816,24 +808,35 @@ export class JukeboxCard extends LitElement {
       color: var(--_fg);
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
-    .top { display: flex; align-items: center; gap: 14px; padding: 12px var(--_pad) 12px; min-height: 60px; position: relative; z-index: 2;
-      background: transparent; border-bottom: 1px solid var(--_hairline); }
-    .brand { display: flex; align-items: center; gap: 10px; font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-xl, 20px); }
-    .brand-i { width: 28px; height: 28px; color: var(--_active); }
-    .pill { white-space: nowrap; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: var(--_chip-bg);
-      border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
+    .top { display: flex; align-items: center; gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); padding: var(--ha-space-2, 8px) var(--_pad); min-height: clamp(52px, 8cqi, 60px); /* the 48px pill + 8px above and below: the header keeps its pre-#117 height */ position: relative; z-index: 2;
+      background: transparent; border-bottom: var(--ha-border-width-sm, 1px) solid var(--_hairline); }
+    .brand { display: flex; align-items: center; gap: var(--ha-space-2, 8px); flex: none; font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-l, 16px), 4cqi, var(--ha-font-size-xl, 20px)); }
+    .brand-i { width: calc(var(--_icon) * 28 / 24); height: calc(var(--_icon) * 28 / 24); color: var(--_active); }
+    /* #117 fluid speaker pill: it shrinks with the header. The parts that no longer fit drop out whole, least important first
+       ("· 3 rooms synced", then "Playing on:"); they wrap onto a second line that the one-line box hides, so nothing is cut in half.
+       The speaker name always stays (a long one ends in "…", like every item name). No width breakpoints. */
+    .pill { white-space: nowrap; display: flex; align-items: center; gap: var(--ha-space-2, 8px); padding: var(--ha-space-1, 4px) clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px));
+      flex: 0 1 auto; min-width: var(--_touch-min); overflow: hidden; border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
+    .pill .pt, .pill .pnm { display: flex; flex-wrap: wrap; align-items: center; column-gap: .3em; min-width: 0; height: 1lh; overflow: hidden; }
+    .pill .pt { flex: 0 1 auto; }
+    /* the words keep their reading order ("Playing on: Everywhere"); the name is laid out first (order) and the row is reversed,
+       so "Playing on:" is the part that wraps away when there is no room, while it still reads before the name */
+    .pill .pnm { flex-direction: row-reverse; justify-content: flex-end; flex: 0 1 auto; }
+    .pill .pn { order: -1; }
+    .pill .pn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .pill b { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
-    .pill .pl { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); margin-right: -2px; }
-    .pill .pc { width: 14px; height: 14px; opacity: .7; margin-left: -2px; }
-    .lost { margin-left: 10px; font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .pill { color: var(--_fg); min-height: 40px; cursor: pointer; } .pill:active { background: var(--_chip-sel); }
+    .pill .pl { font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
+    .pill .pc { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); opacity: .7; margin-left: -2px; }
+    .lost { margin-left: var(--ha-space-2, 8px); font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .pill { color: var(--_fg); min-height: var(--_touch-min); cursor: pointer; } .pill:active { background: var(--_chip-sel); }
     .spacer { flex: 1; }
-    .clock { white-space: nowrap; font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
+    .clock { white-space: nowrap; flex: none; font-size: clamp(var(--ha-font-size-l, 16px), 3.5cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
     .np { container: np / size; min-height: 0; position: relative; overflow: hidden; background: transparent; }
     /* Now Playing, Library, Search, Queue and the detail pages are plain HA card surfaces: ha-card paints the one surface (album art is a background on the screensaver only). */
     .view { position: absolute; inset: 0; z-index: 1; }
     .view[hidden] { display: none; }
-    .badge { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--_active);
+    .badge { position: absolute; top: var(--_space-1-5); left: calc(50% + var(--ha-space-2, 8px)); min-width: 20px; height: 20px; padding: 0 var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-md, 8px); background: var(--_active);
       color: var(--_on-accent); font-style: normal; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); display: grid; place-items: center; font-variant-numeric: tabular-nums; }
     /* Screensaver / Stage: restored to e322336 look (fixed black canvas and white type). Theme rules do not apply here.
        color: #fff is set so the clock and title stay white now that the parent card uses theme body text. */
@@ -846,17 +849,17 @@ export class JukeboxCard extends LitElement {
     .sv-bg::after { content: ""; position: absolute; inset: 0; background: radial-gradient(90% 90% at 50% 50%, #0000 40%, #000a 100%), linear-gradient(#0000004d, #00000080); }
     .sv-bg.noart { inset: -10%; filter: blur(60px) saturate(1.2); opacity: .7; }
     @keyframes kb { from { transform: scale(1) translate(0, 0) } to { transform: scale(1.08) translate(-2%, 1.5%) } }
-    .sv-drift { position: absolute; left: 8%; top: 12%; display: flex; flex-direction: column; gap: 6px; animation: drift 240s ease-in-out infinite alternate; }
+    .sv-drift { position: absolute; left: 8%; top: 12%; display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); animation: drift 240s ease-in-out infinite alternate; }
     @keyframes drift {
       0% { transform: translate(0, 0) } 25% { transform: translate(calc(70cqw - 100%), 18cqh) } 50% { transform: translate(28cqw, calc(64cqh - 100%)) }
       75% { transform: translate(calc(78cqw - 100%), 4cqh) } 100% { transform: translate(6cqw, calc(60cqh - 100%)) } }
     .amb { container-type: size; }
-    .sv-clock { font-family: var(--_font-display); font-weight: 800; font-size: clamp(72px, 16cqw, 200px); line-height: .95; letter-spacing: -.03em; font-variant-numeric: tabular-nums; text-shadow: 0 4px 40px #0008; }
+    .sv-clock { font-family: var(--_font-display); font-weight: 800; font-size: calc(clamp(72px, 16cqw, 200px) * .9); line-height: .95; letter-spacing: -.03em; font-variant-numeric: tabular-nums; text-shadow: 0 4px 40px #0008; }
     .sv-date { font-size: clamp(16px, 2.4cqw, 26px); color: #ffffffc0; font-weight: 600; }
-    .sv-np { display: flex; align-items: center; gap: 14px; margin-top: 18px; max-width: min(1100px, 80cqw); }
+    .sv-np { display: flex; align-items: center; gap: var(--ha-space-4, 16px); margin-top: var(--ha-space-4, 16px); max-width: min(1100px, 80cqw); }
     .sv-np span { display: flex; flex-direction: column; min-width: 0; }
     .sv-np b { font-family: var(--_font-display); font-size: clamp(26px, 4.2cqw, 60px); font-weight: 800; line-height: 1.12; text-shadow: 0 2px 24px #000a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sv-np small { font-size: clamp(17px, 2.4cqw, 32px); margin-top: 4px; text-shadow: 0 2px 16px #000a; color: #ffffffa8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sv-np small { font-size: clamp(17px, 2.4cqw, 32px); margin-top: var(--ha-space-1, 4px); text-shadow: 0 2px 16px #000a; color: #ffffffa8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sv-hint { position: absolute; bottom: 22px; left: 0; right: 0; text-align: center; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: #ffffff55; }
     /* reduced motion: no drift and no Ken Burns. The text block still jumps (no animation) to one of 10 spots every 60 s, so a
        static screen can't burn in. The .rm class mirrors the media query so the dev harness/tests can force it. */
@@ -864,9 +867,9 @@ export class JukeboxCard extends LitElement {
     .rm .sv-drift, .rm .sv-bg { animation: none; } .rm .sv-drift { animation: hop 600s step-end infinite; }
     .rm { --_ly-slide: 0ms; } /* inherited into jb-lyrics: the screensaver lyrics move without sliding */
     @keyframes hop { 0% { transform: translate(0, 0) } 10% { transform: translate(calc(70cqw - 100%), 18cqh) } 20% { transform: translate(28cqw, calc(64cqh - 100%)) } 30% { transform: translate(calc(78cqw - 100%), 4cqh) } 40% { transform: translate(6cqw, calc(60cqh - 100%)) } 50% { transform: translate(calc(50cqw - 50%), 30cqh) } 60% { transform: translate(calc(74cqw - 100%), calc(66cqh - 100%)) } 70% { transform: translate(12cqw, 10cqh) } 80% { transform: translate(calc(60cqw - 100%), calc(40cqh - 50%)) } 90% { transform: translate(20cqw, calc(66cqh - 100%)) } 100% { transform: translate(0, 0) } }
-    .sv-drift.has-ly .sv-clock { font-size: clamp(56px, 10cqw, 140px); }
-    .sv-ly { margin-top: 18px; width: min(820px, 72cqw); }
-    .sv-lys { margin-top: 14px; font-size: clamp(12px, 1.1cqw, 15px); font-weight: 600; letter-spacing: .04em; color: #ffffff6b; text-shadow: 0 1px 8px #000a; white-space: nowrap; }
+    .sv-drift.has-ly .sv-clock { font-size: calc(clamp(56px, 10cqw, 140px) * .9); } /* #38: the clock 10% smaller (landscape) */
+    .sv-ly { margin-top: var(--ha-space-4, 16px); width: min(820px, 72cqw); }
+    .sv-lys { margin-top: var(--ha-space-4, 16px); font-size: clamp(12px, 1.1cqw, 15px); font-weight: 600; letter-spacing: .04em; color: #ffffff6b; text-shadow: 0 1px 8px #000a; white-space: nowrap; }
     /* Portrait (0.8.2, #38): what is playing leads and the clock steps back. Container-based (the shared view's own box is taller
        than wide), never a phone or device size, so landscape keeps every rule above exactly. Sizes come from HA's type scale
        (5xl is its top step; the big clock is a whole multiple of it) and grow fluidly with the screen width between those steps,
@@ -886,60 +889,52 @@ export class JukeboxCard extends LitElement {
     .amb.stage { z-index: 45; }
     /* Tab bar (0.5.0, segmented): one rounded translucent track on the theme footer, equal segments with hairline
        dividers, the active segment using the theme primary. Only colour/transform transitions (no layout, no blur). */
-    .tabs { display: grid; grid-template-columns: repeat(var(--tabs, 4), minmax(0, 1fr)); gap: 4px;
-      padding: 11px calc(var(--_pad) + 4px) calc(13px + env(safe-area-inset-bottom)); background: transparent;
-      border-top: 1px solid var(--_hairline); position: relative; z-index: 2; }
-    .tabs::before { content: ""; position: absolute; top: 7px; left: var(--_pad); right: var(--_pad); bottom: calc(9px + env(safe-area-inset-bottom));
-      border-radius: 18px; background: var(--_chip-bg); border: 1px solid var(--_surface-border); pointer-events: none; }
-    .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 58px;
-      padding: 3px; border-radius: 14px; background: transparent; border: 0;
+    .tabs { display: grid; grid-template-columns: repeat(var(--tabs, 4), minmax(0, 1fr)); gap: var(--ha-space-1, 4px);
+      /* #121 the track (::before) sits --_track-out outside the tab buttons on every side, derived from the bar's own padding */
+      --_tabs-pt: var(--ha-space-3, 12px); --_tabs-pb: var(--ha-space-3, 12px); --_track-out: var(--ha-space-1, 4px);
+      padding: var(--_tabs-pt) calc(var(--_pad) + var(--_track-out)) calc(var(--_tabs-pb) + env(safe-area-inset-bottom)); background: transparent;
+      border-top: var(--ha-border-width-sm, 1px) solid var(--_hairline); position: relative; z-index: 2; }
+    .tabs::before { content: ""; position: absolute; top: calc(var(--_tabs-pt) - var(--_track-out)); left: var(--_pad); right: var(--_pad); bottom: calc(var(--_tabs-pb) - var(--_track-out) + env(safe-area-inset-bottom));
+      border-radius: var(--ha-border-radius-xl, 16px); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); pointer-events: none; }
+    .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--ha-space-1, 4px); min-width: 0; min-height: 58px;
+      padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-xl, 16px); background: transparent; border: 0;
       color: var(--_muted); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: .01em; position: relative;
-      transition: background-color 120ms ease, color 120ms ease, transform 120ms ease; }
-    .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .tab .i { width: 30px; height: 30px; }
-    .tab + .tab::before { content: ""; position: absolute; left: -2.5px; top: 25%; bottom: 25%; width: 1px; background: var(--_hairline); transition: opacity 120ms ease; }
+      transition: background-color var(--_t-fast) ease, color var(--_t-fast) ease, transform var(--_t-fast) ease; }
+    /* #117 fluid tab labels: the size follows the card's width and a long label wraps (centred) instead of being cut */
+    .tab { font-size: clamp(var(--ha-font-size-s, 12px), 2.6cqi, var(--ha-font-size-l, 16px)); letter-spacing: clamp(0px, .05cqi, .01em); }
+    .tab span { max-width: 100%; white-space: normal; text-align: center; overflow-wrap: break-word; }
+    .tab .i { width: clamp(calc(var(--_icon) * 26 / 24), 5cqi, calc(var(--_icon) * 30 / 24)); height: clamp(calc(var(--_icon) * 26 / 24), 5cqi, calc(var(--_icon) * 30 / 24)); }
+    .tab + .tab::before { content: ""; position: absolute; left: -2.5px; top: 25%; bottom: 25%; width: 1px; background: var(--_hairline); transition: opacity var(--_t-fast) ease; }
     .tab.active::before, .tab.active + .tab::before, .tab:hover::before, .tab:hover + .tab::before { opacity: 0; }
     @media (hover: hover) { .tab:hover { background: var(--_chip-sel); color: var(--_fg); } }
     .tab:active { transform: scale(.97); background: var(--_chip-sel); color: var(--_fg); }
     /* selected tab: HA sidebar pattern: --sidebar-selected-icon-color text/icon on a tint of that colour at --dark-divider-opacity */
     .tab.active, .tab.active:hover, .tab.active:active { background: color-mix(in srgb, var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)) calc(var(--dark-divider-opacity, 0.12) * 100%), transparent); color: var(--sidebar-selected-icon-color, var(--primary-color, #03a9f4)); }
-    .tab:focus-visible { outline: 2px solid var(--_active); outline-offset: 3px; }
+    .tab:focus-visible { outline: var(--ha-border-width-md, 2px) solid var(--_active); outline-offset: 3px; }
     .tab .badge { top: 4px; left: calc(50% + 6px); }
     /* 0.7.9 #58: a narrow card on a wide screen (the editor preview): the pill keeps "Playing on: <player>", the tab labels stay whole.
        0.7.12 fluid: gate and breakpoints follow the card's jbapp width, not the window. */
-    @container jbapp (min-width: 641px) {
-      @container jbapp (max-width: 600px) { .pill b, .brand span { display: none; } .top { gap: 10px; } }
-    }
-    @container jbapp (max-width: 960px) { .pill b { display: none; } }
-    @container jbapp (max-width: 800px) { .pill .pl { display: none; } }
-    @container jbapp (max-width: 640px) {
-      .pill { padding: 0; width: 44px; min-height: 44px; justify-content: center; } .pill .pn, .pill b, .pill .pl, .pill .pc { display: none; } .clock { font-size: var(--ha-font-size-l, 16px); } .top { min-height: 52px; padding-top: 10px; padding-bottom: 10px; }
-      .tabs { gap: 2px; padding-left: calc(var(--_pad) + 3px); padding-right: calc(var(--_pad) + 3px); }
-      .tab { font-size: var(--ha-font-size-s, 12px); letter-spacing: 0; } .tab .i { width: 26px; height: 26px; }
-      .tab span { white-space: normal; text-align: center; line-height: var(--ha-line-height-condensed, 1.2); }
-    }
+    .tabs { gap: clamp(2px, .5cqi, var(--ha-space-1, 4px)); }
     /* short panels (fitted height < 700 / < 560 px): tighter header and tab bar so the middle keeps the room */
-    :host([data-fit]) .top { min-height: 50px; padding-top: 7px; padding-bottom: 7px; }
-    :host([data-fit]) .brand { font-size: var(--ha-font-size-xl, 20px); } :host([data-fit]) .brand-i { width: 24px; height: 24px; } :host([data-fit]) .clock { font-size: var(--ha-font-size-xl, 20px); }
-    :host([data-fit]) .pill { padding: 5px 12px; font-size: var(--ha-font-size-m, 14px); }
-    :host([data-fit]) .tabs { gap: 3px; padding: 7px calc(var(--_pad) + 3px) calc(8px + env(safe-area-inset-bottom)); }
-    :host([data-fit]) .tabs::before { top: 4px; bottom: calc(5px + env(safe-area-inset-bottom)); border-radius: 15px; }
-    :host([data-fit]) .tab { min-height: 50px; padding: 3px; gap: 3px; font-size: var(--ha-font-size-m, 14px); border-radius: 12px; } :host([data-fit]) .tab .i { width: 24px; height: 24px; }
+    :host([data-fit]) .top { min-height: 50px; padding-top: var(--ha-space-2, 8px); padding-bottom: var(--ha-space-2, 8px); }
+    :host([data-fit]) .brand { font-size: var(--ha-font-size-xl, 20px); } :host([data-fit]) .brand-i { width: var(--_icon); height: var(--_icon); } :host([data-fit]) .clock { font-size: var(--ha-font-size-xl, 20px); }
+    :host([data-fit]) .pill { font-size: var(--ha-font-size-m, 14px); }
+    :host([data-fit]) .tabs { gap: var(--ha-space-1, 4px); --_tabs-pt: var(--ha-space-2, 8px); --_tabs-pb: var(--ha-space-2, 8px); }
+    :host([data-fit]) .tabs::before { border-radius: var(--ha-border-radius-xl, 16px); }
+    :host([data-fit]) .tab { min-height: 50px; padding: var(--ha-space-1, 4px); gap: var(--ha-space-1, 4px); font-size: var(--ha-font-size-m, 14px); border-radius: var(--ha-border-radius-lg, 12px); } :host([data-fit]) .tab .i { width: var(--_icon); height: var(--_icon); }
     :host([data-fit]) .tab + .tab::before { left: -2px; }
-    :host([data-fit=tiny]) .top { min-height: 44px; padding-top: 5px; padding-bottom: 5px; }
-    /* tiny (< 560 px): one row, icon + small label side by side (icons only on narrow screens) */
-    :host([data-fit=tiny]) .tabs { padding: 6px calc(var(--_pad) + 3px) calc(6px + env(safe-area-inset-bottom)); }
-    :host([data-fit=tiny]) .tabs::before { top: 3px; bottom: calc(3px + env(safe-area-inset-bottom)); border-radius: 14px; }
-    :host([data-fit=tiny]) .tab { flex-direction: row; gap: 8px; min-height: 44px; font-size: var(--ha-font-size-m, 14px); border-radius: 11px; }
-    :host([data-fit=tiny]) .tab .i { width: 22px; height: 22px; }
-    :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 5px; font-size: var(--ha-font-size-xs, 10px); flex: none; }
-    @container jbapp (max-width: 640px) { :host([data-fit=tiny]) .tab span { display: none; } }
+    :host([data-fit=tiny]) .top { min-height: 44px; padding-top: var(--ha-space-1, 4px); padding-bottom: var(--ha-space-1, 4px); }
+    /* tiny (< 560 px tall): one row, icon + label side by side; the label wraps rather than going away on a narrow card */
+        :host([data-fit=tiny]) .tabs::before { border-radius: var(--ha-border-radius-xl, 16px); }
+    :host([data-fit=tiny]) .tab { flex-direction: row; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); font-size: var(--ha-font-size-m, 14px); border-radius: var(--ha-border-radius-lg, 12px); }
+    :host([data-fit=tiny]) .tab .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
+    :host([data-fit=tiny]) .tab .badge { position: static; min-width: 18px; height: 18px; padding: 0 var(--ha-space-1, 4px); font-size: var(--ha-font-size-xs, 10px); flex: none; }
   `];
 }
 defineElement('jukebox-card', JukeboxCard);
 
 (window as any).customCards = (window as any).customCards || [];
 if (!(window as any).customCards.some((c: any) => c.type === 'jukebox-card'))
-  (window as any).customCards.push({ type: 'jukebox-card', name: 'Jukebox', description: 'Kiosk jukebox for Music Assistant: Now Playing, Browse, Search and Queue', preview: false });
+  (window as any).customCards.push({ type: 'jukebox-card', name: 'Jukebox Kiosk', description: 'A touchscreen Jukebox music player for Home Assistant', preview: false });
 // eslint-disable-next-line no-console
 console.info(`%c JUKEBOX-CARD %c ${VERSION} `, 'font-weight:700', '');

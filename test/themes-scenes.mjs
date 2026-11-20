@@ -64,7 +64,7 @@ export const SCENES = {
   'station-sheet': { q: '&tab=browse&lhome=0&radio=1', act: async (p) => { await ev(p, `(() => { const it = { uri: 'library://radio/1', name: 'Neon FM', media_type: 'radio', image: '', metadata: { description: 'A late-night station.' } }; ${C}.querySelector('jb-browse, jb-search').dispatchEvent(new CustomEvent('jukebox-station', { detail: { item: it }, bubbles: true, composed: true })); })()`); await sleep(500); } },
   'queue': { q: '&tab=queue&kcaps=' + encodeURIComponent(JSON.stringify({ autoplay: true, autoplay_mode: true })) },
   'queue-popup': { q: '&tab=queue', act: async (p) => { await tap(p, `${QV}.querySelector('.qr.next .rt, .qr .rt')`); await sleep(500); } },
-  'queue-more-menu': { q: '&tab=queue', act: async (p) => { await tap(p, `${QV}.querySelector('.qr .qa.mo')`); } },
+  'queue-more-menu': { q: '&tab=queue', act: async (p) => { await tap(p, `${QV}.querySelector('.qr.next .rt, .qr .rt')`); await sleep(500); } },
   'queue-autoplay': { q: '&tab=queue&kcaps=' + encodeURIComponent(JSON.stringify({ autoplay: true, autoplay_mode: true })), act: async (p) => { await tap(p, `${QV}.querySelector('[data-action="autoplay-mode"]')`); } },
   'queue-search': { q: '&tab=queue', act: async (p) => { await tap(p, `${QV}.querySelector('.qsearch')`); await sleep(600); const kb = `[...${QV}.querySelector('.qkbd').shadowRoot.querySelectorAll('[data-key="k-M"]')].find((k) => k.getBoundingClientRect().width > 0)`; await tap(p, kb, 200); await sleep(700); } },
 };

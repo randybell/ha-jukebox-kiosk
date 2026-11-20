@@ -2,7 +2,7 @@
 // Where a tap opens anything it is the big pop-up (jb-hold-sheet), the same one a hold opens. Audit of every track list a tap can land on,
 // 1024x600, touch tap and mouse click (+ the physical Esc key closing the pop-up):
 //   ARTIST-FILTER  Library > artist page > "Filter by <artist>" > Tracks (the artist-scoped Songs list)
-//   DISCOVER       a track tile in a Library Discover row (Most played tracks)
+//   DISCOVER       a track in a Library Discover row (Most played tracks; Rows or Tiles)
 //   ARTIST / ALBUM / PLAYLIST pages  a tap or hold on a track row opens the same pop-up as Library Tracks (0.7.20); Esc closes it and
 //                                    clears the row highlight; nothing plays by itself and the old small menu never shows
 // Together with library-song-tap (Library list, Favorites), song-tap-pages (Queue, Queue search, Library search) and search-tap this covers every
@@ -74,11 +74,11 @@ const SETUPS = {
   },
   'DISCOVER': async () => {
     const p = await newPage(`&layout=separate&tab=browse&lhome=0&cfg=${encodeURIComponent(J({ discover: true }))}`);
-    await wait(p, `${BR}.querySelector('.drow')`);
-    await ev(p, `${BR}.querySelector('.scroll').scrollTo({ top: 99999 })`);
-    await wait(p, `${BR}.querySelector('.drow[data-row="most_played_tracks"] .hs:not(.skel) .tile')`);
-    const row = `${BR}.querySelector('.drow[data-row="most_played_tracks"] .hs .tile[data-type="track"]') || ${BR}.querySelector('.drow[data-row="most_played_tracks"] .hs .tile')`;
-    return { p, row, at: row, opens: true };
+    await wait(p, `${BR}.querySelector('.drow[data-loaded]')`);
+    await ev(p, `${BR}.querySelector('.scroll')?.scrollTo({ top: 99999 })`);
+    const item = `${BR}.querySelector('.drow[data-row="most_played_tracks"][data-loaded]')?.querySelector('.row[data-type="track"], .tile[data-type="track"], .row, .tile')`;
+    if (!(await wait(p, item))) throw new Error('most_played_tracks items not loaded');
+    return { p, row: item, at: `${item}.querySelector('.rt') || ${item}`, opens: true };
   },
 };
 // artist / album / playlist pages reached from Library search (EAGLES): a tap on a track row inside the page
@@ -87,7 +87,7 @@ for (const [name, sel] of [['ARTIST-PAGE', 'artist'], ['ALBUM-PAGE', 'album'], [
     const p = await newPage(`&tab=browse&cfg=${encodeURIComponent(J({ library_categories: ['playlist', 'artist', 'album', 'track'] }))}`);
     const qb = await center(p, `${SV}.querySelector('.qbar')`); await p.touchscreen.tap(qb.x, qb.y); await sleep(300);
     await typeOnScreen(p, `${SV}.querySelector('jb-keyboard')`, 'EAGLES');
-    await wait(p, `${SV}.querySelector('.row .ra-b[data-act="add"]')`);
+    await wait(p, `${SV}.querySelector('.row')`);
     if (sel !== 'playlist') {
       await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => /^\\s*${sel}s\\s*$/i.test(x.textContent))?.click()`); await sleep(600);
     }

@@ -68,7 +68,9 @@ for (const [name, sel] of [['now playing', `${QV}.querySelector('.qr.now .rt')`]
   ['song 2', `${QV}.querySelectorAll('.qr.next')[1].querySelector('.rt')`], ['middle song', `${QV}.querySelectorAll('.qr.next')[5].querySelector('.rt')`]]) {
   await press(p, sel, 700);
   const got = await ids(p), off = await offOf(); grayed[name] = off;
-  const vis = await ev(p, `[...${HS}.querySelectorAll('.it[aria-disabled="true"]')].every((b) => +getComputedStyle(b).opacity < 0.5)`);
+  // #113: grayed = HA's disabled text colour (--disabled-text-color through --_disabled), not an ad-hoc opacity
+  const vis = await ev(p, `(() => { const r = ${HS}; const t = document.createElement('span'); t.style.color = 'var(--_disabled)'; r.appendChild(t); const want = getComputedStyle(t).color; t.remove();
+    return [...r.querySelectorAll('.it[aria-disabled="true"]')].every((b) => getComputedStyle(b).color === want && +getComputedStyle(b).opacity === 1); })()`);
   check(`0.7.12 ${name}: all six choices in order; unusable ones grayed`, J(got) === J(want) && vis, J({ got, off }));
   if (false) await p.screenshot({ path: `${process.env.SHOTS}/queue-popup-${name === 'song 1' ? 'song1' : name === 'song 2' ? 'song2' : 'middle'}-1024x600.png` });
   for (const id of off) {
@@ -79,9 +81,27 @@ for (const [name, sel] of [['now playing', `${QV}.querySelector('.qr.now .rt')`]
   await tap(p, `${HS}.querySelector('.it.cancel')`);
 }
 console.log('grayed:', J(grayed));
-// the More button keeps its small menu (only the hold changed)
-o = await order(); await center(p, `${QV}.querySelector('.qr[data-id="${o[2]}"] .qa.mo')`, true); await sleep(250); await tap(p, `${QV}.querySelector('.qr[data-id="${o[2]}"] .qa.mo')`);
-check('the row\'s More (⋯) button still opens the small menu', (await smallMenu(p)) && !(await sheetOpen(p)));
+o = await order();
+check('Queue rows have no play, move, Remove or More buttons', (await ev(p, `${QV}.querySelectorAll('.qr .ra-b, .qr .qa, .qr .acts').length`)) === 0);
+// touch tap / hold at 1024x600 also open the same pop-up; physical Esc closes it
+{
+  const p2 = await browser.newPage(); await hermetic(p2);
+  await p2.setViewport({ width: 1024, height: 600, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+  await p2.goto(`${BASE}?fresh=1&latency=20&kiosk=1&tab=queue`); await p2.waitForFunction('window.__ready === true');
+  await p2.waitForFunction(`${QV}.querySelectorAll('.qr.next').length > 4`); await sleep(400);
+  const ev2 = (e) => p2.evaluate((x) => eval(x), e);
+  const c2 = await p2.evaluate((x) => { const el = eval(x); el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + Math.min(60, r.width / 2), y: r.top + r.height / 2 }; }, `${QV}.querySelectorAll('.qr.next')[2].querySelector('.rt')`);
+  await p2.touchscreen.tap(c2.x, c2.y); await sleep(400);
+  const wantTouch = ['play:Play Now', 'next:Play Next', 'up:Move up', 'down:Move down', 'remove:Remove', 'more:More Info', 'cancel:Cancel'];
+  const ids2 = () => ev2(`[...${HS}.querySelectorAll('.it')].map((b) => b.dataset.action + ':' + b.textContent.trim())`);
+  const open2 = () => ev2(`!!${HS}.querySelector('.sh')`);
+  check('1024x600 touch tap on a Queue row opens the pop-up with Cancel and no close X', (await open2()) && J(await ids2()) === J(wantTouch) && !(await ev2(`${HS}.querySelector('.cls, [data-action="close"], .aps-h .cls')`)), J(await ids2()));
+  await p2.keyboard.press('Escape'); await sleep(300);
+  check('1024x600 physical Esc closes the Queue pop-up', !(await open2()));
+  await p2.touchscreen.touchStart(c2.x, c2.y); await sleep(700); await p2.touchscreen.touchEnd(); await sleep(400);
+  check('1024x600 touch hold on a Queue row opens the same pop-up', (await open2()) && J(await ids2()) === J(wantTouch), J(await ids2()));
+  await p2.close();
+}
 // 0.7.12: admin (can jump), like the live kiosk: all six always; Remove works on Up next song 1
 {
   const a = await browser.newPage(); await hermetic(a); await a.setViewport({ width: 1024, height: 600, deviceScaleFactor: 1 });

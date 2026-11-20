@@ -41,10 +41,10 @@ check('C2 defaults: the five music categories, podcasts / audiobooks opt-in',
   J(C.resolveCategories({})) === J(['tracks', 'artists', 'albums', 'playlists', 'radio']));
 check('C3 configured order kept; unknown + duplicate keys dropped',
   J(C.resolveCategories({ search_categories: ['radio', 'podcasts', 'bogus', 'radio', 'tracks'] })) === J(['radio', 'podcasts', 'tracks']));
-check('C4 0.7.11: an old config listing genres is ignored safely (the genre page is gone), even when the backend has genres',
+check('C4 0.9.0: a configured genres is kept only when the backend can search genres (Genres is a filter again, like MA)',
   J(C.resolveCategories({ search_categories: ['genres', 'tracks'] }, { genres: false })) === J(['tracks'])
-  && J(C.resolveCategories({ search_categories: ['genres', 'tracks'] }, { genres: true })) === J(['tracks'])
-  && !C.CATEGORIES.some((c) => c.key === 'genres'));
+  && J(C.resolveCategories({ search_categories: ['genres', 'tracks'] }, { genres: true })) === J(['genres', 'tracks'])
+  && C.CATEGORIES.some((c) => c.key === 'genres' && c.optIn));
 check('C5 empty / all-invalid list falls back to the defaults',
   J(C.resolveCategories({ search_categories: [] })) === J(C.DEFAULT_CATEGORIES) && J(C.resolveCategories({ search_categories: ['genres'] })) === J(C.DEFAULT_CATEGORIES));
 check('C6 service media types exclude genres', J(C.serviceTypes(['tracks', 'genres', 'podcasts', 'audiobooks'])) === J(['track', 'podcast', 'audiobook']));
@@ -67,6 +67,17 @@ check('R2 defaultCountry: card option, else HA country, 2 letters only',
   R.defaultCountry({ radio_country: 'DE' }) === 'de' && R.defaultCountry({}, { config: { country: 'US' } }) === 'us'
   && R.defaultCountry({ radio_country: 'usa' }) === '' && R.defaultCountry({}) === '');
 check('R3 countryPath / countryName', R.countryPath(' GB ') === 'radiobrowser://category/country/gb' && R.countryName('jp') === 'Japan' && R.countryName('zz').length > 0);
+{
+  // Radio Browser paths come from the instance_id in the provider list (#136)
+  const prov = (id, domain, name = id) => ({ id, domain, name });
+  check('R3a rbRoot: the Radio Browser instance id builds the root (radiobrowser--abcd)', R.rbRoot([prov('spotify', 'spotify'), prov('radiobrowser--abcd', 'radiobrowser', 'Radio Browser')]) === 'radiobrowser--abcd://');
+  check('R3b rbRoot: no list / no Radio Browser instance keeps radiobrowser://', R.rbRoot() === 'radiobrowser://' && R.rbRoot([]) === 'radiobrowser://' && R.rbRoot([prov('tunein--x', 'tunein')]) === 'radiobrowser://');
+  check('R3c rbRoot: with two instances the bare radiobrowser one wins, else the first', R.rbRoot([prov('radiobrowser--zz', 'radiobrowser'), prov('radiobrowser', 'radiobrowser')]) === 'radiobrowser://' && R.rbRoot([prov('radiobrowser--b', 'radiobrowser'), prov('radiobrowser--a', 'radiobrowser')]) === 'radiobrowser--b://');
+  const root = R.rbRoot([prov('radiobrowser--abcd', 'radiobrowser')]);
+  check('R3d modePath / countryPath use the instance root', R.modePath('popular', root) === 'radiobrowser--abcd://popularity/popular' && R.modePath('country', root) === 'radiobrowser--abcd://category/country'
+    && R.modePath('language', root) === 'radiobrowser--abcd://category/language' && R.modePath('tag', root) === 'radiobrowser--abcd://category/tag' && R.countryPath(' DE ', root) === 'radiobrowser--abcd://category/country/de');
+  check('R3e the defaults are unchanged without a root', R.modePath('popular') === 'radiobrowser://popularity/popular' && R.countryPath('de') === 'radiobrowser://category/country/de');
+}
 {
   const path = 'radiobrowser://category/country';
   const l = R.cleanListing([

@@ -54,11 +54,16 @@ for (const kind of ['touch', 'mouse']) {
   // ---- Library: category button, hint, placeholders ----
   const p = await newPage('&tab=browse');
   const btns = await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].map((b) => b.dataset.lcat + ':' + b.textContent.trim())`);
-  check(`${tag}: Library category buttons read Playlists, Artists, Tracks, Radio (no Songs)`, J(btns) === J(['playlist:Playlists', 'artist:Artists', 'track:Tracks', 'radio:Radio']), J(btns));
+  check(`${tag}: Library category buttons read Playlists, Artists, Tracks, Genres, Radio (no Songs; 0.9.0: Genres is back, like MA)`, J(btns) === J(['playlist:Playlists', 'artist:Artists', 'track:Tracks', 'genre:Genres', 'radio:Radio']), J(btns));
   const c = await center(p, `${SV}.querySelector('.lcats .lc[data-lcat="track"]')`);
   await tapAt(p, kind, c); await sleep(600);
   const w = (await wording(p)).join(' | ');
   check(`${tag}: Library > Tracks: hint "Tracks in your library · type to search all providers"`, w.includes('Tracks in your library · type to search all providers'), w);
+  // 0.9.0: MA searches genres in the library only, so the Genres hint does not promise all providers
+  const g = await center(p, `${SV}.querySelector('.lcats .lc[data-lcat="genre"]')`);
+  await tapAt(p, kind, g); await sleep(600);
+  const wg = (await wording(p)).join(' | ');
+  check(`${tag}: Library > Genres: hint "Genres in your library · type to search them" (no "all providers")`, wg.includes('Genres in your library · type to search them') && !wg.includes('Genres in your library · type to search all providers'), wg);
   check(`${tag}: Library > Tracks: search placeholder "Search tracks…"`, w.includes('Search tracks…'), w);
   check(`${tag}: Library > Tracks: no visible wording says song(s)`, (await songWords(p)).length === 0, J(await songWords(p)));
   await shot(p, `0714-library-tracks-${kind}`);

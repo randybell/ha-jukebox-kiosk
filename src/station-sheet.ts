@@ -7,7 +7,7 @@
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { icon } from './icons';
-import { mediaStyles, noFocus, artTpl, fire, playMedia, playMessage } from './shared';
+import { mediaStyles, noFocus, artTpl, fire, playMedia, playMessage, localRect } from './shared';
 import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
 import { defineElement } from './define';
 import { stationInfo } from './radio-fav';
@@ -87,6 +87,14 @@ export class JbStation extends LitElement {
     }
   }
 
+  /** #121: the toast left after the sheet closes sits just above the card's tab bar, measured, instead of a guessed 96 px. */
+  protected updated() {
+    const t = this.renderRoot.querySelector('.toast.solo') as HTMLElement | null;
+    const tabs = this.parentElement?.querySelector('.tabs') as HTMLElement | null;
+    if (!t) return;
+    const lift = tabs && tabs.offsetHeight > 0 ? Math.max(0, localRect(this).bottom - localRect(tabs).top) : 0;
+    t.style.setProperty('--_toast-bottom', `calc(${Math.round(lift)}px + var(--ha-space-4, 16px))`);
+  }
   render() {
     const it = this.item;
     const t = this._toast ? html`<div class="toast solo" role="status">${this._toast}</div>` : nothing;
@@ -124,33 +132,35 @@ export class JbStation extends LitElement {
     .scrim { position: absolute; inset: 0; }
     .st-scrim { z-index: 1; background: var(--_scrim); -webkit-backdrop-filter: var(--_scrim-filter); backdrop-filter: var(--_scrim-filter); }
     .sheet { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; max-height: min(100%, var(--_popup-max-h)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
-      display: flex; flex-direction: column; gap: 16px; padding: 22px 20px calc(18px + env(safe-area-inset-bottom));
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: start; gap: var(--ha-space-4, 16px) var(--ha-space-3, 12px); padding: var(--ha-space-6, 24px) var(--ha-space-5, 20px) calc(var(--ha-space-4, 16px) + env(safe-area-inset-bottom));
       background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; box-shadow: var(--_dialog-shadow); }
-    .x { position: absolute; top: 12px; right: 12px; z-index: 1; } /* #51: the labeled Close pill (was an X) */
-    .top { display: flex; gap: 16px; align-items: flex-start; padding-right: 104px; }
-    .ar.logo { width: 96px; height: 96px; flex: none; border-radius: 14px; overflow: hidden; display: block; }
+    .sheet > * { grid-column: 1 / -1; }
+    /* #51: the labeled Close pill (was an X). #109: it sits in its own grid column beside the station header, so the header
+       no longer reserves a guessed 104 px for it */
+    .sheet > .x { grid-column: 2; grid-row: 1; align-self: start; z-index: 1; }
+    .sheet > .top { grid-column: 1; grid-row: 1; display: flex; gap: var(--ha-space-4, 16px); align-items: flex-start; }
+    .ar.logo { width: clamp(96px, 20cqi, 132px); height: clamp(96px, 20cqi, 132px); flex: none; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; display: block; }
     .ar.logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .tt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .tt { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; }
     .tt .eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
-    .nm { margin: 0; font-family: var(--_font-display); font-size: var(--ha-font-size-2xl, 24px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); overflow-wrap: anywhere; }
-    .desc { margin: 4px 0 0; font-size: var(--ha-font-size-m, 14px); line-height: var(--ha-line-height-condensed, 1.2); color: var(--_muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-    .meta { margin: 0; display: flex; flex-wrap: wrap; gap: 8px 24px; }
+    .nm { margin: 0; font-family: var(--_font-display); font-size: clamp(var(--ha-font-size-2xl, 24px), 4cqi, var(--ha-font-size-3xl, 28px)); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); overflow-wrap: anywhere; }
+    .desc { margin: var(--ha-space-1, 4px) 0 0; font-size: var(--ha-font-size-m, 14px); line-height: var(--ha-line-height-condensed, 1.2); color: var(--_muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+    .meta { margin: 0; display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px) var(--ha-space-6, 24px); }
     .f { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .f dt { font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; color: var(--_inactive); }
     .f dd { margin: 0; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
-    .acts { display: flex; gap: 12px; align-items: center; }
-    .play { flex: 1; height: 60px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 999px; background: var(--_active); color: var(--_on-accent);
+    .acts { display: flex; gap: var(--ha-space-3, 12px); align-items: center; }
+    .play { flex: 1; height: 60px; display: inline-flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent);
       font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); }
-    .play .i { width: 28px; height: 28px; } .play:active { transform: scale(.98); }
-    .fav { width: 60px; height: 60px; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--_surface-border); color: var(--_fg); }
-    .fav .i { width: 28px; height: 28px; } .fav.on { color: var(--_active); border-color: currentColor; } .fav:disabled { opacity: .6; }
+    .play .i { width: calc(var(--_icon) * 28 / 24); height: calc(var(--_icon) * 28 / 24); } .play:active { transform: scale(.98); }
+    .fav { width: 60px; height: 60px; flex: none; display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
+    .fav .i { width: calc(var(--_icon) * 28 / 24); height: calc(var(--_icon) * 28 / 24); } .fav.on { color: var(--_active); border-color: currentColor; } .fav:disabled { color: var(--_disabled); }
     .note { margin: -6px 0 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; }
-    .toast.solo { z-index: 3; bottom: 96px; pointer-events: auto; }
-    /* tablet / desktop: a centred dialog */
+    .toast.solo { z-index: 3; pointer-events: auto; }
+    /* tablet / desktop: a centred dialog. #117 kept as a container query on the card's own width (structural: bottom sheet vs dialog);
+       the logo and name sizes are fluid above */
     @container st (min-width: 700px) {
-      .sheet { left: 50%; top: 50%; bottom: auto; transform: translate(-50%, -50%); width: min(560px, 90cqw); border-radius: var(--_dialog-radius); padding: 26px 26px 20px; }
-      .ar.logo { width: 132px; height: 132px; }
-      .nm { font-size: var(--ha-font-size-3xl, 28px); }
+      .sheet { left: 50%; top: 50%; bottom: auto; transform: translate(-50%, -50%); width: min(560px, 90cqw); border-radius: var(--_dialog-radius); padding: var(--ha-space-6, 24px) var(--ha-space-6, 24px) var(--ha-space-5, 20px); }
     }
   `];
 }

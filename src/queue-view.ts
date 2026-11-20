@@ -2,11 +2,10 @@ import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { tokens, base } from './styles';
 import { songInfo } from './song-info';
 import { icon } from './icons';
-import { combinedOn, libraryTabLabel } from './library-home';
-import { mediaStyles, noFocus, fire, artTpl, provTpl, PressController, swallowNextClick, menuPos, menuTpl, confirmTpl, queueActTpl, isRadioUri, type ConfirmState, type MenuAction, type MenuPos } from './shared';
+import { combinedOn, libraryTabLabel, libraryViewFor, tilesAcrossStyle } from './library-home';
+import { mediaStyles, noFocus, fire, artTpl, provTpl, PressController, swallowNextClick, confirmTpl, isRadioUri, type ConfirmState, type MenuAction } from './shared';
 import './keyboard';
 import type { KeyDetail } from './keyboard';
-import { canJumpQueue } from './speakers/model';
 import { QueueBusy, type QueueItem, type QueueModel, type QueueSnapshot, type RemovedRow } from './queue-model';
 /** MA refused or ignored a change on a played / buffered track (live 2.10.9: 500 "<n> is already played/buffered", delete ignored) */
 import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
@@ -22,13 +21,15 @@ const AP_MODE: Record<AutoplayMode, { label: string; desc: string }> = {
 interface ApSheet { opts?: AutoplayOptions; view: 'modes' | 'playlists'; busy: string; error: string }
 const AP_HOLD_MS = 500;
 import { defineElement } from './define';
+import { TEST_HOOKS } from './test-hooks';
+import { autoplayControlMode, canEnableAutoplay } from './autoplay';
 
 const asArt = (q: QueueItem) => ({ name: q.media_title || '?', image: q.media_image });
 
 export class JbQueue extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, queue: { attribute: false }, active: { type: Boolean },
-    _snap: { state: true }, _menu: { state: true }, _toast: { state: true }, _confirm: { state: true }, _undo: { state: true }, _ap: { state: true }, _search: { state: true }, _q: { state: true },
+    _snap: { state: true }, _toast: { state: true }, _confirm: { state: true }, _undo: { state: true }, _ap: { state: true }, _search: { state: true }, _q: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
@@ -38,7 +39,6 @@ export class JbQueue extends LitElement {
   /** Search inside the queue: the on-screen keyboard stays open while this is on */
   private _search = false;
   private _q = '';
-  private _menu: { item: QueueItem; pos: MenuPos } | null = null;
   private _toast = '';
   /** queue-row Play now waits here for Cancel / Play now (same dialog as Replace queue) */
   private _confirm: ConfirmState | null = null;
@@ -51,10 +51,10 @@ export class JbQueue extends LitElement {
   private _undoTimer?: number;
   private _toastTimer?: number;
   private _unsub?: () => void;
-  private press = new PressController<QueueItem>(this, (it, el) => this.tapSheet(it, el), (it, el) => this.holdSheet(it, el));
+  private press = new PressController<QueueItem>(this, (it) => this.tapSheet(it), (it) => this.holdSheet(it));
   /** 0.7.13 (issue #78): a tap on a song row opens the same pop-up as a hold on it (a tap did nothing before). The tap's own click is swallowed
    *  so it cannot land on a choice that opened under the finger. */
-  private tapSheet(it: QueueItem, el: HTMLElement) { if (isRadioUri(it.media_content_id)) return; /* a station in the queue: tap stays as it was (nothing) */ swallowNextClick(); this.press.held = it.queue_item_id; this.holdSheet(it, el); }
+  private tapSheet(it: QueueItem) { if (isRadioUri(it.media_content_id)) return; /* a station in the queue: tap stays as it was (nothing) */ swallowNextClick(); this.press.held = it.queue_item_id; this.holdSheet(it); }
 
   protected shouldUpdate(ch: PropertyValues) { return !(ch.size === 1 && ch.has('hass')); }
   protected willUpdate(ch: PropertyValues) {
@@ -66,28 +66,36 @@ export class JbQueue extends LitElement {
 
   private toast(t: string) { this._toast = t; window.clearTimeout(this._toastTimer); this._toastTimer = window.setTimeout(() => (this._toast = ''), 2200); }
   private async run(p: Promise<any> | undefined, ok: string) {
-    this._menu = null; this.press.release();
+    this.press.release();
     try { await p; if (ok) this.toast(ok); } catch (e) { this.toast(e instanceof QueueBusy ? e.message : 'Queue action failed'); }
   }
-  /** Autoplay pill: always shown when a kiosk server that lists it, and a known state for this queue.
+  /** Autoplay pill: the same show/hide rules as the Now Playing button (`autoplayControlMode`).
    *  With the autoplay_mode feature a chevron (or a long-press on the pill) opens the style sheet. */
   private autoplayTpl(s: QueueSnapshot | undefined) {
-    if (!this.config?._backend?.ext?.autoplay || typeof s?.autoplay !== 'boolean') return nothing;
-    const on = s.autoplay, dyn = !!s.dynamic, modes = this.apModes;
-    const hold = modes && !dyn ? {
+    const mode = autoplayControlMode(!!this.config?._backend?.ext?.autoplay, s, s?.repeat);
+    if (mode === 'hide') return nothing;
+    const on = s?.autoplay === true, modes = this.apModes, locked = mode === 'locked' || mode === 'repeat-locked';
+    const hold = modes && !locked ? {
       down: () => { this._apHeld = false; window.clearTimeout(this._apHold); this._apHold = window.setTimeout(() => { this._apHeld = true; this.openAp(); }, AP_HOLD_MS); },
       up: () => window.clearTimeout(this._apHold),
     } : { down: () => undefined, up: () => undefined };
-    return html`<span class="apg ${modes ? 'split' : ''}"><button class="ap ${on ? 'on' : ''}" data-action="autoplay" tabindex="-1" aria-pressed=${on ? 'true' : 'false'} ?disabled=${dyn}
-      title=${dyn ? 'This queue already keeps playing' : on ? 'Autoplay is on: more music is added when the queue runs out' : 'Autoplay is off'}
+    const title = mode === 'locked' ? 'This queue already keeps playing'
+      : mode === 'repeat-locked' ? 'Autoplay has been automatically turned off because repeat is on'
+      : on ? 'Autoplay is on: more music is added when the queue runs out' : 'Autoplay is off';
+    const cls = mode === 'locked' ? 'on' : mode === 'repeat-locked' ? '' : (on ? 'on' : '');
+    return html`<span class="apg ${modes ? 'split' : ''}"><button class="ap ${cls}" data-action="autoplay" tabindex="-1"
+      aria-pressed=${mode === 'repeat-locked' ? 'false' : on ? 'true' : 'false'} ?disabled=${locked}
+      aria-disabled=${locked ? 'true' : nothing}
+      title=${title}
       @pointerdown=${(e: PointerEvent) => { noFocus(e); hold.down(); }} @pointerup=${hold.up} @pointerleave=${hold.up} @pointercancel=${hold.up}
       @contextmenu=${(e: Event) => e.preventDefault()}
-      @click=${() => { if (this._apHeld) { this._apHeld = false; return; } this.toggleAutoplay(!on); }}>${icon('autoplay', 'i xs')}Autoplay</button>${modes ? html`<button
-      class="ap apc ${on ? 'on' : ''}" data-action="autoplay-mode" tabindex="-1" aria-label="Autoplay settings" aria-haspopup="dialog" title="Autoplay settings" ?disabled=${dyn}
+      @click=${() => { if (locked || this._apHeld) { this._apHeld = false; return; } this.toggleAutoplay(!on); }}>${icon('autoplay', 'i xs')}Autoplay</button>${modes ? html`<button
+      class="ap apc ${on && !locked ? 'on' : ''}" data-action="autoplay-mode" tabindex="-1" aria-label="Autoplay settings" aria-haspopup="dialog" title="Autoplay settings" ?disabled=${locked}
       @pointerdown=${noFocus} @click=${() => this.openAp()}>${icon('chev', 'i xs')}</button>` : nothing}</span>`;
   }
   private get apModes() { return !!this.config?._backend?.ext?.autoplayMode && !!this.queue?.backend?.autoplayOptions; }
   private async toggleAutoplay(on: boolean) {
+    if (on && !canEnableAutoplay(this._snap?.repeat)) return;
     try { await this.queue?.setAutoplay(on); this.toast(on ? 'Autoplay on' : 'Autoplay off'); }
     catch { this.toast("Couldn't change Autoplay"); }
   }
@@ -152,18 +160,18 @@ export class JbQueue extends LitElement {
   }
   /** Play now icon: confirm first (it stops the current song for everyone), then player_queues/play_index */
   private askPlayNow(it: QueueItem) {
-    this._menu = null; this.press.release();
+    this.press.release();
     this._confirm = { kind: 'jump', item: { ...asArt(it), uri: it.media_content_id ?? '' } as MaItem,
       run: () => this.run(this.queue?.playNow(it.queue_item_id), `Playing ${it.media_title}`) };
   }
   /** Remove icon: no dialog; the row goes at once and Undo puts it back */
   private async removeRow(it: QueueItem) {
-    this._menu = null; this.press.release();
+    this.press.release();
     const r = this.queue?.removedInfo(it.queue_item_id);
     if (!r) return;
     if (this.caps && !this.caps.undo) { this.run(this.queue!.removeRow(it.queue_item_id), `Removed ${it.media_title}`); return; }
     window.clearTimeout(this._undoTimer); this._toast = ''; this._undo = r;
-    this._undoTimer = window.setTimeout(() => (this._undo = null), Number((window as any).__jbQueueUndoMs ?? 5000));
+    this._undoTimer = window.setTimeout(() => (this._undo = null), TEST_HOOKS ? Number((window as any).__jbQueueUndoMs ?? 5000) : 5000);
     try { await this.queue!.removeRow(it.queue_item_id); } catch (e) {
       if (this._undo === r) { window.clearTimeout(this._undoTimer); this._undo = null; }
       this.toast(e instanceof QueueBusy ? e.message : `Couldn't remove ${it.media_title}`);
@@ -178,11 +186,10 @@ export class JbQueue extends LitElement {
     } catch { this.toast(`Couldn't undo: ${r.title} wasn't added back`); }
   }
   private onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && this.escape()) e.stopPropagation(); };
-  /** #51 Esc (also from the card): the topmost of Autoplay sheet, confirm, options menu, then Queue search closes */
+  /** #51 Esc (also from the card): the topmost of Autoplay sheet, confirm, then Queue search closes */
   escape() {
     if (this._ap) this._ap = null;
     else if (this._confirm) this._confirm = null;
-    else if (this._menu) this._menu = null;
     else if (this._search) { this._search = false; this._q = ''; }
     else return false;
     return true;
@@ -205,34 +212,55 @@ export class JbQueue extends LitElement {
     else if (d.type === 'clear') this._q = '';
   };
   private play(it: QueueItem) { this.run(this.queue?.play(it.queue_item_id), `Playing ${it.media_title}`); }
-  private openMenu(it: QueueItem, el: HTMLElement) {
-    const root = this.renderRoot.querySelector('.qx') as HTMLElement;
-    this._menu = { item: it, pos: menuPos(root, el, 5) };
-  }
-  /** Press-and-hold on a row (0.7.11): the card's large centered pop-up (jb-hold-sheet) with the same choices as the row menu. */
-  private holdSheet(it: QueueItem, el?: HTMLElement) {
+  /** Press-and-hold (and tap) on a row: the card's large centered pop-up (jb-hold-sheet). Same six choices as before, plus Cancel; ones this song can't use are grayed and do nothing. */
+  private holdSheet(it: QueueItem) {
     // 0.7.12: always the same five choices (+ Cancel) in the same order; ones this song can't use are grayed out and do nothing
     const can = new Map(this.actions(it).map((a) => [a.id, a]));
     const all: Array<[string, string, string]> = [['play', 'play', 'Play Now'], ['next', 'qnext', 'Play Next'], ['up', 'up', 'Move up'], ['down', 'down', 'Move down'], ['remove', 'trash', 'Remove']];
-    // The row's own buttons decide too: a choice whose row button is usable is usable here (it does what that button does, e.g. Remove
-    // on Up next song 1, which the old menu left off), and Move up / Move down are grayed when the row's arrow is (Move up on song 1).
-    const row = el?.closest('.qr'), rowBtn: Record<string, string> = { play: 'playnow', next: 'playnext', up: 'up', down: 'down', remove: 'remove' };
-    const btn = (id: string) => row?.querySelector(`[data-action="${rowBtn[id]}"]`) as HTMLButtonElement | null;
+    // Enable/gray matches 804e479: the row buttons decided too (Move up/down followed the arrows; Play Next / Remove
+    // stayed usable for an admin when queue_edit was off because those row buttons followed queue_play, not queue_edit).
+    const s = this._snap, q = this.queue;
+    const idx = s?.items.findIndex((x) => x.queue_item_id === it.queue_item_id) ?? -1;
+    const lk = q?.locked ?? -1;
+    const cur = s?.current ?? -1;
+    const nextLen = cur >= 0 ? (s?.items.length ?? 0) - cur - 1 : (s?.items.length ?? 0);
+    const nb = cur >= 0 ? Math.max(0, Math.min(nextLen, lk - cur)) : 0;
+    const kind = idx === cur ? 'now' : idx < cur ? 'past' : 'next';
+    const buf = kind === 'next' && idx < cur + 1 + nb;
+    const isFirstNext = idx === cur + 1 + nb;
+    const isLast = !!s && idx === s.items.length - 1;
+    const radio = isRadioUri(it.media_content_id);
+    const jumps = this.jumps();
+    // Same exists/enabled rules as the 804e479 row buttons (search rows had no Move up/down buttons).
+    const btn = (id: string): { exists: boolean; enabled: boolean } => {
+      if (id === 'play') return { exists: true, enabled: jumps && kind !== 'now' };
+      if (id === 'next') return { exists: !radio, enabled: !radio && jumps && kind === 'next' && !buf && !isFirstNext };
+      if (id === 'remove') return { exists: true, enabled: jumps && kind === 'next' && !buf };
+      if (id === 'up' || id === 'down') {
+        const exists = !this._search && kind === 'next' && this.edits;
+        return { exists, enabled: exists && !(id === 'up' ? isFirstNext || buf : isLast || buf) };
+      }
+      return { exists: false, enabled: false };
+    };
+    const runBtn = (id: string) => {
+      const qid = it.queue_item_id;
+      if (id === 'play') this.askPlayNow(it);
+      else if (id === 'next') this.run(q!.playNext(qid), `${it.media_title} plays next`);
+      else if (id === 'up') this.run(q!.up(qid), '');
+      else if (id === 'down') this.run(q!.down(qid), '');
+      else if (id === 'remove') this.removeRow(it);
+    };
     // Up Next song 1 = index locked+1 (already next). Guests keep working Play Next on song 2+ (v0.7.11); only song 1 is grayed.
-    const idx = this._snap?.items.findIndex((x) => x.queue_item_id === it.queue_item_id) ?? -1;
-    const lk = this.queue?.locked ?? -1;
     const actions: MenuAction[] = all.map(([id, ic, label]) => {
       const a = can.get(id), b = btn(id);
-      // Move up / Move down follow the row's arrows
-      if ((id === 'up' || id === 'down') && b?.disabled) return { id, icon: ic, label, run: () => {}, disabled: true };
-      // Play Next: gray only on Up Next song 1 (and locked/buffer), not by copying the guest row button (always gray for guests)
+      if ((id === 'up' || id === 'down') && b.exists && !b.enabled) return { id, icon: ic, label, run: () => {}, disabled: true };
       if (id === 'next' && idx <= lk + 1) return { id, icon: ic, label, run: () => {}, disabled: true };
       if (a) return a;
-      if (b && !b.disabled) return { id, icon: ic, label, run: () => b.click() };
+      if (b.exists && b.enabled) return { id, icon: ic, label, run: () => runBtn(id) };
       return { id, icon: ic, label, run: () => {}, disabled: true };
     });
     // 0.7.12: More Info (song info) before Cancel, grayed when MA sent nothing beyond the title; not for radio stations in the queue
-    const info = isRadioUri(it.media_content_id) ? undefined : songInfo(it);
+    const info = isRadioUri(it.media_content_id) ? undefined : songInfo(it, this.hass);
     fire(this, 'jukebox-sheet', { item: asArt(it), sub: it.media_artist ?? '', actions, info, close: () => this.press.release() });
   }
   /** backend feature flags (undefined = 0.5.x behaviour: everything on) */
@@ -246,7 +274,7 @@ export class JbQueue extends LitElement {
     const q = this.queue!; const id = it.queue_item_id;
     const radio = isRadioUri(it.media_content_id);
     if (this.jumps()) {
-      // the narrow-row action sheet: the same rules as the row icons (Play now asks first, Remove offers Undo)
+      // the pop-up: Play Now asks first, Remove offers Undo; rows up to lk can't use Play Next / move / remove
       // rows up to `lk` belong to MA (played, playing, or in the player's buffer): no Play next / move / remove there
       // radio stations: no Play Next (stations replace the queue when played from Library/Search)
       const s = this._snap, i = s?.items.findIndex((x) => x.queue_item_id === id) ?? -1, cur = s?.current ?? -1, lk = q.locked;
@@ -271,50 +299,37 @@ export class JbQueue extends LitElement {
     ];
   }
 
-  private jumps() { return !!this.config && (this.caps?.queuePlay ?? true) && canJumpQueue(this.config, this.hass?.user); }
-  private row(it: QueueItem, kind: 'now' | 'next' | 'past', n: number, isFirstNext: boolean, isLast: boolean, jumps: boolean, buf = false, search = false) {
+  private jumps() { return !!this.config && (this.caps?.queuePlay ?? true); }
+  private row(it: QueueItem, kind: 'now' | 'next' | 'past', n: number, buf = false, search = false) {
     const p = this.press.handlers(it.queue_item_id, it);
-    const q = this.queue!;
-    // buf: an Up next row MA already handed to the player (index_in_buffer): it can't move or go (MA refuses / ignores)
-    const ic = (name: string, label: string, act: string, fn: () => void, dis = false) => html`<button class="qa" tabindex="-1" data-action=${act} aria-label=${label} title=${label}
-      ?disabled=${dis} @pointerdown=${noFocus} @click=${(e: Event) => { e.stopPropagation(); fn(); }}>${icon(name)}</button>`;
-    // Play Now: not on the playing row. Play Next: not on the row already next, nor on played rows (MA refuses those).
-    // Radio stations in the queue: hide Play Next (stations replace when played elsewhere; Remove still makes sense here).
-    const radio = isRadioUri(it.media_content_id);
-    const canNext = !radio && jumps && kind === 'next' && !buf && !isFirstNext;
-    const queueActs = html`${radio ? nothing : queueActTpl('next', it.media_title, 'playnext', () => this.run(q.playNext(it.queue_item_id), `${it.media_title} plays next`), !canNext)}
-      ${queueActTpl('replace', it.media_title, 'playnow', () => this.askPlayNow(it), !jumps || kind === 'now')}`;
-    // Remove: never the playing row, played rows, nor the buffered row (MA ignores deletes at or before the buffer)
-    const canRemove = jumps && kind === 'next' && !buf;
-    const remove = html`<button class="ra-b rm" tabindex="-1" data-act="remove" data-action="remove" aria-label="Remove ${it.media_title} from the queue"
-      title=${canRemove ? 'Remove' : kind === 'now' ? 'Playing now' : kind === 'past' ? 'Already played' : 'Already loading'} ?disabled=${!canRemove}
-      @pointerdown=${noFocus} @click=${(e: Event) => { e.stopPropagation(); this.removeRow(it); }}>${icon('trash')}<span>Remove</span></button>`;
-    const qa = (ic: string, label: string, fn: () => Promise<any>, dis = false, act = '') => html`<button class="qa" tabindex="-1" data-action=${act} aria-label=${label} ?disabled=${dis}
-      @pointerdown=${noFocus} @click=${(e: Event) => { e.stopPropagation(); this.run(fn(), ''); }}>${icon(ic)}</button>`;
-    // #72 (0.7.12): search-result rows get the same press-and-hold handlers as normal Queue rows (Approved by Randy via PM, Nov 9 2026)
+    // #72 (0.7.12): search-result rows get the same press-and-hold handlers as normal Queue rows
+    // buf: an Up next row MA already handed to the player (index_in_buffer)
     if (search) return html`<div class="qr sr ${kind} ${buf ? 'buf' : ''} ${this.press.held === it.queue_item_id ? 'held' : ''}" data-id=${it.queue_item_id}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       <span class="n">${kind === 'now' ? icon('eq', 'i eqi') : kind === 'past' ? '' : n}</span>
       ${artTpl(asArt(it), 'th')}
       <div class="rt"><b>${it.media_title}</b><small>${[it.media_artist, it.media_album_name].filter(Boolean).join(' · ')}</small></div>
-      <span class="acts ra">${queueActs}${remove}</span>
     </div>`;
-    return html`<div class="qr ${kind} ${buf ? 'buf' : ''} ${jumps && kind !== 'now' ? 'jx' : ''} ${this.press.held === it.queue_item_id ? 'held' : ''}" data-id=${it.queue_item_id}
+    return html`<div class="qr ${kind} ${buf ? 'buf' : ''} ${this.press.held === it.queue_item_id ? 'held' : ''}" data-id=${it.queue_item_id}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       <span class="n">${kind === 'now' ? icon('eq', 'i eqi') : kind === 'past' ? '' : n}</span>
       ${artTpl(asArt(it), 'th')}
       <div class="rt"><b>${it.media_title}</b><small>${[it.media_artist, it.media_album_name].filter(Boolean).join(' · ')}</small></div>
       ${provTpl(it.media_content_id)}
-      ${kind === 'next' && this.edits ? html`<span class="acts ra">
-        ${queueActs}
-        ${remove}
-        ${qa('up', buf ? 'Already loading' : 'Move up', () => q.up(it.queue_item_id), isFirstNext || buf, 'up')}
-        ${qa('down', buf ? 'Already loading' : 'Move down', () => q.down(it.queue_item_id), isLast || buf, 'down')}
-        <button class="qa mo" tabindex="-1" aria-label="More options" @pointerdown=${noFocus}
-          @click=${(e: MouseEvent) => this.openMenu(it, (e.currentTarget as HTMLElement).closest('.qr') as HTMLElement)}>${icon('more')}</button>
-      </span>` : html`<span class="acts ra">${queueActs}${remove}</span>`}
+    </div>`;
+  }
+
+  /** #146 Queue tile: cover with a number badge (Up next). Played and playing songs are tiles in the same grid (played dimmed, playing highlighted). Same tap and hold as the row. */
+  private tile(it: QueueItem, kind: 'now' | 'next' | 'past', n: number, buf = false) {
+    const p = this.press.handlers(it.queue_item_id, it);
+    return html`<div class="qt ${kind} ${buf ? 'buf' : ''} ${this.press.held === it.queue_item_id ? 'held' : ''}" data-id=${it.queue_item_id}
+        @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
+        @contextmenu=${(e: Event) => e.preventDefault()}>
+      <div class="tw">${artTpl(asArt(it), 'big')}
+        ${kind === 'next' ? html`<span class="qn">${n}</span>` : nothing}</div>
+      <div class="qtt">${kind === 'now' ? html`<span class="qeq">${icon('eq', 'i eqi')}</span>` : nothing}<b>${it.media_title}</b><small>${[it.media_artist, it.media_album_name].filter(Boolean).join(' · ')}</small></div>
     </div>`;
   }
 
@@ -326,7 +341,6 @@ export class JbQueue extends LitElement {
     const next = cur >= 0 ? items.slice(cur + 1) : items;
     const past = cur > 0 ? items.slice(0, cur) : [];
     const remaining = this.queue?.remaining ?? next.length;
-    const jumps = this.jumps();
     // Up next rows already in the player's buffer (MA index_in_buffer > current_index): locked; the first movable row follows
     const nb = cur >= 0 ? Math.max(0, Math.min(next.length, (this.queue?.locked ?? cur) - cur)) : 0;
     const ql = this._q.toLowerCase();
@@ -343,19 +357,22 @@ export class JbQueue extends LitElement {
           <small>${found.length} match${found.length === 1 ? '' : 'es'}</small></div>
         <jb-keyboard class="qkbd" .collapsible=${false} @jb-key=${this.onSearchKey}></jb-keyboard>
         <div class="scroll panel qres" aria-label="Queue search results">
-          ${found.length ? found.map(({ it, i }) => this.row(it, i === cur ? 'now' : i < cur ? 'past' : 'next', i > cur ? i - cur : 0, i === cur + 1 + nb, i === items.length - 1, jumps, i > cur && i <= cur + nb, true))
+          ${found.length ? found.map(({ it, i }) => this.row(it, i === cur ? 'now' : i < cur ? 'past' : 'next', i > cur ? i - cur : 0, i > cur && i <= cur + nb, true))
             : html`<div class="empty"><b>No matching tracks</b><span>Try fewer letters.</span></div>`}
         </div></div>` : html`<div class="scroll panel" @scroll=${() => this.press.scrolled()}>
         ${s?.error ? html`<div class="empty"><b>Queue unavailable</b><span>${s.error}</span></div>`
           : !items.length ? html`<div class="empty"><b>${s?.loading || !s?.at ? 'Loading queue…' : 'The queue is empty'}</b><span>${combinedOn(this.config) ? `Add music from ${libraryTabLabel(this.config)}.` : `Add music from Search or ${libraryTabLabel(this.config)}.`}</span></div>`
+          : libraryViewFor(this.config, 'queue') === 'tiles' ? html`<div class="qg" data-layout="tiles" style=${tilesAcrossStyle(this.config)}>
+              ${past.map((it) => this.tile(it, 'past', 0))}
+              ${now ? html`<h3 class="eyebrow">Now playing</h3>${this.tile(now, 'now', 0)}` : nothing}
+              ${next.length ? html`<h3 class="eyebrow">Up next</h3>${next.map((it, i) => this.tile(it, 'next', i + 1, i < nb))}` : html`<div class="end">End of queue</div>`}
+              ${remaining > next.length ? html`<div class="end">+ ${remaining - next.length} more in Music Assistant</div>` : nothing}</div>`
           : html`
-            ${past.map((it) => this.row(it, 'past', 0, false, false, jumps))}
-            ${now ? html`<h3 class="eyebrow">Now playing</h3>${this.row(now, 'now', 0, false, false, jumps)}` : nothing}
-            ${next.length ? html`<h3 class="eyebrow">Up next</h3>${next.map((it, i) => this.row(it, 'next', i + 1, i === nb, i === next.length - 1, jumps, i < nb))}` : html`<div class="end">End of queue</div>`}
+            ${past.map((it) => this.row(it, 'past', 0))}
+            ${now ? html`<h3 class="eyebrow">Now playing</h3>${this.row(now, 'now', 0)}` : nothing}
+            ${next.length ? html`<h3 class="eyebrow">Up next</h3>${next.map((it, i) => this.row(it, 'next', i + 1, i < nb))}` : html`<div class="end">End of queue</div>`}
             ${remaining > next.length ? html`<div class="end">+ ${remaining - next.length} more in Music Assistant</div>` : nothing}`}
       </div>`}
-      ${this._menu ? menuTpl(this._menu.pos, { item: asArt(this._menu.item), sub: this._menu.item.media_artist ?? '' }, this.actions(this._menu.item),
-        () => { this._menu = null; this.press.release(); }) : nothing}
       ${this._undo ? html`<div class="undo" role="status"><span>Removed ${this._undo.title}.</span>
         <button class="ub" data-action="undo" tabindex="-1" @pointerdown=${noFocus} @click=${() => this.undo()}>Undo</button></div>` : nothing}
       ${confirmTpl(this._confirm, () => (this._confirm = null))}
@@ -366,51 +383,78 @@ export class JbQueue extends LitElement {
 
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
-    .qx { position: relative; height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 16px var(--_pad) 14px; width: 100%; }
-    .head { display: flex; align-items: baseline; gap: 12px; }
-    h2 { font-family: var(--_font-display); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); }
+    .qx { position: relative; height: 100%; display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); padding: clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)) var(--_pad) clamp(var(--ha-space-2, 8px), 3cqi, var(--ha-space-4, 16px)); width: 100%; }
+    /* #117: the header wraps (Autoplay goes to its own line) instead of squeezing "13 up next" into a column or pushing Autoplay off the card */
+    .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--ha-space-2, 8px) var(--ha-space-3, 12px); }
+    .cnt { white-space: nowrap; }
+    .qsearch { white-space: nowrap; }
+    h2 { font-family: var(--_font-display); font-size: clamp(var(--ha-font-size-2xl, 24px), 5cqi, var(--ha-font-size-3xl, 28px)); font-weight: var(--ha-font-weight-bold, 700); }
     .cnt { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); }
-    .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
-      border: 1px solid var(--_surface-border); background: var(--_chip-bg); color: var(--_muted); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
+    .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_muted); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
     .ap.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
-    .ap:disabled { opacity: .45; cursor: default; }
+    .ap:disabled { color: var(--_disabled); border-color: var(--_disabled); cursor: default; } /* #113: HA disabled colours, not an ad-hoc opacity */
     .apg { margin-left: auto; align-self: center; display: inline-flex; }
     .apg .ap { margin-left: 0; }
-    .apg.split .ap:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: 10px; }
-    .apg.split .apc { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding: 0 10px; box-shadow: inset 1px 0 0 var(--_divider); }
+    .apg.split .ap:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: var(--ha-space-2, 8px); }
+    .apg.split .apc { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding: 0 var(--ha-space-2, 8px); min-width: var(--_touch-min); justify-content: center; box-shadow: inset 1px 0 0 var(--_divider); }
     .apg.split .apc.on { box-shadow: inset 1px 0 0 var(--_hairline); }
     .aps { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100% - 24px)); max-height: min(100%, var(--_popup-max-h));
-      padding: 14px 14px 16px; border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); display: flex; flex-direction: column; gap: 10px; overflow: auto; }
-    .aps-h { display: flex; align-items: center; gap: 6px; min-height: 44px; }
-    .aps-h b { flex: 1; font-family: var(--_font-display); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); padding-left: 6px; }
+      padding: var(--ha-space-4, 16px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); overflow: auto; }
+    .aps-h { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); }
+    .aps-h b { flex: 1; font-family: var(--_font-display); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); padding-left: var(--ha-space-2, 8px); }
+    .aps-h .qa { width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_inactive); }
+    .aps-h .qa:active { background: var(--_chip-sel); color: var(--_fg); }
     .aps-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; scrollbar-width: none; }
-    .apo { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 8px 12px; border-radius: 12px; text-align: left; color: var(--_fg); font: inherit; }
+    .apo { display: flex; align-items: center; gap: var(--ha-space-4, 16px); min-height: 64px; padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-lg, 12px); text-align: left; color: var(--_fg); font: inherit; }
     .apo:active { background: var(--_chip-sel); }
-    .apo:disabled { opacity: .6; }
+    .apo:disabled { color: var(--_disabled); }
     .apo[aria-checked="true"] { background: var(--_chip-sel); }
     .apo span:not(.rb):not(.dot):not(.spin) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .apo b { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .apo small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .apo .go { width: 22px; height: 22px; color: var(--_inactive); }
     .apo .pi { width: 24px; height: 24px; color: var(--_muted); }
-    .rb { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--_inactive); display: grid; place-items: center; }
+    .rb { flex: none; width: 22px; height: 22px; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-md, 2px) solid var(--_inactive); display: grid; place-items: center; }
     .rb.sel { border-color: var(--_active); }
-    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--_active); }
-    .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--_chip-sel); border-top-color: var(--_fg); animation: spin 700ms linear infinite; }
+    .dot { width: 10px; height: 10px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); }
+    .spin { width: 14px; height: 14px; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-md, 2px) solid var(--_chip-sel); border-top-color: var(--_fg); animation: spin 700ms linear infinite; }
     @keyframes spin { to { transform: rotate(360deg) } }
-    .aps-note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: 0 8px; }
-    .aps-msg { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); padding: 18px 8px; text-align: center; }
-    .aps-err { color: var(--error-color); font-size: var(--ha-font-size-m, 14px); padding: 0 8px; }
-    .live { width: 7px; height: 7px; border-radius: 50%; background: var(--_active); align-self: center; animation: pulse 800ms ease-in-out infinite alternate; }
+    .aps-note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: 0 var(--ha-space-2, 8px); }
+    .aps-msg { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); padding: var(--ha-space-4, 16px) var(--ha-space-2, 8px); text-align: center; }
+    .aps-err { color: var(--error-color); font-size: var(--ha-font-size-m, 14px); padding: 0 var(--ha-space-2, 8px); }
+    .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); align-self: center; animation: pulse 800ms ease-in-out infinite alternate; }
     @keyframes pulse { from { opacity: 1 } to { opacity: .35 } }
-    .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 10px 12px 20px; display: flex; flex-direction: column; touch-action: pan-y; }
+    @media (prefers-reduced-motion: reduce) { .spin, .live { animation: none; } }
+    .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: var(--ha-space-2, 8px) clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-3, 12px)) clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-5, 20px)); display: flex; flex-direction: column; touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     /* the list sits directly on the HA card surface: no second fill */
     .scroll.panel { background: transparent; }
-    h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); margin: 12px 6px 6px; }
+    h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); margin: var(--ha-space-3, 12px) var(--ha-space-2, 8px) var(--ha-space-2, 8px); }
     h3.eyebrow:first-child { margin-top: 2px; }
-    .qr { display: grid; grid-template-columns: 28px 48px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 72px; padding: 6px 8px; border-radius: 12px; }
-    .qr + .qr { border-top: 1px solid var(--_divider); }
+    .qr { display: grid; grid-template-columns: 28px 48px minmax(0, 1fr) auto; align-items: center; gap: var(--ha-space-3, 12px); min-height: 72px; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-lg, 12px); }
+    .qg { display: grid; gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); }
+    .qg > h3.eyebrow, .qg > .end { grid-column: 1 / -1; }
+    .qg > h3.eyebrow { margin: var(--ha-space-1, 4px) var(--ha-space-2, 8px) 0; }
+    /* #146 Queue tiles: the Library tile look (theme radius, spacing and colours); a number badge on Up next covers */
+    .qt { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-lg, 12px); cursor: pointer; }
+    .qt .tw { position: relative; }
+    .qt .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--ha-border-radius-md, 8px); }
+    .qt .qtt { display: flex; flex-direction: column; min-width: 0; }
+    .qt b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
+    .qt small { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .qn { position: absolute; left: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); min-width: var(--ha-space-7, 28px); height: var(--ha-space-7, 28px); padding: 0 var(--ha-space-2, 8px); box-sizing: border-box;
+      border-radius: var(--ha-border-radius-pill, 9999px); display: grid; place-items: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); font-variant-numeric: tabular-nums;
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg))); color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
+    /* played and playing songs are normal tiles in the same grid (Tiles across honoured): playing highlighted with the theme accent, played dimmed */
+    .qt.now { background: var(--_active); color: var(--_on-accent); }
+    .qt.now .qtt { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--ha-space-2, 8px); align-items: center; }
+    .qt.now .qeq { grid-row: 1 / span 2; display: grid; place-items: center; }
+    .qt.now .qeq .i { width: var(--_icon); height: var(--_icon); }
+    .qt.now small { color: color-mix(in srgb, var(--_on-accent) 70%, transparent); } /* a tint of the on-primary text colour, as the playing row */
+    .qt.past { opacity: var(--_dim); }
+    .qt.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
+    .qr + .qr { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
     .qr .th { width: 48px; height: 48px; }
     .n { font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); text-align: center; font-variant-numeric: tabular-nums; }
     .eqi { width: 20px; height: 20px; margin: auto; color: var(--_on-accent); }
@@ -419,59 +463,41 @@ export class JbQueue extends LitElement {
     .rt small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .qr.now { background: var(--_active); color: var(--_on-accent); border-top-color: transparent; }
     .qr.now + .qr, h3 + .qr { border-top-color: transparent; }
-    .qr.now .rt small { color: rgba(var(--rgb-text-primary-color, 255,255,255), .7); } /* a tint of the on-primary text colour */
-    .qr.now .pv { color: var(--_on-accent); border-color: rgba(var(--rgb-text-primary-color, 255,255,255), .4); background: rgba(var(--rgb-text-primary-color, 255,255,255), .12); }
-    .qr.past { opacity: .45; }
-    .qr.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 1.5px var(--_active); }
-    .acts { display: flex; gap: 2px; align-items: center; }
-    .qr .ra-b { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; flex: none;
-      width: auto; min-width: 76px; min-height: 60px; height: auto; padding: 6px; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); }
-    .qr .ra-b span { white-space: nowrap; }
-    .qr .ra-b .i { flex: none; }
-    .qsearch { align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
-      border: 1px solid var(--_surface-border); color: var(--_fg); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
+    .qr.now .rt small { color: color-mix(in srgb, var(--_on-accent) 70%, transparent); } /* a tint of the on-primary text colour */
+    .qr.now .pv { color: var(--_on-accent); border-color: color-mix(in srgb, var(--_on-accent) 40%, transparent); background: color-mix(in srgb, var(--_on-accent) 12%, transparent); }
+    .qr.past { opacity: var(--_dim); }
+    .qr.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
+    .qsearch { align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); }
     .qsearch.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
-    .qsx { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(360px, 38%) minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 10px 16px;
+    .qsx { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(360px, 38%) minmax(0, 1fr); grid-template-rows: auto 1fr; gap: var(--ha-space-2, 8px) var(--ha-space-4, 16px);
       grid-template-areas: "q res" "kb res"; }
-    .qsbar { grid-area: q; display: flex; flex-direction: column; gap: 5px; }
-    .qsq { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; border-radius: 14px; background: var(--_input-bg); color: var(--_input-ink); border: 1px solid var(--_surface-border); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); }
+    .qsbar { grid-area: q; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
+    .qsq { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: 48px; padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); background: var(--_input-bg); color: var(--_input-ink); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); }
     .qsq .ph { color: var(--_input-label); font-weight: var(--ha-font-weight-medium, 500); }
-    .qsbar small { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); padding-left: 4px; }
+    .qsbar small { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); padding-left: var(--ha-space-1, 4px); }
     .qkbd { grid-area: kb; align-self: end; --kh: 42px; --kgap: 6px; --kfs: var(--ha-font-size-2xl, 24px); }
     .qres { grid-area: res; }
-    .qr.sr { grid-template-columns: 22px 44px minmax(0, 1fr) auto; cursor: default; }
-    .qr .ra-b { color: var(--_fg); } .qr.now .ra-b { color: var(--_on-accent); }
-    .qa { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--_inactive); }
-    .qa:active { background: var(--_chip-sel); color: var(--_fg); }
-    .qa:disabled { opacity: .25; }
-    .qr .qa[data-action="up"], .qr .qa[data-action="down"], .qr .qa.mo { color: var(--_fg); } /* #41: same color as the other row action icons */
-    .qa .i { width: 22px; height: 22px; }
-    .qr.jx .qa.mo { display: none; }
-    .undo { position: absolute; left: 50%; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); bottom: 14px; z-index: 5; display: flex; align-items: center; gap: 12px;
-      padding: 8px 8px 8px 18px; border-radius: var(--ha-border-radius-sm, 4px); background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); box-shadow: var(--ha-box-shadow-l, none); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); } /* ha-toast */
+    .qr.sr { grid-template-columns: 22px 44px minmax(0, 1fr); cursor: default; }
+    .undo { position: absolute; left: 50%; transform: translateX(-50%); width: min(520px, calc(100% - 2 * var(--ha-space-4, 16px))); bottom: var(--ha-space-4, 16px); z-index: 5; display: flex; align-items: center; gap: var(--ha-space-3, 12px);
+      padding: var(--_undo-pad) var(--_undo-pad) var(--_undo-pad) var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-sm, 4px); background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); box-shadow: var(--wa-shadow-l, var(--ha-box-shadow-l, none)); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); } /* ha-toast */
     .undo span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ub { height: 44px; padding: 0 20px; border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
-    .undo ~ .toast { bottom: 76px; }
-    .end { text-align: center; color: var(--_inactive); font-size: var(--ha-font-size-m, 14px); padding: 16px; }
+    .ub { height: var(--_undo-btn); padding: 0 var(--ha-space-5, 20px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
+    /* #121 the toast sits right above Undo: Undo's bottom offset plus its height (button and padding) */
+    :host { --_undo-pad: var(--ha-space-2, 8px); --_undo-btn: var(--_touch-min); }
+    .undo ~ .toast { --_toast-bottom: calc(var(--ha-space-4, 16px) + 2 * var(--_undo-pad) + var(--_undo-btn)); }
+    .end { text-align: center; color: var(--_inactive); font-size: var(--ha-font-size-m, 14px); padding: var(--ha-space-4, 16px); }
+    /* #117: the paddings and title above are fluid now; kept as a container query on the card's own width (structural): a narrow queue
+       row uses smaller number and art columns and drops the preview, Search queue stacks its keyboard under the results, and the
+       Autoplay style sheet becomes a bottom sheet. Queue rows have no buttons (#85); every action is in the hold pop-up. */
     @container np (max-width: 520px) {
-      .qx { padding: 12px 12px 10px; } h2 { font-size: var(--ha-font-size-2xl, 24px); }
-      .scroll { padding: 8px 6px 16px; }
-      .qr { grid-template-columns: 20px 42px minmax(0, 1fr) auto; gap: 9px; padding: 0 4px; }
+      .qr { grid-template-columns: 20px 42px minmax(0, 1fr) auto; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-1, 4px); }
       .qr .pv { display: none; } .qr .th { width: 42px; height: 42px; }
-      .qa[data-action="up"], .qa[data-action="down"] { display: none; }
       .rt b { font-size: var(--ha-font-size-m, 14px); }
-      /* Labeled queue actions stay visible; move actions use the existing responsive controls. */
-      .qr { grid-template-columns: 20px 42px minmax(0, 1fr); grid-template-rows: 42px 60px; min-height: 124px; }
-      .qr > .n { grid-column: 1; grid-row: 1; }
-      .qr > .ar.th { grid-column: 2; grid-row: 1; }
-      .qr .rt { grid-column: 3; grid-row: 1; }
-      .qr .acts { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; gap: 0; }
       .qsx { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "q" "res" "kb"; }
-      .qr.sr { grid-template-columns: 0 40px minmax(0, 1fr); grid-template-rows: 42px 60px; min-height: 124px; } .qr.sr .acts { grid-column: 2 / -1; justify-content: flex-end; }
-      .qr.jx .qa.mo { display: grid; }
-      .qr.jx .acts { gap: 0; }
+      .qr.sr { grid-template-columns: 0 40px minmax(0, 1fr); }
       /* the style sheet becomes a bottom sheet */
-      .aps { top: auto; bottom: 0; transform: translateX(-50%); width: 100%; border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; border-width: var(--_card-border-width, 1px) 0 0; max-height: min(100%, var(--_popup-max-h)); padding-bottom: 20px; }
+      .aps { top: auto; bottom: 0; transform: translateX(-50%); width: 100%; border-radius: var(--_dialog-radius) var(--_dialog-radius) 0 0; border-width: var(--_card-border-width, 1px) 0 0; max-height: min(100%, var(--_popup-max-h)); padding-bottom: var(--ha-space-5, 20px); }
     }
   `];
 }

@@ -7,13 +7,14 @@
 import type { HomeAssistant } from '../types';
 import type { MaBackend } from '../backend/types';
 import { parsePlayers, parseGroupConfig, type GroupConfig, type Players } from './model';
+import { TEST_HOOKS } from '../test-hooks';
 
 export class SpeakerError extends Error {
   constructor(public code: 'timeout' | 'failed' | 'config', message: string) { super(message); }
 }
 /** Timeouts (ms). Tests may shorten them through window.__jbSpeakerTimeouts. */
 export function timeouts() {
-  const o = (typeof window !== 'undefined' && (window as any).__jbSpeakerTimeouts) || {};
+  const o = (TEST_HOOKS && typeof window !== 'undefined' && (window as any).__jbSpeakerTimeouts) || {};
   return { call: o.call ?? 8000, join: o.join ?? 8000, move: o.move ?? 10000, poll: o.poll ?? 3000, fast: o.fast ?? 500 };
 }
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {

@@ -37,13 +37,13 @@ CONF_GUEST_CLASSES: Final = "guest_classes"
 CARD_FILENAME: Final = "jukebox-card.js"
 STATIC_URL_BASE: Final = "/jukebox_kiosk_static"
 CARD_URL: Final = f"{STATIC_URL_BASE}/{CARD_FILENAME}"
-# Home Assistant 2026.11 (HACS built in as the Marketplace) serves plugin resources from /local/community/
-# and keeps /hacsfiles/ working, so the old card can sit under either path.
-LEGACY_RESOURCE_MARKERS: Final = (
-    "/hacsfiles/ha-jukebox-kiosk-card/",
-    "/hacsfiles/ha-jukebox-card/",
-    "/local/community/ha-jukebox-kiosk-card/",
-    "/local/community/ha-jukebox-card/",
+# The old plugin was the repository randybell/ha-jukebox-kiosk-card (hacs.json filename jukebox-card.js, last release 0.5.1).
+# HACS served it from /hacsfiles/<repository>/<file>; Home Assistant 2026.11 (HACS built in as the Marketplace) serves
+# plugin resources from /local/community/ and keeps /hacsfiles/ working, so the old card can sit under either path.
+# Only these exact file paths count (a ?query suffix is fine). "ha-jukebox-card" was only the npm package name, never a folder.
+LEGACY_RESOURCE_PATHS: Final = (
+    "/hacsfiles/ha-jukebox-kiosk-card/jukebox-card.js",
+    "/local/community/ha-jukebox-kiosk-card/jukebox-card.js",
 )
 
 # Repairs issue ids
@@ -237,6 +237,7 @@ PLAYER_ARG_KEYS: Final = (
 PLAYER_LIST_ARG_KEYS: Final = ("player_ids_to_add", "player_ids_to_remove")
 
 QUEUE_EVENTS: Final = ("queue_updated", "queue_items_updated")
+SLEEP_TIMER_EVENT: Final = "player_sleep_timer_updated"
 # MA Autoplay (called "Don't stop the music" before MA 2.10). Sent only by jukebox_kiosk/set_autoplay, for the queue of an
 # entity the user may control; not in MA_COMMANDS, so `ma` callers can't name an arbitrary queue_id. Both need MA scope
 # QUEUES_CONTROL (same as move_item/delete_item). The legacy name is an alias in 2.10.9 and the only name before it.
@@ -250,14 +251,6 @@ AUTOPLAY_MODE_KEY: Final = "autoplay_mode"
 AUTOPLAY_PLAYLIST_KEY: Final = "autoplay_playlist"
 AUTOPLAY_MODES: Final = ("auto", "similar", "library", "playlist")
 AUTOPLAY_MODE_GLOBAL: Final = "global"  # per-queue value meaning "follow MA's global Autoplay setting"
-
-# 0.6.5: "repeat one" is never set through this integration. No allowlisted command takes a repeat mode today
-# (player_queues/repeat is not forwarded; the card uses media_player.repeat_set), but if one ever does, a forwarded
-# repeat 'one' is sent as 'all'.
-REPEAT_ARG_KEYS: Final = ("repeat", "repeat_mode")
-REPEAT_ONE: Final = "one"
-REPEAT_ALL: Final = "all"
-
 
 def is_denied(command: str) -> bool:
     """Return True for commands that are never forwarded."""

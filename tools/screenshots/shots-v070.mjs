@@ -1,4 +1,4 @@
-// v0.7 screenshots (Discover, radio "Stations by…", search categories, genre detail, Library home + editor) at 1920x1080 and 390x844, plus a
+// v0.7 screenshots (Discover, radio "Stations by…", search categories, genre detail, Library home + editor) at 1920x1080, plus a
 // compare sheet. Usage: (starts its own dev server; JB_PORT / JB_URL / JB_ROOT override) node tools/screenshots/shots-v070.mjs
 // Output: test/shots/v070-design/*.png (git-ignored). All data is the placeholder mock (dev/mock-v07.js).
 import puppeteer from 'puppeteer-core';
@@ -11,7 +11,7 @@ const OUT = new URL('../../test/shots/v070-design/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const J = JSON.stringify;
-const VPS = [{ width: 1920, height: 1080 }, { width: 390, height: 844, isMobile: true, hasTouch: true }];
+const VPS = [{ width: 1920, height: 1080 }];
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 const errors = [], files = [];
 const ALL = { search_categories: ['tracks', 'artists', 'albums', 'playlists', 'radio', 'podcasts', 'audiobooks', 'genres'], radio_browse: true, discover: true };
@@ -126,19 +126,19 @@ for (const vp of VPS) {
   await pg.close();
 }
 
-// compare sheet: desktop and phone side by side per scene
+// compare sheet: one row per scene
 const b64 = (f) => 'data:image/png;base64,' + readFileSync(f).toString('base64');
 const names = [...new Set(shots.map((s) => s.name))];
 const rows = names.map((n) => {
-  const d = shots.find((s) => s.name === n && s.vp.width === 1920), m = shots.find((s) => s.name === n && s.vp.width === 390);
-  return `<section><h2>${d?.title ?? n}</h2><div class="r">${d ? `<img class="d" src="${b64(d.f)}">` : ''}${m ? `<img class="m" src="${b64(m.f)}">` : ''}</div></section>`;
+  const d = shots.find((s) => s.name === n && s.vp.width === 1920);
+  return `<section><h2>${d?.title ?? n}</h2><div class="r">${d ? `<img class="d" src="${b64(d.f)}">` : ''}</div></section>`;
 }).join('');
 const sheet = await browser.newPage();
 await sheet.setViewport({ width: 1480, height: 900 });
 await sheet.setContent(`<html><body style="margin:0;background:#000;color:#fff;font:600 18px system-ui,sans-serif;padding:24px">
 <style>h1{font-size:26px;margin:0 0 6px}p{opacity:.6;margin:0 0 20px;font-weight:400}section{margin:0 0 28px}h2{font-size:16px;letter-spacing:.08em;text-transform:uppercase;opacity:.75;margin:0 0 10px}
 .r{display:flex;gap:20px;align-items:flex-start}img{border:1px solid #ffffff33;border-radius:10px}.d{width:1080px}.m{width:281px}</style>
-<h1>Jukebox card v0.7 — Discover, Search &amp; Library home (design branch)</h1><p>1920x1080 (scaled) and 390x844 · placeholder mock data · every v0.7 feature is behind a config flag, off by default</p>${rows}</body></html>`, { waitUntil: 'load' });
+<h1>Jukebox card v0.7 — Discover, Search &amp; Library home (design branch)</h1><p>1920x1080 (scaled) · placeholder mock data · every v0.7 feature is behind a config flag, off by default</p>${rows}</body></html>`, { waitUntil: 'load' });
 const cf = `${OUT}compare-sheet.png`;
 await sheet.screenshot({ path: cf, fullPage: true }); files.push(cf);
 await browser.close();

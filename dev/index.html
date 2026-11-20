@@ -26,8 +26,9 @@
   <div id="log"></div>
   <script type="module">
     import { hass, onHass } from './mock-hass.js';
-    await import('../custom_components/jukebox_kiosk/www/jukebox-card.js');
     const params = new URLSearchParams(location.search);
+    // #143: hooks=1 loads the e2e build with the window.__jb* test hooks (test/hooks-build.mjs); the shipped card has none
+    await import(params.get('hooks') === '1' ? '../test/tmp/jukebox-card.hooks.js' : '../custom_components/jukebox_kiosk/www/jukebox-card.js');
     if (params.get('log') === '1') document.body.classList.add('log');
     if (params.get('fresh') === '1') localStorage.removeItem('jukebox-card:recents:v1');
     // lyrics: fresh=1 also empties the lyrics cache unless keeplyrics=1; overlay=1|0 presets the per-device art overlay toggle
@@ -35,9 +36,9 @@
     if (params.has('overlay')) localStorage.setItem('jukebox-card:lyrics-overlay:v1', params.get('overlay') === '1' ? '1' : '0');
     // cfg=<json>: extra card options (e.g. {"lyrics_tab":false}), merged last
     const extra = params.get('cfg') ? JSON.parse(params.get('cfg')) : {};
-    // legacy=0: nothing added, the card's own 0.7.20 defaults (Library rows, row action buttons off). Without it the harness keeps the 0.7.14 look
-    // (Library tiles, action buttons on) so the older tests that were written against it still test what they were written for.
-    const legacy = params.get('legacy') === '0' ? {} : { library_view: 'tiles', show_action_icons: true };
+    // legacy=0: nothing added, the card's own defaults (Library rows). Without it the harness keeps Library tiles
+    // so the older tests that were written against that look still test what they were written for.
+    const legacy = params.get('legacy') === '0' ? {} : { library_view: 'tiles' };
     // spk=dyn: 0.5 dynamic speakers (targets Everywhere / Indoor / Outdoor; presets come from MA's dynamic-group defaults); target=<entity> presets the remembered group
     if (params.get('fresh') === '1') localStorage.removeItem('jukebox-card:target:v1');
     if (params.get('target')) localStorage.setItem('jukebox-card:target:v1', params.get('target'));

@@ -59,10 +59,10 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   await typeQ(p, 'r');
   await wait(p, `${SV}.querySelectorAll('.cats .fc').length > 0`);
   const chips = await ev(p, `[...${SV}.querySelectorAll('.cats .fc')].map((b) => b.dataset.cat)`);
-  check('S1 chips: All + the configured categories in order (0.7.11: a configured genres is ignored, no Genres chip)', J(chips) === J(['all', ...ALL.search_categories.filter((k) => k !== 'genres')]), J(chips));
+  check('S1 chips: All + the configured categories in order (0.9.0: Genres is a filter again, like MA)', J(chips) === J(['all', ...ALL.search_categories]), J(chips));
   await typeQ(p, 'ock'); await sleep(600);
-  check('S2 0.7.11: no genre search and no genre rows even with genres configured and a backend that has them (the genre page is gone)',
-    (await maOf(p, 'music/search')).every((a) => J(a.media_types) !== J(['genre'])) && !(await ev(p, `!!${SV}.querySelector('.row[data-group="genres"]')`)));
+  check('S2 0.9.0: genres configured + a backend that has them: MA music/search media_types [genre] (library only), genre rows shown',
+    (await maOf(p, 'music/search')).some((a) => J(a.media_types) === J(['genre'])) && (await wait(p, `!!${SV}.querySelector('.row[data-group="genres"]')`)));
   await p.close();
 }
 // ---------------- 3. podcasts & audiobooks categories; genres need the flag + backend ----------------
@@ -124,7 +124,7 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   await tap(p, `${BR}.querySelector('.modes .fc[data-rmode="popular"]')`);
   await wait(p, `${BR}.querySelectorAll('.grid.radio .tile').length === 24`);
   check('R9 listings are cached (24 h): Popular again makes no MA call', (await maOf(p, 'music/browse')).length === nb, `${nb} → ${(await maOf(p, 'music/browse')).length}`);
-  check('R10 cache in localStorage under jukebox-card:rb:v1:', await ev(p, `Object.keys(localStorage).some((k) => k === 'jukebox-card:rb:v1:radiobrowser://popularity/popular')`));
+  check('R10 cache in localStorage under jukebox-card:rb:v1:', await ev(p, `Object.keys(localStorage).some((k) => k === 'jukebox-card:rb:v1:radiobrowser--demo0004://popularity/popular')`));
   await tap(p, `${BR}.querySelector('.modes .fc[data-rmode="library"]')`);
   await wait(p, `${BR}.querySelector('.fc.sort')`);
   check('R11 My stations returns to the library list with Favorites + sort', await ev(p, `!!${BR}.querySelector('.fc[data-cat="favorites"]')`));
@@ -138,7 +138,7 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('R12 Radio Browser down, no cached copy → error + Retry', await ev(p, `!!${BR}.querySelector('[data-action="rb-retry"]')`));
   await p.close();
   const q = await open('&tab=browse&lhome=0', { radio_browse: true });
-  await q.evaluate(() => localStorage.setItem('jukebox-card:rb:v1:radiobrowser://popularity/popular', JSON.stringify({ t: 1, d: { folders: [], stations: [{ media_type: 'radio', uri: 'radiobrowser://radio/00000000-0000-0000-0000-000000000001', name: 'Saved Placeholder FM' }] } })));
+  await q.evaluate(() => localStorage.setItem('jukebox-card:rb:v1:radiobrowser--demo0004://popularity/popular', JSON.stringify({ t: 1, d: { folders: [], stations: [{ media_type: 'radio', uri: 'radiobrowser://radio/00000000-0000-0000-0000-000000000001', name: 'Saved Placeholder FM' }] } })));
   await q.goto(q.url().replace('&tab=browse&lhome=0', '&tab=browse&lhome=0&rbfail=1').replace('fresh=1', 'fresh=0'));
   await q.waitForFunction('window.__ready === true');
   await tap(q, `${BR}.querySelector('.cats .fc[data-cat="radio"]')`);
@@ -158,7 +158,7 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   await wait(p, `${BR}.querySelector('.drow')`);
   const cats = await ev(p, `[...${BR}.querySelectorAll('.cats .fc')].map((b) => b.dataset.cat)`);
   check('D1 Discover is the first chip and selected by default', cats[0] === 'discover' && (await ev(p, `${BR}.querySelector('.cats .fc.on')?.dataset.cat`)) === 'discover', J(cats));
-  await wait(p, `[...${BR}.querySelectorAll('.drow')].some((r) => r.querySelector('.hs:not(.skel) .tile'))`);
+  await wait(p, `${BR}.querySelector('.drow[data-loaded] .row')`);
   const rows = await ev(p, `[...${BR}.querySelectorAll('.drow')].map((r) => r.dataset.row)`);
   check('D2 default rows in order (library rows, missing ones skipped)', J(rows) === J(['in_progress', 'recently_played', 'recently_added_albums', 'favorite_playlists', 'favorite_radio', 'random_albums', 'most_played_tracks']), J(rows));
   const its = await maOf(p, 'music/recommendations/items');
@@ -171,14 +171,33 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('D6 Continue listening shows resume progress', rp.length >= 2 && rp.includes('35') && rp.includes('67'), J(rp));
   const n0 = await plays(p);
   await ev(p, `${BR}.querySelector('.scroll').scrollTo({ top: 0 })`); await sleep(100);
+  await tap(p, `${BR}.querySelector('.drow[data-row="recently_added_albums"] .row')`);
+  await wait(p, `${BD}?.querySelector('h2')`);
+  { const tr0 = await ev(p, `${BR}.querySelector('jb-detail').trail?.[0]`); check('D7 album row opens the detail, never plays', (await plays(p)) === n0 && tr0 === 'Library · Discover', J({ tr0, n0, n: await plays(p) })); }
+  await p.close();
+}
+{
+  const p = await open('&tab=browse&lhome=0', { discover: true, library_views: { discover: 'tiles' } });
+  await wait(p, `${BR}.querySelector('.drow')`);
+  await wait(p, `${BR}.querySelector('.drow[data-loaded] .tile')`);
+  const tRows = await ev(p, `[...${BR}.querySelectorAll('.drow')].map((r) => r.dataset.row)`);
+  const tIts = await maOf(p, 'music/recommendations/items');
+  check('D4t tiles: rows load lazily at 800 px tall', tIts.length >= 1 && tIts.length < tRows.length, J(tIts));
+  await ev(p, `${BR}.querySelector('.scroll').scrollTo({ top: 99999 })`);
+  await wait(p, `window.__ws.filter((m) => m.command === 'music/recommendations/items').length >= 7`);
+  check('D4t tiles: scrolling loads the remaining rows', (await maOf(p, 'music/recommendations/items')).length === 7);
+  const tRp = await ev(p, `[...${BR}.querySelectorAll('.drow[data-row="in_progress"] .rp')].map((x) => x.getAttribute('aria-valuenow'))`);
+  check('D6t tiles: Continue listening shows resume progress', tRp.length >= 2 && tRp.includes('35') && tRp.includes('67'), J(tRp));
+  const tN0 = await plays(p);
+  await ev(p, `${BR}.querySelector('.scroll').scrollTo({ top: 0 })`); await sleep(100);
   await tap(p, `${BR}.querySelector('.drow[data-row="recently_added_albums"] .tile')`);
   await wait(p, `${BD}?.querySelector('h2')`);
-  { const tr0 = await ev(p, `${BR}.querySelector('jb-detail').trail?.[0]`); check('D7 album tile opens the detail, never plays', (await plays(p)) === n0 && tr0 === 'Library · Discover', J({ tr0, n0, n: await plays(p) })); }
+  { const tr0 = await ev(p, `${BR}.querySelector('jb-detail').trail?.[0]`); check('D7t tiles: album tile opens the detail, never plays', (await plays(p)) === tN0 && tr0 === 'Library · Discover', J({ tr0, n0: tN0, n: await plays(p) })); }
   await p.close();
 }
 {
   const p = await open('&tab=browse&lhome=0', { discover: ['favorite_radio', 'mock_stream--XXXXXXXX:stations_for_you', 'never_played_tracks', 'no_such_row'] });
-  await wait(p, `${BR}.querySelectorAll('.drow .hs:not(.skel)').length >= 2`, 6000);
+  await wait(p, `${BR}.querySelectorAll('.drow[data-loaded]').length >= 2`, 6000);
   await sleep(300);
   const rows = await ev(p, `[...${BR}.querySelectorAll('.drow')].map((r) => r.dataset.row)`);
   check('D8 custom list: provider:id rows, empty rows hidden, unknown rows skipped', J(rows) === J(['favorite_radio', 'stations_for_you']), J(rows));
@@ -196,12 +215,6 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   await wait(k, `${BR}.querySelectorAll('.tile').length > 0`);
   check('D11 backend without discover: chip hidden, library category shown', !(await ev(k, `!!${BR}.querySelector('.fc[data-cat="discover"]')`)) && (await maOf(k, 'music/recommendations')).length === 0);
   await k.close();
-  const m = await open('&tab=browse&lhome=0', { discover: true }, { width: 390, height: 844 });
-  await wait(m, `${BR}.querySelector('.drow .hs:not(.skel) .tile')`);
-  const w = await ev(m, `${BR}.querySelector('.drow .hs .tile').getBoundingClientRect().width`);
-  const ov = await ev(m, `document.documentElement.scrollWidth <= 390`);
-  check('D12 phone: compact tiles, rows scroll sideways, no page overflow', w < 130 && ov, String(w));
-  await m.close();
 }
 // ---------------- 6. Autoplay ("don't stop the music"): the Queue always shows the switch when MA supports it ----------------
 {
@@ -228,9 +241,13 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('AP4 tap → jukebox_kiosk/set_autoplay {enabled: true}, pill on, no raw ma command',
     sent.length === 1 && sent[0].on === true && /^media_player\./.test(sent[0].e) && (await maOf(c, 'player_queues/autoplay')).length === 0, J(sent));
   await tap(c, `__card.shadowRoot.querySelector('.tab[data-tab="now"]')`);
-  const ind = await wait(c, `/Autoplay/.test(${NV}.querySelector('.upn')?.textContent ?? '')`);
-  check('AP5 Now Playing: "Up next · Autoplay" indicator only (no 7th transport button)', ind
-    && !(await ev(c, `!!${NV}.querySelector('.tb[aria-label*="Autoplay"]')`)), String(await ev(c, `${NV}.querySelector('.upn')?.textContent?.replace(/\\s+/g, ' ')`)));
+  const ind = await wait(c, `${NV}.querySelector('[data-action="np-autoplay"][aria-pressed="true"]')`) && !/Autoplay/.test(await ev(c, `${NV}.querySelector('.upn')?.textContent ?? ''`));
+  const ap = await ev(c, `(() => { const b = ${NV}.querySelector('[data-action="np-autoplay"]');
+    return { has: !!b, pressed: b?.getAttribute('aria-pressed'), disabled: !!b?.disabled, tb: !!${NV}.querySelector('.tb[aria-label*="Autoplay"]'),
+      upn: ${NV}.querySelector('.upn')?.textContent?.replace(/\s+/g, ' ') }; })()`);
+  check('AP5 Now Playing: spot A Autoplay button (same state as the Queue pill), Up next no longer says Autoplay, no 7th transport button',
+    ind && ap.has && ap.pressed === 'true' && !ap.disabled && !ap.tb, J(ap));
+
   await c.close();
   // Autoplay style picker (feature autoplay_mode): chevron opens the sheet, playlist chooser, saves via set_autoplay_mode
   const noMode = await open('&tab=queue&kcaps=' + AP);
@@ -271,15 +288,15 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('AP11 scrim / Escape closes the sheet', await wait(d, `!${QV}.querySelector('.aps')`));
   await d.close();
   // no provider for similar tracks: Similar music is hidden; long-press on the pill opens the sheet without toggling
-  const e = await open('&tab=queue&apsimilar=0&kcaps=' + APM, {}, { width: 390, height: 844, isMobile: true, hasTouch: true });
+  const e = await open('&tab=queue&apsimilar=0&kcaps=' + APM, {}, { width: 1024, height: 600, isMobile: true, hasTouch: true });
   await wait(e, `${QV}.querySelector('.ap')`);
   const r = await e.evaluate((x) => { const b = eval(x).getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; }, `${QV}.querySelector('.ap')`);
   await e.mouse.move(r.x, r.y); await e.mouse.down(); await sleep(700); await e.mouse.up(); await sleep(150);
   await wait(e, `${QV}.querySelectorAll('.aps .apo').length > 0`);
   const m2 = await ev(e, `[...${QV}.querySelectorAll('.aps .apo')].map((b) => b.dataset.mode)`);
-  const bottom = await ev(e, `(() => { const b = ${QV}.querySelector('.aps').getBoundingClientRect(); return Math.round(innerHeight - b.bottom); })()`);
-  check('AP12 phone: long-press opens a bottom sheet, Similar music hidden when MA cannot do it, pill not toggled',
-    J(m2) === J(['auto', 'library', 'playlist']) && (await e.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay').length)) === 0 && bottom < 120, J([m2, bottom]));
+  const sheet = await ev(e, `(() => { const b = ${QV}.querySelector('.aps'); if (!b) return null; const r = b.getBoundingClientRect(); return { h: Math.round(r.height), visible: r.height > 0 && getComputedStyle(b).display !== 'none' }; })()`);
+  check('AP12 long-press opens the Autoplay sheet, Similar music hidden when MA cannot do it, pill not toggled',
+    J(m2) === J(['auto', 'library', 'playlist']) && (await e.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay').length)) === 0 && !!sheet?.visible, J([m2, sheet]));
   await e.close();
 }
 // ---------------- 7. Library home prototype, flag library_home ----------------

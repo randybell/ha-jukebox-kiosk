@@ -34,19 +34,88 @@ export const combinedOn = (c: Partial<JukeboxCardConfig> | undefined) => c?.libr
 /** Tab label: always "Library" (or `library_label`), with or without the tile home. */
 export const libraryTabLabel = (c: Partial<JukeboxCardConfig> | undefined) => String(c?.library_label ?? '').trim() || 'Library';
 
-/** 0.7.20: the top level of every Library section is drawn as rows or tiles (`library_view`). The default is in this one place. */
+/** rows or tiles. The default is in this one place. */
 export type LibraryView = 'rows' | 'tiles';
 export const DEFAULT_LIBRARY_VIEW: LibraryView = 'rows';
-export const LIBRARY_COLUMNS_MIN = 2, LIBRARY_COLUMNS_MAX = 6, DEFAULT_LIBRARY_COLUMNS = 3;
-/** `library_view`: 'rows' or 'tiles'; anything else (or unset) = the default. */
+export const LIBRARY_COLUMNS_MIN = 1, LIBRARY_COLUMNS_MAX = 8, DEFAULT_LIBRARY_COLUMNS = 3;
+/** Per-section keys shown in the editor (#146). Radio Favorites and Browse share `radio`. */
+export const EDITOR_VIEW_SECTIONS = [
+  { id: 'playlist', label: 'Playlists' },
+  { id: 'artist', label: 'Artists' },
+  { id: 'track', label: 'Tracks' },
+  { id: 'genre', label: 'Genres' },
+  { id: 'radio', label: 'Radio' },
+  { id: 'album', label: 'Albums' },
+  { id: 'podcast', label: 'Podcasts' },
+  { id: 'audiobook', label: 'Audiobooks' },
+  { id: 'queue', label: 'Queue' },
+  { id: 'discover', label: 'Discover' },
+  { id: 'artist_page', label: 'Artist page' },
+  { id: 'album_page', label: 'Album page' },
+  { id: 'playlist_page', label: 'Playlist page' },
+  { id: 'search', label: 'Search results' },
+] as const;
+export type LibraryViewSection = (typeof EDITOR_VIEW_SECTIONS)[number]['id'];
+/** Library category tops. An existing leftover `library_view` is still read for these at runtime; nothing is copied between keys. */
+const LIBRARY_TOPS = new Set<string>(['playlist', 'artist', 'track', 'genre', 'radio', 'album', 'podcast', 'audiobook']);
+const asView = (v: unknown): LibraryView | undefined => (v === 'rows' || v === 'tiles' ? v : undefined);
+/** New-install / unset defaults, in this one place. Playlists, Albums and Radio start as Tiles; every other section starts as Rows (Discover included). */
+export const DEFAULT_SECTION_VIEWS: Record<LibraryViewSection, LibraryView> = {
+  playlist: 'tiles', artist: 'rows', track: 'rows', genre: 'rows', radio: 'tiles',
+  album: 'tiles', podcast: 'rows', audiobook: 'rows',
+  queue: 'rows', discover: 'rows', artist_page: 'rows', album_page: 'rows', playlist_page: 'rows', search: 'rows',
+};
+export const sectionViewDefault = (section: string): LibraryView =>
+  (DEFAULT_SECTION_VIEWS as Record<string, LibraryView>)[section] ?? DEFAULT_LIBRARY_VIEW;
+/** Leftover all-sections `library_view` when present; undefined if the key is missing or not rows/tiles. */
+export const leftoverLibraryView = (c: Partial<JukeboxCardConfig> | undefined): LibraryView | undefined => asView(c?.library_view);
+/** `library_view`: 'rows' or 'tiles'; anything else (or unset) = the generic rows default. Prefer libraryViewFor for a section. */
 export const libraryView = (c: Partial<JukeboxCardConfig> | undefined): LibraryView =>
-  c?.library_view === 'rows' || c?.library_view === 'tiles' ? c.library_view : DEFAULT_LIBRARY_VIEW;
-/** `library_columns` clamped to 2..6 (whole numbers); not a number = 3. */
+  leftoverLibraryView(c) ?? DEFAULT_LIBRARY_VIEW;
+/** Rows or tiles for one section. An explicit `library_views` key wins. Library tops with no key still follow an existing leftover `library_view`. Otherwise the section default. */
+export const libraryViewFor = (c: Partial<JukeboxCardConfig> | undefined, section: string): LibraryView => {
+  const v = asView((c?.library_views as Record<string, unknown> | undefined)?.[section]);
+  if (v) return v;
+  if (LIBRARY_TOPS.has(section)) {
+    const leftover = leftoverLibraryView(c);
+    if (leftover) return leftover;
+  }
+  return sectionViewDefault(section);
+};
+/** What the editor shows: an explicit `library_views` key, else leftover `library_view` on Library tops only (so the dropdown matches runtime), else the section default. */
+export const editorViewValue = (c: Partial<JukeboxCardConfig> | undefined, section: string): LibraryView =>
+  asView((c?.library_views as Record<string, unknown> | undefined)?.[section])
+  ?? (LIBRARY_TOPS.has(section) ? leftoverLibraryView(c) : undefined)
+  ?? sectionViewDefault(section);
+/** `library_columns` clamped to 1..8 (whole numbers); not a number = 3. The card shows exactly this many tiles across. */
 export function libraryColumns(c: Partial<JukeboxCardConfig> | undefined): number {
   const raw: unknown = c?.library_columns;
   const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
   if (!Number.isFinite(n)) return DEFAULT_LIBRARY_COLUMNS;
   return Math.max(LIBRARY_COLUMNS_MIN, Math.min(LIBRARY_COLUMNS_MAX, Math.round(n)));
+}
+export const tilesAcrossStyle = (c: Partial<JukeboxCardConfig> | undefined) => `--_cols:${libraryColumns(c)}`;
+/** On editor save: merge `view_*` form fields into `library_views`. Does not copy or delete leftover `library_view`. Returns undefined when nothing should be written. */
+export function collectLibraryViews(
+  form: Record<string, unknown>,
+  prev: Partial<JukeboxCardConfig> | undefined,
+): Record<string, LibraryView> | undefined {
+  const views: Record<string, LibraryView> = {};
+  const prevViews = (prev?.library_views ?? {}) as Record<string, unknown>;
+  for (const s of EDITOR_VIEW_SECTIONS) {
+    const k = s.id;
+    const fromForm = asView(form[`view_${k}`]);
+    const fromPrev = asView(prevViews[k]);
+    const shown = editorViewValue(prev, k);
+    if (fromForm && (fromPrev || fromForm !== shown)) views[k] = fromForm;
+    else if (fromPrev) views[k] = fromPrev;
+  }
+  for (const [k, raw] of Object.entries(prevViews)) {
+    const v = asView(raw);
+    if (v && views[k] === undefined) views[k] = v;
+  }
+  if (!Object.keys(views).length) return undefined;
+  return views;
 }
 
 /** 0.7.2 Library category buttons, in the editor's order. */

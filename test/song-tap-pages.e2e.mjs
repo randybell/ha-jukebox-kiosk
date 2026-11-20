@@ -60,9 +60,9 @@ const SETUPS = {
   'LIB-MORE': async () => {
     const p = await newPage(`&tab=browse&cfg=${encodeURIComponent(JSON.stringify({ library_view: 'rows' }))}`); // 0.7.20: Tracks as rows (harness legacy default is tiles)
     await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Tracks').click()`); await sleep(600);
-    await p.waitForFunction((b) => eval(b).querySelectorAll('.list .row[data-type="track"] .ra-b[data-act="more"]').length > 0, {}, BRC);
+    await p.waitForFunction((b) => eval(b).querySelectorAll('.list .row[data-type="track"]').length > 1, {}, BRC);
     const row = `${BRC}.querySelectorAll('.list .row[data-type="track"]')[1]`;
-    return { p, row, at: `${row}.querySelector('.ra-b[data-act="more"]')`, holdAt: `${row}.querySelector('.rt')`, mustScroll: true };
+    return { p, row, at: `${row}.querySelector('.rt')`, holdAt: `${row}.querySelector('.rt')`, mustScroll: true };
   },
   'QUEUE': async () => {
     const p = await newPage('&tab=queue&qbuf=0&admin=1');
@@ -75,9 +75,9 @@ const SETUPS = {
     const kb = `${SV}.querySelector('jb-keyboard')`;
     const qb = await center(p, `${SV}.querySelector('.qbar')`); await p.touchscreen.tap(qb.x, qb.y); await sleep(300);
     await typeOnScreen(p, kb, 'EAGLES');
-    await p.waitForFunction((s) => !!eval(s).querySelector('.row .ra-b[data-act="add"]'), {}, SV);
+    await p.waitForFunction((s) => !!eval(s).querySelector('.row'), {}, SV);
     await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => /^\\s*tracks\\s*$/i.test(x.textContent))?.click()`); await sleep(600);
-    await p.waitForFunction((s) => !!eval(s).querySelector('.row[data-type="track"] .ra-b[data-act="radio"]'), {}, SV);
+    await p.waitForFunction((s) => !!eval(s).querySelector('.row[data-type="track"]'), {}, SV);
     const row = `${SV}.querySelector('.row[data-type="track"]')`;
     return { p, row, at: `${row}.querySelector('.rt')`, holdAt: `${row}.querySelector('.rt')`, mustScroll: true };
   },
@@ -171,7 +171,7 @@ for (const kind of ['touch', 'mouse']) {
     const kb = `${SV}.querySelector('jb-keyboard')`;
     const qb = await center(p, `${SV}.querySelector('.qbar')`); await p.touchscreen.tap(qb.x, qb.y); await sleep(300);
     await typeOnScreen(p, kb, 'EAGLES');
-    await p.waitForFunction((s) => !!eval(s).querySelector('.row .ra-b[data-act="add"]'), {}, SV);
+    await p.waitForFunction((s) => !!eval(s).querySelector('.row'), {}, SV);
     await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => /^\\s*artists\\s*$/i.test(x.textContent))?.click()`); await sleep(600);
     await p.waitForFunction((s) => !!eval(s).querySelector('.row[data-type="artist"]'), {}, SV);
     await clear(p);

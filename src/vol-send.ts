@@ -6,10 +6,12 @@ import type { HomeAssistant } from './types';
  *  - connected: one media_player.volume_set with notifyOnError=false (the card reports failures itself);
  *  - disconnected (or a call fails with "connection lost"): nothing is sent; only the LAST value per speaker is kept;
  *  - back online (volFlush, called by the card on reconnect): each kept value is sent once; values older than STALE_MS are dropped.
+ * #64: Mute buttons use the same path through sendMute (media_player.volume_mute, last mute per speaker, same flush and status).
  * The card shows one "Reconnecting to Home Assistant…" status while volDown() is true.
  */
 export const STALE_MS = 30_000;
 const pending = new Map<string, { v: number; t: number }>();
+const pendingMute = new Map<string, { v: boolean; t: number }>();
 let down = false;
 const subs = new Set<() => void>();
 export const volDown = () => down;
@@ -19,6 +21,9 @@ export const connected = (hass?: HomeAssistant) => (hass?.connection as any)?.co
 export const isConnLost = (err: any) => err?.error?.code === 3 || err?.code === 3 || /connection lost/i.test(String(err?.message ?? err?.error?.message ?? ''));
 /** Test hook / introspection: the values waiting for the connection. */
 export const pendingVolumes = () => new Map(pending);
+export const pendingMutes = () => new Map(pendingMute);
+/** Test hook: drop kept volume and mute values and clear the offline status. */
+export function volReset() { pending.clear(); pendingMute.clear(); setVolDown(false); }
 
 export async function sendVolume(hass: HomeAssistant | undefined, id: string, v: number): Promise<void> {
   if (!hass) return;
@@ -31,7 +36,18 @@ export async function sendVolume(hass: HomeAssistant | undefined, id: string, v:
     setVolDown(true);
   }
 }
-/** Connection is back: hide the status and send each kept value once (stale ones are dropped). */
+export async function sendMute(hass: HomeAssistant | undefined, id: string, muted: boolean): Promise<void> {
+  if (!hass) return;
+  if (down || !connected(hass)) { pendingMute.set(id, { v: muted, t: Date.now() }); setVolDown(true); return; }
+  try {
+    await hass.callService('media_player', 'volume_mute', { is_volume_muted: muted }, { entity_id: id }, false);
+  } catch (err) {
+    if (!isConnLost(err)) throw err;
+    if (!pendingMute.has(id)) pendingMute.set(id, { v: muted, t: Date.now() });
+    setVolDown(true);
+  }
+}
+/** Connection is back: hide the status and send each kept volume and mute once (stale ones are dropped). */
 export function volFlush(hass: HomeAssistant | undefined) {
   if (!hass || !connected(hass)) return;
   setVolDown(false);
@@ -40,5 +56,10 @@ export function volFlush(hass: HomeAssistant | undefined) {
     pending.delete(id);
     if (now - p.t > STALE_MS) continue;
     void sendVolume(hass, id, p.v).catch((e) => console.warn('[jukebox-card] volume_set failed', e));
+  }
+  for (const [id, p] of [...pendingMute]) {
+    pendingMute.delete(id);
+    if (now - p.t > STALE_MS) continue;
+    void sendMute(hass, id, p.v).catch((e) => console.warn('[jukebox-card] volume_mute failed', e));
   }
 }

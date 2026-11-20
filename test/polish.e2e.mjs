@@ -25,16 +25,18 @@ async function labelGeometry(page, tag, queue = false) {
   }, { tag, queue });
 }
 try {
-  // Required screenshot sizes plus phones to cover touch-label wrapping at the narrow breakpoint.
-  for (const [width, height] of [[1024, 600], [820, 1180], [1920, 1080], [390, 844], [360, 640]]) {
+  // Required screenshot sizes (phones are not supported and are not tested).
+  for (const [width, height] of [[1024, 600], [820, 1180], [1920, 1080]]) {
     const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width, height, deviceScaleFactor: 1 }); const tag = `${width}x${height}`;
     await p.goto(`${BASE}?fresh=1&latency=20&kiosk=1&tab=browse`); await p.waitForFunction('window.__ready === true');
     await p.evaluate(() => __card.shadowRoot.querySelector('jb-search').setQuery('MO'));
     await p.waitForFunction(() => __card.shadowRoot.querySelector('jb-search').shadowRoot.querySelectorAll('.grp .row').length > 0);
-    const search = await labelGeometry(p, 'jb-search'); check(`${tag} Search labels single-line and contained in rows`, search.ok, search);
+    const search = await p.evaluate(() => { const r = __card.shadowRoot.querySelector('jb-search').shadowRoot; return { rows: r.querySelectorAll('.grp .row').length, buttons: r.querySelectorAll('.grp .row .ra-b').length }; });
+    check(`${tag} Search rows carry no play or queue buttons`, search.rows > 0 && search.buttons === 0, search);
     await p.evaluate(() => __card.shadowRoot.querySelector('[data-tab=queue]').click());
     await p.waitForFunction(() => __card.shadowRoot.querySelector('jb-queue').shadowRoot.querySelectorAll('.qr.next').length > 3);
-    const queue = await labelGeometry(p, 'jb-queue', true); check(`${tag} Queue labels >=14px, touch-sized, single-line and contained`, queue.ok, queue);
+    const queue = await p.evaluate(() => { const r = __card.shadowRoot.querySelector('jb-queue').shadowRoot; return { rows: r.querySelectorAll('.qr').length, buttons: r.querySelectorAll('.qr .ra-b, .qr .qa, .qr .acts').length }; });
+    check(`${tag} Queue rows carry no play or queue buttons`, queue.rows > 0 && queue.buttons === 0, queue);
     const fill = await p.evaluate(() => { const host = __card.shadowRoot.querySelector('jb-queue'), root = host.shadowRoot.querySelector('.qx'); return { host: host.getBoundingClientRect().width, content: root.getBoundingClientRect().width }; });
     check(`${tag} Queue uses available width`, Math.abs(fill.host - fill.content) <= 1, fill);
     if (width >= 820) {

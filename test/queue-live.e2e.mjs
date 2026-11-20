@@ -26,16 +26,36 @@ const STATES = [
 ];
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu'] });
 const QV = `__card.shadowRoot.querySelector('jb-queue').shadowRoot`;
+const HS = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`;
+const ev = (e) => p.evaluate((e) => eval(e), e);
+async function tap(expr) {
+  await ev(`${expr}?.scrollIntoView({ block: 'center' })`); await sleep(80);
+  const r = await p.evaluate((e) => { const el = eval(e); if (!el) return null; const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; }, expr);
+  if (!r) throw new Error('no element ' + expr);
+  await p.mouse.click(r.x, r.y); await sleep(150);
+}
+async function sheetOf(id) {
+  await tap(`${QV}.querySelector('.qr[data-id="${id}"] .rt')`);
+  await p.waitForFunction((hs) => !!eval(hs).querySelector('.sh'), { timeout: 3000 }, HS);
+  const st = await ev(`(() => { const m = {}; for (const b of ${HS}.querySelectorAll('.its .it[data-action]')) m[b.dataset.action] = b.getAttribute('aria-disabled') === 'true'; return m; })()`);
+  await tap(`${HS}.querySelector('.it.cancel')`);
+  await p.waitForFunction((hs) => !eval(hs).querySelector('.sh'), { timeout: 3000 }, HS);
+  return st;
+}
 const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width: 1024, height: 600 });
-await p.goto(`${BASE}?layout=separate&fresh=1&latency=20&kiosk=1&tab=queue`); await p.waitForFunction('window.__ready === true');
+await p.goto(`${BASE}?layout=separate&fresh=1&latency=20&kiosk=1&admin=1&tab=queue`); await p.waitForFunction('window.__ready === true');
 await p.waitForFunction(`${QV}.querySelectorAll('.qr.next').length > 3`);
 await p.evaluate((REAL) => {
   const Q = window.__queues['media_player.everywhere'], t = Q.items.map((x) => x._t);
   Q.items = Array.from({ length: 1029 }, (_, i) => ({ queue_item_id: REAL[i] ?? `live${String(i).padStart(4, '0')}`, _t: t[i % t.length] }));
 }, REAL);
 const setState = async (c, b) => { await p.evaluate((c, b) => { const Q = window.__queues['media_player.everywhere']; Q.index = c; Q.buf = b; window.__kioskPush(); }, c, b); await sleep(900); };
-const rows = () => p.evaluate((qv) => [...eval(qv).querySelectorAll('.qr.next')].slice(0, 4).map((r) => ({ id: r.dataset.id,
-  up: !r.querySelector('[data-action=up]')?.disabled, down: !r.querySelector('[data-action=down]')?.disabled })), QV);
+const rows = async () => {
+  const base = await ev(`[...${QV}.querySelectorAll('.qr.next')].slice(0, 4).map((r) => ({ id: r.dataset.id }))`);
+  const out = [];
+  for (const r of base) { const st = await sheetOf(r.id); out.push({ ...r, up: !st.up, down: !st.down }); }
+  return out;
+};
 const moves = () => p.evaluate(() => (window.__ws || []).filter((m) => m.type === 'ma' && m.command === 'player_queues/move_item').map((m) => m.args));
 const toast = () => p.evaluate((qv) => eval(qv).querySelector('.toast')?.textContent?.trim() ?? '', QV);
 const ids = async () => p.evaluate(() => window.__queues['media_player.everywhere'].items.slice(29, 37).map((x) => x.queue_item_id));
@@ -51,7 +71,7 @@ for (const s of STATES) {
   const n0 = (await moves()).length;
   const second = r[1];
   if (second.up) {
-    await p.evaluate((qv, id) => eval(qv).querySelector(`.qr[data-id="${id}"] [data-action=up]`).click(), QV, second.id); await sleep(1200);
+    await tap(`${QV}.querySelector('.qr[data-id="${second.id}"] .rt')`); await p.waitForFunction((hs) => !!eval(hs).querySelector('.sh'), { timeout: 3000 }, HS); await tap(`${HS}.querySelector('.its .it[data-action="up"]')`); await sleep(1200);
     const m = (await moves()).slice(n0), r2 = await rows(), t = await toast();
     check(`QL ${s.name}: song 2 Up → move_item pos_shift -1, MA moved it, no "already loading"`, m.length === 1 && m[0].queue_item_id === second.id && m[0].pos_shift === -1 && r2[0].id === second.id && !/already loading/i.test(t), J({ m, first: r2[0].id, t }));
   } else {
@@ -60,7 +80,7 @@ for (const s of STATES) {
   if (second.down) {
     const r1 = await rows(), sd = r1.find((x) => x.id === second.id) ?? r1[1];
     const n1 = (await moves()).length;
-    await p.evaluate((qv, id) => eval(qv).querySelector(`.qr[data-id="${id}"] [data-action=down]`).click(), QV, sd.id); await sleep(1200);
+    await tap(`${QV}.querySelector('.qr[data-id="${sd.id}"] .rt')`); await p.waitForFunction((hs) => !!eval(hs).querySelector('.sh'), { timeout: 3000 }, HS); await tap(`${HS}.querySelector('.its .it[data-action="down"]')`); await sleep(1200);
     const m = (await moves()).slice(n1), t = await toast();
     check(`QL ${s.name}: song 2 Down → move_item pos_shift +1, no "already loading"`, m.length === 1 && m[0].pos_shift === 1 && !/already loading/i.test(t), J({ m, t }));
   }
@@ -78,7 +98,7 @@ check('QL buffer advances (31,31) → (31,33) with the Queue open: songs 1–2 l
   await p.evaluate(() => { window.__queues['media_player.everywhere'].buf = 33; }); // no push: the card still shows the old numbers
   const before = await p.evaluate(() => (window.__ws || []).length);
   const t0 = Date.now();
-  await p.evaluate((qv, id) => eval(qv).querySelector(`.qr[data-id="${id}"] [data-action=up]`).click(), QV, song2);
+  await tap(`${QV}.querySelector('.qr[data-id="${song2}"] .rt')`); await p.waitForFunction((hs) => !!eval(hs).querySelector('.sh'), { timeout: 3000 }, HS); await tap(`${HS}.querySelector('.its .it[data-action="up"]')`);
   await p.waitForFunction((qv) => !!eval(qv).querySelector('.toast'), { timeout: 3000, polling: 20 }, QV);
   const seen = await p.evaluate((n) => (window.__ws || []).slice(n).map((m) => m.type === 'ma' ? m.command : m.type), before);
   const iMove = seen.indexOf('player_queues/move_item'), iRead = seen.indexOf('queue_items', iMove + 1);

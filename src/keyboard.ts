@@ -113,9 +113,20 @@ export class JbKeyboard extends LitElement {
               @pointerdown=${(e: PointerEvent) => e.preventDefault()}
               @click=${() => this.emit({ type: 'hide' })}><i></i><span>Hide keyboard</span>${icon('chev', 'i xs')}</button>`
           : nothing}
-        <div class="keys" role="group">
-          ${this.keys().map(
-            (k) => html`<button
+        ${(() => {
+          // #117: digits row (when ten keys fit), the letters / symbols grid, and the row of wide keys are three blocks, so the
+          // letter grid can take as many 48 px columns as the keyboard's own width allows
+          const all = this.keys(), key = (k: KeyDef) => this.keyTpl(k);
+          return html`<div class="nums">${all.filter((k) => k.cls === 'num').map(key)}</div>
+            <div class="keys" role="group">${all.filter((k) => k.cls !== 'num' && !k.cls?.includes('sp')).map(key)}</div>
+            <div class="ksp">${all.filter((k) => k.cls?.includes('sp')).map(key)}</div>`;
+        })()}
+      </section>
+    `;
+  }
+
+  private keyTpl(k: KeyDef) {
+    return html`<button
               class="k ${k.cls ?? ''} ${this._pressed === k.id ? 'pressed' : ''}"
               data-key=${k.id}
               tabindex="-1"
@@ -126,11 +137,7 @@ export class JbKeyboard extends LitElement {
               @lostpointercapture=${() => this.onCancel()}
               @click=${(e: MouseEvent) => this.onClick(e, k)}
               @contextmenu=${(e: Event) => e.preventDefault()}
-            >${k.icon ? icon(k.icon) : k.label}</button>`,
-          )}
-        </div>
-      </section>
-    `;
+            >${k.icon ? icon(k.icon) : k.label}</button>`;
   }
 
   static styles = [
@@ -139,47 +146,59 @@ export class JbKeyboard extends LitElement {
     css`
       :host { display: block; min-width: 0; }
       .kb {
-        container: kb / inline-size; min-width: 0; padding: 6px 10px 10px; border-radius: var(--_radius);
+        container: kb / inline-size; min-width: 0; padding: var(--ha-space-2, 8px) var(--ha-space-2, 8px) var(--ha-space-2, 8px); border-radius: var(--_radius);
         /* HA input fill (ha-textfield); the keys on it are plain HA chips */
         background: var(--_input-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_card-shadow);
         user-select: none; -webkit-user-select: none; touch-action: manipulation;
       }
       .kb-handle {
-        display: var(--_kb-handle-display, flex); align-items: center; justify-content: center; gap: 6px;
-        width: 100%; height: var(--_kb-handle-h, 28px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_inactive); position: relative;
+        display: var(--_kb-handle-display, flex); align-items: center; justify-content: center; gap: var(--ha-space-2, 8px);
+        /* #117: the handle is a button, so it is a full touch target */
+        width: 100%; min-height: max(var(--_touch-min), var(--_kb-handle-h, 28px)); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_inactive); position: relative;
       }
-      .kb-handle i { position: absolute; top: 3px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--_divider); }
+      .kb-handle i { position: absolute; top: 3px; left: 50%; width: 40px; height: 4px; margin-left: calc(-1 * var(--ha-space-5, 20px)); border-radius: 2px; background: var(--_divider); }
       .kb-handle span { display: var(--_kb-handle-label, inline); }
-      .keys { display: grid; grid-template-columns: repeat(28, minmax(0, 1fr)); gap: var(--kgap, 8px); }
-      /* Four grid tracks make one letter key (the gap between tracks is the same as between keys, so a letter is as wide as before).
-         The bottom row is a little re-balanced in the same units: 123 and backspace a bit wider than a letter key, Space still the
-         widest, Clear the smallest. Narrow: 5 + 11 + 5 + 7 = 28 tracks (7 letter keys). Wide (below): 10 + 14 + 10 + 6 = 40 (10 letter keys). */
-      .k { grid-column: span 4; }
-      .k.tg, .k.bk { grid-column: span 5; }
-      .k.space { grid-column: span 11; }
-      .k.clr { grid-column: span 7; }
+      /* #117 fluid keyboard. The key set is made for whole rows: 28 keys (26 letters, ' and -) in four rows of seven, or, once ten
+         48 px keys fit (the structural query below, which also adds the digits row and & .), 30 keys in three rows of ten. Any count in
+         between left a nearly empty last row (9 columns: 9 + 9 + 9 + 1) and narrower keys without saving a row, so the letters are
+         seven columns that stretch with the keyboard, then ten. The gap between keys shrinks a little on a narrow keyboard so seven
+         still fit at 48 px. The digits get their own row, and the wide keys (123, Space, backspace, Clear) their own row, sharing it by weight. */
+      .kb { --_kcg: clamp(var(--ha-space-1, 4px), 1.5cqi, var(--kgap, var(--ha-space-2, 8px))); }
+      .keys, .nums { display: grid; column-gap: var(--_kcg); row-gap: var(--kgap, var(--ha-space-2, 8px)); }
+      .keys { grid-template-columns: repeat(7, minmax(0, 1fr));
+        /* on a narrow keyboard the gap gives way first so a phone keeps seven letter columns (four letter rows) at 48 px; only a keyboard
+           narrower than seven 48 px keys (a card under about 370 px) lets the letter keys go narrower than 48 px, because five columns
+           would need seven rows and leave no room for the results (the one exception to the 48 px rule, reported in #117) */
+        column-gap: clamp(2px, (100% - 7 * var(--_touch-min) - 1px) / 6, var(--_kcg)); }
+      .nums { display: none; grid-template-columns: repeat(10, minmax(0, 1fr)); margin-bottom: var(--kgap, var(--ha-space-2, 8px)); }
+      .ksp { display: flex; gap: var(--_kcg); margin-top: var(--kgap, var(--ha-space-2, 8px)); }
+      .ksp .k { min-width: var(--_touch-min); flex: 5 1 0; }
+      .ksp .k.space { flex-grow: 11; }
+      .ksp .k.clr { flex-grow: 7; }
+      /* keys are 48 px wide at least; their height is also capped by --_kh-room, the room the host leaves for each key row on a
+         short card (see jb-search), so on a short screen the keyboard ends above the tab bar instead of being cut off */
       .k {
-        height: var(--kh, 60px); display: grid; place-items: center; border-radius: 12px;
-        font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: 1px solid var(--_surface-border);
-        user-select: none; -webkit-user-select: none; transition: transform 60ms, background 60ms;
+        height: min(var(--_kh-room, 100vh), max(var(--_touch-min), var(--kh, 60px))); display: grid; place-items: center; border-radius: var(--ha-border-radius-lg, 12px);
+        font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+        user-select: none; -webkit-user-select: none; transition: transform var(--_t-instant), background var(--_t-instant);
       }
       /* The backspace icon grows with the key labels (26px at the 24px default), so it stays in proportion. */
       .k .i { width: calc(var(--kfs, var(--ha-font-size-2xl, 24px)) + 2px); height: calc(var(--kfs, var(--ha-font-size-2xl, 24px)) + 2px); }
       /* 123, Space and Clear use the same label size and weight as the letter keys. */
       .k.sp { font-size: var(--kfs, var(--ha-font-size-2xl, 24px)); font-weight: var(--ha-font-weight-bold, 700); color: var(--_fg); background: var(--_chip-bg); }
       .k.pressed { background: var(--_chip-sel); color: var(--_fg); transform: scale(0.96); }
-      .k.num, .wide-only { display: none; }
-      @container kb (min-width: 600px) {
-        .keys { grid-template-columns: repeat(40, minmax(0, 1fr)); }
-        .k { height: var(--kh-wide, 56px); }
-        .k.num, .wide-only { display: grid; }
+      .wide-only { display: none; }
+      /* #117 structural, kept as a container query on the keyboard's own width: the digits row (and the #+= symbols key in place
+         of 123) appears once ten keys of the 48 px touch size fit side by side: 10 x 48 px + 9 gaps of at most 10 px; the letters go to ten a row there too. */
+      @container kb (min-width: calc(10 * 48px + 9 * 10px)) {
+        .keys { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+        .nums { display: grid; }
+        .k { height: min(var(--_kh-room, 100vh), max(var(--_touch-min), var(--kh-wide, 56px))); }
+        .wide-only { display: grid; }
         .narrow-only { display: none !important; }
-        .k.tg, .k.bk { grid-column: span 10; }
-        .k.space { grid-column: span 14; }
-        .k.clr { grid-column: span 6; }
-      }
-      @container kb (max-width: 380px) {
-        .kb-handle span { display: none; }
+        .ksp .k.tg, .ksp .k.bk { flex-grow: 10; }
+        .ksp .k.space { flex-grow: 14; }
+        .ksp .k.clr { flex-grow: 6; }
       }
     `,
   ];

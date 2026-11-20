@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from homeassistant.components.frontend import add_extra_js_url, remove_extra_js_url
 from homeassistant.components.http import StaticPathConfig
@@ -17,7 +18,7 @@ from .const import (
     CARD_URL,
     DOMAIN,
     ISSUE_LEGACY_PLUGIN,
-    LEGACY_RESOURCE_MARKERS,
+    LEGACY_RESOURCE_PATHS,
     LOGGER,
     STATIC_URL_BASE,
 )
@@ -56,7 +57,8 @@ def async_remove_card(hass: HomeAssistant, version: str) -> None:
 
 
 def _is_legacy(url: str) -> bool:
-    return any(marker in url for marker in LEGACY_RESOURCE_MARKERS)
+    """True only for our own old card file; the path must match exactly (a ?query or #fragment is ignored)."""
+    return urlsplit(url.strip()).path in LEGACY_RESOURCE_PATHS
 
 
 LEGACY_PLUGIN_DIR = ("www", "community", "ha-jukebox-kiosk-card")

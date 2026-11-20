@@ -4,6 +4,68 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.9.2 — 2026-11-20
+
+- On Now Playing, the Autoplay button is now called **Radio - Autoplay**. It is no longer greyed out while Repeat is on or when Music Assistant keeps the queue going by itself: tapping it always switches Music Assistant's Autoplay on or off. It is still hidden while a radio station or other live stream plays, when the queue isn't active, or when Music Assistant doesn't offer Autoplay. The Queue's Autoplay button hasn't changed.
+
+## 0.9.1 — 2026-11-20
+
+- Each part of the card now has its own Rows or Tiles choice: each Library button (Playlists, Artists, Tracks, Genres, Radio, Albums, Podcasts and Audiobooks), the Queue, Discover, artist pages, album pages, playlist pages and search results. In the editor these are the Show … as settings. On a new setup, Playlists, Albums and Radio start as Tiles; everything else starts as Rows. (#146)
+- Older setups keep their saved Library view choice for all eight Library buttons, unless you change one of them. That old choice is not copied into the new settings and does not change the Queue, Discover, pages or search results. If you never saved a Library view choice, Playlists, Albums and Radio change from Rows to Tiles. Discover now starts as Rows rather than side-scrolling strips of covers.
+- Tiles across sets exactly how many tiles go across, from 1 to 8 (default 3), everywhere you choose Tiles. The Queue's playing and played tracks are tiles in the same grid as Up next: the playing track is highlighted, played tracks are dimmed, and Up next tiles carry their number.
+- The sleep timer now uses Music Assistant's timer, with 15 minutes, 30 minutes, 45 minutes, 1 hour and 2 hours. The cover shows a moon and the time left. Open the choices while a timer runs to see Stops in and Cancel sleep timer. A timer started or cancelled in Music Assistant shows in the card too, including timers set there to stop at the end of a track, episode, audiobook or chapter. Music Assistant handles stopping playback; the card no longer runs a backup timer of its own. Without the Jukebox Kiosk integration, the sleep timer button on Now Playing is hidden, because that connection cannot set Music Assistant's sleep timer. (#44)
+- Now Playing has an Autoplay button beside Playing on, outlined when off and filled when on. Like the Queue's Autoplay button, it is greyed and cannot be changed while Repeat is on. Both follow Music Assistant: hidden for an inactive queue, radio or another live stream, and shown as an on indicator that cannot be changed when Music Assistant keeps the queue going by itself.
+- Continue listening in Discover has a clearer progress bar in both Rows and Tiles, with a solid background and an outline so it stays readable over the cover. Discover also keeps loading the later lists as you scroll.
+
+## 0.9.0 — 2026-11-19
+
+- Mute buttons now keep the last mute you set for each speaker while Home Assistant is disconnected, and send it once when the connection comes back, the same way volume already does.
+- The Repeat button now switches only between Repeat off and Repeat entire queue. There is no repeat-one in the cycle. If the player is already on repeat-one (set somewhere else), the button shows as pressed, labelled Repeat single track, and a tap turns repeat off. The card no longer turns repeat-one into repeat-all on its own, and the server no longer rewrites a repeat-one command.
+- The action buttons on track rows and on Queue rows are gone, and so is the `show_action_icons` setting. A tap or a press and hold on a row still opens its pop-up.
+- The `coerce_repeat_one` and `show_action_icons` settings are gone. Old setups that still have them keep loading; the card ignores those keys, and the editor does not write them back.
+- In the Queue pop-up, guests now get the same Play Now confirmation as admins, with Play Now greyed on the track that is playing, and the same Undo after Remove. When `queue_edit` is off, only Move up and Move down are greyed for that reason; Play Next and Remove follow `queue_play` for everyone.
+- Genres is a search filter again, and a Library category button, when Music Assistant can search genres. It is in the default Library button row, and it is an optional chip if you set `search_categories`. Radio and Podcasts stay separate. Tapping a genre does not open a page: it adds a Genre filter, and the results are that genre's artists, albums and tracks in your library. Words you typed to find the genre are cleared; typing again searches inside the genre. Genres are searched in your library only. With `search_filters` off, a genre row or tile is plain text and does nothing.
+- Selected chips, pressed keys and the Queue's playing row stay readable on dark themes.
+- The press-and-hold pop-up is capped at the same height as the other pop-ups (the smaller of that ceiling and the space between the bars). Its buttons never shrink below 48 px; the art, text and gaps shrink instead.
+- Tapping a tab or the Playing on button now closes an open pop-up.
+- Side padding follows the card's own width, not the window, so a half-width card gets narrower padding.
+- Spacing, corner rounding and borders follow Home Assistant's theme tokens. Uneven 1.5 px outlines are now 1 px, and selected rings are 2 px. A theme that changes those tokens changes the card too. Icon sizes follow the theme's icon size; at the default they look the same.
+- Things you can't tap use Home Assistant's disabled colors. Quiet-but-tappable items share one dim look.
+- Transitions follow Home Assistant's timings. If the device asks for reduced motion, the caret blink, the loading line, the busy and pending pulses, lyrics loading and the queue spinner stop; the press-and-hold progress still fills.
+- The layout follows the card's size more smoothly. Controls are at least 48 px. The on-screen keyboard has seven letter keys a row, or ten once ten 48 px keys fit (the same point that adds the digit row). On a short landscape card the key height comes from the room left, so the keys end above the tab bar.
+- On a card narrower than about 520 px, the Up next strip on Now Playing is left out; the Queue tab still shows what is next.
+- The header keeps the height it had before (64 px on a wide card). The speaker status reads in order, with "Playing on:" first.
+- The Library category buttons are never narrower than 48 px. The four sleep choices on the cover stay on one row. The More speakers button sits in its own strip under the speaker list.
+- A touch on a result row no longer also presses the button that the newly opened page puts under your finger.
+- The Play on and Presets chips in Speakers have their outline again.
+- Messages share one toast look. The screensaver lyrics pill keeps its own look.
+
+## 0.8.9 — 2026-11-18
+
+- Album art on Now Playing and the screensaver now recovers on its own. If a picture won't load, the card tries the next picture it has for that track, then shows the no-art look. Each picture is tried only once per track, and everything starts fresh when the next track begins, so a picture that failed no longer keeps later covers blank.
+- If you open your dashboard over plain http (not https), pictures with plain http addresses now show too. On https dashboards they are still left out, because the browser would block them.
+- The clock in the top bar and on the screensaver follows the 12-hour or 24-hour setting and the time zone in your Home Assistant profile, the same way Home Assistant shows times. The screensaver date uses your profile's language and time zone too.
+- The clock now changes right on the minute. It used to update every 15 seconds, so it could be up to 15 seconds late.
+- In More Info, the Published date for podcast episodes and audiobooks uses the language and time zone in your Home Assistant profile. A date with no time of day shows exactly as written, so it no longer shows a day early in some time zones.
+- In the Library, Filter by on an artist's page now finds all of that artist's albums and tracks in your library, up to 1,000 of each. It used to stop at the first 100.
+- The "Stations by" lists on Library → Radio now open the Radio Browser provider by the id Music Assistant gives it. If Music Assistant won't allow that, for example for a guest, the card goes back to the way it opened them before.
+- Jukebox Kiosk now waits up to 60 seconds for a lyrics lookup, the same as the card. It used to give up after 30 seconds, so a slow first lookup could fail.
+- The `accent` and `font_base` settings are gone. Neither did anything any more. Old setups that still have them keep loading, and you can remove them.
+
+## 0.8.8 — 2026-11-18
+
+- In the card editor, the Player, Rooms and speaker pickers list only Music Assistant players, so you can't pick a player the jukebox can't use.
+- On Now Playing, when there are more rooms than fit, the top volume slider for your player stays in place and only the room sliders scroll.
+- In landscape, the screensaver clock is 10% smaller. Portrait is unchanged.
+- In the card picker, the card is now called "Jukebox Kiosk", with the description "A touchscreen Jukebox music player for Home Assistant".
+- The cleanup of the old Jukebox Card plugin now removes only the old card file itself. Other dashboard resources are left alone, even ones with a similar name.
+
+## 0.8.7 — 2026-11-17
+
+- Jukebox Kiosk now needs Home Assistant 2026.11.0 or newer, the version that brought the Marketplace.
+- The three notices in Settings → System → Repairs that ask you to remove the old Jukebox Card plugin now send you to Settings → Marketplace. They used to say HACS, which Home Assistant 2026.11 no longer has.
+- The card itself is unchanged.
+
 ## 0.8.6 — 2026-11-17
 
 - The card no longer falls back to the "Everywhere" player on its own. Playing, shuffle, the queue, lyrics, the speakers panel and the player's own volume slider all use the player you picked in the card's settings. Each room's slider still controls that room.

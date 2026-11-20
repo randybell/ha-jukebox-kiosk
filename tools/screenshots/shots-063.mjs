@@ -14,7 +14,7 @@ const b = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/b
 const errs = [];
 const tap = async (p, expr) => { const r = await p.evaluate((e) => { const el = eval(e); el?.scrollIntoView?.({ block: 'center' }); const q = el?.getBoundingClientRect(); return q && { x: q.left + q.width / 2, y: q.top + q.height / 2 }; }, expr); if (!r) throw new Error('no ' + expr); if (process.env.DBG) console.log(expr.slice(-40), r); await p.mouse.click(r.x, r.y); await sleep(80); };
 const wait = (p, fn, timeout = 6000) => p.waitForFunction(fn, { timeout, polling: 50 }).then(() => true, () => false);
-for (const [w, h] of [[1920, 1080], [390, 844]]) {
+for (const [w, h] of [[1920, 1080]]) {
   const p = await b.newPage();
   await hermetic(p);
   p.on('pageerror', (e) => errs.push(`${w}: ${e.message}`));
@@ -44,7 +44,7 @@ for (const [w, h] of [[1920, 1080], [390, 844]]) {
 // 6–7: Now Playing speaker controls (Drop / Add per room, Speakers button, "Playing on:" pill); 8: the station sheet
 const NOW = `__card.shadowRoot.querySelector('jb-now')`;
 const nra = (e) => `${NOW}.shadowRoot.querySelector('.vr[data-entity="${e}"] .ra')`;
-for (const [w, h] of [[1920, 1080], [390, 844]]) {
+for (const [w, h] of [[1920, 1080]]) {
   const p = await b.newPage();
   await hermetic(p);
   p.on('pageerror', (e) => errs.push(`${w}: ${e.message}`));

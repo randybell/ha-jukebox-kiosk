@@ -20,9 +20,12 @@ const stripVars = (t) => { // remove every var( ... ) with balanced parentheses
 const bad = [];
 for (const f of files) {
   const lines = readFileSync(new URL(f, SRC), 'utf8').replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).split('\n'); // comments blanked, line numbers kept
-  let inSaver = false;
+  let inSaver = false, inOverlay = false;
   lines.forEach((raw, i) => {
     if (f === 'jukebox-card.ts') { if (/^\s*\.amb \{/.test(raw)) inSaver = true; if (/:host\(:fullscreen\)/.test(raw)) inSaver = false; }
+    // #127: the lyrics overlay's contrast text over the art shade (was marked by the never-set --_art-fg variable)
+    if (f === 'lyrics/lyrics-view.ts' && /:host\(\[mode=overlay\]\) \{/.test(raw)) inOverlay = true;
+    if (inOverlay) { if (/^\s*\}/.test(raw)) inOverlay = false; return; }
     if (inSaver || EXEMPT.test(raw)) return;
     if (!/[a-z-]+\s*:/.test(raw)) return;
     let t = raw.replace(/\/\/.*$/, '').replace(/text-shadow:[^;]*;?/g, ''); // text-shadow: legibility over the art, as the lyrics shade

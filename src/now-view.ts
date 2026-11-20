@@ -1,11 +1,12 @@
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
+import { keyed } from 'lit/directives/keyed.js';
 import { tokens, base } from './styles';
 import { icon } from './icons';
 import { providerLabel } from './providers';
 import { combinedOn, libraryTabLabel } from './library-home';
-import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, status, playerArt } from './shared';
+import { mediaStyles, noFocus, fmtTime, provTpl, roomsOf, fire, status, nowArt, songKey, artLoaded, artFailed } from './shared';
 import { throttle } from './slider';
-import { sendVolume } from './vol-send';
+import { sendVolume, sendMute } from './vol-send';
 import './slider';
 import './lyrics/lyrics-view';
 import type { LyricsStore } from './lyrics/store';
@@ -25,8 +26,9 @@ export interface InlineSpeakers extends HTMLElement {
 import { defineElement } from './define';
 import { FavController } from './heart';
 import { favoriteButtonFor } from './favorites';
-import { shownRepeat, nextRepeat } from './repeat';
-import { SLEEP_MINUTES, sleepLabel, fmtSleepRemain, remainFromExpires, sleepPlayerId, canMaSleep, parseExpires, type SleepMinutes } from './sleep';
+import { shownRepeat, nextRepeat, REPEAT_LABEL, type RepeatMode } from './repeat';
+import { SLEEP_MINUTES, SLEEP_LABEL, sleepLabel, fmtSleepRemain, remainFromExpires, canMaSleep, parseExpires, parseSleepMode, sleepIsActive, sleepModeLabel, isEndOfContentMode, type SleepMinutes, type SleepTimerMode } from './sleep';
+import { autoplayControlMode } from './autoplay';
 
 const VOL_THROTTLE_MS = 200;
 const HOLD_MS = 4000; // keep optimistic values this long unless the entity confirms sooner
@@ -37,7 +39,7 @@ export class JbNow extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, queue: { attribute: false }, active: { type: Boolean }, lyrics: { attribute: false }, spk: { attribute: false },
     _overlay: { state: true }, _tick: { state: true }, _snap: { state: true }, _toast: { state: true },
-    _sleepOpen: { state: true }, _sleepExpires: { state: true }, _sleepMins: { state: true },
+    _sleepOpen: { state: true }, _sleepExpires: { state: true }, _sleepMins: { state: true }, _sleepMode: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
@@ -62,7 +64,7 @@ export class JbNow extends LitElement {
   private _sleepExpires: number | null = null;
   /** last chosen duration (0 = Off); drives the chooser highlight */
   private _sleepMins: SleepMinutes = 0;
-  private _sleepLocal?: number; // card-side setTimeout handle
+  private _sleepMode: SleepTimerMode | undefined;
   private _sleepSyncing = false;
   private _unsub?: () => void;
   private vol = new Map<string, Pending<number>>();
@@ -82,25 +84,26 @@ export class JbNow extends LitElement {
       if (this.ent?.state === 'playing' || this._sleepExpires) this._tick++;
       if (this._sleepExpires && remainFromExpires(this._sleepExpires) <= 0) this.onSleepExpired();
     }, 1000);
+    this.watchSleep();
   }
-  /** 0.7.9 #59: the speaker list scrolls inside its own area when it doesn't fit; mark the edges so the "More speakers" hint and fades show */
+  /** 0.7.9 #59: the speaker list scrolls inside its own area when it doesn't fit (0.8.8: only the rooms scroll, the lead row stays fixed); mark the edges so the "More speakers" hint and fades show */
   private _volEl?: HTMLElement;
   private _volRo?: ResizeObserver;
   private volEdges = () => {
-    const v = this._volEl, w = v?.parentElement; if (!v || !w) return;
+    const v = this._volEl, w = v?.closest('.volw'); if (!v || !w) return;
     const over = v.scrollHeight - v.clientHeight > 1;
     w.classList.toggle('over', over);
     w.classList.toggle('more-b', over && v.scrollTop + v.clientHeight < v.scrollHeight - 1);
     w.classList.toggle('more-t', over && v.scrollTop > 1);
   };
   protected updated() {
-    const v = this.renderRoot.querySelector('.vol') as HTMLElement | null;
+    const v = this.renderRoot.querySelector('.rooms') as HTMLElement | null;
     if (v && v !== this._volEl) {
       this._volEl?.removeEventListener('scroll', this.volEdges);
       this._volRo?.disconnect();
       this._volEl = v;
       v.addEventListener('scroll', this.volEdges, { passive: true });
-      if (typeof ResizeObserver !== 'undefined') { this._volRo = new ResizeObserver(this.volEdges); this._volRo.observe(v); const rm = v.querySelector('.rooms'); if (rm) this._volRo.observe(rm); }
+      if (typeof ResizeObserver !== 'undefined') { this._volRo = new ResizeObserver(this.volEdges); this._volRo.observe(v); const panel = v.closest('.vol'); if (panel) this._volRo.observe(panel); }
     }
     this.volEdges();
   }
@@ -108,7 +111,7 @@ export class JbNow extends LitElement {
     super.disconnectedCallback();
     this._volRo?.disconnect(); this._volRo = undefined; this._volEl = undefined;
     window.clearInterval(this._timer);
-    window.clearTimeout(this._sleepLocal);
+    this.unwatchSleep();
     this._unsub?.(); this._unsub = undefined; this._spkUnsub?.(); this._spkUnsub = undefined;
   }
   protected willUpdate(ch: PropertyValues) {
@@ -117,6 +120,7 @@ export class JbNow extends LitElement {
       this._spkUnsub?.();
       this._spkUnsub = this.spk?.onState(() => { const k = this.spkKey(); if (k !== this._spkKey) { this._spkKey = k; this.requestUpdate(); } }) as any;
     }
+    if (ch.has('config') || ch.has('hass')) this.watchSleep();
   }
   /** Re-render only when an entity we draw changed. */
   protected shouldUpdate(ch: PropertyValues) {
@@ -166,6 +170,10 @@ export class JbNow extends LitElement {
     });
   }
   private toast(t: string) { this._toast = t; window.clearTimeout(this._toastTimer); this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400); }
+  private async toggleAutoplay(on: boolean) {
+    try { await this.queue?.setAutoplay(on); this.toast(on ? 'Autoplay on' : 'Autoplay off'); }
+    catch { this.toast("Couldn't change Autoplay"); }
+  }
 
   // ---------- transport ----------
   private isPlaying() { return this.flag('state', this.ent?.state) === 'playing'; }
@@ -187,7 +195,7 @@ export class JbNow extends LitElement {
     this.flags.set('shuffle', { v, t: Date.now() }); this.requestUpdate();
     this.call('media_player', 'shuffle_set', { shuffle: v }, this.eid);
   }
-  /** 0.6.5: off <-> all only; 'one' is never sent (a player on 'one' is shown as all, so a tap turns repeat off) */
+  /** #139: off → all → one → off, matching Music Assistant */
   cycleRepeat() {
     const cur = this.flag('repeat', shownRepeat(this.ent?.attributes?.repeat));
     const v = nextRepeat(cur);
@@ -239,91 +247,101 @@ export class JbNow extends LitElement {
     });
   }
 
-  // ---------- sleep timer (MA players/sleep_timer/* when be.send is available; else card-side pause) ----------
+  // ---------- sleep timer (kiosk jukebox_kiosk/sleep_timer_* → MA players/sleep_timer/*) ----------
+  private _sleepUnsub?: () => void;
+  private _sleepWatchEnt?: string;
   private sleepRemain() { return remainFromExpires(this._sleepExpires); }
+  private applySleepExpires(exp: number | null, mode?: SleepTimerMode) {
+    const modeIn = mode !== undefined ? mode : this._sleepMode;
+    if (exp === this._sleepExpires && modeIn === this._sleepMode) return;
+    this._sleepExpires = exp;
+    this._sleepMode = modeIn;
+    if (isEndOfContentMode(modeIn)) this._sleepMins = 0;
+    else if (!exp) this._sleepMins = 0;
+    else if (!this._sleepMins) {
+      const rem = remainFromExpires(exp);
+      this._sleepMins = (SLEEP_MINUTES as readonly number[]).find((m) => Math.abs(rem - m * 60) < 90) as SleepMinutes
+        ?? (SLEEP_MINUTES as readonly number[]).reduce((best, m) => Math.abs(rem - m * 60) < Math.abs(rem - best * 60) ? m : best, 15) as SleepMinutes;
+    }
+    this.requestUpdate();
+  }
+  private applySleepPayload(raw: unknown) {
+    this.applySleepExpires(parseExpires(raw), parseSleepMode(raw));
+  }
+  private unwatchSleep() {
+    this._sleepUnsub?.(); this._sleepUnsub = undefined; this._sleepWatchEnt = undefined;
+  }
+  private watchSleep() {
+    const be = this.config?._backend;
+    const ent = this.eid;
+    if (!this.isConnected || !canMaSleep(be) || !ent) { this.unwatchSleep(); return; }
+    if (this._sleepWatchEnt === ent) return;
+    this.unwatchSleep();
+    this._sleepWatchEnt = ent;
+    void this.syncSleepFromMa();
+    const start = this._sleepWatchEnt;
+    be!.subscribeSleepTimer?.(ent, (ev) => { this.applySleepPayload(ev); }).then((off) => {
+      if (this._sleepWatchEnt === start && this.isConnected) this._sleepUnsub = off;
+      else off();
+    }).catch((e) => {
+      console.warn('[jukebox-card] subscribe_sleep_timer failed', e);
+      if (this._sleepWatchEnt === start) this._sleepWatchEnt = undefined;
+    });
+  }
   private toggleSleepOpen() {
     this._sleepOpen = !this._sleepOpen;
     if (this._sleepOpen) void this.syncSleepFromMa();
   }
   private async syncSleepFromMa() {
     const be = this.config?._backend;
-    if (!canMaSleep(be) || this._sleepSyncing) return;
-    const pid = sleepPlayerId(this.eid, this.hass);
-    if (!pid) return;
+    if (!canMaSleep(be) || this._sleepSyncing || !this.eid) return;
     this._sleepSyncing = true;
     try {
-      const raw = await be!.send('players/sleep_timer/get', { player_id: pid });
-      const exp = parseExpires(raw);
-      if (exp !== this._sleepExpires) {
-        this._sleepExpires = exp;
-        if (!exp) this._sleepMins = 0;
-        else if (!this._sleepMins) {
-          const rem = remainFromExpires(exp);
-          this._sleepMins = (SLEEP_MINUTES as readonly number[]).find((m) => Math.abs(rem - m * 60) < 90) as SleepMinutes
-            ?? (SLEEP_MINUTES as readonly number[]).reduce((best, m) => Math.abs(rem - m * 60) < Math.abs(rem - best * 60) ? m : best, 15) as SleepMinutes;
-        }
-        this.requestUpdate();
-      }
+      const raw = await be!.sleepTimerGet!(this.eid);
+      this.applySleepPayload(raw);
     } catch (e) {
-      console.warn('[jukebox-card] sleep_timer/get failed', e);
+      console.warn('[jukebox-card] sleep_timer_get failed', e);
     } finally { this._sleepSyncing = false; }
   }
   private onSleepExpired() {
-    window.clearTimeout(this._sleepLocal); this._sleepLocal = undefined;
-    this._sleepExpires = null; this._sleepMins = 0; this._sleepOpen = false;
-    // MA route: the server already stopped the player. Card-side fallback pauses below via the timeout.
+    this._sleepExpires = null; this._sleepMins = 0; this._sleepMode = undefined; this._sleepOpen = false;
     this.requestUpdate();
   }
-  /** Top-right status for sleep set/cancel. Skipped on phone (np ≤ 520px): the Sleep M:SS chip already shows it,
-   *  and the brief chip covers the art fullscreen / lyrics buttons. */
+  /** Top-right status for sleep set/cancel. Skipped on a narrow card (the CSS narrow layout, which sets --_narrow): the Sleep M:SS
+   *  chip already shows it, and the brief chip covers the art fullscreen / lyrics buttons. #117: the width lives in the CSS only. */
   private sleepStatus(msg: string) {
-    if (this.clientWidth <= 520) return;
+    const nw = this.renderRoot.querySelector('.nw');
+    if (nw && getComputedStyle(nw).getPropertyValue('--_narrow').trim() === '1') return;
     status(this, msg);
   }
-  /** minutes 0 = Off. Uses MA sleep_timer when available so it survives the screen sleeping. */
+  /** minutes 0 = Off. Uses MA sleep_timer (kiosk commands resolve the player id). */
   async setSleep(minutes: SleepMinutes) {
     const be = this.config?._backend;
-    const pid = sleepPlayerId(this.eid, this.hass);
-    window.clearTimeout(this._sleepLocal); this._sleepLocal = undefined;
-    if (canMaSleep(be) && pid) {
-      try {
-        if (minutes === 0) {
-          await be!.send('players/sleep_timer/clear', { player_id: pid });
-          this._sleepExpires = null; this._sleepMins = 0;
-          this.sleepStatus('Sleep timer off');
-        } else {
-          const raw = await be!.send('players/sleep_timer/set', { player_id: pid, seconds: minutes * 60 });
-          this._sleepExpires = parseExpires(raw) ?? (Date.now() / 1000 + minutes * 60);
-          this._sleepMins = minutes;
-          this.sleepStatus(`Sleep in ${minutes} min`);
-        }
-        this._sleepOpen = false;
-        this.requestUpdate();
-        return;
-      } catch (e) {
-        console.warn('[jukebox-card] sleep_timer failed; using card-side timer', e);
-        // fall through to card-side
+    if (!canMaSleep(be) || !this.eid) {
+      this._sleepOpen = false;
+      this.requestUpdate();
+      return;
+    }
+    try {
+      if (minutes === 0) {
+        await be!.sleepTimerClear!(this.eid);
+        this._sleepExpires = null; this._sleepMins = 0; this._sleepMode = undefined;
+        this.sleepStatus('Sleep timer off');
+      } else {
+        const raw = await be!.sleepTimerSet!(this.eid, minutes * 60);
+        this._sleepExpires = parseExpires(raw) ?? (Date.now() / 1000 + minutes * 60);
+        this._sleepMode = parseSleepMode(raw) ?? 'duration';
+        this._sleepMins = minutes;
+        this.sleepStatus(`Stops in ${fmtSleepRemain(this.sleepRemain())}`); // MA's "Stops in {0}"
       }
+      this._sleepOpen = false;
+      this.requestUpdate();
+    } catch (e) {
+      console.warn('[jukebox-card] sleep_timer failed', e);
+      this.toast('That did not work. Check the player.');
+      this._sleepOpen = false;
+      this.requestUpdate();
     }
-    // Card-side fallback: local countdown + media_pause when time is up
-    if (minutes === 0) {
-      this._sleepExpires = null; this._sleepMins = 0;
-      this.sleepStatus('Sleep timer off');
-    } else {
-      const secs = minutes * 60;
-      this._sleepExpires = Date.now() / 1000 + secs;
-      this._sleepMins = minutes;
-      this._sleepLocal = window.setTimeout(() => {
-        this._sleepLocal = undefined;
-        this._sleepExpires = null; this._sleepMins = 0;
-        this.flags.set('state', { v: 'paused', t: Date.now() });
-        this.call('media_player', 'media_pause', {}, this.eid);
-        this.requestUpdate();
-      }, secs * 1000);
-      this.sleepStatus(`Sleep in ${minutes} min`);
-    }
-    this._sleepOpen = false;
-    this.requestUpdate();
   }
 
   // ---------- progress ----------
@@ -386,7 +404,7 @@ export class JbNow extends LitElement {
   private toggleMute(id: string) {
     const v = !this.mutedOf(id);
     this.mute.set(id, { v, t: Date.now() }); this.requestUpdate();
-    this.call('media_player', 'volume_mute', { is_volume_muted: v }, id);
+    sendMute(this.hass, id, v).catch((err) => { console.warn('[jukebox-card] media_player.volume_mute failed', err); this.toast('That did not work. Check the player.'); });
   }
 
   // ---------- render ----------
@@ -424,11 +442,13 @@ export class JbNow extends LitElement {
     const title = a.media_title as string | undefined;
     const idle = !e || !title || ['off', 'idle', 'unavailable', 'standby'].includes(e.state);
     const cur = this._snap && this._snap.current >= 0 ? this._snap.items[this._snap.current] : undefined;
-    const pic = playerArt(a, cur);
+    // #147: the first art source that has not failed for this song (proxy copy, then the queue picture), else the disc
+    const song = songKey(a), pid = this.eid;
+    const pic = nowArt(pid, a, cur);
     const prov = providerLabel(a.media_content_id);
     const playing = this.isPlaying();
     const shuffle = this.flag('shuffle', !!a.shuffle);
-    const repeat = this.flag('repeat', shownRepeat(a.repeat));
+    const repeat: RepeatMode = this.flag('repeat', shownRepeat(a.repeat));
     const { pos, dur } = this.position();
     const where = (a.friendly_name as string) ?? (this.eid ? this.eid.replace(/^media_player\./, '').replace(/_/g, ' ') : '');
     const stateWord = playing ? 'Playing on' : e?.state === 'paused' || this.flag('state', e?.state) === 'paused' ? 'Paused on' : 'Ready on';
@@ -436,12 +456,21 @@ export class JbNow extends LitElement {
     const up = this.queue?.upNext ?? [];
     const nextIt = up[0];
     const more = Math.max(0, (this.queue?.remaining ?? up.length) - 1);
-    // Autoplay indicator only (the toggle lives in the Queue header): server lists it, MA says it is on, queue not dynamic
+    // the Autoplay-only Up next panel (queue ends, Autoplay will add more): server lists it, MA says it is on, queue not dynamic
     const autoplay = !!this.config._backend?.ext?.autoplay && this._snap?.autoplay === true && !this._snap?.dynamic;
+    const apMode = autoplayControlMode(!!this.config._backend?.ext?.autoplay, this._snap, this._snap?.repeat);
+    const apOn = this._snap?.autoplay === true;
+    const apTpl = apMode === 'hide' ? nothing
+      : html`<button class="apb ${apOn ? 'on' : ''}" data-action="np-autoplay" tabindex="-1" aria-pressed=${apOn ? 'true' : 'false'}
+          aria-label="Radio - Autoplay" title=${apOn ? 'Autoplay is on: more music is added when the queue runs out' : 'Autoplay is off'}
+          @pointerdown=${noFocus} @click=${() => this.toggleAutoplay(!apOn)}>${icon('autoplay', 'i xs')}<span>Radio - Autoplay</span></button>`;
     const favOn = this.isFav();
     const showFav = this.canFav();
     const sleepRem = this.sleepRemain();
-    const sleepOn = sleepRem > 0;
+    const canSleep = canMaSleep(this.config?._backend);
+    const sleepOn = sleepIsActive(this._sleepExpires, this._sleepMode);
+    const sleepModeText = !sleepRem ? sleepModeLabel(this._sleepMode, this._snap?.currentMediaType) : undefined;
+    const sleepChip = sleepModeText ?? sleepLabel(sleepRem);
     const tb = (cls: string, ic: string, label: string, fn: () => void, on?: boolean, dot = false, dis = false) =>
       html`<button class="tb ${cls} ${on ? 'on' : ''}" tabindex="-1" aria-label=${label} title=${label} aria-pressed=${on === undefined ? nothing : on ? 'true' : 'false'}
         ?disabled=${dis} @pointerdown=${noFocus} @click=${fn}>${icon(ic)}${dot ? html`<i class="dot"></i>` : nothing}</button>`;
@@ -450,7 +479,8 @@ export class JbNow extends LitElement {
     const slx = this._sleepOpen ? html`<div class="slx" data-action="sleep-close" @pointerdown=${this.sleepAway}></div>` : nothing;
     return html`<div class="nw ${idle ? 'idle' : ''} ${this._sleepOpen ? 'sl-open' : ''}" data-state=${e?.state ?? 'unknown'}>${slx}
       <div class="art ${showLyr && this._overlay ? 'lyr-on' : ''}">
-        ${pic ? html`<img src=${pic} alt="" draggable="false" @error=${(ev: Event) => ((ev.target as HTMLElement).style.display = 'none')} />`
+        ${pic ? keyed(pic, html`<img src=${pic} alt="" draggable="false" @load=${() => artLoaded(pid, song, pic)}
+            @error=${() => { artFailed(pid, song, pic); this.requestUpdate(); }} />`)
           : html`<span class="ph">${icon('disc')}</span>`}
         ${showLyr && this._overlay ? html`<jb-lyrics class="ovl" mode="overlay" @jukebox-lyrics-tap=${() => { this._overlay = false; writeOverlay(false); }} .hass=${this.hass} .config=${this.config} .store=${this.lyrics}
           ?active=${this.active}></jb-lyrics>` : nothing}
@@ -460,25 +490,27 @@ export class JbNow extends LitElement {
             @pointerdown=${noFocus} @click=${this.toggleOverlay}>${icon('lyrics')}</button>` : nothing}
           <button class="ab stg" tabindex="-1" aria-label="Full screen" @pointerdown=${noFocus}
             @click=${() => fire(this, 'jukebox-stage', { open: true })}>${icon('fullscreen')}</button>`}
-          <!-- #42: the sleep timer lives in the artwork corner (always shown, also when idle), away from Play/Pause -->
-          <button class="ab slp ${sleepOn || this._sleepOpen ? 'on' : ''}" tabindex="-1" aria-label=${sleepOn ? `Sleep timer ${fmtSleepRemain(sleepRem)}` : 'Sleep timer'}
-            title=${sleepOn ? `Sleep timer ${fmtSleepRemain(sleepRem)}` : 'Sleep timer'} aria-pressed=${sleepOn || this._sleepOpen ? 'true' : 'false'}
-            @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon')}</button>
+          <!-- #42: the sleep timer lives in the artwork corner (also when idle), away from Play/Pause.
+               Hidden when the backend cannot send MA players/sleep_timer/* (plain MA / native). -->
+          ${canSleep ? html`<button class="ab slp ${sleepOn || this._sleepOpen ? 'on' : ''}" tabindex="-1" aria-label=${sleepOn ? (sleepModeText ?? `Sleep timer ${fmtSleepRemain(sleepRem)}`) : 'Sleep timer'}
+            title=${sleepOn ? (sleepModeText ?? `Sleep timer ${fmtSleepRemain(sleepRem)}`) : 'Sleep timer'} aria-pressed=${sleepOn || this._sleepOpen ? 'true' : 'false'}
+            @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon')}</button>` : nothing}
         </div>
-        ${this._sleepOpen ? html`<div class="sleep-strip" role="group" aria-label="Sleep timer">
-          <button class="sp ${this._sleepMins === 0 ? 'on' : ''}" tabindex="-1" aria-pressed=${this._sleepMins === 0 ? 'true' : 'false'}
-            @pointerdown=${noFocus} @click=${() => this.setSleep(0)}>Off</button>
-          ${SLEEP_MINUTES.map((m) => html`<button class="sp ${this._sleepMins === m ? 'on' : ''}" tabindex="-1"
-            aria-pressed=${this._sleepMins === m ? 'true' : 'false'}
-            @pointerdown=${noFocus} @click=${() => this.setSleep(m as SleepMinutes)}>${m}</button>`)}
-        </div>` : sleepOn ? html`<div class="sleep-strip cd-only" aria-live="polite">
-          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${sleepLabel(sleepRem)}
-            @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon', 'i xs')}${sleepLabel(sleepRem)}</button>
+        ${canSleep && this._sleepOpen ? html`<div class="sleep-strip ma" role="group" aria-label="Sleep timer">
+          <!-- 0.9.1 (#44): Music Assistant's own choices and words; while a timer runs, "Stops in" and a red Cancel (as MA's menu) -->
+          ${sleepOn ? html`<div class="sl-row"><span class="sl-st" aria-live="polite">${sleepModeText ?? `Stops in ${fmtSleepRemain(sleepRem)}`}</span></div>` : nothing}
+          ${SLEEP_MINUTES.map((m) => html`<button class="sp ${sleepOn && this._sleepMins === m ? 'on' : ''}" tabindex="-1" data-min=${m}
+            aria-pressed=${sleepOn && this._sleepMins === m ? 'true' : 'false'}
+            @pointerdown=${noFocus} @click=${() => this.setSleep(m as SleepMinutes)}>${SLEEP_LABEL[m]}</button>`)}
+          ${sleepOn ? html`<button class="sp cx" tabindex="-1" data-min="0" @pointerdown=${noFocus} @click=${() => this.setSleep(0)}>Cancel sleep timer</button>` : nothing}
+        </div>` : canSleep && sleepOn ? html`<div class="sleep-strip cd-only" aria-live="polite">
+          <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${sleepModeText ?? `Sleep timer ${sleepChip}`}
+            @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon', 'i xs')}${sleepChip}</button>
         </div>` : nothing}
       </div>
       <div class="info">
         <div class="badges">${prov ? html`<span class="pv big">${prov}</span>` : nothing}
-          <span class="where">${icon('eq', 'i xs')}${stateWord} ${where}</span></div>
+          <span class="where">${icon('eq', 'i xs')}${stateWord} ${where}</span>${apTpl}</div>
         <h1 class="ti">${idle ? 'Nothing playing' : title}</h1>
         <div class="sub">${idle ? combinedOn(this.config) ? `Pick something in ${libraryTabLabel(this.config)}.` : `Pick something in Search or ${libraryTabLabel(this.config)}.` : [a.media_artist, a.media_album_name].filter(Boolean).join(' · ')}</div>
         <div class="prog ${dur ? '' : 'nodur'}">
@@ -492,11 +524,11 @@ export class JbNow extends LitElement {
           ${tb('pr', 'prev', 'Previous', () => this.prev())}
           ${tb('pp', playing ? 'pause' : 'play', playing ? 'Pause' : 'Play', () => this.playPause())}
           ${tb('nx', 'next', 'Next', () => this.next())}
-          ${tb('rp', 'repeat', 'Repeat queue', () => this.cycleRepeat(), repeat !== 'off', repeat !== 'off')}
+          ${tb('rp', repeat === 'one' ? 'repeatone' : 'repeat', REPEAT_LABEL[repeat], () => this.cycleRepeat(), repeat !== 'off', repeat !== 'off')}
           ${showFav ? tb('fv', favOn ? 'heart' : 'heartline', favOn ? 'Remove from favorites' : 'Add to favorites', () => this.toggleFavorite(), favOn, false, idle) : nothing}
         </div>
         ${nextIt ? html`<button class="upn panel" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
-            <span class="eyebrow">${autoplay ? 'Up next · Autoplay' : 'Up next'}</span><b>${nextIt.media_title}</b>${provTpl(nextIt.media_content_id)}
+            <span class="eyebrow">Up next</span><b>${nextIt.media_title}</b>${provTpl(nextIt.media_content_id)}
             <span class="more">${more ? `+ ${more} more` : ''}</span></button>`
           : autoplay && cur ? html`<button class="upn panel ap" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
             <span class="eyebrow">Autoplay</span><b>Autoplay will add more when this ends</b></button>` : nothing}
@@ -506,7 +538,7 @@ export class JbNow extends LitElement {
             ${rooms.length ? html`<div class="rooms">${rooms.map((r) => this.volRow(r.entity, r.name, false, this.spk?.inline(r.entity)))}</div>` : nothing}
           </div>
           <button class="vmore" tabindex="-1" aria-label="More speakers below" @pointerdown=${noFocus}
-            @click=${() => { const v = this.renderRoot.querySelector('.vol') as HTMLElement | null; v?.scrollBy({ top: Math.max(40, v.clientHeight * 0.75), behavior: 'smooth' }); }}>${icon('chev', 'i xs')}More speakers</button>
+            @click=${() => { const v = this.renderRoot.querySelector('.rooms') as HTMLElement | null; v?.scrollBy({ top: Math.max(40, v.clientHeight * 0.75), behavior: 'smooth' }); }}>${icon('chev', 'i xs')}More speakers</button>
         </div>
       </div>
       ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
@@ -516,24 +548,33 @@ export class JbNow extends LitElement {
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     .nw { position: relative; height: 100%; display: grid; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain;
-      grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: 24px; padding: 14px calc(var(--_pad) + 12px) 20px;
+      grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-6, 24px));
+      /* #117: the side margin grows with the card (none beyond --_pad on the narrowest cards, so seven 48px transport buttons always fit) */
+      padding: clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)) calc(var(--_pad) + clamp(0px, 3cqi - var(--ha-space-3, 12px), var(--ha-space-3, 12px))) clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-5, 20px));
       /* 0.7.9 #55: rows as tall as their content, so the square art always pushes the title down (never under it) */
       grid-auto-rows: max-content; }
     .nw::-webkit-scrollbar { display: none; }
-    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), 44cqh, 580px); aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: var(--primary-color, #03a9f4);
-      box-shadow: 0 0 0 1px var(--_hairline); }
+    /* #117: the cover takes a smaller share of the height on narrow cards (30% of it, up to 44% once the card is ~300px wider than that), so the controls stay in view */
+    .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), max(clamp(30cqh, 100cqw - 300px, 44cqh), calc(4 * var(--_touch-min) + 6 * var(--ha-space-1, 4px))), 580px); aspect-ratio: 1; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; background: var(--primary-color, #03a9f4);
+      box-shadow: 0 0 0 var(--ha-border-width-sm, 1px) var(--_hairline); }
     .art .ovl { position: absolute; inset: 0; z-index: 1; }
     .slx { position: absolute; inset: 0; z-index: 4; } .art .slx { z-index: 1; }
     .nw.sl-open .art { z-index: 5; }
-    .art-btns { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 8px; }
-    /* #42: ≥48px at 1x; on zoomed big screens (--_z > 1) the same 40px floor as before (54px at 1920x1080) */
-    .ab { width: max(40px, calc(48px / var(--_z, 1))); height: max(40px, calc(48px / var(--_z, 1))); border-radius: 50%; display: grid; place-items: center;
+    .art-btns { position: absolute; top: var(--_ab-inset); right: var(--_ab-inset); z-index: 2; display: flex; gap: var(--ha-space-2, 8px); }
+    /* #42: the touch minimum at 1x; on zoomed big screens (--_z > 1) never below --_ab-floor before the zoom (54px on screen at 1920x1080) */
+    :host { --_ab-inset: var(--_space-2-5); --_ab-floor: 40px; --_ab: max(var(--_ab-floor), calc(var(--_touch-min) / var(--_z, 1))); }
+    .ab { width: var(--_ab); height: var(--_ab); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg);
-      border: 1px solid var(--_surface-border); transition: background 150ms, color 150ms; }
-    .ab .i { width: 24px; height: 24px; }
-    .art .sleep-strip { position: absolute; z-index: 2; top: calc(18px + max(40px, calc(48px / var(--_z, 1)))); right: 10px; left: 10px; margin: 0; justify-content: flex-end; }
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background var(--_t-fast), color var(--_t-fast); }
+    .ab .i { width: var(--_icon); height: var(--_icon); }
+    /* #117: the four sleep choices (48 px each) stay on one row over the cover: the artwork is never narrower than four of them plus
+       small gaps (unless the card itself is), and on a small cover the strip's side insets and gaps shrink before anything wraps */
+    .art .sleep-strip { position: absolute; z-index: 2; top: calc(var(--_ab-inset) + var(--_ab) + var(--ha-space-2, 8px)); margin: 0; justify-content: flex-end;
+      --_sp-in: clamp(var(--ha-space-1, 4px), (100% - 4 * var(--_touch-min) - 3 * var(--ha-space-2, 8px)) / 2, var(--_ab-inset)); right: var(--_sp-in); left: var(--_sp-in);
+      gap: clamp(2px, (100% - 4 * var(--_touch-min)) / 3, var(--ha-space-2, 8px)); }
+    .art .sleep-strip .sp { padding: 0 clamp(var(--ha-space-1, 4px), 2cqi, var(--ha-space-4, 16px)); }
     .art .sleep-strip .sp { background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       border-color: var(--_surface-border); }
@@ -548,139 +589,139 @@ export class JbNow extends LitElement {
     /* Cover overlay buttons sit on the picture: an HA icon button (no shadow, theme icon colour) on the ha-card surface, so the icon stays readable on any cover */
     .art .sleep-strip .sp { color: var(--_fg); }
     .art .sleep-strip .sp.on { color: var(--_active); border-color: var(--_active); }
-    .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: 10px;
-      --_fg: var(--primary-text-color, #212121);
-      --_muted: var(--secondary-text-color, #727272);
-      --_inactive: var(--secondary-text-color, var(--disabled-text-color));
-      --_track: var(--disabled-color, var(--divider-color));
-      --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
-      --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
-      --_chip-bg: var(--ha-assist-chip-container-color, transparent);
-      --_chip-sel: var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15));
-      --_surface-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-      --_prov-fg: var(--primary-text-color, #212121);
-      --_prov-bg: var(--ha-assist-chip-container-color, transparent);
-      --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-      color: var(--_fg); }
-    /* Theme surfaces (volume panel, up next, More speakers): theme text and the theme's primary colour */
-    .info .panel, .info .vmore {
-      --_active: var(--primary-color, #03a9f4);
-      --_on-accent: var(--text-primary-color, #fff);
-      --_fg: var(--primary-text-color, #212121);
-      --_muted: var(--secondary-text-color, #727272);
-      --_inactive: var(--secondary-text-color, var(--state-inactive-color, var(--disabled-text-color)));
-      --_track: var(--disabled-color, var(--divider-color));
-      --_hairline: var(--divider-color, rgba(0, 0, 0, 0.12));
-      --_divider: var(--divider-color, rgba(0, 0, 0, 0.12));
-      --_chip-bg: var(--ha-assist-chip-container-color, transparent);
-      --_chip-sel: var(--ha-filter-chip-selected-container-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15));
-      --_surface-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-      --_prov-fg: var(--primary-text-color, #212121);
-      --_prov-bg: var(--ha-assist-chip-container-color, transparent);
-      --_prov-border: var(--outline-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-      color: var(--_fg);
-    }
-    .badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .pv.big { font-size: var(--ha-font-size-s, 12px); padding: 4px 10px; }
-    .where { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
-      padding: 4px 10px; border-radius: 999px; background: var(--_chip-sel); border: 1px solid var(--_hairline); color: var(--_muted); }
-    .ti { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-3xl, 28px), 4.6cqw, var(--ha-font-size-5xl, 40px)); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: -.01em;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: none; }
-    .sub { font-size: clamp(var(--ha-font-size-m, 14px), 1.8cqw, var(--ha-font-size-xl, 20px)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -4px; }
-    .prog { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: center; gap: 10px; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
+    /* 0.9.1 (#44): MA's worded choices in a tidy three-across grid over the top of the cover, one label per button on one line;
+       Cancel (theme error colour) and the "Stops in" line each take a whole row, on the card surface */
+    .art .sleep-strip.ma { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ha-space-2, 8px); --_sp-in: var(--_ab-inset); }
+    .art .sleep-strip.ma .sp { width: 100%; padding: 0 var(--ha-space-2, 8px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .art .sleep-strip.ma .sp.cx { grid-column: 1 / -1; color: var(--error-color); border-color: var(--error-color); }
+    .art .sleep-strip.ma .sl-row { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+    .art .sleep-strip.ma .sl-st { display: inline-flex; align-items: center; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
+      background: var(--ha-card-background, var(--card-background-color, var(--_bg))); color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+      font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); font-variant-numeric: tabular-nums; }
+    .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); color: var(--_fg); }
+    .badges { display: flex; align-items: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; }
+    /* Autoplay at spot A, as MA's pill: loop icon and the word; outlined in the theme colour when off, filled with it when on (also the not-tappable indicator of a queue MA fills itself) */
+    .apb { margin-left: auto; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); min-width: var(--_touch-min); padding: 0 var(--ha-space-4, 16px);
+      border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-md, 2px) solid var(--_active); background: transparent; color: var(--_active);
+      font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; cursor: pointer; }
+    .apb .i { width: var(--_icon); height: var(--_icon); }
+    .apb.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
+    .apb:active { transform: scale(.96); }
+    .apb:disabled, .apb.ind { cursor: default; transform: none; }
+    /* repeat on (MA locks Autoplay): not tappable, shown in the theme's disabled colour */
+    .apb:disabled:not(.on) { color: var(--_disabled); border-color: var(--_disabled); }
+    .pv.big { font-size: var(--ha-font-size-s, 12px); padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); }
+    .where { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
+      padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-sel); border: var(--ha-border-width-sm, 1px) solid var(--_hairline); color: var(--_muted); }
+    .ti { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-2xl, 24px), 4.6cqw, var(--ha-font-size-5xl, 40px)); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: -.01em;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .sub { font-size: clamp(var(--ha-font-size-m, 14px), 1.8cqw, var(--ha-font-size-xl, 20px)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: calc(-1 * var(--ha-space-1, 4px)); }
+    .prog { display: grid; grid-template-columns: clamp(40px, 10cqw, 52px) minmax(0, 1fr) clamp(40px, 10cqw, 52px); align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); color: var(--_muted); font-variant-numeric: tabular-nums; }
     .prog .tr { text-align: right; }
     /* live labels: text comes from data-v so drag handlers can update it without touching Lit-owned text nodes */
     .tl::after, .vv::after { content: attr(data-v); }
     .ps { --_slider-h: 4px; --_slider-knob: 14px; --_slider-hit: 34px; }
     .vs { --_slider-h: 7px; --_slider-knob: 22px; --_slider-hit: 40px; }
-    .prog.nodur .ps { opacity: .5; }
+    .prog.nodur .ps { --ha-slider-indicator-color: var(--_disabled); --ha-slider-thumb-color: var(--_disabled); }
     .tp { display: grid; grid-template-columns: repeat(6, 1fr); align-items: center; justify-items: center; margin: 2px 0; }
     .tp:has(.tb:nth-child(5):last-child) { grid-template-columns: repeat(5, 1fr); }
     .tp:has(.tb.fv) { grid-template-columns: repeat(7, 1fr); } .tp:has(.tb.fv) .tb.sh { grid-column: 2; } /* #42: empty first slot keeps Play/Pause centered with the heart */
-    .tb { position: relative; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; color: var(--_active); }
-    .tb .i { width: 30px; height: 30px; }
-    .tb.sh, .tb.rp, .tb.sl { color: var(--_inactive); } .tb.sh .i, .tb.rp .i, .tb.sl .i { width: 24px; height: 24px; }
+    /* #117: transport buttons scale with the card, never under the 48px touch target (with the heart there are seven) */
+    .tb { position: relative; width: clamp(var(--_touch-min), 11cqw, 56px); height: clamp(var(--_touch-min), 11cqw, 56px); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center; color: var(--_active); }
+    .tb .i { width: calc(var(--_icon) * 30 / 24); height: calc(var(--_icon) * 30 / 24); }
+    .tb.sh, .tb.rp, .tb.sl { color: var(--_inactive); } .tb.sh .i, .tb.rp .i, .tb.sl .i { width: var(--_icon); height: var(--_icon); }
     .tb.sh.on, .tb.rp.on, .tb.fv.on, .tb.sl.on { color: var(--_active); }
-    .tb.fv { color: var(--_inactive); } .tb.fv .i { width: 26px; height: 26px; }
-    .sleep-strip { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin: -2px 0 2px; }
-    .sleep-strip .sp { height: 34px; min-width: 44px; padding: 0 14px; border-radius: 999px; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
-      background: var(--_chip-bg); border: 1px solid var(--_surface-border); color: var(--_fg); }
+    .tb.fv { color: var(--_inactive); } .tb.fv .i { width: calc(var(--_icon) * 26 / 24); height: calc(var(--_icon) * 26 / 24); }
+    .sleep-strip { display: flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; margin: -2px 0 2px; }
+    .sleep-strip .sp { min-height: var(--_touch-min); min-width: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+      background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
     .sleep-strip .sp.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
     .sleep-strip .sp:active { transform: scale(.96); }
     .sleep-cd { letter-spacing: .04em; font-variant-numeric: tabular-nums; }
-    .sleep-strip .sp.sleep-cd { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; }
-    .sleep-strip .sp.sleep-cd .i { width: 14px; height: 14px; }
-    .tb .dot { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: currentColor; }
-    .tb.pp { width: 80px; height: 80px; background: var(--_active); color: var(--_on-accent); }
-    .tb.pp .i { width: 44px; height: 44px; }
-    .tb.pr, .tb.nx { width: 72px; height: 72px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
+    .sleep-strip .sp.sleep-cd { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-3, 12px); }
+    .sleep-strip .sp.sleep-cd .i { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); }
+    .tb .dot { position: absolute; left: 50%; bottom: var(--_space-1-5); width: 5px; height: 5px; margin-left: -2.5px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
+    .tb.pp { width: clamp(56px, 16cqw, 80px); height: clamp(56px, 16cqw, 80px); background: var(--_active); color: var(--_on-accent); }
+    .tb.pp .i { width: calc(var(--_icon) * 44 / 24); height: calc(var(--_icon) * 44 / 24); }
+    .tb.pr, .tb.nx { width: clamp(calc(var(--_touch-min) + 4px), 14cqw, 72px); height: clamp(calc(var(--_touch-min) + 4px), 14cqw, 72px); } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
+    .tp:has(.tb.fv) .tb { width: clamp(var(--_touch-min), 9cqw, 56px); height: clamp(var(--_touch-min), 9cqw, 56px); }
+    .tp:has(.tb.fv) .tb.pp { width: clamp(calc(var(--_touch-min) + 8px), 13cqw, 80px); height: clamp(calc(var(--_touch-min) + 8px), 13cqw, 80px); }
+    .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: clamp(calc(var(--_touch-min) + 4px), 11cqw, 72px); height: clamp(calc(var(--_touch-min) + 4px), 11cqw, 72px); } /* #43: bigger Next/Previous; their glyph fills only 12 of 24 viewBox units (pause: 14), so the icon box is larger than Play/Pause's to make the visible arrows ~93% of its glyph */
     .tb:active { transform: scale(.94); }
-    .tb:disabled { opacity: .3; }
-    .upn { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; text-align: left; min-width: 0; width: 100%; }
+    .tb:disabled { color: var(--_disabled); }
+    .tb.pp:disabled { background: color-mix(in srgb, var(--_disabled-fill) 20%, transparent); }
+    .upn { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); text-align: left; min-width: 0; width: 100%; }
     .upn .eyebrow { font-size: var(--ha-font-size-xs, 10px); flex: none; }
     .upn b { font-size: var(--ha-font-size-m, 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .upn .pv { flex: none; }
     .upn .more { margin-left: auto; font-size: var(--ha-font-size-s, 12px); color: var(--_muted); flex: none; }
-    .vol { container: vol / inline-size; padding: 6px 14px; display: flex; flex-direction: column; }
+    .vol { container: vol / inline-size; padding: clamp(var(--ha-space-1, 4px), 1.5cqi, var(--ha-space-2, 8px)) clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); display: flex; flex-direction: column; }
     /* the volume panel sits directly on the HA card surface: no second fill */
     .vol.panel { background: transparent; }
     /* the Up next panel sits directly on the HA card surface: no second fill */
     .upn.panel { background: transparent; }
     .volw { position: relative; display: flex; flex-direction: column; min-height: 0; }
     /* More speakers floats over the fading speaker list: use ha-card's fill + backdrop-filter (not a transparent hole, not --_surface-solid) so the label stays readable. */
-    .vmore { display: none; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 2; align-items: center; gap: 4px;
-      padding: 4px 12px; min-height: 30px; border-radius: 999px; border: 1px solid var(--_surface-border);
+    .vmore { display: none; position: absolute; left: 50%; bottom: var(--_space-1-5); transform: translateX(-50%); z-index: 2; align-items: center; gap: var(--ha-space-1, 4px);
+      padding: var(--ha-space-1, 4px) var(--ha-space-3, 12px); min-height: var(--_touch-min); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
-    .vmore .i { width: 12px; height: 12px; }
+    .vmore .i { width: calc(var(--_icon) * 12 / 24); height: calc(var(--_icon) * 12 / 24); }
     .volw.more-b .vmore { display: inline-flex; }
-    .volw.over .vol { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-    .volw.over .vol::-webkit-scrollbar { display: none; }
-    .volw.more-b .vol { -webkit-mask-image: linear-gradient(#000 calc(100% - 44px), #0000); mask-image: linear-gradient(#000 calc(100% - 44px), #0000); }
-    .volw.more-t.more-b .vol { -webkit-mask-image: linear-gradient(#0000, #000 24px, #000 calc(100% - 44px), #0000); mask-image: linear-gradient(#0000, #000 24px, #000 calc(100% - 44px), #0000); }
-    .volw.more-t:not(.more-b) .vol { -webkit-mask-image: linear-gradient(#0000, #000 24px); mask-image: linear-gradient(#0000, #000 24px); }
-    .rooms { display: flex; flex-direction: column; border-top: 1px solid var(--_divider); }
-    .vr { display: grid; grid-template-columns: 30px minmax(80px, 30%) minmax(0, 1fr) 34px; align-items: center; gap: 8px; min-height: 46px; }
-    .vm { width: 34px; height: 34px; display: grid; place-items: center; color: var(--_active); margin-left: -6px; border-radius: 50%; }
-    .vm .i { width: 20px; height: 20px; }
-    .vr.room .vm { color: var(--_inactive); } .vr.room .vm .i { width: 18px; height: 18px; }
+    /* #117: the 48px More speakers pill gets its own strip under the speaker list instead of floating over a slider (two targets on one spot) */
+    .volw.more-b { padding-bottom: calc(var(--_touch-min) + var(--ha-space-1, 4px)); }
+    .volw.more-b .vmore { bottom: 0; }
+    .volw.over .rooms { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+    .volw.over .rooms::-webkit-scrollbar { display: none; }
+    .volw.more-b .rooms { -webkit-mask-image: linear-gradient(#000 calc(100% - 44px), #0000); mask-image: linear-gradient(#000 calc(100% - 44px), #0000); }
+    .volw.more-t.more-b .rooms { -webkit-mask-image: linear-gradient(#0000, #000 24px, #000 calc(100% - 44px), #0000); mask-image: linear-gradient(#0000, #000 24px, #000 calc(100% - 44px), #0000); }
+    .volw.more-t:not(.more-b) .rooms { -webkit-mask-image: linear-gradient(#0000, #000 24px); mask-image: linear-gradient(#0000, #000 24px); }
+    .rooms { min-height: 0; display: flex; flex-direction: column; border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
+    /* the lead speaker row stays fixed; only the rooms scroll (0.7.9 #59 scroll area moved from .vol to .rooms). No second surface: the card shows through as before. */
+    .vr.main, .rooms > .vr { flex-shrink: 0; }
+    .vr { display: grid; grid-template-columns: 30px minmax(min(80px, 25cqi), 30%) minmax(0, 1fr) 34px; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); }
+    /* #117: the mute button is a 48px target; the extra reaches into the panel's side margin so the icon stays where it was */
+    .vm { width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; color: var(--_active); margin-left: calc(-1 * var(--ha-space-3, 12px)); border-radius: var(--ha-border-radius-circle, 50%); }
+    .vm .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
+    .vr.room .vm { color: var(--_inactive); } .vr.room .vm .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .vr.muted .vm { color: var(--_active); }
     .vn { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vr.main .vn { font-weight: var(--ha-font-weight-bold, 700); }
     .vn i { font-style: normal; font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
     .vv { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); text-align: right; font-variant-numeric: tabular-nums; }
-    .vr.off { opacity: .5; }
+    .vr.off .vn, .vr.off .vv, .vr.off .vm, .vm:disabled { color: var(--_disabled); }
     /* 0.6.3 speaker controls: a trailing column for Speakers (main row) and Drop/Add (rooms) */
     .vol.acts .vr.main { grid-template-columns: 30px minmax(0, max-content) minmax(0, 1fr) 34px auto; }
-    .vol.acts .rooms .vr { grid-template-columns: 30px minmax(70px, 28%) minmax(0, 1fr) 34px 36px; }
-    .spkb { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
-      background: var(--_chip-bg); border: 1px solid var(--_surface-border); color: var(--_fg); white-space: nowrap; }
+    .vol.acts .rooms .vr { grid-template-columns: 30px minmax(min(70px, 22cqi), 28%) minmax(0, 1fr) 34px var(--_touch-min); }
+    .spkb { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+      background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); white-space: nowrap; }
     .spkb:active { background: var(--_chip-sel); }
-    .ra { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--_surface-border); color: var(--_fg); background: var(--_chip-bg); justify-self: end; }
+    .ra { width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); background: var(--_chip-bg); justify-self: end; }
     .ra span { display: none; }
-    .ra .i { width: 18px; height: 18px; }
+    .ra .i { width: calc(var(--_icon) * 18 / 24); height: calc(var(--_icon) * 18 / 24); }
     .ra.add { background: var(--_active); border-color: transparent; color: var(--_on-accent); }
     .ra.drop { color: var(--_fg); }
-    .ra[aria-disabled="true"] { opacity: .45; }
-    .ra.add[aria-disabled="true"] { background: var(--_chip-bg); color: var(--_muted); }
-    .ra:disabled { opacity: .5; }
-    .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: .5; }
+    .ra[aria-disabled="true"], .ra:disabled { color: var(--_disabled); }
+    .ra.add[aria-disabled="true"], .ra.add:disabled { background: var(--_chip-bg); border-color: var(--_surface-border); color: var(--_disabled); }
+    .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: var(--_dim); }
     .vr.pending .ra { animation: jb-pulse 1s ease-in-out infinite; }
     @keyframes jb-pulse { 50% { opacity: .35; } }
+    @media (prefers-reduced-motion: reduce) { .vr.pending .ra { animation: none; } .tb:active, .sleep-strip .sp:active, .apb:active { transform: none; } }
     .vn .else { display: block; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .vr.muted .vs { opacity: .45; }
+    .vr.muted .vs { opacity: var(--_dim); }
     @container vol (min-width: 600px) {
-      .rooms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 20px; padding-top: 8px; }
-      .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 30px; grid-template-areas: "m n n" "s s v"; row-gap: 0; min-height: 0; padding-bottom: 4px; }
+      .rooms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--ha-space-5, 20px); padding-top: var(--ha-space-2, 8px); }
+      .rooms .vr { grid-template-columns: 36px minmax(0, 1fr) 30px; grid-template-areas: "m n n" "s s v"; row-gap: 0; min-height: 0; padding-bottom: var(--ha-space-1, 4px); }
       .rooms .vm { grid-area: m; } .rooms .vn { grid-area: n; } .rooms .vs { grid-area: s; } .rooms .vv { grid-area: v; }
-      .vol.acts .rooms .vr { grid-template-columns: 30px minmax(0, 1fr) 34px; grid-template-areas: "m n a" "s s v"; }
+      .vol.acts .rooms .vr { grid-template-columns: 36px minmax(0, 1fr) var(--_touch-min); grid-template-areas: "m n a" "s s v"; }
       .rooms .ra { grid-area: a; }
     }
-    @container np (orientation: portrait) and (min-width: 521px) { .nw { align-content: safe center; } }
+    /* #117: portrait centres the column whenever it fits (safe: a taller column starts at the top and scrolls), at every width */
+    @container np (orientation: portrait) { .nw { align-content: safe center; } }
     /* landscape: art left, info right */
     @container np (orientation: landscape) and (min-width: 700px) {
-      .nw { grid-template-columns: auto minmax(0, 1fr); align-items: center; justify-items: stretch; column-gap: clamp(24px, 3.5cqw, 48px); overflow: hidden; padding-top: 20px; padding-bottom: 20px;
+      .nw { grid-template-columns: auto minmax(0, 1fr); align-items: center; justify-items: stretch; column-gap: clamp(var(--ha-space-6, 24px), 3.5cqw, var(--ha-space-12, 48px)); overflow: hidden; padding-top: var(--ha-space-5, 20px); padding-bottom: var(--ha-space-5, 20px);
         grid-template-rows: minmax(0, 1fr); grid-auto-rows: minmax(0, 1fr); }
       /* 0.7.9 #59: the info column never runs under the tab bar; the speaker list takes what is left and scrolls inside itself */
       .info { max-height: 100%; min-height: 0; }
@@ -688,44 +729,26 @@ export class JbNow extends LitElement {
       .info > .volw { flex: 0 1 auto; min-height: 96px; }
       .volw > .vol { min-height: 0; max-height: 100%; }
       .art { width: min(calc(100cqh - 40px), 46cqw); align-self: center; }
-      .info { max-width: none; gap: 9px; }
+      .info { max-width: none; gap: var(--ha-space-2, 8px); }
       .ti { font-size: clamp(var(--ha-font-size-3xl, 28px), 3.4cqw, var(--ha-font-size-5xl, 40px)); }
-      .vs { --_slider-h: 6px; --_slider-knob: 20px; --_slider-hit: 36px; }
+      .vs { --_slider-h: 6px; --_slider-knob: 20px; }
       .tb.pp { width: 74px; height: 74px; }
-      .tb.pr, .tb.nx { width: 64px; height: 64px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; }
+      .tb.pr, .tb.nx { width: 64px; height: 64px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
     }
     @container np (orientation: landscape) and (max-height: 560px) {
-      .upn { display: none; } .vr { min-height: 38px; } .tb.pp { width: 70px; height: 70px; } .tb { width: 48px; height: 48px; }
-      .tb.pr, .tb.nx { width: 60px; height: 60px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; }
+      .upn { display: none; } .tb.pp { width: 70px; height: 70px; } .tb { width: var(--_touch-min); height: var(--_touch-min); }
+      .tb.pr, .tb.nx { width: 60px; height: 60px; } .tb.pr .i, .tb.nx .i { width: calc(var(--_icon) * 48 / 24); height: calc(var(--_icon) * 48 / 24); }
     }
-    /* phone */
-    @container np (max-width: 520px) {
-      .nw { gap: 14px; padding: 12px 14px 14px; }
-      .art { width: min(calc(100cqw - 140px), 30cqh); }
-      .vs { --_slider-knob: 24px; }
-      .info { gap: 8px; }
-      .ti { font-size: var(--ha-font-size-2xl, 24px); -webkit-line-clamp: 1; display: block; white-space: nowrap; text-overflow: ellipsis; }
-      .sub { font-size: var(--ha-font-size-l, 16px); }
-      .prog { grid-template-columns: 40px minmax(0, 1fr) 40px; }
-      .tb { width: 48px; height: 48px; } .tb.pp { width: 70px; height: 70px; }
-      .tb.pr, .tb.nx { width: 58px; height: 58px; } .tb.pr .i, .tb.nx .i { width: 48px; height: 48px; }
-      .tp:has(.tb.fv) .tb { width: 40px; height: 40px; } .tp:has(.tb.fv) .tb.pp { width: 60px; height: 60px; }
-      .tp:has(.tb.fv) .tb.pr, .tp:has(.tb.fv) .tb.nx { width: 48px; height: 48px; } .tp:has(.tb.fv) .tb.pr .i, .tp:has(.tb.fv) .tb.nx .i { width: 34px; height: 34px; }
-      .tp:has(.tb.fv) .tb .i { width: 22px; height: 22px; } .tp:has(.tb.fv) .tb.pp .i { width: 32px; height: 32px; }
-      .tp:has(.tb.fv) .tb.sh .i, .tp:has(.tb.fv) .tb.rp .i, .tp:has(.tb.fv) .tb.sl .i { width: 20px; height: 20px; }
-      .sleep-strip .sp { height: 32px; padding: 0 12px; font-size: var(--ha-font-size-s, 12px); }
-      /* phone: the sleep choices stay on one row on the artwork (≥ 40px tall) */
-      .art .sleep-strip { flex-wrap: nowrap; gap: 4px; }
-      .art .sleep-strip .sp { height: 40px; min-width: 40px; padding: 0 9px; flex: none; }
-      .upn { display: none; }
-      .vol { padding: 4px 12px; }
-      .vr { grid-template-columns: 28px 86px minmax(0, 1fr) 30px; min-height: 48px; }
-      .vn { font-size: var(--ha-font-size-m, 14px); }
-      /* phone: name + Speakers on top, the group slider below; rooms keep one line with a round Drop/Add */
-      .vol.acts .vr.main { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "m n b" "s s v"; row-gap: 0; padding-top: 4px; }
+    /* #117: a behaviour flag, not a layout: sleepStatus() reads it to skip the brief top-right status chip when the card is too narrow
+       for it to clear the cover's Fullscreen/Lyrics buttons (the Sleep M:SS chip already shows the same thing). Kept as a container query on the card's own width.
+       Structural, as before #117: on a card this narrow the Up next strip is left out whole (the Queue tab shows it), so the speaker rows stay in view. */
+    @container np (max-width: 520px) { .nw { --_narrow: 1; } .upn { display: none; } }
+    /* #117 structural, kept as a container query on the speaker panel's own width: below ~460px a one-line main row would squeeze the
+       group slider to almost nothing, so the name + Speakers button go on top and the slider gets the full row underneath */
+    @container vol (max-width: 460px) {
+      .vol.acts .vr.main { grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-areas: "m n b" "s s v"; row-gap: 0; padding-top: var(--ha-space-1, 4px); }
       .vol.acts .vr.main .vm { grid-area: m; } .vol.acts .vr.main .vn { grid-area: n; } .vol.acts .vr.main .vs { grid-area: s; }
       .vol.acts .vr.main .vv { grid-area: v; } .vol.acts .vr.main .spkb { grid-area: b; }
-      .vol.acts .rooms .vr { grid-template-columns: 26px 88px minmax(0, 1fr) 26px 34px; gap: 6px; }
     }
   `];
 }

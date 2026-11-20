@@ -31,7 +31,7 @@ const page = async (w, h, q) => {
   return p;
 };
 const note = async (p, n) => notes.push(`${n}: modal=${await p.evaluate((e) => !!eval(e), `${SR}.querySelector('.sp-ask')`)} chip="${await p.evaluate((e) => eval(e), chipText)}"`);
-for (const [w, h] of [[1920, 1080], [390, 844]]) {
+for (const [w, h] of [[1920, 1080]]) {
   const tag = `${w}x${h}`;
   // 1 + 3: drop the Garage leader from Now Playing, then Join it back
   let p = await page(w, h, '');

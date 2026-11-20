@@ -3,9 +3,11 @@ import { tokens, base } from './styles';
 import { songInfo, INFO_TYPES } from './song-info';
 import { icon } from './icons';
 import { providerLabel } from './providers';
+import { parseSearchProviders } from './search-sources';
+import { pageAll } from './page-all';
 import {
-  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, swallowNextClick, menuPos, menuTpl, mediaActions, tapActions, rowActsTpl,
-  playMedia, playMessage, normItem, drillable, canRadio, isRadio, hideStartRadio, confirmTpl, type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, swallowNextClick, menuPos, menuTpl, mediaActions, tapActions,
+  playMedia, playMessage, normItem, drillable, canRadio, isRadio, hideStartRadio, confirmTpl, type MenuAction, type MenuPos, type ConfirmState,
   maCall,
 } from './shared';
 import './detail-view';
@@ -14,12 +16,12 @@ export { fromQueueTrack, queueTracks, mergePage, QUEUE_PAGE_MIN, QUEUE_PAGE_MAX 
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem, RadioBrowseMode } from './types';
 import { defineElement } from './define';
 import { removeFromQueue } from './queue-row-remove';
-import { radioModes, defaultCountry, countryName, countryPath, MODE_PATH, MODE_LABEL, rbList, type RbListing, type RbFolder } from './radio-browse';
+import { radioModes, defaultCountry, countryName, countryPath, modePath, rbRoot, RB_ROOT, MODE_LABEL, rbList, type RbListing, type RbFolder } from './radio-browse';
 import {
   discoverWanted, DEFAULT_ROWS, parseRows, pickRows, parseItems, resumeFraction, memGet, memPut, memClear, ROWS_TTL_MS, ITEMS_TTL_MS, DISCOVER_CONCURRENCY,
   type DiscoverRow,
 } from './discover';
-import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, libraryCategories, libraryView, libraryColumns, type TileId } from './library-home';
+import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, libraryCategories, libraryViewFor, tilesAcrossStyle, type TileId } from './library-home';
 import { loadDetail } from './detail-view';
 import { FavController, heartTpl, heartType } from './heart';
 import { PoolCache, libraryFiltered, normText, type ScopePool } from './search-scope';
@@ -67,6 +69,8 @@ const SORTS = [
 const RADIO_SORTS = [{ id: 'play_count_desc', label: 'Popular' }, ...SORTS];
 /** v0.7 Library filters: an artist scope lists that artist's albums and tracks only. */
 const LART_CATS = ['album', 'track'];
+/** artist filter: library albums / tracks are read 100 at a time, at most 10 pages (1000) each, and the filter's pool keeps that many */
+const LART_PAGE = 100, LART_MAX_PAGES = 10;
 const sortsFor = (type: string) => (type === 'radio' ? RADIO_SORTS : type === 'genre' ? SORTS.slice(0, 2) : SORTS);
 /** MA genre sort keys (music/genres/library_items) for the card's sorts */
 const GENRE_ORDER: Record<string, string> = { name: 'sort_name', timestamp_added_desc: 'timestamp_added_desc' };
@@ -120,6 +124,10 @@ export class JbBrowse extends LitElement {
   /** folders entered inside the current mode (Country › United States) */
   private _rtrail: RbFolder[] = [];
   private _rb: RbState | null = null;
+  /** Radio Browser browse root from MA's provider list (e.g. radiobrowser--abcd://); null until the list has loaded */
+  private _rbRoot: string | null = null;
+  /** the server refused the instance-id path (a guest may only browse `radiobrowser://`): use the plain domain path from now on */
+  private _rbPlain = false;
   // ---- v0.7 Discover ----
   private _disc: { rows: DiscoverRow[]; loading: boolean; error: string; key: string } | null = null;
   private _ditems: Record<string, RowState> = {};
@@ -134,7 +142,7 @@ export class JbBrowse extends LitElement {
   /** artist scope ("Artist: JJ Grey"): Albums / Tracks show only this artist's library items */
   private _lart: MaItem | null = null;
   private _lpool: { key: string; pool?: ScopePool; error: string } | null = null;
-  private lpools = new PoolCache();
+  private lpools = new PoolCache(undefined, undefined, undefined, { albums: LART_MAX_PAGES * LART_PAGE, tracks: LART_MAX_PAGES * LART_PAGE });
   private _lqTimer?: number;
   /** Tap never plays: artists / albums / playlists (and podcasts with the Jukebox Kiosk integration) open their detail, everything else a sheet. */
   private hearts = new FavController(this);
@@ -352,29 +360,65 @@ export class JbBrowse extends LitElement {
   private onScroll(e: Event) {
     this.press.scrolled();
     const el = e.target as HTMLElement;
+    if (this._cat === DISCOVER_CAT.type) { this.queueNearbyRows(true); return; }
     if (!this._stack.length && !this._lart && el.scrollTop + el.clientHeight > el.scrollHeight - 400) this.load(true);
   }
 
   // ---------- v0.7 radio "Stations by…" ----------
-  private rbBase() { return this._rmode === 'library' ? '' : MODE_PATH[this._rmode]; }
+  private rbBase() { return this._rmode === 'library' ? '' : modePath(this._rmode, this._rbRoot ?? RB_ROOT); }
   private rbPath() { return this._rtrail.length ? this._rtrail[this._rtrail.length - 1].path : this.rbBase(); }
+  /** The Radio Browser root: built from the instance_id in the provider list the card already loads (kiosk search_providers).
+   *  No list or no Radio Browser instance: the plain `radiobrowser://` (the error text then stays as it was). A failed list load is retried next time. */
+  private async resolveRbRoot(): Promise<string> {
+    if (this._rbRoot) return this._rbRoot;
+    const be = this.be;
+    let root = RB_ROOT, known = true;
+    if (be?.ext?.searchProviders && be.searchProviders) {
+      try { root = rbRoot(parseSearchProviders(await be.searchProviders())); }
+      catch (e) { console.warn('[jukebox-card] radio provider lookup failed', e); known = false; }
+    }
+    if (known) this._rbRoot = root;
+    return root;
+  }
+  /** music/browse with the instance-id root; if the server refuses it, once more with `radiobrowser://` (what the card always sent before) */
+  private rbSend = async (cmd: string, data: Record<string, unknown>): Promise<any> => {
+    const be = this.be!, root = this._rbRoot, path = String(data.path ?? '');
+    if (cmd !== 'music/browse' || !root || root === RB_ROOT || !path.startsWith(root)) return be.send(cmd, data);
+    const plain = { ...data, path: RB_ROOT + path.slice(root.length) };
+    if (this._rbPlain) return be.send(cmd, plain);
+    try { return await be.send(cmd, data); }
+    catch (e) {
+      const r = await be.send(cmd, plain).catch(() => { throw e; });
+      this._rbPlain = true;
+      return r;
+    }
+  };
   setRMode(m: RMode) {
     this._rmode = m; this._stack = []; this._menu = null; this._rb = null; this._rtrail = [];
+    this.renderRoot.querySelector('.scroll')?.scrollTo({ top: 0 });
+    if (m === 'library') { this.ensure(); return; }
+    void this.startRb(m);
+  }
+  private async startRb(m: RMode) {
+    const root = await this.resolveRbRoot();
+    if (this._rmode !== m || this._rtrail.length) return;
     if (m === 'country') {
       const cc = defaultCountry(this.config, this.hass);
-      if (cc) this._rtrail = [{ name: countryName(cc, this.hass?.language || 'en'), path: countryPath(cc) }];
+      if (cc) this._rtrail = [{ name: countryName(cc, this.hass?.language || 'en'), path: countryPath(cc, root) }];
     }
-    if (m === 'library') this.ensure(); else this.loadRb();
-    this.renderRoot.querySelector('.scroll')?.scrollTo({ top: 0 });
+    this.loadRb();
   }
   private openFolder(f: RbFolder) { this._rtrail = [...this._rtrail, f]; this._rb = null; this.loadRb(); this.renderRoot.querySelector('.scroll')?.scrollTo({ top: 0 }); }
   private rbUp() { this._rtrail = this._rtrail.slice(0, -1); this._rb = null; this.loadRb(); }
   async loadRb() {
-    const be = this.be, path = this.rbPath();
-    if (!be || !path) return;
+    const be = this.be;
+    if (!be) return;
+    if (!this._rtrail.length) await this.resolveRbRoot();
+    const path = this.rbPath();
+    if (!path || this._rmode === 'library') return;
     this._rb = { path, loading: true, error: '', stale: false };
     try {
-      const r = await rbList((c, d) => be.send(c, d), path);
+      const r = await rbList(this.rbSend, path);
       if (this._rb?.path !== path) return;
       this._rb = { path, data: r.data, loading: false, error: '', stale: r.stale };
       if (r.stale) this.toast("Couldn't refresh the stations, showing a saved list.");
@@ -447,6 +491,21 @@ export class JbBrowse extends LitElement {
       }), { root, rootMargin: '300px 0px' });
     }
     els.forEach((el) => this._io!.observe(el));
+    this.queueNearbyRows();
+  }
+  /** Load a Discover row within 300 px of the scrollport. On scroll, also load the next rows when the list is at the bottom — tall Rows/Tiles lists can hide later `.drow`s from IntersectionObserver (`content-visibility` in a flex `.scroll`). */
+  private queueNearbyRows(fromScroll = false) {
+    if (this._cat !== DISCOVER_CAT.type || this._stack.length || !this._disc?.rows.length) return;
+    const root = this.renderRoot.querySelector('.scroll') as HTMLElement | null;
+    const els = [...this.renderRoot.querySelectorAll<HTMLElement>('.drow[data-key]')].filter((el) => !this._ditems[el.dataset.key!]);
+    if (!els.length) return;
+    if (!root) { els.forEach((el) => this.queueRow(el.dataset.key!)); return; }
+    const rr = root.getBoundingClientRect();
+    const atBottom = fromScroll && root.scrollTop + root.clientHeight > root.scrollHeight - 400;
+    for (const el of els) {
+      const r = el.getBoundingClientRect();
+      if (atBottom || (r.top < rr.bottom + 300 && r.bottom > rr.top - 300)) this.queueRow(el.dataset.key!);
+    }
   }
   private queueRow(key: string) {
     const row = this._disc?.rows.find((r) => r.key === key);
@@ -487,8 +546,12 @@ export class JbBrowse extends LitElement {
         <h3 class="eyebrow">${r.name}</h3>
         ${st?.error ? html`<div class="note rowerr">${st.error} <button class="fc tog" data-action="row-retry" tabindex="-1" @pointerdown=${noFocus}
             @click=${() => this.retryRow(r.key)}>Retry</button></div>`
-          : st?.done ? html`<div class="hs" @scroll=${() => this.press.scrolled()}>${st.items.map((it) => this.tile(it, it.media_type || 'track', resume))}</div>`
-          : html`<div class="hs skel" aria-hidden="true">${[0, 1, 2, 3, 4, 5].map(() => html`<div class="tile"><span class="ar big"></span><b>&nbsp;</b></div>`)}</div>`}
+          : st?.done ? (libraryViewFor(this.config, 'discover') === 'tiles'
+              ? html`<div class="grid lib disc-grid" data-layout="tiles" style=${tilesAcrossStyle(this.config)}>${st.items.map((it) => this.tile(it, it.media_type || 'track', resume))}</div>`
+              : html`<div class="list lib" data-layout="rows">${st.items.map((it) => this.itemRow(it, it.media_type || 'track', resume))}</div>`)
+          : libraryViewFor(this.config, 'discover') === 'tiles'
+            ? html`<div class="grid lib disc-grid" data-layout="tiles" aria-hidden="true" style=${tilesAcrossStyle(this.config)}>${[0, 1, 2, 3, 4, 5].map(() => html`<div class="tile"><span class="ar big"></span><b>&nbsp;</b></div>`)}</div>`
+            : html`<div class="list lib" data-layout="rows" aria-hidden="true">${[0, 1, 2, 3, 4, 5].map(() => html`<div class="row"><span class="ar"></span><b>&nbsp;</b></div>`)}</div>`}
       </section>`;
     })}</div>`;
   }
@@ -533,7 +596,7 @@ export class JbBrowse extends LitElement {
       : station ? () => { this._menu = null; this.press.release(); fire(this, 'jukebox-station', { item: it }); } : undefined, ask, canRadio(type, it), station, hideStartRadio(type, it));
     // 0.7.10: the large centered sheet at card level (jb-hold-sheet), not the small anchored menu
     this.press.held = it.uri; this.requestUpdate(); void el;
-    const info = !station && INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it) : undefined; // 0.7.12: More Info on songs, episodes, audiobooks
+    const info = !station && INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it, this.hass) : undefined; // 0.7.12: More Info on songs, episodes, audiobooks
     fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, type) || providerLabel(it.uri), actions, info, close: () => this.press.release() });
   }
 
@@ -585,7 +648,8 @@ export class JbBrowse extends LitElement {
     if (this._lpool?.key === a.uri) return;
     this._lpool = { key: a.uri, error: '' };
     const hass = this.hass, cfg = this.config;
-    const lib = (type: string) => this.lib({ media_type: type, search: a.name, limit: 100, offset: 0, order_by: 'name' }).then(libraryItems).catch(() => [] as MaItem[]);
+    // every page (100 at a time, up to LART_MAX_PAGES), not just the first 100
+    const lib = (type: string) => pageAll((offset, limit) => this.lib({ media_type: type, search: a.name, limit, offset, order_by: 'name' }).then(libraryItems), LART_PAGE, LART_MAX_PAGES);
     this.lpools.get(a.uri, () => Promise.all([
       loadDetail(hass, cfg, a, 'artist'), lib('album'), lib('track'),
     ]).then(([d, al, tr]) => {
@@ -682,24 +746,25 @@ export class JbBrowse extends LitElement {
     if (type === 'playlist') return it.owner ?? '';
     return artistNames(it);
   }
-  /** 0.7.20: the top level of a Library section, as `library_view` says: rows (a list) or tiles (a grid of `library_columns` columns). */
+  /** The top level of a Library section, as `library_views.<section>` (else `library_view`) says: rows or an exact-column tile grid. */
   private libItems(items: MaItem[], type: string, src: string) {
-    if (libraryView(this.config) === 'tiles') {
-      return html`<div class="grid lib ${type}" data-layout="tiles" data-src=${src} style="--_cols:${libraryColumns(this.config)}">${items.map((it) => this.tile(it, type, false, true))}</div>`;
+    if (libraryViewFor(this.config, type) === 'tiles') {
+      return html`<div class="grid lib ${type}" data-layout="tiles" data-src=${src} style=${tilesAcrossStyle(this.config)}>${items.map((it) => this.tile(it, type, false, true))}</div>`;
     }
     return html`<div class="list lib ${type === 'genre' ? 'genres' : type}" data-layout="rows" data-src=${src}>${items.map((it) => (type === 'track' ? this.row(it)
       : type === 'genre' ? this.genreRow(it) : this.itemRow(it, type)))}</div>`;
   }
   /** 0.7.20: a Library row for playlists, artists, albums, stations, podcasts and audiobooks: the same small cover as the track rows (no circle),
    *  title, sub line, source badge and heart, and an arrow when a tap opens a page. No action buttons (the tiles had none). Tap and hold are the tile's. */
-  private itemRow(it: MaItem, type: string) {
+  private itemRow(it: MaItem, type: string, resume = false) {
     const p = this.press.handlers(it.uri, { it, type });
     const fav = !!heartType(this.config, type, it);
     const sub = this.sub(it, type);
+    const rf = resume ? resumeFraction(it) : 0;
     return html`<div class="row ir ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type=${type}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
-      ${artTpl(it, 'th')}
+      ${rf ? html`<div class="tw">${artTpl(it, 'th')}<span class="rp" role="progressbar" aria-label="Listened" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(rf * 100)}><i style="width:${(rf * 100).toFixed(1)}%"></i></span></div>` : artTpl(it, 'th')}
       <div class="rt"><b>${it.name}</b>${sub ? html`<small>${sub}</small>` : nothing}</div>
       ${provTpl(it.uri, it.provider, it.media_type ?? type)}
       ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type), 'mo fav') : nothing}
@@ -708,8 +773,13 @@ export class JbBrowse extends LitElement {
   }
   /** A genre tile (0.7.20, tiles layout): the glyph cover like the genre row's; a tap opens nothing, as on the row. */
   private genreTile(it: MaItem) {
-    return html`<div class="tile gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Open ${it.name}`} @click=${() => this.openDetail(it, 'genre')}>
+    // filters off (search_filters: false): a genre filters nothing, so the tile is plain text (no Filter pill, no button role or label)
+    if (!this.filtersOn()) return html`<div class="tile gen off" data-uri=${it.uri} data-type="genre">
       <div class="tw"><span class="ar big gl" aria-hidden="true">${icon('genre')}</span></div>
+      <b>${it.name}</b><small>Genre</small>
+    </div>`;
+    return html`<div class="tile gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Filter by genre ${it.name}`} @click=${() => this.genreTap(it)}>
+      <div class="tw"><span class="ar big gl" aria-hidden="true">${icon('genre')}</span><span class="gf" aria-hidden="true">Filter</span></div>
       <b>${it.name}</b><small>Genre</small>
     </div>`;
   }
@@ -742,17 +812,6 @@ export class JbBrowse extends LitElement {
   private row(it: MaItem, n?: number) {
     const p = this.press.handlers(it.uri, { it, type: 'track' });
     const fav = !!heartType(this.config, 'track', it);
-    const act = (a: RowAct | 'more', el: HTMLElement) => {
-      const ask = (k: RowAct) => {
-        this._menu = null;
-        if (k === 'next' || k === 'add') { void this.play(it, 'track', k); return; }
-        if (k === 'remove') { void this.removeRow(it, 'track'); return; }
-        this._confirm = { kind: k, item: it, run: () => this.play(it, 'track', 'replace', k === 'radio') };
-      };
-      if (a !== 'more') { ask(a); return; }
-      // 0.7.13 (issue #78): More opens the same pop-up as a hold on this row, not the old small menu
-      this.openMenu(it, 'track', el.closest('.row') as HTMLElement);
-    };
     return html`<div class="row ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type="track"
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
@@ -760,16 +819,26 @@ export class JbBrowse extends LitElement {
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b><small>${this.sub(it, 'track')}</small></div>
       ${provTpl(it.uri, it.provider)}<span class="du">${fmtDur(it.duration)}</span>
       ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, 'track'), 'mo fav') : nothing}
-      ${rowActsTpl(it, canRadio('track', it), act)}
     </div>`;
   }
 
-  /** A genre row (separate layout's Genres list). 0.7.11: the genre page is gone, so a tap opens nothing. */
+  /** #46 (Randy): tapping a genre filters the results by it (MA's genre filter). Embedded in the combined Library tab the search
+   *  view above applies it; the separate Library tab hands it to the Search tab. No genre page opens. */
+  private genreTap(it: MaItem) {
+    if (this.embedded) this.dispatchEvent(new CustomEvent('jb-lib-scope', { detail: { item: it, type: 'genre' } }));
+    else this.dispatchEvent(new CustomEvent('jukebox-nav', { detail: { tab: 'search', genre: it }, bubbles: true, composed: true }));
+  }
+  /** A genre row (separate layout's Genres list): a tap filters by that genre (#46). */
   private genreRow(it: MaItem) {
-    return html`<div class="row gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Open ${it.name}`}
-        @click=${() => this.openDetail(it, 'genre')}>
+    // filters off (search_filters: false): a plain row, as on the tile above
+    if (!this.filtersOn()) return html`<div class="row gen off" data-uri=${it.uri} data-type="genre">
       <span class="ar th gl" aria-hidden="true">${icon('genre')}</span>
-      <div class="rt"><b>${it.name}</b><small>Genre</small></div><span class="du"></span><span class="mo">${icon('open')}</span>
+      <div class="rt"><b>${it.name}</b><small>Genre</small></div>
+    </div>`;
+    return html`<div class="row gen" role="button" data-uri=${it.uri} data-type="genre" aria-label=${`Filter by genre ${it.name}`}
+        @click=${() => this.genreTap(it)}>
+      <span class="ar th gl" aria-hidden="true">${icon('genre')}</span>
+      <div class="rt"><b>${it.name}</b><small>Genre</small></div><span class="du"></span><span class="gf" aria-hidden="true">Filter</span>
     </div>`;
   }
   /** Radio "My stations": Favorites, then "More stations" (library stations that are not favourites); a hint when both are empty. */
@@ -884,149 +953,153 @@ export class JbBrowse extends LitElement {
 
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
-    .bx { position: relative; height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 14px var(--_pad) 12px; }
-    .bar { display: flex; gap: 8px; align-items: center; min-width: 0; }
+    .bx { position: relative; height: 100%; display: flex; flex-direction: column; gap: clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-3, 12px));
+      padding: clamp(var(--ha-space-2, 8px), 3cqi, var(--ha-space-4, 16px)) var(--_pad) clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-3, 12px)); }
+    /* #117: the category buttons keep a line of their own once they can't get ~20em next to Filter / Favorites / sort (flex wrap, no width rule) */
+    .bar { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); align-items: center; min-width: 0; }
     /* 0.7.2 combined Library tab: jb-search draws the padding, search box and category buttons */
-    :host([embedded]) .bx { padding: 0; gap: 10px; }
-    :host([embedded]) .bar .fc { height: 36px; padding: 0 13px; font-size: var(--ha-font-size-m, 14px); }
+    :host([embedded]) .bx { padding: 0; gap: var(--ha-space-2, 8px); }
+    :host([embedded]) .bar .fc { min-height: var(--_touch-min); padding: 0 var(--ha-space-3, 12px); font-size: var(--ha-font-size-m, 14px); }
     .bsp { flex: 1; }
-    .row.gen { grid-template-columns: 44px minmax(0, 1fr) auto 40px; cursor: pointer; }
-    .cats { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+    .row.gen { grid-template-columns: 44px minmax(0, 1fr) auto auto; cursor: pointer; }
+    /* search_filters: false: a genre does nothing when tapped, so its row or tile does not look tappable */
+    .row.gen.off, .tile.gen.off { cursor: default; }
+    /* #46: "Filter" says what a tap on a genre does (a labeled pill, no small icon) */
+    .gf { display: inline-flex; align-items: center; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; flex: none; }
+    .tile.gen .tw .gf { position: absolute; right: var(--ha-space-2, 8px); bottom: var(--ha-space-2, 8px); background: var(--ha-card-background, var(--card-background-color, var(--_bg))); }
+    .cats { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; flex: 1 1 20em; min-width: 0; }
     .cats::-webkit-scrollbar { display: none; }
-    .fc { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 42px; padding: 0 18px; border-radius: 999px; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
-      color: var(--_inactive); border: 1px solid var(--_surface-border); background: var(--_chip-bg); white-space: nowrap; }
+    .fc { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
+      color: var(--_inactive); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); white-space: nowrap; }
     .fc.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
-    .fc.tog { padding: 0 14px; font-size: var(--ha-font-size-m, 14px); }
+    .fc.tog { padding: 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); font-size: var(--ha-font-size-m, 14px); }
     /* v0.7 Library filters: chips (same as Search), the filter box and the on-screen keyboard under the grid */
-    .scope { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
-    .sc { display: inline-flex; align-items: center; gap: 6px; height: 44px; max-width: 100%; padding: 0 8px 0 16px; border-radius: 999px;
+    .scope { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-width: 0; flex-wrap: wrap; }
+    .sc { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); max-width: 100%; padding: 0 var(--ha-space-2, 8px) 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); border-radius: var(--ha-border-radius-pill, 9999px);
       background: var(--_chip-sel); color: var(--_fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); min-width: 0; }
     .sc .scl { opacity: .8; flex: none; }
     .sc b { font-weight: var(--ha-font-weight-bold, 700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-    .sc .scx { width: 28px; height: 28px; padding: 5px; border-radius: 50%; background: var(--_chip-bg); flex: none; }
-    .fc.clr { height: 44px; padding: 0 16px; font-size: var(--ha-font-size-m, 14px); color: var(--_fg); border-color: var(--_surface-border); }
-    .empty .fc.clr { margin-top: 14px; }
-    .lfq { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 8px 0 18px; border-radius: 16px; border: 1px solid var(--_surface-border);
-      background: var(--_input-bg); color: var(--_input-ink); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); min-width: 0; }
+    .sc .scx { width: 28px; height: 28px; padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-circle, 50%); background: var(--_chip-bg); flex: none; }
+    .fc.clr { min-height: var(--_touch-min); padding: 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); font-size: var(--ha-font-size-m, 14px); color: var(--_fg); border-color: var(--_surface-border); }
+    .empty .fc.clr { margin-top: var(--ha-space-4, 16px); }
+    .lfq { display: flex; align-items: center; gap: var(--ha-space-2, 8px); height: clamp(var(--_touch-min), 10cqi, 52px); padding: 0 var(--ha-space-2, 8px) 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-xl, 16px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
+      background: var(--_input-bg); color: var(--_input-ink); font-size: clamp(var(--ha-font-size-l, 16px), 3.5cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); min-width: 0; }
     .lfq .lfv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .lfq .lfv.ph { color: var(--_input-label); font-weight: var(--ha-font-weight-medium, 500); }
-    .lfq .caret { width: 2px; height: 26px; background: var(--_active); flex: none; margin-left: -8px; }
-    .lfq .lfx { margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--_inactive); flex: none; }
-    .kbd { flex: none; width: 100%; max-width: 1100px; align-self: center; }
-    .lsplit { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 18px; }
-    .lkcol { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+    .lfq .caret { width: 2px; height: 26px; background: var(--_active); flex: none; margin-left: calc(-1 * var(--ha-space-2, 8px)); }
+    .lfq .lfx { margin-left: auto; width: var(--_touch-min); height: var(--_touch-min); margin-right: calc(-1 * var(--ha-space-1, 4px)); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_inactive); flex: none; }
+    /* #117: the filter keyboard uses the same fluid key size as the search keyboard (48 px touch size up to 60 px on a wide card), with
+       the same height cap so a short card keeps room for the list */
+    .kbd { flex: none; width: 100%; max-width: 1100px; align-self: center;
+      --kh: clamp(var(--_touch-min), 12cqi, 60px); --kgap: clamp(var(--ha-space-1, 4px), 1.6cqi, var(--ha-space-2, 8px)); --_kh-room: max(28px, 15cqh - 42px); }
+    .lsplit { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--ha-space-4, 16px); }
+    .lkcol { display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); min-height: 0; }
     .lkcol .kbd { margin-top: auto; }
     .lsplit > .scroll { min-height: 0; }
     /* 0.7.12 fluid: Library split/compact filters follow the card middle (np) width via host, not the window. */
     @container np (max-width: 999px) {
-      .lsplit { display: flex; flex-direction: column; gap: 12px; }
+      .lsplit { display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); }
       .lkcol { display: contents; }
       .lkcol .lfq { order: 1; } .lkcol .scope { order: 2; } .lsplit > .scroll { order: 3; flex: 1; } .lkcol .kbd { order: 4; margin-top: 0; }
     }
+    /* #117 kept as a container query on the card's own width (a content choice, not sizes): on a narrow card the "matches the text" chip
+       is dropped while typing, since the box above already shows the text and two lines of chips would push the list down */
     @container np (max-width: 600px) {
-      .sc { height: 40px; font-size: var(--ha-font-size-m, 14px); padding-left: 13px; }
-      .fc.clr { height: 40px; padding: 0 13px; font-size: var(--ha-font-size-m, 14px); }
-      .fc.flt { padding: 0 12px; }
-      .fc.flt .fl { display: none; }
-      .lfq { height: 46px; font-size: var(--ha-font-size-l, 16px); }
       .scope.typing.textonly { display: none; }
       .scope.typing .sc[data-scope="text"] { display: none; }
     }
-    .scroll { flex: 1; min-height: 0; overflow-y: auto; container: np / inline-size; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
+    .scroll { flex: 1; min-height: 0; overflow-y: auto; container: np / inline-size; scrollbar-width: none; overscroll-behavior: contain; padding: clamp(var(--ha-space-2, 8px), 2cqi, var(--ha-space-4, 16px)); display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); touch-action: pan-y; }
     .scroll::-webkit-scrollbar { display: none; }
     /* the list sits directly on the HA card surface: no second fill */
     .scroll.panel { background: transparent; }
     /* v0.7 Library home */
-    .home { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
-    .lt { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 4px; min-height: 180px; padding: 22px 24px;
-      border-radius: 22px; border: 1px solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); text-align: left; cursor: pointer; }
+    .home { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, calc(50% - var(--ha-space-2, 8px))), 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)); }
+    .lt { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: var(--ha-space-1, 4px); min-height: clamp(132px, 30cqi, 180px); padding: clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-6, 24px));
+      border-radius: clamp(var(--ha-border-radius-xl, 16px), 4cqi, var(--ha-border-radius-3xl, 24px)); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_fg); text-align: left; cursor: pointer; }
     .lt:active { background: var(--_chip-sel); }
-    .lti { flex: 1; display: flex; align-items: flex-start; } .lti svg { width: 52px; height: 52px; fill: var(--_active); }
-    .ltl { font-family: var(--_font-display, inherit); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); }
+    .lti { flex: 1; display: flex; align-items: flex-start; } .lti svg { width: clamp(calc(var(--_icon) * 38 / 24), 9cqi, calc(var(--_icon) * 52 / 24)); height: clamp(calc(var(--_icon) * 38 / 24), 9cqi, calc(var(--_icon) * 52 / 24)); fill: var(--_active); }
+    .ltl { font-family: var(--_font-display, inherit); font-size: clamp(var(--ha-font-size-xl, 20px), 5cqi, var(--ha-font-size-3xl, 28px)); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); }
     .lts { font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); }
-    .lhead { align-items: center; gap: 14px; overflow: hidden; }
-    .lt-title { font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 18px 16px; }
-    .tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; border-radius: 12px; padding: 4px; cursor: pointer; }
-    .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 1.5px var(--_active); }
+    .lhead { align-items: center; gap: var(--ha-space-4, 16px); overflow: hidden; }
+    .lt-title { font-size: clamp(var(--ha-font-size-l, 16px), 3.5cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* #117: tiles never get narrower than two touch targets plus a gap (--_tile-min), so the two cover buttons (heart, open) fit side by side on the picture.
+       #146: the largest auto tile is three touch targets plus a small gap (was a fixed 150px) */
+    .grid { --_tmin: var(--_tile-min); display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(var(--_tmin), 28cqi, calc(3 * var(--_touch-min) + var(--_space-1-5))), 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
+    .tile { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; border-radius: var(--ha-border-radius-lg, 12px); padding: var(--ha-space-1, 4px); cursor: pointer; }
+    .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .tw { position: relative; }
-    .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: 10px; }
-    .big.circ { border-radius: 50%; }
-    .tw .pv { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); }
+    .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--ha-border-radius-md, 8px); }
+    .big.circ { border-radius: var(--ha-border-radius-circle, 50%); }
+    .tw .pv { position: absolute; left: clamp(5px, 1.5cqi, 8px); bottom: clamp(5px, 1.5cqi, 8px); max-width: calc(100% - 16px); }
     .tile.artist .tw .pv { left: 50%; transform: translateX(-50%); bottom: 2px; }
     /* Playlist artwork (including lettering near its lower edge) must not sit behind a provider badge. */
-    .tile[data-type="playlist"] .tw .pv { position: static; display: block; margin-top: 6px; max-width: 100%; }
+    .tile[data-type="playlist"] .tw .pv { position: static; display: block; margin-top: var(--ha-space-2, 8px); max-width: 100%; }
     .tile[data-type="playlist"] b { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
-    .tw .open { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    .tw .open { position: absolute; right: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); width: var(--_touch-min); height: var(--_touch-min); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg); }
-    .tw .open .i { width: 20px; height: 20px; }
-    .tw .tfav { position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    .tw .open .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
+    .tw .tfav { position: absolute; left: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); width: var(--_touch-min); height: var(--_touch-min); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_muted); }
     .tw .tfav.on { color: var(--_active); }
-    .tw .tfav .i { width: 20px; height: 20px; }
+    .tw .tfav .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
     .mo.fav.on { color: var(--_active); }
     .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto auto; }
-    .row .ra { flex: none; } .row .ra-b { flex-shrink: 0; }
-    .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
+    .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
     .tile.artist b { text-align: center; }
-    /* 0.7.20 Library tiles: library_columns fixed columns (2 to 6) instead of as many 150px ones as fit */
+    /* #146: Tiles across is exact (1-8). No auto-fill shrink. */
     .grid.lib { grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); }
     .row.ir { grid-template-columns: 44px minmax(0, 1fr); grid-auto-flow: column; grid-auto-columns: auto; }
     .tile small { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .list { display: flex; flex-direction: column; }
-    .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; min-height: 58px; padding: 0 4px; border-radius: 10px; cursor: pointer; }
-    .row + .row { border-top: 1px solid var(--_divider); }
-    .row.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 1.5px var(--_active); }
+    .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto auto; align-items: center; gap: var(--ha-space-3, 12px); min-height: 58px; padding: 0 var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-md, 8px); cursor: pointer; }
+    .row + .row { border-top: var(--ha-border-width-sm, 1px) solid var(--_divider); }
+    .row.held { background: var(--_chip-sel); box-shadow: inset 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
     .row .n { text-align: center; color: var(--_inactive); font-size: var(--ha-font-size-m, 14px); font-variant-numeric: tabular-nums; }
     .rt { min-width: 0; display: flex; flex-direction: column; }
     .rt b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .rt .ver { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .rt small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .du { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); text-align: right; font-variant-numeric: tabular-nums; }
-    .mo { width: 40px; height: 40px; display: grid; place-items: center; color: var(--_inactive); }
+    .mo { width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; color: var(--_inactive); }
     .dv { flex: 1; min-height: 0; }
-    .sec { display: flex; align-items: center; gap: 6px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .08em; text-transform: uppercase; color: var(--_muted); margin: 2px 0 -4px; }
-    .sec .i { width: 14px; height: 14px; color: var(--_active); }
-    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--_divider); }
+    .sec { display: flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .08em; text-transform: uppercase; color: var(--_muted); margin: 2px 0 calc(-1 * var(--ha-space-1, 4px)); }
+    .sec .i { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); color: var(--_active); }
+    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-md, 8px); border: var(--ha-border-width-sm, 1px) dashed var(--_divider); }
     /* v0.7 radio "Stations by…" */
-    .modes { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-top: -4px; }
+    .modes { display: flex; gap: var(--ha-space-2, 8px); overflow-x: auto; scrollbar-width: none; margin-top: calc(-1 * var(--ha-space-1, 4px)); }
     .modes::-webkit-scrollbar { display: none; }
-    .fc.sm { height: 36px; padding: 0 14px; font-size: var(--ha-font-size-m, 14px); }
-    .rbh { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .rbt { font-family: var(--_font-display); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-    .tagc { display: flex; flex-wrap: wrap; gap: 8px; }
+    .fc.sm { min-height: var(--_touch-min); padding: 0 clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); font-size: var(--ha-font-size-m, 14px); }
+    .rbh { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-width: 0; }
+    .rbt { font-family: var(--_font-display); font-size: clamp(var(--ha-font-size-l, 16px), 4cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .tagc { display: flex; flex-wrap: wrap; gap: var(--ha-space-2, 8px); }
     .row.fold { grid-template-columns: 44px minmax(0, 1fr) auto auto; }
     .ar.gl { display: grid; place-items: center; background: var(--_chip-bg); color: var(--_muted); } .ar.gl .i { width: 60%; height: 60%; }
-    .empty .fc { margin-top: 8px; }
+    .empty .fc { margin-top: var(--ha-space-2, 8px); }
     /* v0.7 Discover */
-    .disc { display: flex; flex-direction: column; gap: 22px; }
-    .drow { display: flex; flex-direction: column; gap: 8px; min-height: 120px; content-visibility: auto; contain-intrinsic-size: auto 260px; }
+    .disc { display: flex; flex-direction: column; gap: clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-6, 24px)); }
+    .drow { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); min-height: 120px; content-visibility: auto; contain-intrinsic-size: auto 260px; }
     .drow h3 { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); }
-    .hs { display: grid; grid-auto-flow: column; grid-auto-columns: 168px; gap: 16px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
+    .hs { display: grid; grid-auto-flow: column; grid-auto-columns: clamp(var(--_tmin, var(--_tile-min)), 30cqi, calc(3.5 * var(--_touch-min))); gap: clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
       scroll-snap-type: x proximity; touch-action: pan-x pan-y; padding-bottom: 2px; }
     .hs::-webkit-scrollbar { display: none; }
     .hs .tile { scroll-snap-align: start; }
-    .hs.skel .ar { background: var(--_chip-bg) !important; } .hs.skel b { background: var(--_chip-bg); border-radius: 6px; width: 70%; }
-    .rowerr { display: flex; align-items: center; gap: 10px; } .rowerr .fc { height: 34px; }
-    .rp { position: absolute; left: 8px; right: 8px; bottom: 6px; height: 4px; border-radius: 2px; background: var(--_chip-sel); overflow: hidden; }
-    .rp i { display: block; height: 100%; background: var(--_active); }
+    .hs.skel .ar { background: var(--_chip-bg) !important; } .hs.skel b { background: var(--_chip-bg); border-radius: var(--ha-border-radius-md, 8px); width: 70%; }
+    .rowerr { display: flex; align-items: center; gap: var(--ha-space-2, 8px); } .rowerr .fc { min-height: var(--_touch-min); }
+    /* 0.9.1: Continue listening progress readable on any artwork: the theme colour fill on a card-surface track with a card-surface rim and a hairline, sizes from theme spacing */
+    .rp { position: absolute; left: var(--ha-space-1, 4px); right: var(--ha-space-1, 4px); bottom: var(--ha-space-1, 4px); height: var(--ha-space-2, 8px); box-sizing: border-box;
+      border-radius: var(--ha-border-radius-pill, 9999px); background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
+      border: var(--ha-border-width-md, 2px) solid var(--ha-card-background, var(--card-background-color, var(--_bg))); box-shadow: 0 0 0 var(--ha-border-width-sm, 1px) var(--_surface-border); overflow: hidden; }
+    .rp i { display: block; height: 100%; border-radius: inherit; background: var(--_active); }
+    .tw:has(.rp) .pv { bottom: calc(2 * var(--ha-space-1, 4px) + var(--ha-space-2, 8px)); } /* the source badge sits just above the progress bar */
+    /* #117 kept as a container query on the card's own width (a content choice): a narrow row drops its provider badge and
+       uses 40px art so the title keeps its room; every size above it is fluid */
     @container np (max-width: 520px) {
-      .hs { grid-auto-columns: 112px; gap: 10px; } .drow { contain-intrinsic-size: auto 190px; } .disc { gap: 16px; }
-      .fc.sm { height: 32px; padding: 0 11px; font-size: var(--ha-font-size-m, 14px); } .rbt { font-size: var(--ha-font-size-l, 16px); }
-    }
-    @container np (max-width: 520px) {
-      .bx { padding: 10px 12px 8px; gap: 10px; }
-      .bar { flex-wrap: wrap; } .cats { flex-basis: 100%; order: 0; } .fc { height: 36px; padding: 0 13px; font-size: var(--ha-font-size-m, 14px); }
-      .scroll { padding: 10px; }
-      .grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px 10px; }
-      .home { grid-template-columns: 1fr 1fr; gap: 12px; } .lt { min-height: 132px; padding: 16px; border-radius: 18px; }
-      .lti svg { width: 38px; height: 38px; } .ltl { font-size: var(--ha-font-size-xl, 20px); } .lts { font-size: var(--ha-font-size-m, 14px); } .lt-title { font-size: var(--ha-font-size-l, 16px); }
-      .tw .pv { font-size: var(--ha-font-size-xs, 10px); left: 5px; bottom: 5px; }
-      .row { grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: 8px; } .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto auto; } .row .pv { display: none; } .row .du { font-size: var(--ha-font-size-s, 12px); } .th { width: 40px; height: 40px; }
+      .row { grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: var(--ha-space-2, 8px); } .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto auto; } .row .pv { display: none; } .row .du { font-size: var(--ha-font-size-s, 12px); } .th { width: 40px; height: 40px; }
     }
   `];
 }

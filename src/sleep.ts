@@ -1,24 +1,64 @@
 /**
  * Now Playing sleep timer helpers.
- * Prefer Music Assistant's server-side players/sleep_timer/{get,set,clear} through be.send
- * (survives the kiosk screen sleeping). Fall back to a card-side timer that pauses via media_player.
+ * MA players/sleep_timer/{get,set,clear} through jukebox_kiosk, with the entity's
+ * MA player id (the same id MA's app sends). Updates come from player_sleep_timer_updated.
  */
-import type { HomeAssistant } from './types';
+import type { MaBackend } from './backend/types';
 
-/** Chooser durations in minutes (Off is 0). */
-export const SLEEP_MINUTES = [15, 30, 60] as const;
+/** Chooser durations in minutes (Off is 0). MA's five presets. */
+export const SLEEP_MINUTES = [15, 30, 45, 60, 120] as const;
 export type SleepMinutes = 0 | (typeof SLEEP_MINUTES)[number];
+/** MA frontend en.json `sleep_timer_preset` (2.17.297.post3 and 2.17.370). */
+export const SLEEP_LABEL: Record<(typeof SLEEP_MINUTES)[number], string> = {
+  15: '15 minutes',
+  30: '30 minutes',
+  45: '45 minutes',
+  60: '1 hour',
+  120: '2 hours',
+};
 
-/** Remaining seconds → "M:SS" (tabular). */
-export function fmtSleepRemain(secs: number): string {
-  const s = Math.max(0, Math.floor(secs));
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, '0')}`;
+/** MA `SleepTimerMode` (server 2.11 / frontend 2.17.370). */
+export type SleepTimerMode = 'duration' | 'end_of_item' | 'end_of_chapter';
+
+export const isEndOfContentMode = (mode?: string | null): mode is 'end_of_item' | 'end_of_chapter' =>
+  mode === 'end_of_item' || mode === 'end_of_chapter';
+
+/** MA `sleepTimerActive` (`sleep_timer.ts:64-68`): end-of-item/chapter is on even with no expiry. */
+export function sleepIsActive(expiresAt: number | null | undefined, mode?: string | null, nowSec = Date.now() / 1000): boolean {
+  if (isEndOfContentMode(mode)) return true;
+  return remainFromExpires(expiresAt, nowSec) > 0;
 }
 
-/** Countdown chip text, e.g. "Sleep 29:41". */
+/** MA `endOfContentLabel` + en.json `sleep_timer_end_of_item.*` / `sleep_timer_end_of_chapter`. */
+export function sleepModeLabel(mode?: string | null, mediaType?: string): string | undefined {
+  if (mode === 'end_of_chapter') return 'End of chapter';
+  if (mode !== 'end_of_item') return undefined;
+  const t = String(mediaType ?? '').toLowerCase();
+  if (t === 'track') return 'End of track';
+  if (t === 'podcast_episode') return 'End of episode';
+  if (t === 'audiobook') return 'End of audiobook';
+  return 'End of current item';
+}
+
+export function parseSleepMode(raw: unknown): SleepTimerMode | undefined {
+  if (raw && typeof raw === 'object' && 'mode' in (raw as object)) {
+    const m = (raw as { mode: unknown }).mode;
+    if (m === 'duration' || m === 'end_of_item' || m === 'end_of_chapter') return m;
+  }
+  return undefined;
+}
+
+/** Remaining seconds → Music Assistant's formatDuration: "MM:SS" under an hour, "HH:MM:SS" from an hour, every part zero-padded (45:00, 01:59:59). */
+export function fmtSleepRemain(secs: number): string {
+  const s = Math.max(0, Math.floor(secs));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  return h ? `${p2(h)}:${p2(m)}:${p2(ss)}` : `${p2(m)}:${p2(ss)}`;
+}
+
+/** Countdown chip text: just the time beside the moon icon, as MA's indicator, e.g. "29:41". */
 export function sleepLabel(secs: number): string {
-  return `Sleep ${fmtSleepRemain(secs)}`;
+  return fmtSleepRemain(secs);
 }
 
 /** Seconds left until a unix (UTC) expiry timestamp; 0 when unset or past. */
@@ -27,25 +67,19 @@ export function remainFromExpires(expiresAt: number | null | undefined, nowSec =
   return Math.max(0, expiresAt - nowSec);
 }
 
-/**
- * HA media_player entity → MA player_id for sleep_timer commands.
- * Prefer active_queue (the live group/queue id), else mass_player_id.
- */
-export function sleepPlayerId(entity: string, hass: HomeAssistant | undefined): string | undefined {
-  const a = hass?.states[entity]?.attributes ?? {};
-  if (typeof a.active_queue === 'string' && a.active_queue) return a.active_queue;
-  if (typeof a.mass_player_id === 'string' && a.mass_player_id) return a.mass_player_id;
-  return undefined;
-}
-
-/** True when the backend can forward MA sleep_timer commands. */
-export function canMaSleep(be: { caps?: { send?: boolean } } | undefined | null): boolean {
-  return !!be?.caps?.send;
+/** True when the backend exposes the kiosk sleep-timer commands. */
+export function canMaSleep(be: Pick<MaBackend, 'sleepTimerSet'> | { sleepTimerSet?: unknown } | undefined | null): boolean {
+  return typeof be?.sleepTimerSet === 'function';
 }
 
 /** Parse MA get/set response into a unix expiry, or null when cleared / unknown. */
 export function parseExpires(raw: unknown): number | null {
   if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) return raw;
+  if (raw && typeof raw === 'object' && 'expires_at' in (raw as object)) {
+    const v = (raw as { expires_at: unknown }).expires_at;
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
+    return null;
+  }
   if (raw && typeof raw === 'object' && typeof (raw as any).sleep_timer_expires_at === 'number') {
     const v = (raw as any).sleep_timer_expires_at;
     return Number.isFinite(v) && v > 0 ? v : null;

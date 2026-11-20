@@ -1,6 +1,6 @@
-// 0.7.13: Library search result buttons (Add to queue, Play Next, Play Now, Start radio) fire on a normal touch tap or mouse click,
-// with a query typed on the on-screen keyboard and that keyboard still open. Play Now and Start radio still ask first. A swipe that starts on a
-// button scrolls the list and fires nothing. Queue search buttons still fire on a tap. Pressing and holding the row itself still opens the pop-up.
+// #85: Library search rows have no inline buttons. A tap or click on a result row, with a query typed on the on-screen keyboard and that keyboard still
+// open, opens the item's pop-up; its actions work (Play Now and Start radio still ask first). A swipe that starts on a row scrolls the list and
+// opens nothing. Queue search result rows have no buttons; a tap or click opens the pop-up and Play Next there still fires, with the keyboard still open. Pressing and holding the row opens the same pop-up.
 // Viewport 1024x600 only. Usage: node test/search-tap.e2e.mjs (starts its own dev server)
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -45,54 +45,56 @@ async function openLibrary() {
   const kb = `${SV}.querySelector('jb-keyboard')`;
   const qb = await center(p, `${SV}.querySelector('.qbar')`); await p.touchscreen.tap(qb.x, qb.y); await sleep(300);
   await typeOnScreen(p, kb, 'EAGLES');
-  await p.waitForFunction((s) => !!eval(s).querySelector('.row .ra-b[data-act="add"]'), {}, SV);
+  await p.waitForFunction((s) => !!eval(s).querySelector('.row'), {}, SV);
   await ev(p, `[...${SV}.querySelectorAll('button')].find((x) => /^\\s*tracks\\s*$/i.test(x.textContent))?.click()`); await sleep(600);
-  await p.waitForFunction((s) => !!eval(s).querySelector('.row[data-type="track"] .ra-b[data-act="radio"]'), {}, SV);
+  await p.waitForFunction((s) => !!eval(s).querySelector('.row[data-type="track"]'), {}, SV);
   return { p, kb };
 }
 const row = `${SV}.querySelector('.row[data-type="track"]')`;
-const btn = (a) => `${row}.querySelector('.ra-b[data-act="${a}"]')`;
 const confirmOpen = (p) => ev(p, `!!${SV}.querySelector('.confirm')`);
 const confirmBtn = `${SV}.querySelector('.confirm [data-action="confirm"]')`;
 
-// ---- every Library search button: touch tap and mouse click, keyboard open ----
+// ---- Library search rows have no buttons; a tap or click on a row opens its pop-up, whose actions work (Play Now and Start radio still ask first) ----
+const sheetItem = (a) => `${HS}.querySelector('.it[data-action="${a}"]')`;
+const opens = async (p, kind) => { await hit(p, kind, `${row}.querySelector('.rt')`); await sleep(300); };
 for (const kind of ['touch', 'mouse']) {
-  const tag = (a) => `1024x600 Library search, keyboard open, ${kind === 'touch' ? 'tap' : 'click'} on ${a}`;
+  const tag = (a) => `1024x600 Library search, keyboard open, ${kind === 'touch' ? 'tap' : 'click'} on the row, pop-up ${a}`;
   const { p, kb } = await openLibrary();
   check(`1024x600 Library search (${kind}): a query is typed and the on-screen keyboard is open`, (await kbOpen(p, kb)) && (await ev(p, `${SV}.querySelectorAll('.row').length`)) > 0);
-  check(`1024x600 Library search (${kind}): a row has Add to queue, Play Next, Play Now and Start radio buttons`, J(await ev(p, `[...${row}.querySelectorAll('.ra-b')].map((b) => b.dataset.act)`)) === '["add","next","replace","radio"]');
-  await clear(p); await hit(p, kind, btn('add'));
+  check(`1024x600 Library search (${kind}): a row has no play or queue buttons`, (await ev(p, `${row}.querySelectorAll('.ra-b').length`)) === 0);
+  await clear(p); await opens(p, kind);
+  check(`1024x600 Library search (${kind}): the row opens its pop-up and plays nothing`, (await ev(p, `!!${HS}.querySelector('.sh')`)) && J(await calls(p)) === '[]', J(await calls(p)));
+  await shot(p, `search-${kind}-popup-keyboard-open`);
+  await hit(p, kind, sheetItem('add')); await sleep(250);
   check(`${tag('Add to queue')}: enqueues add right away`, J(await calls(p)) === '["add"]', J(await calls(p)));
-  await shot(p, `search-${kind}-add-keyboard-open`);
-  await clear(p); await hit(p, kind, btn('next'));
-  check(`${tag('Play Next')}: enqueues next right away`, J(await calls(p)) === '["next"]', J(await calls(p)));
-  await clear(p); await hit(p, kind, btn('replace'));
-  check(`${tag('Play Now')}: asks first and plays nothing yet`, (await confirmOpen(p)) && J(await calls(p)) === '[]', J({ c: await confirmOpen(p), calls: await calls(p) }));
+  await clear(p); await opens(p, kind); await hit(p, kind, sheetItem('next')); await sleep(250);
+  check(`${tag('Play next')}: enqueues next right away`, J(await calls(p)) === '["next"]', J(await calls(p)));
+  await clear(p); await opens(p, kind); await hit(p, kind, sheetItem('replace')); await sleep(250);
+  check(`${tag('Play now')}: asks first and plays nothing yet`, (await confirmOpen(p)) && J(await calls(p)) === '[]', J({ c: await confirmOpen(p), calls: await calls(p) }));
   await shot(p, `search-${kind}-playnow-confirm`);
   await hit(p, kind, confirmBtn);
-  check(`${tag('Play Now')}: confirming replaces the queue`, !(await confirmOpen(p)) && J(await calls(p)) === '["replace"]', J(await calls(p)));
-  await clear(p); await hit(p, kind, btn('radio'));
+  check(`${tag('Play now')}: confirming replaces the queue`, !(await confirmOpen(p)) && J(await calls(p)) === '["replace"]', J(await calls(p)));
+  await clear(p); await opens(p, kind); await hit(p, kind, sheetItem('radio')); await sleep(250);
   check(`${tag('Start radio')}: asks first and starts nothing yet`, (await confirmOpen(p)) && J(await calls(p)) === '[]', J({ c: await confirmOpen(p), calls: await calls(p) }));
   await hit(p, kind, confirmBtn);
   check(`${tag('Start radio')}: confirming starts the radio`, !(await confirmOpen(p)) && J(await calls(p)) === '["replace:radio"]', J(await calls(p)));
-  // cancelling a confirm plays nothing
-  await clear(p); await hit(p, kind, btn('replace'));
+  await clear(p); await opens(p, kind); await hit(p, kind, sheetItem('replace')); await sleep(250);
   await hit(p, kind, `${SV}.querySelector('.confirm [data-action="cancel"], .confirm .cancel')`);
-  check(`${tag('Play Now')}: cancelling the confirm plays nothing`, !(await confirmOpen(p)) && J(await calls(p)) === '[]', J(await calls(p)));
-  check(`1024x600 Library search (${kind}): no hold pop-up opened by any button press`, !(await ev(p, `!!${HS}.querySelector('.sh')`)));
+  check(`${tag('Play now')}: cancelling the confirm plays nothing`, !(await confirmOpen(p)) && J(await calls(p)) === '[]', J(await calls(p)));
   await p.close();
 }
 
-// ---- physical keyboard: Enter / Space on a focused-less button still works (a click with detail 0) ----
+// ---- physical keyboard: Esc closes a row's pop-up and plays nothing ----
 {
   const { p } = await openLibrary();
-  await clear(p);
-  await ev(p, `${btn('add')}.click()`); await sleep(200);
-  check('1024x600 Library search: a keyboard-style activation (click with no pointer) on Add to queue still enqueues add', J(await calls(p)) === '["add"]', J(await calls(p)));
+  await clear(p); await opens(p, 'mouse');
+  const was = await ev(p, `!!${HS}.querySelector('.sh')`);
+  await p.keyboard.press('Escape'); await sleep(400);
+  check('1024x600 Library search: physical Esc closes the row pop-up, nothing played', was && !(await ev(p, `!!${HS}.querySelector('.sh')`)) && J(await calls(p)) === '[]', J(await calls(p)));
   await p.close();
 }
 
-// ---- row press-and-hold still opens the pop-up; a button press does not ----
+// ---- row press-and-hold opens the same pop-up ----
 for (const kind of ['touch', 'mouse']) {
   const { p } = await openLibrary();
   await clear(p);
@@ -106,26 +108,24 @@ for (const kind of ['touch', 'mouse']) {
   await p.close();
 }
 
-// ---- a swipe that starts on a button scrolls and fires nothing ----
+// ---- a swipe that starts on a row scrolls the list and opens or fires nothing ----
 {
   const { p } = await openLibrary();
   const sc = `(() => { for (let a = ${row}; a; a = a.parentElement || a.getRootNode().host) if (a.scrollHeight > a.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(a).overflowY)) return a; })()`;
   const long = await ev(p, `(() => { const s = ${sc}; return s ? s.scrollHeight - s.clientHeight : 0; })()`);
   check('1024x600 Library search: the Tracks list is long enough to scroll with the keyboard open', long > 40, String(long));
-  for (const a of ['add', 'next', 'replace', 'radio']) {
-    await ev(p, `{ const s = ${sc}; s.scrollTop = 0; }`); await sleep(200); await clear(p);
-    const b = await center(p, btn(a));
-    const t0 = await ev(p, `${sc}.scrollTop`);
-    await p.touchscreen.touchStart(b.x, b.y);
-    for (let i = 1; i <= 12; i++) { await p.touchscreen.touchMove(b.x, b.y - i * 12); await sleep(20); }
-    await p.touchscreen.touchEnd(); await sleep(500);
-    const t1 = await ev(p, `${sc}.scrollTop`);
-    check(`1024x600 Library search: a swipe starting on ${a} scrolls the list and fires nothing`, t1 > t0 + 20 && J(await calls(p)) === '[]' && !(await confirmOpen(p)), J({ t0, t1, calls: await calls(p), confirm: await confirmOpen(p) }));
-  }
+  await ev(p, `{ const s = ${sc}; s.scrollTop = 0; }`); await sleep(200); await clear(p);
+  const b = await center(p, `${row}.querySelector('.rt')`);
+  const t0 = await ev(p, `${sc}.scrollTop`);
+  await p.touchscreen.touchStart(b.x, b.y);
+  for (let i = 1; i <= 12; i++) { await p.touchscreen.touchMove(b.x, b.y - i * 12); await sleep(20); }
+  await p.touchscreen.touchEnd(); await sleep(500);
+  const t1 = await ev(p, `${sc}.scrollTop`);
+  check('1024x600 Library search: a swipe starting on a row scrolls the list, opens no pop-up and fires nothing', t1 > t0 + 20 && J(await calls(p)) === '[]' && !(await confirmOpen(p)) && !(await ev(p, `!!${HS}.querySelector('.sh')`)), J({ t0, t1, calls: await calls(p) }));
   await p.close();
 }
 
-// ---- Queue search: a tap on a result's button still fires ----
+// ---- Queue search: a tap or click on a result opens the pop-up; Play Next in the pop-up still fires, keyboard stays open ----
 {
   const p = await browser.newPage(); await hermetic(p);
   await p.setViewport({ width: 1024, height: 600, deviceScaleFactor: 1, hasTouch: true });
@@ -136,12 +136,16 @@ for (const kind of ['touch', 'mouse']) {
   await typeOnScreen(p, kb, 'E');
   await p.waitForFunction((e) => eval(e).querySelectorAll('.qr.sr').length > 0, {}, QV);
   check('1024x600 Queue search: a query is typed and the on-screen keyboard is open', await kbOpen(p, kb));
-  const qrow = `[...${QV}.querySelectorAll('.qr.sr.next:not(.buf)')].find((r) => !r.querySelector('[data-action=playnext]').disabled && !r.querySelector('[data-action=playnow]').disabled)`;
-  await clear(p); await hit(p, 'touch', `${qrow}.querySelector('[data-action="playnext"]')`);
-  check('1024x600 Queue search: a tap on Play Next fires it', (await qws(p)).length === 1 && J(await calls(p)) === '[]', J({ ws: await qws(p), calls: await calls(p) }));
+  const qrow = `([...${QV}.querySelectorAll('.qr.sr.next:not(.buf)')][1] || [...${QV}.querySelectorAll('.qr.sr.next:not(.buf)')][0])`;
+  check('1024x600 Queue search: result rows have no play or queue buttons', (await ev(p, `${qrow} && ${qrow}.querySelectorAll('.ra-b, .qa, .acts').length`)) === 0);
+  await clear(p); await hit(p, 'touch', `${qrow}.querySelector('.rt')`); await sleep(250);
+  check('1024x600 Queue search, keyboard open, touch: the pop-up opens', !!(await ev(p, `${HS}.querySelector('.sh')`)));
+  await hit(p, 'touch', `${HS}.querySelector('.it[data-action="next"]')`); await sleep(300);
+  check('1024x600 Queue search: a tap on Play Next in the pop-up fires it', (await qws(p)).length === 1 && J(await calls(p)) === '[]', J({ ws: await qws(p), calls: await calls(p) }));
   await shot(p, 'queue-search-tap-keyboard-open');
-  await clear(p); await hit(p, 'mouse', `${qrow}.querySelector('[data-action="playnext"]')`);
-  check('1024x600 Queue search: a mouse click on Play Next fires it', (await qws(p)).length === 1, J(await qws(p)));
+  await clear(p); await hit(p, 'mouse', `${qrow}.querySelector('.rt')`); await sleep(250);
+  await hit(p, 'mouse', `${HS}.querySelector('.it[data-action="next"]')`); await sleep(300);
+  check('1024x600 Queue search: a mouse click on Play Next in the pop-up fires it', (await qws(p)).length === 1, J(await qws(p)));
   await p.close();
 }
 

@@ -21,7 +21,7 @@
 // Speakers (0.5.0): dev/mock-ma.js adds media_player.indoor / media_player.outdoor (dynamic MA groups, each with its own queue)
 // and the players/*, player_queues/* and config/players/* MA commands (logged in __maLog; writes also in __calls). See mock-ma.js for params.
 // admin=1 (the user is an admin), user=<name>, uid=<user id>. nolib=1: get_library is refused (a guest without library reads).
-// jjgrey=1: the v0.7 search-filters artist (JJ Grey, library + Apple Music, one duplicate track) and look-alikes.
+// jjgrey=1: the v0.7 search-filters artist (JJ Grey, library + Apple Music, one duplicate track) and look-alikes. jjmany=N: N more library albums and tracks by JJ Grey (needs jjgrey=1).
 // HA media_player.join / unjoin throw (their ids don't match MA's speakers; the card must use MA set_members).
 
 import { createMa } from './mock-ma.js';
@@ -214,6 +214,13 @@ if (params.get('jjgrey') === '1') {
     track('Low Tide Lantern', J, 'Porch Light', 245, 'apple_music'), track('Gulf Wind', J, 'Gulf Coast Sessions', 265, 'apple_music'),
     track('Pelican Run', J, 'Gulf Coast Sessions', 233, 'apple_music'), track('Lantern on the Levee', J, 'Gulf Coast Sessions', 280, 'apple_music'),
     track('Porch Light Blues', 'Grey Harbor', 'Porch Light Blues', 240, 'apple_music'), track('Lantern', 'Lantern Choir', 'Evensong', 190));
+  // jjmany=N: N more library albums and N more library tracks by this artist (names contain "JJ Grey", the mock's name search), to test paging past 100
+  const many = Number(params.get('jjmany') ?? 0);
+  for (let i = 1; i <= many; i++) {
+    const n = String(i).padStart(3, '0');
+    CATALOG.albums.push(album(`JJ Grey Bulk Album ${n}`, J, 'library', true));
+    CATALOG.tracks.push(track(`JJ Grey Bulk Song ${n}`, J, 'Porch Light', 200 + (i % 60)));
+  }
   // the Apple Music-only items are not in the library: get_library leaves them out (search and the artist page still list them)
   for (const k of ['artists', 'albums', 'tracks']) for (const it of CATALOG[k]) if (it.uri.startsWith('apple_music://')) it._nolib = true;
 }

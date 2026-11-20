@@ -11,10 +11,11 @@ export interface ServiceCallResponse<T = any> {
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
   user?: { id?: string; name?: string; is_admin?: boolean };
-  locale?: { language?: string };
+  /** the user's profile: language, 12/24-hour setting ('language' | 'system' | '12' | '24'), time zone ('local' | 'server') */
+  locale?: { language?: string; time_format?: string; time_zone?: string; date_format?: string };
   language?: string;
   /** loaded integrations (backend: auto looks for jukebox_kiosk) */
-  config?: { components?: string[]; country?: string | null; language?: string };
+  config?: { components?: string[]; country?: string | null; language?: string; time_zone?: string };
   /** entity registry display entries (every user can read them) */
   entities?: Record<string, { entity_id?: string; device_id?: string | null; platform?: string; translation_key?: string | null }>;
   callWS?<T = any>(msg: Record<string, unknown>): Promise<T>;
@@ -82,12 +83,9 @@ export interface JukeboxCardConfig {
   browse_limit?: number;
   /** Upcoming queue items fetched. Default 200. */
   queue_limit?: number;
-  accent?: 'mono' | 'fixed' | 'art';
   /** Results per media type from 2 characters. 1-character queries always use 5. */
   limit?: number;
   default_tab?: TabId;
-  /** Base URL for the bundled fonts, or false to use system fonts. */
-  font_base?: string | false;
   /** Card height. Default 100dvh (panel view). */
   height?: string;
   /** UI scale. 'auto' (default) zooms the whole card up on big screens (1920x1080 → 1.35) so it isn't sparse; a number forces it; 1 disables. */
@@ -144,10 +142,11 @@ export interface JukeboxCardConfig {
   library_tiles?: Array<LibraryTileId | { tile: LibraryTileId; label?: string }>;
   /** The Library tab's name (default "Library"). */
   library_label?: string;
-  /** 0.7.20: how the top level of every Library section (Playlists, Artists, Tracks, Genres, Radio, Albums, Podcasts, Audiobooks) is drawn:
-   *  'rows' (default) or 'tiles'. Pages you open (artist, album, playlist), Library search results and the Queue are not affected. */
+  /** Legacy 0.7.20 all-sections rows/tiles. Left in saved configs and still read at runtime for Library tops only; not copied into `library_views`. */
   library_view?: 'rows' | 'tiles';
-  /** 0.7.20: columns of tiles when `library_view: tiles`. 2 to 6, default 3 (anything else is clamped; not a number = 3). Ignored for rows. */
+  /** #146: rows or tiles per section (Playlists, Artists, Tracks, Genres, Radio, Albums, Podcasts, Audiobooks, Queue, Discover, artist/album/playlist pages, search results). */
+  library_views?: Partial<Record<string, 'rows' | 'tiles'>>;
+  /** Tiles across the whole card, 1 to 8 (default 3). The card shows exactly that many. Kept when migrating from 0.7.20 (then 2 to 6). */
   library_columns?: number;
   /** Clock and title */
   title?: string;
@@ -161,14 +160,10 @@ export interface JukeboxCardConfig {
   grouping_users?: string[];
   /** What everyone else may do in the Speakers panel: volume (default) or none (read only). */
   guest_access?: 'volume' | 'none';
-  /** Dropping the leader of a playing group: block (default) or allow (MA hands off; WiiM restarts the group after a gap). */
+  /** Dropping the leader of a playing group: block (default) or allow (MA hands off; some players restart the group after a gap). */
   leader_drop?: 'allow' | 'block'; // default 'allow' (0.6.3)
   /** 0.6.4: true brings back the centred confirm dialogs for drop / last room / takeovers. Default false: status chip only. */
   confirm_drop?: boolean;
-  /** 0.6.5: a player that reports repeat 'one' is shown as 'all' and gets one repeat_set 'all' (needs Playback). Default true. */
-  coerce_repeat_one?: boolean;
-  /** 0.7.14 (#80): false hides the row action buttons (Add to queue, Play Next, Play Now, Remove, Start radio, More, the Queue row buttons) on every list row. 0.7.20: the default is now false (off) and the card setup screen no longer shows the switch; `true` in YAML still shows them. Taps and holds still open the pop-ups. */
-  show_action_icons?: boolean;
   /** @internal the Music Assistant config entry the card uses (what the integration reports, else an admin lookup) */
   _maEntry?: string;
   /** @internal the card's Music Assistant backend (set by the card, shared with every view) */

@@ -4,7 +4,7 @@ import { defineElement } from './define';
 import { CATEGORIES, DEFAULT_CATEGORIES } from './search-categories';
 import { LIBRARY_ROWS, DEFAULT_ROWS, rowName } from './discover';
 import { RADIO_MODES, MODE_LABEL } from './radio-browse';
-import { TILES, configuredTiles, LIBRARY_CATS, DEFAULT_LIBRARY_CATEGORIES, libraryCategories, libraryTabLabel, combinedOn, DEFAULT_LIBRARY_VIEW, DEFAULT_LIBRARY_COLUMNS, LIBRARY_COLUMNS_MIN, LIBRARY_COLUMNS_MAX } from './library-home';
+import { TILES, configuredTiles, LIBRARY_CATS, DEFAULT_LIBRARY_CATEGORIES, libraryCategories, libraryTabLabel, combinedOn, DEFAULT_LIBRARY_COLUMNS, LIBRARY_COLUMNS_MIN, LIBRARY_COLUMNS_MAX, EDITOR_VIEW_SECTIONS, editorViewValue, collectLibraryViews } from './library-home';
 
 /**
  * Visual editor built on HA's <ha-form>. YAML remains the reference (see README).
@@ -48,19 +48,21 @@ export function startTabOptions(c: Partial<JukeboxCardConfig> = {}) {
   ];
 }
 const sel = (options: Array<{ value: string; label: string }>) => ({ select: { options, mode: 'dropdown' } });
+/** HA's entity picker limited to Music Assistant players: the same rule as ma-player.ts (entity registry platform
+ *  music_assistant); HA's selector `integration` filter checks exactly that (frontend src/data/selector.ts filterSelectorEntities). */
+const maPlayers = (multiple = false) => ({ entity: { filter: { domain: 'media_player', integration: 'music_assistant' }, ...(multiple ? { multiple: true } : {}) } });
 
 export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
   const choose = c.speaker_mode === 'dynamic';
   return [
-    { name: 'entity', selector: { entity: { domain: 'media_player' } } },
-    { name: 'rooms', selector: { entity: { domain: 'media_player', multiple: true } } },
+    { name: 'entity', selector: maPlayers() },
+    { name: 'rooms', selector: maPlayers(true) },
     {
       type: 'expandable', name: 'display', title: 'Display', icon: 'mdi:monitor', flatten: true, expanded: true,
       schema: [
         { name: 'default_tab', selector: sel(startTabOptions(c)) },
         { name: 'screensaver_minutes', selector: { select: { options: saverOptions(c.screensaver_minutes), mode: 'dropdown', custom_value: true } } },
         { name: 'screensaver_lyrics', selector: { boolean: {} } },
-        { name: 'coerce_repeat_one', selector: { boolean: {} } },
       ],
     },
     {
@@ -70,7 +72,7 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
           { value: 'fixed', label: 'Volume only: always play on the chosen player' },
           { value: 'dynamic', label: 'Choose speakers: pick, group and drop speakers from the card' }]) },
         ...(choose ? [
-          { name: 'targets', selector: { entity: { domain: 'media_player', multiple: true } } },
+          { name: 'targets', selector: maPlayers(true) },
           { name: 'grouping', selector: sel([{ value: 'admins', label: 'Admins' }, { value: 'everyone', label: 'Everyone' }, { value: 'nobody', label: 'Nobody' }]) },
           { name: 'grouping_users', selector: { text: {} } },
           { name: 'guest_access', selector: sel([{ value: 'volume', label: 'Can change the volume and mute' }, { value: 'none', label: 'Can only look' }]) },
@@ -108,10 +110,8 @@ export function editorSchema(c: Partial<JukeboxCardConfig> = {}) {
           { value: 'separate', label: 'Separate Library and Search tabs' }]) },
         { name: 'library_label', selector: { text: {} } },
         { name: 'library_categories', selector: { select: { multiple: true, reorder: true, mode: 'list', options: LIBRARY_CATS.map((x) => ({ value: x.id, label: DEFAULT_LIBRARY_CATEGORIES.includes(x.id) ? x.label : `${x.label} (optional)` })) } } },
-        { name: 'library_view', selector: sel([
-          { value: 'rows', label: 'Rows: a list with small covers' },
-          { value: 'tiles', label: 'Tiles: a grid of big covers' }]) },
-        ...(c.library_view === 'tiles' ? [{ name: 'library_columns', selector: { number: { min: 2, max: 6, step: 1, mode: 'box' } } }] : []),
+        ...EDITOR_VIEW_SECTIONS.map((s) => ({ name: `view_${s.id}`, selector: sel([{ value: 'rows', label: 'Rows' }, { value: 'tiles', label: 'Tiles' }]) })),
+        { name: 'library_columns', selector: { number: { min: LIBRARY_COLUMNS_MIN, max: LIBRARY_COLUMNS_MAX, step: 1, mode: 'box' } } },
         { name: 'library_home', selector: { boolean: {} } },
         { name: 'library_tiles', selector: { select: { multiple: true, reorder: true, mode: 'list', options: TILES.map((t) => ({ value: t.id, label: t.optIn ? `${t.label} (optional)` : t.label })) } } },
         { name: 'browse_limit', selector: { number: { min: 10, max: 500, mode: 'box' } } },
@@ -129,7 +129,6 @@ export const LABELS: Record<string, string> = {
   default_tab: 'Start tab',
   screensaver_minutes: 'Screensaver after (pick, or type minutes up to 1440)',
   screensaver_lyrics: 'Lyrics on the screensaver',
-  coerce_repeat_one: 'Turn "repeat one" back into repeat all (the card only offers off and all)',
   speaker_mode: 'Speakers panel',
   targets: 'Groups to play on (empty = every speaker group)',
   grouping: 'Who may change speakers',
@@ -149,8 +148,9 @@ export const LABELS: Record<string, string> = {
   library_layout: 'Library layout',
   library_label: 'Library tab name (empty = Library)',
   library_categories: 'Library category buttons (in this order)',
-  library_view: 'Library lists (every Library button: rows or tiles)',
-  library_columns: 'Tile columns (2 to 6)',
+  library_columns: 'Tiles across',
+  // #146: one plain question per section (Show <section> as), using the section names from EDITOR_VIEW_SECTIONS; the choices are Rows and Tiles
+  ...Object.fromEntries(EDITOR_VIEW_SECTIONS.map((s) => [`view_${s.id}`, `Show ${s.label} as`])),
   library_home: 'Separate tabs only: open the Library tab on big shortcut tiles',
   library_tiles: 'Separate tabs only: Library tiles (in this order)',
   browse_limit: 'Items per Library page',
@@ -163,8 +163,7 @@ export const LABELS: Record<string, string> = {
 export const SHOWN_DEFAULTS = {
   default_tab: 'now',
   show_lyrics: true, screensaver_lyrics: true, lyrics_seek: true,
-  radio_favorites_only: false, library_home: false, library_view: DEFAULT_LIBRARY_VIEW, library_columns: DEFAULT_LIBRARY_COLUMNS, library_layout: 'combined', search_sources: true, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
-  coerce_repeat_one: true,
+  radio_favorites_only: false, library_home: false, library_columns: DEFAULT_LIBRARY_COLUMNS, library_layout: 'combined', search_sources: true, search_filters: true, library_first: true, speaker_mode: 'fixed', grouping: 'admins', guest_access: 'volume', leader_drop: 'allow', confirm_drop: false,
 };
 const roomEntity = (r: RoomConfig | string) => (typeof r === 'string' ? r : r.entity);
 
@@ -230,15 +229,24 @@ export class JukeboxCardEditor extends LitElement {
     if (v.library_label !== undefined && !String(v.library_label ?? '').trim()) delete v.library_label;
     // kept while typing; the card ignores anything but two letters (then HA's country is used)
     if (v.radio_country !== undefined) { const cc = String(v.radio_country ?? '').trim(); if (!cc) delete v.radio_country; else v.radio_country = /^[a-z]{2}$/i.test(cc) ? cc.toLowerCase() : cc; }
-    // 0.7.20: tile columns are whole numbers 2..6 (the card clamps too); not a number = the key is dropped (the card uses 3)
+    // Tiles across: whole numbers 1..8 (the card clamps too); not a number = the key is dropped (the card uses 3)
     if (v.library_columns !== undefined) {
       const n = Math.round(Number(v.library_columns));
       if (Number.isFinite(n) && v.library_columns !== null && v.library_columns !== '') v.library_columns = Math.max(LIBRARY_COLUMNS_MIN, Math.min(LIBRARY_COLUMNS_MAX, n)); else delete v.library_columns;
     }
+    const views = collectLibraryViews(v, prevC);
+    for (const s of EDITOR_VIEW_SECTIONS) delete v[`view_${s.id}`];
+    // Leave leftover library_view alone in saved configs (do not copy or delete it).
+    if (prevC && Object.prototype.hasOwnProperty.call(prevC, 'library_view')) v.library_view = prevC.library_view;
+    else delete v.library_view;
+    delete v.library_views;
+    if (views) v.library_views = views;
     if (v.lyrics_offset_ms !== undefined) {
       const n = Math.round(Number(v.lyrics_offset_ms));
       if (Number.isFinite(n)) v.lyrics_offset_ms = Math.max(-5000, Math.min(5000, n)); else delete v.lyrics_offset_ms;
     }
+    delete v.coerce_repeat_one; // the option is gone (#139): an old YAML value is ignored and not written back
+    delete v.show_action_icons; // the option is gone (#85): an old YAML value is ignored and not written back
     return v as JukeboxCardConfig;
   }
   private changed(e: CustomEvent) {
@@ -258,6 +266,9 @@ export class JukeboxCardEditor extends LitElement {
     out.discover = c.discover === true ? [...DEFAULT_ROWS] : Array.isArray(c.discover) ? c.discover : [];
     out.library_tiles = configuredTiles(c).map((t) => t.id);
     out.library_categories = libraryCategories(c);
+    for (const s of EDITOR_VIEW_SECTIONS) out[`view_${s.id}`] = editorViewValue(c, s.id);
+    delete out.library_view;
+    delete out.library_views;
     out.radio_browse = c.radio_browse === true ? [...RADIO_MODES] : Array.isArray(c.radio_browse) ? c.radio_browse : [];
     return out;
   }
@@ -268,6 +279,6 @@ export class JukeboxCardEditor extends LitElement {
     return html`<ha-form .hass=${this.hass} .data=${this.formData()} .schema=${editorSchema(this._config)}
       .computeLabel=${(s: any) => LABELS[s.name] ?? s.title ?? s.name} @value-changed=${this.changed}></ha-form>`;
   }
-  static styles = css`p { padding: 8px 0; }`;
+  static styles = css`p { padding: var(--ha-space-2, 8px) 0; }`;
 }
 defineElement('jukebox-card-editor', JukeboxCardEditor);

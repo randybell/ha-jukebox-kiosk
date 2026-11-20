@@ -58,15 +58,15 @@
     },
     "legacy_card_plugin_installed": {
       "title": "Remove the old Jukebox Card plugin",
-      "description": "The Jukebox Card now ships inside the Jukebox Kiosk integration. {removed} of {count} old dashboard resources were removed automatically. Open HACS and remove the old \"Jukebox Card\" plugin, then refresh your browsers."
+      "description": "The Jukebox Card now ships inside the Jukebox Kiosk integration. {removed} of {count} old dashboard resources were removed automatically. Open Settings > Marketplace and remove the old \"Jukebox Card\" plugin, then refresh your browsers."
     },
     "legacy_card_plugin_yaml": {
       "title": "Remove the old Jukebox Card resource",
-      "description": "The Jukebox Card now ships inside the Jukebox Kiosk integration. Your dashboards use YAML resources, so remove the {count} old /hacsfiles/ha-jukebox-kiosk-card/ resource line(s) yourself, remove the old plugin in HACS, then restart Home Assistant."
+      "description": "The Jukebox Card now ships inside the Jukebox Kiosk integration. Your dashboards use YAML resources, so remove the {count} old /hacsfiles/ha-jukebox-kiosk-card/ resource line(s) yourself, remove the old plugin in Settings > Marketplace, then restart Home Assistant."
     },
     "legacy_card_plugin_files": {
       "title": "Remove the old Jukebox Card plugin",
-      "description": "The Jukebox Card now ships inside the Jukebox Kiosk integration and its old dashboard resources are gone, but the old \"Jukebox Card\" plugin is still installed in HACS. Open HACS, remove that plugin, then restart Home Assistant. This notice goes away once the plugin files are removed."
+      "description": "The Jukebox Card now ships inside the Jukebox Kiosk integration and its old dashboard resources are gone, but the old \"Jukebox Card\" plugin is still installed in Settings > Marketplace. Open Settings > Marketplace, remove that plugin, then restart Home Assistant. This notice goes away once the plugin files are removed."
     }
   }
 }

@@ -35,10 +35,8 @@ from .const import (
     PLAYER_ARG_KEYS,
     PLAYER_LIST_ARG_KEYS,
     QUEUE_EVENTS,
+    SLEEP_TIMER_EVENT,
     QUEUE_LIMIT_MAX,
-    REPEAT_ALL,
-    REPEAT_ARG_KEYS,
-    REPEAT_ONE,
     RESERVED_ARG_KEYS,
     SEARCH_PROVIDER_TYPES,
     TODO_VERIFY,
@@ -49,7 +47,7 @@ from .const import (
     todo_verify_commands,
 )
 from .permissions import Policy, allowed_classes, check_class, check_entity, is_guest
-from .players import PlayerNotFound, entity_for_player, queue_id_for_entity
+from .players import PlayerNotFound, entity_for_player, player_id_for_entity, queue_id_for_entity
 
 if TYPE_CHECKING:
     from music_assistant_client import MusicAssistantClient
@@ -67,6 +65,8 @@ except ImportError:  # pragma: no cover
     impersonation_arg = None  # type: ignore[assignment]
 
 COMMAND_TIMEOUT = 30
+# Lyrics lookups can take 8-33 s the first time (rate limits), and the card waits 60 s for them (src/lyrics/store.ts CALL_TIMEOUT).
+COMMAND_TIMEOUTS: dict[str, float] = {"metadata/get_track_lyrics": 60}
 
 TRACK_COMMANDS = {
     "album": ("music/albums/album_tracks", "tracks"),
@@ -131,14 +131,6 @@ def _guard_lyrics_track(track: Any) -> None:
         raise KioskError("library_track", "Pass the provider track, not the library track")
 
 
-def _no_repeat_one(args: dict[str, Any]) -> None:
-    """Repeat 'one' is never forwarded: it is mapped to 'all' (0.6.5)."""
-    for key in REPEAT_ARG_KEYS:
-        val = args.get(key)
-        if isinstance(val, str) and val.lower() == REPEAT_ONE:
-            args[key] = REPEAT_ALL
-
-
 def _impersonation(client: MusicAssistantClient, user: User | None) -> dict[str, Any]:
     if user is None or impersonation_arg is None:
         return {}
@@ -151,7 +143,7 @@ def _impersonation(client: MusicAssistantClient, user: User | None) -> dict[str,
 
 async def _send(client: MusicAssistantClient, command: str, **kwargs: Any) -> Any:
     try:
-        async with asyncio.timeout(COMMAND_TIMEOUT):
+        async with asyncio.timeout(COMMAND_TIMEOUTS.get(command, COMMAND_TIMEOUT)):
             return await client.send_command(command, **kwargs)
     except TimeoutError as err:
         raise KioskError("timeout", f"Music Assistant did not answer {command}") from err
@@ -187,7 +179,6 @@ async def forward(
             value = args.get(key)
             if not isinstance(value, str) or not value.startswith(prefixes):
                 raise KioskError("invalid_args", f"{key} must start with {' or '.join(prefixes)} for {command}")
-    _no_repeat_one(args)
     _entry_, policy, client = _context(hass)
     check_class(user, policy, spec.perm)
     _check_players(hass, user, args, control=spec.perm is not PermClass.READ)
@@ -379,6 +370,16 @@ async def ws_queue_items(hass: HomeAssistant, connection: websocket_api.ActiveCo
         extra["autoplay"] = autoplay
     if isinstance(queue.get("is_dynamic"), bool):
         extra["dynamic"] = queue["is_dynamic"]
+    if isinstance(queue.get("active"), bool):
+        extra["active"] = queue["active"]
+    # MA isQueueInfiniteStream reads only current_item.media_item.media_type (helpers.ts:50-54).
+    media = current_item.get("media_item") if isinstance(current_item.get("media_item"), dict) else {}
+    mt = media.get("media_type")
+    if isinstance(mt, str) and mt:
+        extra["current_media_type"] = mt
+    rm = queue.get("repeat_mode")
+    if rm in ("off", "one", "all"):
+        extra["repeat_mode"] = rm
     connection.send_result(
         msg["id"],
         {
@@ -663,6 +664,231 @@ async def ws_subscribe_queue(
     connection.send_result(msg_id, {"queue_id": queue_id})
 
 
+def _expires_payload(raw: Any) -> dict[str, Any]:
+    """Shape MA's sleep_timer get/set return (unix seconds or None) for the card."""
+    exp = raw if isinstance(raw, (int, float)) and raw > 0 else None
+    return {"expires_at": exp}
+
+
+_SLEEP_MODES = frozenset({"duration", "end_of_item", "end_of_chapter"})
+
+
+async def _sleep_payload(client: Any, player_id: str, raw: Any) -> dict[str, Any]:
+    """Expiry from players/sleep_timer/get, plus sleep_timer_mode from the playback owner.
+
+    MA's get command returns only expires_at (None while an end-of-item timer is paused).
+    The mode is stored on the playback owner (sleep_timer.py _get_sleep_timer_player
+    → _resolve_playback_owner in base.py:581-597; player.set_sleep_timer). MA's
+    frontend reads player.sleep_timer_mode on that owner (sleep_timer.ts:38).
+    """
+    out = _expires_payload(raw)
+    owner_id = await _playback_owner_id(client, player_id)
+    player = await _ma_player(client, owner_id)
+    if player is not None:
+        mode = player.get("sleep_timer_mode")
+        if mode in _SLEEP_MODES:
+            out["mode"] = mode
+    return out
+
+
+async def _ma_player(client: Any, player_id: str) -> dict[str, Any] | None:
+    """Return players/get as a dict, or None if the command fails or the result is not a player."""
+    try:
+        player = await _send(client, "players/get", player_id=player_id)
+    except Exception:
+        return None
+    return player if isinstance(player, dict) else None
+
+
+async def _playback_owner_id(client: Any, player_id: str, groups: dict[str, tuple[str | None, str | None]] | None = None) -> str:
+    """Return the id of the player that owns this player's playback.
+
+    MA `_resolve_playback_owner` (server-dev base.py:581-597): the sync leader, or
+    the group player capturing that leader. 2.10.12 `_get_player_with_redirect`
+    (controller.py:3169-3191) is the same two steps. Sleep commands and
+    `player_sleep_timer_updated` use that player's id (sleep_timer.py:183-196,
+    168-171).
+    """
+    def _note(pid: str, raw: dict[str, Any] | None) -> None:
+        if groups is not None:
+            groups[pid] = _group_fields(raw) or (None, None)
+
+    player = await _ma_player(client, player_id)
+    _note(player_id, player)
+    if player is None:
+        return player_id
+    owner_id, owner = player_id, player
+    synced_to = owner.get("synced_to")
+    if isinstance(synced_to, str) and synced_to:
+        leader = await _ma_player(client, synced_to)
+        _note(synced_to, leader)
+        if leader is not None:
+            owner_id, owner = synced_to, leader
+    active_group = owner.get("active_group")
+    if isinstance(active_group, str) and active_group:
+        group = await _ma_player(client, active_group)
+        _note(active_group, group)
+        if group is not None:
+            owner_id = active_group
+    return owner_id
+
+
+def _sleep_id_filter(player_id: str, owner_id: str) -> str | tuple[str, ...]:
+    """The card's player plus its current playback owner, when that owner is someone else."""
+    return (player_id, owner_id) if owner_id != player_id else player_id
+
+
+def _group_fields(data: Any) -> tuple[str | None, str | None] | None:
+    """synced_to and active_group from a players/get or player_updated payload, or None if it is not a player dict."""
+    if not isinstance(data, dict):
+        return None
+    def _id(v: Any) -> str | None:
+        return v if isinstance(v, str) and v else None
+    return (_id(data.get("synced_to")), _id(data.get("active_group")))
+
+
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/sleep_timer_get", probatio.Required("entity_id"): str}
+)
+@websocket_api.async_response
+@_wrap
+async def ws_sleep_timer_get(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Return the MA sleep timer expiry (and mode, when the player has one) for the entity's player."""
+    _e, _, client = _context(hass)
+    player_id = player_id_for_entity(hass, msg["entity_id"])
+    raw = await _send(client, "players/sleep_timer/get", player_id=player_id)
+    connection.send_result(msg["id"], {**await _sleep_payload(client, player_id, raw), "player_id": player_id})
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{DOMAIN}/sleep_timer_set",
+        probatio.Required("entity_id"): str,
+        probatio.Required("seconds"): int,
+    }
+)
+@websocket_api.async_response
+@_wrap
+async def ws_sleep_timer_set(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Set the MA sleep timer for the entity's player (registry unique_id)."""
+    _e, _, client = _context(hass)
+    seconds = msg["seconds"]
+    if not isinstance(seconds, int) or seconds <= 0:
+        raise KioskError("invalid_args", "seconds must be greater than zero")
+    player_id = player_id_for_entity(hass, msg["entity_id"])
+    raw = await _send(client, "players/sleep_timer/set", player_id=player_id, seconds=seconds)
+    connection.send_result(msg["id"], {**await _sleep_payload(client, player_id, raw), "player_id": player_id})
+
+
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/sleep_timer_clear", probatio.Required("entity_id"): str}
+)
+@websocket_api.async_response
+@_wrap
+async def ws_sleep_timer_clear(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Clear the MA sleep timer for the entity's player (registry unique_id)."""
+    _e, _, client = _context(hass)
+    player_id = player_id_for_entity(hass, msg["entity_id"])
+    await _send(client, "players/sleep_timer/clear", player_id=player_id)
+    connection.send_result(msg["id"], {**await _sleep_payload(client, player_id, None), "player_id": player_id})
+
+
+@websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/subscribe_sleep_timer", probatio.Required("entity_id"): str}
+)
+@websocket_api.async_response
+@_wrap
+async def ws_subscribe_sleep_timer(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Push the entity's current sleep expiry whenever a player_sleep_timer_updated event fires.
+
+    The subscription is filtered to this entity's player plus its current playback
+    owner (the id MA emits on). The filter is updated when the group changes.
+    """
+    _e, _, client = _context(hass)
+    player_id = player_id_for_entity(hass, msg["entity_id"])
+    msg_id = msg["id"]
+    from music_assistant_models.enums import EventType  # noqa: PLC0415
+
+    event_filter = (EventType(SLEEP_TIMER_EVENT), EventType.PLAYER_UPDATED)
+    held: dict[str, Any] = {"unsub": None, "ids": None, "groups": {}, "closed": False}
+
+    def _close() -> None:
+        if held["closed"]:
+            return
+        held["closed"] = True
+        unsub = held["unsub"]
+        held["unsub"] = None
+        if unsub is not None:
+            unsub()
+
+    async def _push() -> None:
+        if held["closed"]:
+            return
+        raw = await _send(client, "players/sleep_timer/get", player_id=player_id)
+        if held["closed"]:
+            return
+        connection.send_message(
+            websocket_api.event_message(msg_id, {**await _sleep_payload(client, player_id, raw), "player_id": player_id})
+        )
+
+    def _listen(owner_id: str) -> None:
+        if held["closed"]:
+            return
+        unsub = held["unsub"]
+        held["unsub"] = None
+        if unsub is not None:
+            unsub()
+        if held["closed"]:
+            return
+        ids = _sleep_id_filter(player_id, owner_id)
+        held["unsub"] = client.subscribe(_on_event, event_filter, ids)
+        held["ids"] = ids
+        connection.subscriptions[msg_id] = _close
+
+    async def _retarget() -> None:
+        if held["closed"]:
+            return
+        seen: dict[str, tuple[str | None, str | None]] = {}
+        owner_id = await _playback_owner_id(client, player_id, seen)
+        if held["closed"]:
+            return
+        held["groups"].update(seen)
+        ids = _sleep_id_filter(player_id, owner_id)
+        if ids == held["ids"]:
+            return
+        _listen(owner_id)
+        await _push()
+
+    @callback
+    def _on_event(event: Any) -> None:
+        name = str(getattr(getattr(event, "event", None), "value", getattr(event, "event", "")))
+        if name == "player_updated":
+            fields = _group_fields(getattr(event, "data", None))
+            if fields is None:
+                return
+            oid = getattr(event, "object_id", None)
+            if isinstance(oid, str) and held["groups"].get(oid) == fields:
+                return
+            if isinstance(oid, str):
+                held["groups"][oid] = fields
+            hass.async_create_task(_retarget())
+        elif name == SLEEP_TIMER_EVENT:
+            hass.async_create_task(_push())
+
+    seed: dict[str, tuple[str | None, str | None]] = {}
+    _listen(await _playback_owner_id(client, player_id, seed))
+    held["groups"].update(seed)
+    connection.send_result(msg_id, {"player_id": player_id})
+
+
 HANDLERS = (
     ws_capabilities,
     ws_ma,
@@ -675,6 +901,10 @@ HANDLERS = (
     ws_favorite_current,
     ws_unfavorite_current,
     ws_subscribe_queue,
+    ws_sleep_timer_get,
+    ws_sleep_timer_set,
+    ws_sleep_timer_clear,
+    ws_subscribe_sleep_timer,
 )
 
 

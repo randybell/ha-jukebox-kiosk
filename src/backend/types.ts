@@ -89,6 +89,12 @@ export interface QueueWindow {
   autoplay?: boolean;
   /** MA queue is_dynamic (radio/endless sources): autoplay does nothing there */
   dynamic?: boolean;
+  /** MA PlayerQueue.active */
+  active?: boolean;
+  /** media_item.media_type of the current queue item (radio / audio_source / track / …) */
+  currentMediaType?: string;
+  /** MA PlayerQueue.repeat_mode */
+  repeat?: string;
 }
 export type QueueAction = 'play' | 'up' | 'down' | 'next' | 'remove';
 export type TrackListType = 'album' | 'artist' | 'playlist' | 'podcast';
@@ -133,6 +139,11 @@ export interface MaBackend {
   searchProviders?(): Promise<any>;
   /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. */
   subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;
+  /** MA sleep timer for the entity, using the entity's MA player id. Kiosk only. */
+  sleepTimerGet?(entity: string): Promise<unknown>;
+  sleepTimerSet?(entity: string, seconds: number): Promise<unknown>;
+  sleepTimerClear?(entity: string): Promise<unknown>;
+  subscribeSleepTimer?(entity: string, cb: (ev: { expires_at?: number | null; player_id?: string }) => void): Promise<() => void>;
 }
 
 /** {context, response: {response: X}} / {response: X} / X  ->  X */

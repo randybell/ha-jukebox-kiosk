@@ -30,6 +30,12 @@ export interface QueueSnapshot {
   autoplay?: boolean;
   /** MA queue is_dynamic: autoplay does not apply */
   dynamic?: boolean;
+  /** MA PlayerQueue.active — Now Playing Autoplay is hidden when this is not true */
+  active?: boolean;
+  /** media_item.media_type of the current queue item, for the infinite-stream hide rule */
+  currentMediaType?: string;
+  /** MA PlayerQueue.repeat_mode: Autoplay is locked while this is one or all */
+  repeat?: string;
   loading: boolean;
   error: string;
   at: number;
@@ -120,7 +126,7 @@ export class QueueModel {
       this.set({
         items, current, loading: false, error: '', at: Date.now(),
         total: w.total, currentIndex: w.currentIndex, queueId, bufferIndex: w.bufferIndex,
-        autoplay: w.autoplay, dynamic: w.dynamic,
+        autoplay: w.autoplay, dynamic: w.dynamic, active: w.active, currentMediaType: w.currentMediaType, repeat: w.repeat,
       });
     } catch (err) {
       if (seq !== this.seq) return;

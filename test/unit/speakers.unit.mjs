@@ -56,9 +56,6 @@ check('U7 dynamic: admins group, guests do not; grouping_users by name or id', M
   && M.canGroup({ ...dyn, grouping_users: ['kitchen tablet'] }, guest) && M.canGroup({ ...dyn, grouping_users: ['u-guest'] }, guest));
 check('U8 grouping everyone / nobody', M.canGroup({ ...dyn, grouping: 'everyone' }, guest) && !M.canGroup({ ...dyn, grouping: 'nobody' }, admin));
 check('U9 guest_access volume (default) / none', M.canVolume(fixed, guest) && !M.canVolume({ ...fixed, guest_access: 'none' }, guest) && M.canVolume({ ...fixed, guest_access: 'none' }, admin));
-check('U10 queue Play now / Play next: admins and grouping_users in either mode; guests never; grouping nobody hides them',
-  M.canJumpQueue(fixed, admin) && M.canJumpQueue(dyn, admin) && !M.canJumpQueue(fixed, guest) && M.canJumpQueue({ ...fixed, grouping_users: ['Kitchen Tablet'] }, guest)
-    && M.canJumpQueue({ ...fixed, grouping: 'everyone' }, guest) && !M.canJumpQueue({ ...fixed, grouping: 'nobody' }, admin));
 
 // ---------------- presets / plans ----------------
 const rooms = [{ entity: 'media_player.living_room', name: 'Living Room', ma: 'spk_living' }, { entity: 'media_player.kitchen', name: 'Kitchen', ma: 'spk_kitchen' }, { entity: 'media_player.garage', name: 'Garage' }];

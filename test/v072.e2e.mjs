@@ -57,15 +57,6 @@ const pickSrc = async (p, id) => { await openSrc(p); await tap(p, SRC(id)); };
 const noPopup = (p) => ev(p, `![...${SV}.querySelectorAll('.toast, .confirm, [role=dialog]')].some((e) => e.getBoundingClientRect().width > 0) && !${C}.querySelector('.toast')`);
 
 // ---------------- 1. defaults: one Library tab, no tiles, box + source buttons + 5 buttons ----------------
-for (const [vpName, vp] of [['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }], ['320x640', { width: 320, height: 640, isMobile: true, hasTouch: true }]]) {
-  const p = await open('', {}, vp);
-  await openSrc(p);
-  const g = await ev(p, `(() => { const q = ${SV}.querySelector('.qrow').getBoundingClientRect(), row = ${SV}.querySelector('.srco'), r = row.getBoundingClientRect();
-    const bs = [...row.querySelectorAll('.src')].map((b) => b.getBoundingClientRect()); const kb = ${SV}.querySelector('.kbd')?.getBoundingClientRect();
-    return { gap: Math.round(r.top - q.bottom), tops: new Set(bs.map((b) => Math.round(b.top))).size, minH: Math.min(...bs.map((b) => b.height)), scrolls: row.scrollWidth > row.clientWidth + 1, rowInside: r.right <= innerWidth + 1, resH: Math.round(${SV}.querySelector('.res')?.getBoundingClientRect().height ?? 0), kbTop: Math.round(kb?.top ?? 0) }; })()`);
-  check(`T3d [${vpName}] phone: one horizontally scrolling button row directly under the box, >= 44px`, g.gap >= 0 && g.gap <= 16 && g.tops === 1 && g.minH >= 44 && g.scrolls && g.rowInside, J(g));
-  await p.close();
-}
 for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   const p = await open('', {}, vp);
   await wait(p, `${SV}.querySelectorAll('.lcats .lc').length >= 5`);
@@ -82,7 +73,7 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   check(`T3b [${vpName}] the button row sits directly under the search box, touch-sized (>= 44px), all on screen`, geo.gap >= 0 && geo.gap <= 16 && geo.left <= 1 && geo.minH >= 44 && geo.inside, J(geo));
   check(`T3c [${vpName}] no dropdown / popover / select for sources`, !(await ev(p, `!!${SV}.querySelector('.srcb, .srcm, .srcveil, select, [aria-haspopup]')`)));
   const b = await btns(p);
-  check(`T4 [${vpName}] buttons in order: Playlists, Artists, Tracks, Radio (0.7.9 #34: no Genres; Playlists on)`, J(b) === J(['playlist:Playlists', 'artist:Artists', 'track:Tracks', 'radio:Radio']) && (await onBtn(p)) === 'playlist', J(b));
+  check(`T4 [${vpName}] buttons in order: Playlists, Artists, Tracks, Genres, Radio (0.9.0: Genres is back, like MA; Playlists on)`, J(b) === J(['playlist:Playlists', 'artist:Artists', 'track:Tracks', 'genre:Genres', 'radio:Radio']) && (await onBtn(p)) === 'playlist', J(b));
   check(`T5 [${vpName}] all five buttons on screen`, (await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].every((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.right <= innerWidth && r.bottom <= innerHeight; })`)));
   check(`T6 [${vpName}] empty box shows the library playlists`, (await libShown(p)) && (await wait(p, `${BR}.querySelectorAll('.tile[data-type=playlist]').length > 0`)));
   await p.close();
@@ -98,9 +89,10 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
     const ok = await wait(p, `${BR}.querySelectorAll('${sel}').length > 0`);
     check(`B1 ${cat}: button on, library list shown`, ok && (await onBtn(p)) === cat && (await libShown(p)) && (await ev(p, `${SH}.browse.cat`)) === cat, J({ on: await onBtn(p) }));
   }
-  // 0.7.9 #34: no Genres button at the top of the combined Library
-  check('G1 (0.7.9 #34) no Genres category button; the others stay', !(await ev(p, `!!${SV}.querySelector('.lcats .lc[data-lcat=genre]')`))
-    && (await ev(p, `${SV}.querySelectorAll('.lcats .lc').length`)) >= 4, J(await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].map((b) => b.dataset.lcat)`)));
+  // 0.9.0: the Genres button is back (MA's Command Center has a Genres filter); empty box = the library genres
+  await tap(p, `${SV}.querySelector('.lcats .lc[data-lcat=genre]')`);
+  check('G1 (0.9.0) Genres button: on, the library genres listed', (await onBtn(p)) === 'genre' && (await wait(p, `${BR}.querySelectorAll('.tile[data-type=genre], .row[data-type=genre]').length > 0`)),
+    J(await ev(p, `[...${SV}.querySelectorAll('.lcats .lc')].map((b) => b.dataset.lcat)`)));
   check('G3 no popups', await noPopup(p));
   await p.close();
 }
@@ -273,13 +265,12 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   await n.close();
   const a = await open('', { library_categories: ['album', 'genre', 'podcast'] });
   await wait(a, `${SV}.querySelectorAll('.lcats .lc').length >= 2`);
-  check('K7 library_categories: Albums / Podcasts by config, in order (0.7.9 #34: a configured Genres is not shown)', J((await btns(a)).map((x) => x.split(':')[0])) === J(['album', 'podcast']), J(await btns(a)));
+  check('K7 library_categories: Albums / Genres / Podcasts by config, in order (0.9.0: a configured Genres is shown)', J((await btns(a)).map((x) => x.split(':')[0])) === J(['album', 'genre', 'podcast']), J(await btns(a)));
   await a.close();
 }
 
 // ---------------- keyboard always open (default) on every size; library_keyboard: tap is the opt-in fallback ----------------
-for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }], ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }],
-  ['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }], ['360x640', { width: 360, height: 640, isMobile: true, hasTouch: true }]]) {
+for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }], ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }]]) {
   const p = await open('&ha=toolbar&sidebar=none', {}, vp);
   await wait(p, `!!${SV}.querySelector('.srct') && ${SV}.querySelectorAll('.lcats .lc').length >= 5`);
   const g = await ev(p, `(() => { const R = (el) => { const b = el?.getBoundingClientRect(); return b && b.height ? { t: b.top, b: b.bottom, l: b.left, r: b.right } : null; };
@@ -296,16 +287,16 @@ for (const [vpName, vp] of [['1024x600', { width: 1024, height: 600, isMobile: t
   await p.close();
 }
 {
-  const t = await open('', { library_keyboard: 'tap' }, { width: 390, height: 844, isMobile: true, hasTouch: true });
+  const t = await open('', { library_keyboard: 'tap' }, { width: 1024, height: 600, isMobile: true, hasTouch: true });
   await wait(t, `${SV}.querySelectorAll('.lcats .lc').length >= 2`);
   const before = await ev(t, `[${SV}.querySelector('.sx').classList.contains('kb-hidden'), !!${SV}.querySelector('.kb-open')]`);
   await tap(t, `${SV}.querySelector('.qbar')`); await sleep(200);
-  check('KB3 library_keyboard: tap (phone fallback): list first with the Keyboard pill, tapping the search box opens the keyboard', J(before) === J([true, true]) && !(await ev(t, `${SV}.querySelector('.sx').classList.contains('kb-hidden')`)), J(before));
+  check('KB3 library_keyboard: tap: list first with the Keyboard pill, tapping the search box opens the keyboard', J(before) === J([true, true]) && !(await ev(t, `${SV}.querySelector('.sx').classList.contains('kb-hidden')`)), J(before));
   await t.close();
 }
 
 // ---------------- 0.7.3: big icon category buttons, compact sources control, Favorites / A–Z corner icons ----------------
-for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }, {}],   ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }, {}], ['390x844', { width: 390, height: 844, isMobile: true, hasTouch: true }, {}], ['360x640', { width: 360, height: 640, isMobile: true, hasTouch: true }, {}]]) {
+for (const [vpName, vp, cfg] of [['1024x600', { width: 1024, height: 600, isMobile: true, hasTouch: true }, {}], ['800x1280', { width: 800, height: 1280, isMobile: true, hasTouch: true }, {}]]) {
   const p = await open('&ha=toolbar&sidebar=none', cfg, vp);
   await wait(p, `!!${SV}.querySelector('.srct') && ${SV}.querySelectorAll('.lcats .lc').length >= 5 && !!${SV}.querySelector('.lcorner')`);
   const geo = `(() => { const R = (el) => { const b = el?.getBoundingClientRect(); return b && b.height ? { t: b.top, b: b.bottom, l: b.left, r: b.right, h: b.height } : null; };

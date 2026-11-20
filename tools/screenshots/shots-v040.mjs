@@ -9,7 +9,7 @@ const ROOT = await devRoot();
 const OUT = new URL('../../test/shots/v040/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VPS = [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }, { width: 390, height: 844, isMobile: true, hasTouch: true }];
+const VPS = [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }];
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 const errors = [];
 const files = [];

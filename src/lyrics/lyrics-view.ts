@@ -333,9 +333,9 @@ export class JbLyrics extends LitElement {
     :host(:not([mode=saver])) { height: 100%; }
     /* Overlay sits on the dark art shade: contrast text, like HA media-control over art (not theme body text). */
     :host([mode=overlay]) {
-      --_fg: var(--_art-fg, #ffffff);
-      --_muted: color-mix(in srgb, var(--_art-fg, #ffffff) 72%, transparent);
-      --_inactive: color-mix(in srgb, var(--_art-fg, #ffffff) 55%, transparent);
+      --_fg: #ffffff;
+      --_muted: color-mix(in srgb, #ffffff 72%, transparent);
+      --_inactive: color-mix(in srgb, #ffffff 55%, transparent);
       color: var(--_fg);
     }
     .ly { position: relative; height: 100%; min-height: 0; display: flex; flex-direction: column; }
@@ -344,7 +344,7 @@ export class JbLyrics extends LitElement {
     .sc::-webkit-scrollbar { display: none; }
     .pad { height: 42%; }
     .ln { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); color: var(--_inactive); padding: .28em 0;
-      transition: color 300ms ease, opacity 300ms ease, transform 300ms ease; transform-origin: left center; text-wrap: balance; overflow-wrap: anywhere; }
+      transition: color var(--_t-normal) ease, opacity var(--_t-normal) ease, transform var(--_t-normal) ease; transform-origin: left center; text-wrap: balance; overflow-wrap: anywhere; }
     .plain .ln { color: var(--_fg); font-weight: var(--ha-font-weight-medium, 500); }
     .synced .ln.past { color: var(--_inactive); }
     .synced .ln.cur { color: var(--_fg); }
@@ -352,24 +352,23 @@ export class JbLyrics extends LitElement {
     .seekable .ln { cursor: pointer; position: relative; }
     /* long-press feedback: a white bar fills under the line while held, then the line flashes */
     .seekable .ln::after { content: ""; position: absolute; left: 0; bottom: .05em; height: 3px; width: 0; background: var(--_active); border-radius: 2px; opacity: 0; }
-    .seekable .ln.press::after { width: min(100%, 220px); opacity: .9; transition: width ${LONG_PRESS_MS}ms linear, opacity 120ms; }
+    .seekable .ln.press::after { width: min(100%, 220px); opacity: .9; transition: width ${LONG_PRESS_MS}ms linear, opacity var(--_t-fast); }
     .ln.press { transform: scale(.985); }
     .ln.flash { color: var(--_fg) !important; animation: flash 900ms ease; }
     @keyframes flash { 0% { background: var(--_chip-sel) } 100% { background: transparent } }
-    .msg { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 16px; }
+    .msg { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); text-align: center; padding: var(--ha-space-4, 16px); }
     .mt { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); }
     .st-loading .mt { animation: breathe 1.8s ease-in-out infinite; }
     @keyframes breathe { 50% { opacity: .45 } }
     .chip { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .12em; text-transform: uppercase; color: var(--_muted);
-      padding: 4px 8px; border-radius: 999px; border: 1px solid var(--_surface-border); background: var(--_art-chip-bg, var(--_chip-bg)); white-space: nowrap; }
+      padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); white-space: nowrap; }
     .chip.fl { position: absolute; top: 10px; left: 10px; z-index: 2; }
-    /* toast: ha-toast styling */
-    .toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; padding: 8px 14px; border-radius: var(--ha-border-radius-sm, 4px);
-      background: var(--ha-color-neutral-10); color: var(--ha-color-on-neutral-loud); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; box-shadow: var(--ha-box-shadow-l, none); }
+    /* toast: the shared look from styles.ts (base); the screensaver keeps its own pill below */
+    .toast { z-index: 3; }
     /* the screensaver is exempt from theming: its lyrics keep exactly the 0.8.0 look */
-    :host([mode=saver]) { --_chip-sel: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.14); --_surface-border: var(--divider-color, rgba(0, 0, 0, 0.12)); }
+    :host([mode=saver]) { --_chip-sel: color-mix(in srgb, var(--primary-text-color, #212121) 14%, transparent); --_surface-border: var(--divider-color, rgba(0, 0, 0, 0.12)); }
     :host([mode=saver]) .chip { background: rgba(0, 0, 0, 0.32); }
-    :host([mode=saver]) .toast { border-radius: 999px; background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); box-shadow: var(--ha-card-box-shadow, 0 6px 24px rgba(0,0,0,.3)); }
+    :host([mode=saver]) .toast { border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_active); color: var(--_on-accent); font-weight: var(--ha-font-weight-bold, 700); box-shadow: var(--ha-card-box-shadow, 0 6px 24px rgba(0,0,0,.3)); }
 
     /* over the Now Playing art: a shade keeps the text readable on any cover, no backdrop-filter */
     .m-overlay { background: linear-gradient(to top, rgba(0, 0, 0, .8), rgba(0, 0, 0, .42)); padding: 0 6%; container-type: inline-size; }
@@ -394,7 +393,7 @@ export class JbLyrics extends LitElement {
     .m-saver.st-plain .win { height: 7.5em; font-size: clamp(16px, 2.2cqw, 28px); -webkit-mask-image: linear-gradient(transparent, #000 25%, #000 75%, transparent);
       mask-image: linear-gradient(transparent, #000 25%, #000 75%, transparent); }
     .m-saver.st-plain .ln { font-size: 1em; color: rgba(255, 255, 255, .8); font-weight: 600; white-space: normal; text-shadow: 0 2px 24px #000c; }
-    @media (prefers-reduced-motion: reduce) { .ln, .m-saver .col { transition: none; animation: none; } }
+    @media (prefers-reduced-motion: reduce) { .ln, .m-saver .col { transition: none; animation: none; } .st-loading .mt { animation: none; } }
   `];
 }
 defineElement('jb-lyrics', JbLyrics);

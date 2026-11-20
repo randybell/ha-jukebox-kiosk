@@ -96,6 +96,9 @@ export class KioskBackend implements MaBackend {
       currentItemId: r?.current_item_id != null ? String(r.current_item_id) : undefined,
       autoplay: typeof r?.autoplay === 'boolean' ? r.autoplay : undefined,
       dynamic: typeof r?.dynamic === 'boolean' ? r.dynamic : undefined,
+      active: typeof r?.active === 'boolean' ? r.active : undefined,
+      currentMediaType: typeof r?.current_media_type === 'string' ? r.current_media_type : undefined,
+      repeat: r?.repeat_mode === 'off' || r?.repeat_mode === 'one' || r?.repeat_mode === 'all' ? r.repeat_mode : undefined,
     };
   }
   async queueAction(entity: string, action: QueueAction, queueItemId: string, queueId?: string) {
@@ -142,6 +145,21 @@ export class KioskBackend implements MaBackend {
     const conn = this.hass.connection;
     if (!conn?.subscribeMessage) throw new BackendError('unsupported', 'no websocket subscriptions');
     const unsub = await conn.subscribeMessage(cb, { type: `${KIOSK_DOMAIN}/subscribe_queue`, entity_id: entity });
+    return () => { void Promise.resolve(unsub()).catch(() => undefined); };
+  }
+  sleepTimerGet(entity: string) {
+    return this.ws({ type: 'sleep_timer_get', entity_id: entity });
+  }
+  sleepTimerSet(entity: string, seconds: number) {
+    return this.ws({ type: 'sleep_timer_set', entity_id: entity, seconds });
+  }
+  sleepTimerClear(entity: string) {
+    return this.ws({ type: 'sleep_timer_clear', entity_id: entity });
+  }
+  async subscribeSleepTimer(entity: string, cb: (ev: { expires_at?: number | null; player_id?: string }) => void) {
+    const conn = this.hass.connection;
+    if (!conn?.subscribeMessage) throw new BackendError('unsupported', 'no websocket subscriptions');
+    const unsub = await conn.subscribeMessage(cb, { type: `${KIOSK_DOMAIN}/subscribe_sleep_timer`, entity_id: entity });
     return () => { void Promise.resolve(unsub()).catch(() => undefined); };
   }
 }

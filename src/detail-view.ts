@@ -4,15 +4,15 @@ import { icon } from './icons';
 import { providerLabel } from './providers';
 import { songInfo, INFO_TYPES } from './song-info';
 import {
-  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuPos, menuTpl,
-  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, rowActsTpl, foldedActions, mediaActions, hideStartRadio, swallowNextClick, SEARCH_ACTS, confirmTpl, drillable,
-  type MenuAction, type MenuPos, type RowAct, type ConfirmState,
+  mediaStyles, noFocus, artTpl, provTpl, artistNames, fmtDur, unwrap, fire, PressController, menuTpl,
+  playMedia, playInOrder, shufflePlay, playMessage, normItem, safeImage, canRadio, isRadio, mediaActions, hideStartRadio, swallowNextClick, confirmTpl, drillable,
+  type MenuAction, type MenuPos, type ConfirmState,
   maCall,
 } from './shared';
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem } from './types';
 import type { MaBackend, TrackListType } from './backend/types';
 import { defineElement } from './define';
-import { removeFromQueue } from './queue-row-remove';
+import { libraryViewFor, tilesAcrossStyle } from './library-home';
 import { FavController, heartTpl, heartType } from './heart';
 
 /** Track-list `page` is 0..1000. A first page shorter than this is taken as the whole list (no "load more" call). */
@@ -137,7 +137,6 @@ export async function loadDetail(hass: HomeAssistant, config: JukeboxCardConfig,
  * its menus and its toast. Emits `jb-nav` {op:'push', item, type} | {op:'back'} for the host's back stack.
  */
 /** 0.7.10: the artist page's Albums column header names (only here; buttons elsewhere keep their own titles). */
-const ALBUM_HEAD = { add: 'Add to queue', next: 'Play next', replace: 'Play now', radio: 'Start radio' } as const;
 
 export class JbDetail extends LitElement {
   static properties = {
@@ -236,15 +235,6 @@ export class JbDetail extends LitElement {
       fire(this, 'jukebox-played', { item: it, ...r });
     } catch (err) { this.toast(`Couldn't play ${it.name}`); console.warn('[jukebox-card] play_media failed', err); }
   }
-  private async removeRow(it: MaItem, type: string) {
-    this.closeMenu();
-    try {
-      await removeFromQueue(this, it, type);
-      this.toast(`Removed ${it.name} from the queue`);
-    } catch (e) {
-      this.toast(e instanceof Error ? e.message : `Couldn't remove ${it.name} from the queue`);
-    }
-  }
   /** Header buttons, the whole list. Play (in order) and Shuffle replace the queue, so they ask first; Add does not. */
   private headerAct(mode: 'play' | 'shuffle' | 'add' | 'radio') {
     const e = this.entry; if (!e || !this.hass) return;
@@ -261,38 +251,22 @@ export class JbDetail extends LitElement {
       fire(this, 'jukebox-played', { item: e.item, ...r });
     } catch (err) { this.toast(`Couldn't play ${e.item.name}`); console.warn('[jukebox-card] play failed', err); }
   }
-  private root() { return this.renderRoot.querySelector('.dx') as HTMLElement; }
   /** Row tap: an album / artist / playlist / podcast row opens its detail; a station row is only highlighted. Track / episode rows go through songMenu. */
   private tap(it: MaItem, type: string, key: string) {
     if (type !== 'track' && type !== 'podcast_episode' && drillable(type, this.config)) { this.press.release(); fire(this, 'jb-nav', { op: 'push', item: it, type }); return; }
     this._sel = this._sel === key ? '' : key;
   }
-  /** Play Next and Remove act at once; Play Now and Start radio ask first. Radio Play Now replaces immediately. */
-  private rowAct(it: MaItem, type: string, a: RowAct | 'more', el: HTMLElement) {
-    const ask = (k: RowAct) => {
-      this.closeMenu();
-      if (k === 'next' || k === 'add') { this.play(it, type, k); return; }
-      if (k === 'remove') { void this.removeRow(it, type); return; }
-      if ((type === 'radio' || isRadio(it)) && k === 'replace') { this.play(it, type, 'replace'); return; }
-      this._confirm = { kind: k, item: it, run: () => this.play(it, type, 'replace', k === 'radio') };
-    };
-    if (a !== 'more') { ask(a); return; }
-    const actions = foldedActions(canRadio(type, it), ask);
-    this._menu = { item: it, type, pos: menuPos(this.root(), el.closest('.row') as HTMLElement, actions.length), actions };
-  }
-
-  /** 0.7.20: a track / episode row here opens the same pop-up (jb-hold-sheet) as Library Tracks, on a tap or a hold (Randy, Nov 10: action buttons are off
-   *  everywhere, so the pop-up is how to act on one track). Stations and every other row type keep their old tap. */
+  /** A track / episode row here opens the same pop-up (jb-hold-sheet) as Library Tracks, on a tap or a hold. Stations and every other row type keep their old tap. */
   private isSong(it: MaItem, type: string) { return (type === 'track' || type === 'podcast_episode') && !isRadio(it); }
   private songMenu(it: MaItem, type: string, key: string) {
     const pt = it.media_type === 'podcast_episode' ? '' : type;
     const ask = (k: 'replace' | 'radio') => { this.closeMenu(); this.press.release(); this._confirm = { kind: k, item: it, run: () => this.play(it, pt, 'replace', k === 'radio') }; };
     const actions = mediaActions((enq) => this.play(it, pt, enq), undefined, ask, canRadio(type, it), false, hideStartRadio(type, it));
     this.press.held = key; this.requestUpdate();
-    const info = INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it) : undefined;
+    const info = INFO_TYPES.includes(it.media_type ?? type) ? songInfo(it, this.hass) : undefined;
     fire(this, 'jukebox-sheet', { item: it, sub: this.sub(it, type) || providerLabel(it.uri), actions, info, close: () => this.press.release() });
   }
-  /** 0.7.10: press-and-hold on an artist page Albums row (not its buttons) opens the menu 5 pop-up. */
+  /** Press-and-hold on an artist page Albums row opens the item pop-up. */
   private albumMenu(it: MaItem, key: string, el: HTMLElement) {
     const ask = (k: 'replace' | 'radio') => { this.closeMenu(); this._confirm = { kind: k, item: it, run: () => this.play(it, 'album', 'replace', k === 'radio') }; };
     const open = () => { this.closeMenu(); this.tap(it, 'album', key); };
@@ -313,17 +287,23 @@ export class JbDetail extends LitElement {
     await this.hearts.toggle(it, t); // the outcome shows in the card's top-right status chip
   }
   private heart(it: MaItem, type: string) { return heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type)); }
-  /** Album row inside an artist: tap opens the album; the #35 search-row buttons (Add to queue, Play next, Play now, Start radio) act on the whole album. */
-  /** 0.7.10: one header naming the album rows' icon columns (sentence case, header only); Start radio only when some album offers it. */
-  private albumHead(albums: MaItem[]) {
-    const cols = [...SEARCH_ACTS.map((a) => ALBUM_HEAD[a]), ...(albums.some((x) => canRadio('album', x)) ? [ALBUM_HEAD.radio] : [])];
-    return html`<div class="ahd" aria-hidden="true">${cols.map((c) => html`<span>${c}</span>`)}</div>`;
+  private pageView() { return libraryViewFor(this.config, ({ artist: 'artist_page', album: 'album_page', playlist: 'playlist_page' } as Record<string, string>)[this.entry?.type ?? ''] ?? ''); }
+  /** Minimal page tile so the artist/album/playlist-page setting can be tested. Themes owns the look. */
+  private tile(it: MaItem, type: string, n?: number, i = 0) {
+    const key = type === 'album' ? 'al|' + it.uri : `${i}|${it.uri}`;
+    const p = this.press.handlers(key, { it, type, key });
+    return html`<div class="tile ${this.press.held === key ? 'held' : ''}" data-uri=${it.uri} data-type=${type}
+        @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
+        @contextmenu=${(e: Event) => e.preventDefault()}>
+      ${artTpl(it, 'big')}<b>${it.name}</b>
+    </div>`;
   }
-  private albumRow(it: MaItem, radioCol = false) {
+  /** Album row inside an artist: tap opens the album; a hold opens the album's pop-up. */
+  private albumRow(it: MaItem) {
     const key = 'al|' + it.uri;
     const p = this.press.handlers(key, { it, type: 'album', key });
     const fav = !!heartType(this.config, 'album', it);
-    return html`<div class="row drill sr ${radioCol && !canRadio('album', it) ? 'nor' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''} ${this.press.pressing === key ? 'hp' : ''}" data-uri=${it.uri} data-type="album" aria-label="Open ${it.name}"
+    return html`<div class="row drill ${fav ? 'hasfav' : ''} ${this.press.held === key ? 'held' : ''} ${this.press.pressing === key ? 'hp' : ''}" data-uri=${it.uri} data-type="album" aria-label="Open ${it.name}"
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       ${artTpl(it, 'th')}
@@ -331,7 +311,6 @@ export class JbDetail extends LitElement {
         <small>${provTpl(it.uri, it.provider, 'album')}<span class="st">${['Album', (it as any).year].filter(Boolean).join(' · ')}</span></small></div>
       <span class="du"></span>
       ${fav ? this.heart(it, 'album') : nothing}
-      ${rowActsTpl(it, canRadio('album', it), (a, el) => this.rowAct(it, 'album', a, el), SEARCH_ACTS, true, false)}
     </div>`;
   }
   private row(it: MaItem, n?: number, i = 0) {
@@ -347,7 +326,6 @@ export class JbDetail extends LitElement {
         <small>${provTpl(it.uri, it.provider)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, 'track')}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
       ${fav ? this.heart(it, type) : nothing}
-      ${rowActsTpl(it, canRadio(type, it), (a, el) => this.rowAct(it, type, a, el))}
     </div>`;
   }
   /** "9 tracks · 43 min" (a "+" while more playlist pages are pending). */
@@ -403,10 +381,14 @@ export class JbDetail extends LitElement {
             <button class="sbtn retry" data-action="retry" tabindex="-1" @pointerdown=${noFocus} @click=${() => { e.data = undefined; this.load(e); this.requestUpdate(); }}>Retry</button></div>` : nothing}
           ${d.note ? html`<div class="note src" data-src=${d.src}>${d.note}</div>` : nothing}
           ${type === 'artist' && !d.loading ? html`<h3 class="eyebrow">Albums</h3>${d.albums.length
-            ? html`<div class="list albums">${this.albumHead(d.albums)}${d.albums.map((a) => this.albumRow(a, d.albums.some((x) => canRadio('album', x))))}</div>`
+            ? (this.pageView() === 'tiles'
+              ? html`<div class="grid lib albums" data-layout="tiles" style=${tilesAcrossStyle(this.config)}>${d.albums.map((a) => this.tile(a, 'album'))}</div>`
+              : html`<div class="list albums" data-layout="rows">${d.albums.map((a) => this.albumRow(a))}</div>`)
             : html`<div class="empty noalbums"><span>No albums found.</span></div>`}` : nothing}
           ${d.tracks.length ? html`<h3 class="eyebrow">${tracksTitle}${d.src === 'search' ? html` <em>matched by search</em>` : nothing}</h3>
-            <div class="list tracks">${d.tracks.map((t, i) => this.row(t, type === 'album' && d.src === 'kiosk' ? i + 1 : undefined, i))}</div>
+            ${this.pageView() === 'tiles'
+              ? html`<div class="grid lib tracks" data-layout="tiles" style=${tilesAcrossStyle(this.config)}>${d.tracks.map((t, i) => this.tile(t, 'track', type === 'album' && d.src === 'kiosk' ? i + 1 : undefined, i))}</div>`
+              : html`<div class="list tracks" data-layout="rows">${d.tracks.map((t, i) => this.row(t, type === 'album' && d.src === 'kiosk' ? i + 1 : undefined, i))}</div>`}
             ${d.more || d.loadingMore ? html`<button class="sbtn more-t" data-action="more" tabindex="-1" ?disabled=${d.loadingMore} @pointerdown=${noFocus}
               @click=${() => this.loadMoreTracks(false)}>${d.loadingMore ? 'Loading more tracks…' : 'Load more tracks'}</button>` : nothing}`
             : !d.loading && !d.error && !d.note ? html`<div class="empty notracks"><span>No ${type === 'podcast' ? 'episodes' : 'tracks'} found.</span></div>` : nothing}
@@ -421,62 +403,54 @@ export class JbDetail extends LitElement {
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
     .dx { position: relative; height: 100%; display: flex; flex-direction: column; min-height: 0; }
-    .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: 16px; touch-action: pan-y;
-      padding-bottom: calc(16px + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
+    .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; padding: clamp(var(--ha-space-2, 8px), 3cqi, var(--ha-space-4, 16px)); touch-action: pan-y;
+      padding-bottom: calc(clamp(var(--ha-space-2, 8px), 3cqi, var(--ha-space-4, 16px)) + var(--_fab-space, 0px)); scroll-padding-bottom: var(--_fab-space, 0px); }
     .scroll::-webkit-scrollbar { display: none; }
     /* the list sits directly on the HA card surface: no second fill */
     .scroll.panel { background: transparent; }
-    .detail { display: flex; flex-direction: column; gap: 14px; }
-    /* Station-only actions: keep Play Now on one line and fully inside its row. */
-    .row[data-type="radio"] { min-height: 68px; }
-    .row[data-type="radio"] .ra-b[data-act="replace"] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-      width: auto; min-width: 72px; height: auto; min-height: 56px; padding: 6px; font-size: var(--ha-font-size-m, 14px); line-height: var(--ha-line-height-condensed, 1.2); }
-    .row[data-type="radio"] .ra-b[data-act="replace"] span { white-space: nowrap; }
-    /* 0.7.10: the artist page's Albums rows: icon-only Add to queue / Play next / Play now (/ Start radio) buttons (48px, #42),
-       named once by a sticky column header above the list (labels sit exactly over their button column) */
-    .row.sr .ra-b span { display: none; }
-    .row.sr .du { display: block; } /* no empty trailing grid column, so the buttons end at the list's right edge like the header */
-    .row.sr.nor .ra { padding-right: var(--_abw, 48px); }
-    /* sticky inside .list.albums only: it leaves with the Albums section; padded out to the panel edges. ha-card surface so rows stay hidden in opaque themes and may blur behind it in a translucent one */
-    .ahd { position: sticky; top: -16px; z-index: 2; display: var(--_ra-display, flex); justify-content: flex-end; margin: 0 -16px 2px; padding: 6px 16px;
-      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
-      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none); }
-    .ahd span { width: var(--_abw, 48px); flex: none; text-align: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); color: var(--_muted); }
-    .nav { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .back { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px 0 12px; border-radius: 999px; background: var(--_chip-bg);
-      border: 1px solid var(--_surface-border); color: var(--_fg); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
-    .back .i { width: 22px; height: 22px; }
+    .detail { display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); }
+    .nav { display: flex; align-items: center; gap: var(--ha-space-3, 12px); min-width: 0; }
+    .grid.lib { display: grid; grid-template-columns: repeat(var(--_cols, 3), minmax(0, 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
+    /* #146: the Library tile look (theme radius, spacing and colours) */
+    .grid.lib .tile { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); padding: var(--ha-space-1, 4px); border-radius: var(--ha-border-radius-lg, 12px); cursor: pointer; }
+    .grid.lib .tile.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }
+    .grid.lib .tile .big { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--ha-border-radius-md, 8px); }
+    .grid.lib .tile .big.circ { border-radius: var(--ha-border-radius-circle, 50%); }
+    .grid.lib .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
+    .back { flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px) 0 var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-bg);
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); font-weight: var(--ha-font-weight-bold, 700); font-size: var(--ha-font-size-m, 14px); }
+    .back .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     .trail { min-width: 0; font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .dh { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; }
-    .dart { width: 150px; height: 150px; border-radius: 12px; }
-    .dart.circ { border-radius: 50%; }
-    .th.circ { border-radius: 50%; }
-    .dt { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .dh { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: clamp(var(--ha-space-3, 12px), 3cqi, var(--ha-space-4, 16px)); align-items: center; }
+    .dart { width: clamp(96px, 22cqi, 150px); height: clamp(96px, 22cqi, 150px); border-radius: var(--ha-border-radius-lg, 12px); }
+    .dart.circ { border-radius: var(--ha-border-radius-circle, 50%); }
+    .th.circ { border-radius: var(--ha-border-radius-circle, 50%); }
+    .dt { min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); }
     .dt .eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_inactive); }
-    .dt h2 { font-family: var(--_font-display); font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dt h2 { font-family: var(--_font-display); font-size: clamp(var(--ha-font-size-xl, 20px), 4.5cqi, var(--ha-font-size-3xl, 28px)); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2);
+      overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
     .dt small { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); }
     .meta { font-size: var(--ha-font-size-m, 14px) !important; font-variant-numeric: tabular-nums; }
-    .da { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .da { display: flex; gap: var(--ha-space-2, 8px); flex-wrap: wrap; margin-top: var(--ha-space-2, 8px); }
     .sbtn.hfav { padding: 0; aspect-ratio: 1; justify-content: center; color: var(--_inactive); }
     .sbtn.hfav.on { color: var(--_active); border-color: currentColor; }
-    .pbtn, .sbtn { display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border-radius: 999px; font-weight: var(--ha-font-weight-bold, 700); }
+    .pbtn, .sbtn { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-weight: var(--ha-font-weight-bold, 700);
+      font-size: clamp(var(--ha-font-size-m, 14px), 3cqi, var(--ha-font-size-l, 16px)); }
     .pbtn { background: var(--_active); color: var(--_on-accent); }
-    .sbtn { border: 1px solid var(--_surface-border); color: var(--_fg); }
-    .pbtn .i, .sbtn .i { width: 22px; height: 22px; }
+    .sbtn { border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
+    .pbtn .i, .sbtn .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); }
     .sbtn.scope { border-color: var(--_active); color: var(--_active); max-width: 100%; }
     .sbtn.scope span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--_divider); }
-    .note.err { color: var(--_fg); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    .note .retry { height: 38px; }
-    h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); } h3 em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; text-transform: none; color: var(--_inactive); margin-left: 6px; }
+    .note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-md, 8px); border: var(--ha-border-width-sm, 1px) dashed var(--_divider); }
+    .note.err { color: var(--_fg); display: flex; align-items: center; justify-content: space-between; gap: var(--ha-space-3, 12px); flex-wrap: wrap; }
+    .note .retry { min-height: var(--_touch-min); }
+    h3.eyebrow { font-size: var(--ha-font-size-s, 12px); color: var(--_muted); } h3 em { font-style: normal; font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0; text-transform: none; color: var(--_inactive); margin-left: var(--ha-space-2, 8px); }
     .more-t { align-self: center; min-width: 220px; justify-content: center; }
-    .empty { padding: 14px; }
+    .empty { padding: var(--ha-space-4, 16px); }
+    /* #117 kept as a container query on the card's own width (a structural choice): on a narrow card the Play / Shuffle / heart buttons
+       take a full line under the cover and title instead of squeezing beside a 96px cover, and rows drop the provider badge */
     @container np (max-width: 520px) {
-      .scroll { padding: 10px; } .ahd { top: -10px; margin: 0 -10px 2px; padding: 6px 10px; }
-      .dh { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; } .dart { width: 96px; height: 96px; }
-      .dt h2 { font-size: var(--ha-font-size-xl, 20px); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       .da { grid-column: 1 / -1; }
-      .pbtn, .sbtn { height: 42px; padding: 0 14px; font-size: var(--ha-font-size-m, 14px); }
       .row .pv { display: none; }
     }
   `];

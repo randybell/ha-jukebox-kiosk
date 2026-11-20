@@ -45,6 +45,7 @@ def _qi(n: int) -> dict[str, Any]:
             "uri": f"library://track/{n}",
             "name": f"Song {n}",
             "provider": "library",
+            "media_type": "track",
             "favorite": n % 2 == 0,
             "artists": [{"name": "Artist"}],
             "album": {"name": "Album", "metadata": {"images": [{"path": "https://img.example/a.jpg", "remotely_accessible": True}]}},
@@ -60,7 +61,12 @@ class FakeMa:
         self.server_info = SimpleNamespace(schema_version=44)
         self.queue = [_qi(n) for n in range(10)]
         self.subs: list[tuple[Any, Any, Any]] = []
+        self.sleep_timers: dict[str, float | None] = {}
+        self.players: dict[str, dict[str, Any]] = {}
+        self.get_hook: Any = None  # optional awaitable run before players/get
         self.autoplay_key = "autoplay_enabled"  # older MA: "dont_stop_the_music_enabled"; None: no field
+        self.active = True
+        self.repeat_mode = "off"
         self.autoplay_error: str | None = None  # raised by player_queues/autoplay when set
         # per-queue Autoplay style config (MA 2.10.9 config/player_queues/*); None = MA without the setting
         self.ap_mode: str | None = "global"
@@ -90,7 +96,8 @@ class FakeMa:
         self.calls.append((command, kwargs))
         if command == "player_queues/get":
             q = {"queue_id": kwargs["queue_id"], "current_index": 4, "index_in_buffer": 4,
-                 "items": len(self.queue), "current_item": self.queue[4], "is_dynamic": False}
+                 "items": len(self.queue), "current_item": self.queue[4], "is_dynamic": False,
+                 "active": self.active, "repeat_mode": self.repeat_mode}
             if self.autoplay_key:
                 q[self.autoplay_key] = True
             return q
@@ -121,6 +128,19 @@ class FakeMa:
                     "dynamic_members": {"value": True}, "secret_thing": {"value": "x"}}}
         if command == "players/all":
             return [{"player_id": PLAYER_A}, {"player_id": PLAYER_B}]
+        if command == "players/get":
+            if self.get_hook is not None:
+                await self.get_hook()
+            return self.players.get(kwargs["player_id"])
+        if command == "players/sleep_timer/get":
+            return self.sleep_timers.get(kwargs["player_id"])
+        if command == "players/sleep_timer/set":
+            exp = 1_700_000_000 + int(kwargs["seconds"])
+            self.sleep_timers[kwargs["player_id"]] = exp
+            return exp
+        if command == "players/sleep_timer/clear":
+            self.sleep_timers[kwargs["player_id"]] = None
+            return None
         return {"ok": command}
 
     def subscribe(self, cb: Any, event_filter: Any = None, id_filter: Any = None) -> Any:

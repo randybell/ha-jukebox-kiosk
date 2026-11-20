@@ -4,6 +4,8 @@
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
 import { devIndex } from './serve.mjs';
+import { hooksBuild } from './hooks-build.mjs';
+hooksBuild(); // #143: this test sets window.__jbUndoMs
 
 const BASE = await devIndex();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -26,7 +28,7 @@ async function open(query = '', vp = { width: 1280, height: 800 }) {
   page.on('pageerror', (e) => pageErrors.push(e.message));
   await page.setViewport({ deviceScaleFactor: 1, ...vp });
   await page.evaluateOnNewDocument(() => { window.__jbUndoMs = 8000; });
-  await page.goto(`${BASE}?layout=separate&fresh=1&latency=30&gap=500&kiosk=1${query.includes('tab=') ? '' : '&tab=now'}${query}`);
+  await page.goto(`${BASE}?hooks=1&layout=separate&fresh=1&latency=30&gap=500&kiosk=1${query.includes('tab=') ? '' : '&tab=now'}${query}`);
   await page.waitForFunction('window.__ready === true');
   await sleep(150);
   return page;
@@ -49,6 +51,12 @@ const mqCalls = (page) => page.evaluate(() => window.__calls.filter((c) => c.dom
 const openQ = async (q = '') => { const p = await open(`&tab=queue${q}`); await wait(p, `${QV}.querySelectorAll('.qr.next').length > 3`); await sleep(150); return p; };
 const nextIds = (p) => ev(p, `[...${QV}.querySelectorAll('.qr.next')].map((r) => r.dataset.id)`);
 const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_item_id)`);
+const HS = `__card.shadowRoot.querySelector('jb-hold-sheet').shadowRoot`;
+async function qsheet(p, id, action) {
+  await ev(p, `${QV}.querySelector('.qr[data-id="${id}"]')?.scrollIntoView({ block: 'center' })`); await sleep(80);
+  await tap(p, `${QV}.querySelector('.qr[data-id="${id}"] .rt')`); await sleep(200);
+  await tap(p, `${HS}.querySelector('.it[data-action="${action}"]')`);
+}
 
 // ---------------- 1. auto picks the kiosk backend ----------------
 {
@@ -69,7 +77,7 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const p = await openQ('&admin=1');
   let ids = await nextIds(p);
   let n = await nws(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[3]}"] .ra-b[data-action="playnext"]')`);
+  await qsheet(p, ids[3], 'next');
   await wait(p, `${QV}.querySelector('.qr.next')?.dataset.id === '${ids[3]}' || [...${QV}.querySelectorAll('.qr.next')][1]?.dataset.id === '${ids[3]}'`, 3000);
   await sleep(800);
   let m = maOf(await ws(p, n), 'player_queues/move_item');
@@ -80,13 +88,13 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('Q2 the server push (queue_updated) refreshes the window', pushed >= 1, String(pushed));
   ids = await nextIds(p);
   n = await nws(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[4]}"] .ra-b[data-action="remove"]')`);
+  await qsheet(p, ids[4], 'remove');
   await sleep(900);
   m = maOf(await ws(p, n), 'player_queues/delete_item');
   check('Q3 Remove → player_queues/delete_item {item_id_or_index}; the row is gone', m.length === 1 && m[0].args.item_id_or_index === ids[4] && !(await maQueue(p)).includes(ids[4]) && !(await nextIds(p)).includes(ids[4]), J(m.map((x) => x.args)));
   ids = await nextIds(p);
   n = await nws(p);
-  await tap(p, `${QV}.querySelector('.qr[data-id="${ids[2]}"] .ra-b[data-action="playnow"]')`);
+  await qsheet(p, ids[2], 'play');
   await wait(p, `!!${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`, 2000);
   await tap(p, `${QV}.querySelector('.confirm .cbtn[data-action="confirm"]')`);
   await sleep(900);
@@ -142,8 +150,12 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   const caps = encodeURIComponent(J({ queue_play: false, queue_edit: false, undo: false, unfavorite: false, speakers: false, lyrics: false, library_write: true }));
   const p = await openQ(`&admin=1&kcaps=${caps}`);
   await sleep(300);
-  const acts = await ev(p, `[...${QV}.querySelectorAll('.qr .qa')].filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.dataset.action ?? 'more')`);
-  check('G1 no queue_play / queue_edit → no Play Now / Play Next / Move / Remove icons', !acts.some((a) => ['playnow', 'playnext', 'up', 'down', 'remove'].includes(a)), J([...new Set(acts)]));
+  const rowBtns = await ev(p, `${QV}.querySelectorAll('.qr .ra-b, .qr .qa, .qr .acts').length`);
+  await tap(p, `${QV}.querySelector('.qr.next .rt')`); await sleep(200);
+  const sheet = await ev(p, `[...${HS}.querySelectorAll('.it')].map((b) => b.dataset.action + (b.getAttribute('aria-disabled') === 'true' ? '-off' : ''))`);
+  check('G1 no queue_play / queue_edit → no row buttons; the pop-up lists Play Now / Play Next / Move / Remove grayed',
+    rowBtns === 0 && ['play', 'next', 'up', 'down', 'remove'].every((a) => sheet.includes(a + '-off')), J({ rowBtns, sheet }));
+  await tap(p, `${HS}.querySelector('.it.cancel')`);
   const tabs = await ev(p, `[...__card.shadowRoot.querySelectorAll('.tab')].map((t) => t.dataset.tab)`);
   check('G2 the bar is Now Playing, Library, (Search in the separate layout,) Queue — no Lyrics tab', J(tabs) === J(['now', 'browse', 'search', 'queue']), J(tabs));
   const n = await nws(p);
@@ -434,15 +446,8 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('S11 sheet heart off on a provider result → item_by_uri lookup, then remove_item with the library id; heart off',
     m.map((x) => x.command).join() === 'music/item_by_uri,music/favorites/remove_item' && /^\d+$/.test(String(m[1].args.library_item_id)) && (await sheet(p)).fav === 'false', J(m));
   await ev(p, `__card.shadowRoot.querySelector('jb-station').dispatchEvent(new CustomEvent('jukebox-station-close', { bubbles: true, composed: true }))`); await sleep(150);
-  // Radio rows: Play Next and Remove are hidden; Play Now replaces immediately (no confirm, no next/add)
-  const acts = await ev(p, `[...${row}.querySelectorAll('.ra-b:not(.fav)')].map((b) => b.dataset.act)`);
-  check('S12a radio row actions: only Play (replace), no Play Next / Remove', J(acts) === J(['replace']), J(acts));
-  await tap(p, `${row}.querySelector('[data-act=replace]')`); await sleep(300);
-  const asked12 = (await plays(p)).length === 0;
-  await ev(p, `__card.shadowRoot.querySelector('jb-station-confirm').shadowRoot.querySelector('[data-action=confirm]')?.click()`); await sleep(300); // 0.7.9 #37: the queue has songs → Replace
-  const pa = await plays(p);
-  check('S12b radio Play → (0.7.9: station confirm, Replace) enqueue replace, no sheet, no other confirm', asked12 && pa.length === 1 && pa[0].enqueue === 'replace' && pa[0].media_id === st
-    && pa[0].media_type === 'radio' && !(await sheet(p)) && !(await ev(p, `!!${SV}.shadowRoot.querySelector('.confirm')`)), J(pa));
+  // Radio rows carry no inline buttons (#85); the station sheet above is the way to play one
+  check('S12 radio row: no inline play or queue buttons', (await ev(p, `${row}.querySelectorAll('.ra-b:not(.fav)').length`)) === 0);
   await p.close();
 }
 // ---------------- 10. v0.7 hearts: every row, tile and page (library class), one shared store, no confirmation ----------------
@@ -590,24 +595,24 @@ const maQueue = (p) => ev(p, `window.__queues['${EV}'].items.map((x) => x.queue_
   check('K16 Now Playing heart → info chip naming the track (top right), heart off', (await pressedOf(p, npb)) === 'false' && ch4?.kind === 'info' && /^Removed .+ from favorites$/.test(ch4.text) && ch4.top < 140, J(ch4));
   await p.close();
 }
-// ---------------- 0.6.5 repeat one → repeat queue, only with Playback ----------------
+// ---------------- #139 repeat one is shown as Repeat single track; nothing is rewritten ----------------
 {
   const reps = (p) => ev(p, `window.__calls.filter((c) => c.service === 'repeat_set').map((c) => ({ r: c.data.repeat, e: [c.target?.entity_id].flat().join() }))`);
-  const shown = (p) => ev(p, `(() => { const b = ${NP}.querySelector('.tb.rp'); return b.classList.contains('on') && b.getAttribute('aria-label') === 'Repeat queue'; })()`);
+  const shown = (p) => ev(p, `(() => { const b = ${NP}.querySelector('.tb.rp'); return b.classList.contains('on') && b.getAttribute('aria-label') === 'Repeat single track'; })()`);
   let p = await open('&repeat=one'); // plain kiosk user, default guest classes include playback
-  await sleep(2200);
+  await sleep(500);
   let r = await reps(p);
-  check('RP1 kiosk user with Playback: player on one → shown as repeat queue, exactly one repeat_set all on the target', (await shown(p)) && r.length === 1 && r[0].r === 'all' && r[0].e === EV, J(r));
+  check('RP1 kiosk user with Playback: player on one → shown as Repeat single track, nothing sent', (await shown(p)) && r.length === 0, J(r));
   await p.close();
   p = await open(`&repeat=one&kcaps=${encodeURIComponent(J({ queue_play: false }))}`); // no Playback class
-  await sleep(2200);
+  await sleep(500);
   r = await reps(p);
-  check('RP2 kiosk user without Playback: shown as repeat queue, nothing sent', (await shown(p)) && r.length === 0, J(r));
+  check('RP2 kiosk user without Playback: shown as Repeat single track, nothing sent', (await shown(p)) && r.length === 0, J(r));
   await p.close();
   p = await open('&repeat=one&kfail=capabilities'); // the server never says what the user may do
-  await sleep(2200);
+  await sleep(500);
   r = await reps(p);
-  check('RP3 capabilities unknown (server error) → nothing sent', r.length === 0, J(r));
+  check('RP3 capabilities unknown (server error) → shown as Repeat single track, nothing sent', (await shown(p)) && r.length === 0, J({ r, shown: await shown(p) }));
   await p.close();
 }
 check('no page errors', pageErrors.length === 0, J(pageErrors.slice(0, 3)));

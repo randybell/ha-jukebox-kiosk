@@ -1,6 +1,4 @@
-// 0.7.20: the card editor's two new Library options, library_view (rows | tiles) and library_columns (2 to 6, shown only while tiles is chosen).
-// Same controls and place as the other Library settings (select dropdown like Library layout; number box like Items per Library page), plain wording.
-// Shown values: rows / 3 when unset; untouched shown defaults are not written back; YAML values load; edits write only what changed; columns clamp to 2..6.
+// #146: per-section Tiles / Rows settings (no master library_view), Tiles across 1–8 always shown.
 // Usage: node test/editor-library-view.e2e.mjs (starts its own dev server). SHOTS=<dir> also writes the screenshot.
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -13,6 +11,9 @@ const check = (name, ok, info = '') => { total++; if (!ok) failures++; console.l
 const J = JSON.stringify;
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none'] });
 const base = { type: 'custom:jukebox-card', entity: 'media_player.everywhere' };
+const VIEWS = ['view_playlist', 'view_artist', 'view_track', 'view_genre', 'view_radio', 'view_album', 'view_podcast', 'view_audiobook', 'view_queue', 'view_discover', 'view_artist_page', 'view_album_page', 'view_playlist_page', 'view_search'];
+const NAMES = { view_playlist: 'Playlists', view_artist: 'Artists', view_track: 'Tracks', view_genre: 'Genres', view_radio: 'Radio', view_album: 'Albums', view_podcast: 'Podcasts', view_audiobook: 'Audiobooks', view_queue: 'Queue', view_discover: 'Discover', view_artist_page: 'Artist page', view_album_page: 'Album page', view_playlist_page: 'Playlist page', view_search: 'Search results' };
+const LABELS = Object.fromEntries(Object.entries(NAMES).map(([k, v]) => [k, `Show ${v} as`]));
 const open = async (cfg) => {
   const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width: 900, height: 1500, deviceScaleFactor: 1 });
   await p.goto(`${ROOT}editor.html?fresh=1&cfg=${encodeURIComponent(J(cfg))}`);
@@ -29,52 +30,65 @@ const setNum = async (p, name, value) => { await ev(p, `(() => { const i = ${F}.
 {
   const p = await open(base);
   const l = await lib(p);
-  check('Library section: library_view sits right after the category buttons, before the Library home options', l.indexOf('library_view') === l.indexOf('library_categories') + 1 && l.indexOf('library_view') < l.indexOf('library_home'), J(l));
-  check('unset: library_columns is not shown (rows)', !l.includes('library_columns'), J(l));
-  const f = await ev(p, `(() => { const r = ${F}.querySelector('[data-name=library_view]'); const s = r.querySelector('select'); const ly = ${F}.querySelector('[data-name=library_layout]');
-    return { label: r.querySelector('span').textContent, value: s.value, opts: [...s.options].map((o) => o.value + '=' + o.textContent), sameKind: !!ly.querySelector('select') }; })()`);
-  check('library_view: a dropdown (like Library layout), shown as Rows, with plain Rows / Tiles choices', f.sameKind && f.value === 'rows' && f.opts.length === 2 && /^rows=Rows/.test(f.opts[0]) && /^tiles=Tiles/.test(f.opts[1]) && /rows or tiles/i.test(f.label), J(f));
-  if (process.env.SHOTS) { await ev(p, `${F}.querySelector('details[data-section=library]').scrollIntoView()`); await p.screenshot({ path: `${process.env.SHOTS}/0720-editor-library-rows.png` }); }
+  check('no master library_view field', !l.includes('library_view') && !l.includes('library_views'), J(l));
+  check('the 14 section fields sit right after the category buttons, before Tiles across',
+    VIEWS.every((n, i) => l.indexOf(n) === l.indexOf('library_categories') + 1 + i) && l.indexOf('library_columns') === l.indexOf(VIEWS.at(-1)) + 1, J(l));
+  check('Tiles across is always shown (rows by default)', l.includes('library_columns'), J(l));
+  const fields = await ev(p, `(() => { const out = {};
+    for (const n of ${J(VIEWS)}) {
+      const r = ${F}.querySelector('[data-name=' + n + ']');
+      const s = r.querySelector('select');
+      out[n] = { label: r.querySelector('span').textContent.trim(), value: s.value, opts: [...s.options].map((o) => o.value + '=' + o.textContent.trim()) };
+    }
+    const c = ${F}.querySelector('[data-name=library_columns]');
+    const i = c.querySelector('input');
+    out.cols = { label: c.querySelector('span').textContent.trim(), type: i.type, value: i.value, min: i.min, max: i.max, desc: [...c.querySelectorAll('span, p, small, .ha-form-help, .helper')].map((x) => x.textContent.trim()) };
+    return out;
+  })()`);
+  const wantVal = (n) => (['view_playlist', 'view_album', 'view_radio'].includes(n) ? 'tiles' : 'rows');
+  const mismatches = VIEWS.filter((n) => !(fields[n].value === wantVal(n) && fields[n].opts.join() === 'rows=Rows,tiles=Tiles' && fields[n].label === LABELS[n])).map((n) => ({ n, got: fields[n], want: { label: LABELS[n], value: wantVal(n) } }));
+  check('each section is a dropdown labelled in plain words (Show <section> as), options exactly Rows and Tiles; Playlists, Albums and Radio start as Tiles, the rest as Rows', mismatches.length === 0, J(mismatches.length ? mismatches : { sample: fields.view_playlist, album: fields.view_album, queue: fields.view_queue, labels: Object.fromEntries(VIEWS.map((n) => [n, fields[n].label + '=' + fields[n].value])) }));
+  check('Tiles across: a number box, shown as 3, labelled only "Tiles across"',
+    fields.cols.type === 'number' && fields.cols.value === '3' && fields.cols.label === 'Tiles across', J(fields.cols));
+  if (process.env.SHOTS) { await ev(p, `${F}.querySelector('details[data-section=library]').scrollIntoView()`); await p.screenshot({ path: `${process.env.SHOTS}/146-editor-library-views.png` }); }
   await ev(p, `__changes.length = 0`);
-  await pick(p, 'library_view', 'tiles');
+  await pick(p, 'view_playlist', 'rows');
   const c1 = await lastChange(p);
-  check('choosing Tiles writes library_view: tiles and nothing else', c1.library_view === 'tiles' && !('library_columns' in c1) && Object.keys(c1).filter((k) => !(k in base)).join() === 'library_view', J(c1));
-  const l2 = await lib(p);
-  check('with tiles chosen, library_columns appears right after library_view', l2.indexOf('library_columns') === l2.indexOf('library_view') + 1, J(l2));
-  const g = await ev(p, `(() => { const r = ${F}.querySelector('[data-name=library_columns]'); const i = r.querySelector('input'); return { label: r.querySelector('span').textContent, type: i.type, value: i.value }; })()`);
-  check('library_columns: a number box (like Items per Library page), shown as 3 when unset, labelled in plain words', g.type === 'number' && g.value === '3' && /columns/i.test(g.label), J(g));
-  if (process.env.SHOTS) { await ev(p, `${F}.querySelector('details[data-section=library]').scrollIntoView()`); await p.screenshot({ path: `${process.env.SHOTS}/0720-editor-library-tiles.png` }); }
+  check('choosing Rows on Playlists writes library_views.playlist: rows (differs from the Tiles default) and does not write library_view',
+    c1.library_views?.playlist === 'rows' && !('library_view' in c1) && !VIEWS.some((n) => n in c1), J(c1));
+  await ev(p, `__changes.length = 0`);
   await setNum(p, 'library_columns', 5);
   const c2 = await lastChange(p);
-  check('typing 5 writes library_columns: 5, library_view stays tiles', c2.library_columns === 5 && c2.library_view === 'tiles', J(c2));
+  check('typing 5 writes library_columns: 5, Playlists stay rows', c2.library_columns === 5 && c2.library_views?.playlist === 'rows', J(c2));
   await setNum(p, 'library_columns', 9);
-  check('typing 9 is clamped to 6', (await lastChange(p)).library_columns === 6, J(await lastChange(p)));
+  check('typing 9 is clamped to 8', (await lastChange(p)).library_columns === 8, J(await lastChange(p)));
   await setNum(p, 'library_columns', 0);
-  check('typing 0 is clamped to 2', (await lastChange(p)).library_columns === 2, J(await lastChange(p)));
+  check('typing 0 is clamped to 1', (await lastChange(p)).library_columns === 1, J(await lastChange(p)));
+  await setNum(p, 'library_columns', 8);
+  check('typing 8 stays 8', (await lastChange(p)).library_columns === 8, J(await lastChange(p)));
   await setNum(p, 'library_columns', 3.4);
   check('typing 3.4 becomes 3', (await lastChange(p)).library_columns === 3, J(await lastChange(p)));
-  await pick(p, 'library_view', 'rows');
-  const l3 = await lib(p);
-  check('switching back to Rows hides library_columns again', !l3.includes('library_columns') && (await lastChange(p)).library_view === 'rows', J({ l3, c: await lastChange(p) }));
   await p.close();
 }
 {
   const p = await open({ ...base, library_view: 'tiles', library_columns: 4 });
-  const v = await ev(p, `({ view: ${F}.querySelector('[data-name=library_view] select').value, cols: ${F}.querySelector('[data-name=library_columns] input').value })`);
-  check('YAML library_view: tiles + library_columns: 4 load as Tiles / 4', v.view === 'tiles' && v.cols === '4', J(v));
+  const v = await ev(p, `({ playlist: ${F}.querySelector('[data-name=view_playlist] select').value, album: ${F}.querySelector('[data-name=view_album] select').value, artist: ${F}.querySelector('[data-name=view_artist] select').value, queue: ${F}.querySelector('[data-name=view_queue] select').value, discover: ${F}.querySelector('[data-name=view_discover] select').value, cols: ${F}.querySelector('[data-name=library_columns] input').value })`);
+  check('YAML library_view: tiles + library_columns: 4: Library tops show Tiles (leftover), Queue and Discover stay Rows (their defaults), columns 4',
+    v.playlist === 'tiles' && v.album === 'tiles' && v.artist === 'tiles' && v.queue === 'rows' && v.discover === 'rows' && v.cols === '4', J(v));
   await ev(p, `__changes.length = 0`);
-  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=coerce_repeat_one] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
+  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=screensaver_lyrics] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
   const c = await lastChange(p);
-  check('an unrelated edit keeps both YAML values', c.library_view === 'tiles' && c.library_columns === 4 && c.coerce_repeat_one === false, J(c));
+  check('an unrelated edit leaves leftover library_view alone and does not copy it into library_views, keeps columns',
+    c.library_view === 'tiles' && !('library_views' in c) && c.library_columns === 4 && c.screensaver_lyrics === false, J(c));
   await p.close();
 }
 {
-  // an unrelated edit on a fresh config does not write the shown defaults (rows, 3)
   const p = await open(base);
   await ev(p, `__changes.length = 0`);
-  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=coerce_repeat_one] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
+  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=screensaver_lyrics] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
   const c = await lastChange(p);
-  check('an unrelated edit does not write library_view / library_columns', !('library_view' in c) && !('library_columns' in c), J(c));
+  check('an unrelated edit on a fresh config writes neither library_view nor library_views nor library_columns',
+    !('library_view' in c) && !('library_views' in c) && !('library_columns' in c), J(c));
   await p.close();
 }
 {
@@ -89,10 +103,28 @@ const setNum = async (p, name, value) => { await ev(p, `(() => { const i = ${F}.
   const text = await ev(p, `__editor.shadowRoot.textContent`);
   check('large_buttons in a saved config: the editor loads with no field and no "Large buttons" text', !names.includes('large_buttons') && !/large buttons/i.test(text), J(names));
   await ev(p, `__changes.length = 0`);
-  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=coerce_repeat_one] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
+  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=screensaver_lyrics] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
   const c = await lastChange(p);
-  check('large_buttons in a saved config: an editor edit still works', c.coerce_repeat_one === false && c.entity === 'media_player.everywhere', J(c));
+  check('large_buttons in a saved config: an editor edit still works', c.screensaver_lyrics === false && c.entity === 'media_player.everywhere', J(c));
   check('large_buttons in a saved config: no errors or console warnings', msgs.length === 0, J(msgs));
+  await p.close();
+}
+{
+  // #139: the "Turn repeat one back into repeat all" option is gone. A saved config that still has
+  // coerce_repeat_one loads without errors or console warnings, the editor shows no field for it, and an edit does not write it back.
+  const msgs = [];
+  const p = await browser.newPage(); await hermetic(p); await p.setViewport({ width: 900, height: 1500, deviceScaleFactor: 1 });
+  p.on('pageerror', (e) => msgs.push('pageerror: ' + e.message)); p.on('console', (m) => { if (['warning', 'warn', 'error'].includes(m.type())) msgs.push(m.type() + ': ' + m.text()); });
+  await p.goto(`${ROOT}editor.html?fresh=1&cfg=${encodeURIComponent(J({ ...base, coerce_repeat_one: false }))}`);
+  await p.waitForFunction('window.__editor && __editor.shadowRoot && __editor.shadowRoot.querySelector("ha-form")', { timeout: 8000 }); await sleep(600);
+  const names = await ev(p, `[...${F}.querySelectorAll('[data-name]')].map((e) => e.dataset.name)`);
+  const text = await ev(p, `__editor.shadowRoot.textContent`);
+  check('coerce_repeat_one in a saved config: the editor loads with no field and no "repeat one" text', !names.includes('coerce_repeat_one') && !/repeat one/i.test(text), J(names));
+  await ev(p, `__changes.length = 0`);
+  await ev(p, `(() => { const i = ${F}.querySelector('[data-name=screensaver_lyrics] input'); i.checked = false; i.dispatchEvent(new Event('change')); })()`); await sleep(250);
+  const c = await lastChange(p);
+  check('coerce_repeat_one in a saved config: an editor edit does not write it back', !('coerce_repeat_one' in c) && c.screensaver_lyrics === false && c.entity === 'media_player.everywhere', J(c));
+  check('coerce_repeat_one in a saved config: no errors or console warnings', msgs.length === 0, J(msgs));
   await p.close();
 }
 await browser.close();
