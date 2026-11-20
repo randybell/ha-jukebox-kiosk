@@ -607,7 +607,7 @@ export class JbNow extends LitElement {
     .badges { display: flex; align-items: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; }
     /* Autoplay at spot A, as MA's pill: loop icon and the word; outlined in the theme colour when off, filled with it when on (also the not-tappable indicator of a queue MA fills itself) */
     .apb { margin-left: auto; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); min-width: var(--_touch-min); padding: 0 var(--ha-space-4, 16px);
-      border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-sm, 1px) solid var(--_active); background: transparent; color: var(--_active);
+      border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-md, 2px) solid var(--_active); background: transparent; color: var(--_active);
       font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; cursor: pointer; }
     .apb .i { width: var(--_icon); height: var(--_icon); }
     .apb.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
