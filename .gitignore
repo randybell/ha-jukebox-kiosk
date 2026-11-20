@@ -3,6 +3,7 @@ node_modules/
 
 # old build output dir (the card now builds into custom_components/jukebox_kiosk/www/, which IS committed)
 dist/
+dist-dev/
 
 # generated test output (screenshots, results.json, perf.json); curated shots live in docs/
 test/shots/

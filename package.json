@@ -10,6 +10,7 @@
   "private": true,
   "scripts": {
     "build": "rollup -c",
+    "build:dev": "JB_DEV_PREVIEW=1 rollup -c",
     "watch": "rollup -c -w",
     "typecheck": "tsc --noEmit",
     "test": "tsc --noEmit && node scripts/run-tests.mjs unit && node scripts/run-tests.mjs e2e",
