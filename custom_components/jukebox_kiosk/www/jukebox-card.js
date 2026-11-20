@@ -1486,15 +1486,11 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
     .qn { position: absolute; left: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); min-width: var(--ha-space-7, 28px); height: var(--ha-space-7, 28px); padding: 0 var(--ha-space-2, 8px); box-sizing: border-box;
       border-radius: var(--ha-border-radius-pill, 9999px); display: grid; place-items: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); font-variant-numeric: tabular-nums;
       background: var(--ha-card-background, var(--card-background-color, var(--_bg))); color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); }
-    /* played and playing songs: tight rows across the whole grid (small cover, title beside it) so Up next starts right below; playing is highlighted like the playing row in Rows */
-    .qt.now, .qt.past { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: var(--ha-space-3, 12px); padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); }
-    .qt.now .tw, .qt.past .tw { flex: none; width: calc(var(--_touch-min) + var(--ha-space-4, 16px)); }
-    .qt.now b, .qt.past b { margin-top: 0; }
+    /* played and playing songs are normal tiles in the same grid (Tiles across honoured): playing highlighted with the theme accent, played dimmed */
     .qt.now { background: var(--_active); color: var(--_on-accent); }
-    .qt.now .qtt { flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--ha-space-2, 8px); align-items: center; }
+    .qt.now .qtt { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--ha-space-2, 8px); align-items: center; }
     .qt.now .qeq { grid-row: 1 / span 2; display: grid; place-items: center; }
     .qt.now .qeq .i { width: var(--_icon); height: var(--_icon); }
-    .qt.now b { font-size: var(--ha-font-size-l, 16px); }
     .qt.now small { color: color-mix(in srgb, var(--_on-accent) 70%, transparent); } /* a tint of the on-primary text colour, as the playing row */
     .qt.past { opacity: var(--_dim); }
     .qt.held { background: var(--_chip-sel); box-shadow: 0 0 0 var(--ha-border-width-md, 2px) var(--_active); }

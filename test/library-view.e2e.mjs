@@ -292,14 +292,15 @@ for (const [tag, cfg] of [['missing', {}], ['false', { show_action_icons: false 
     const first = ts.filter((t) => Math.round(t.getBoundingClientRect().top) === top).length;
     return { layout: g.dataset.layout, tiles: [...g.querySelectorAll('.qt')].length, next: ts.length, rows: R.querySelectorAll('.qr').length, tracks: getComputedStyle(g).gridTemplateColumns.split(' ').length, first }; })()`);
   check('Queue library_views.queue: tiles shows an exact 4-column tile grid', q.layout === 'tiles' && q.tiles > 0 && q.rows === 0 && q.tracks === 4 && q.first === Math.min(4, q.next), J(q));
-  const look = await ev(p, `(() => { const R = __card.shadowRoot.querySelector('jb-queue').shadowRoot; const g = R.querySelector('.qg'); const gw = g.getBoundingClientRect().width;
+  const look = await ev(p, `(() => { const R = __card.shadowRoot.querySelector('jb-queue').shadowRoot; const g = R.querySelector('.qg');
     const now = R.querySelector('.qt.now'), past = R.querySelector('.qt.past'), nx = [...R.querySelectorAll('.qt.next')];
-    const nb = now.getBoundingClientRect(), sc = R.querySelector('.scroll').getBoundingClientRect();
-    return { badges: nx.slice(0, 4).map((t) => t.querySelector('.qn')?.textContent.trim()), nowWide: nb.width > gw * 0.9, nowTight: nb.height < nx[0].getBoundingClientRect().height / 2,
-      nowBg: getComputedStyle(now).backgroundColor !== 'rgba(0, 0, 0, 0)', pastDim: past ? Number(getComputedStyle(past).opacity) < 1 : true,
-      nextTopInView: nx[0].getBoundingClientRect().top < sc.bottom, nextTop: Math.round(nx[0].getBoundingClientRect().top - sc.top), scH: Math.round(sc.height), tileH: Math.round(nx[0].getBoundingClientRect().height) }; })()`);
-  check('Queue tiles: numbered badges on Up next, playing song a tight highlighted row across the grid, played songs dimmed, first Up next row starts in view',
-    J(look.badges) === J(['1', '2', '3', '4']) && look.nowWide && look.nowTight && look.nowBg && look.pastDim && look.nextTopInView, J(look));
+    const items = [...R.querySelectorAll('.qt.past, .qt.now, .qt.next')]; const cols = getComputedStyle(g).gridTemplateColumns.split(' ').length;
+    const tw = Math.round(nx[0].getBoundingClientRect().width);
+    return { badges: nx.slice(0, 4).map((t) => t.querySelector('.qn')?.textContent.trim()), hasPast: !!past, hasNow: !!now,
+      sameGrid: items.every((t) => t.parentElement === g), sameWidth: items.every((t) => Math.abs(Math.round(t.getBoundingClientRect().width) - tw) <= 1), cols,
+      nowBg: getComputedStyle(now).backgroundColor !== 'rgba(0, 0, 0, 0)', pastDim: past ? Number(getComputedStyle(past).opacity) < 1 : true }; })()`);
+  check('Queue tiles: played, playing and Up next are all tiles in one grid with Tiles across columns; numbered badges on Up next, playing highlighted, played dimmed',
+    J(look.badges) === J(['1', '2', '3', '4']) && look.hasPast && look.hasNow && look.sameGrid && look.sameWidth && look.cols === 4 && look.nowBg && look.pastDim, J(look));
   await p.close();
 }
 {
