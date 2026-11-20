@@ -674,17 +674,17 @@ _SLEEP_MODES = frozenset({"duration", "end_of_item", "end_of_chapter"})
 
 
 async def _sleep_payload(client: Any, player_id: str, raw: Any) -> dict[str, Any]:
-    """Expiry from players/sleep_timer/get, plus sleep_timer_mode from players/get when present.
+    """Expiry from players/sleep_timer/get, plus sleep_timer_mode from the playback owner.
 
     MA's get command returns only expires_at (None while an end-of-item timer is paused).
-    The frontend reads player.sleep_timer_mode (2.17.370 sleep_timer.ts).
+    The mode is stored on the playback owner (sleep_timer.py _get_sleep_timer_player
+    → _resolve_playback_owner in base.py:581-597; player.set_sleep_timer). MA's
+    frontend reads player.sleep_timer_mode on that owner (sleep_timer.ts:38).
     """
     out = _expires_payload(raw)
-    try:
-        player = await _send(client, "players/get", player_id=player_id)
-    except Exception:
-        player = None
-    if isinstance(player, dict):
+    owner_id = await _playback_owner_id(client, player_id)
+    player = await _ma_player(client, owner_id)
+    if player is not None:
         mode = player.get("sleep_timer_mode")
         if mode in _SLEEP_MODES:
             out["mode"] = mode

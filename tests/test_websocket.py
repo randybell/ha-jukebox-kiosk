@@ -776,6 +776,28 @@ async def test_sleep_timer_get_end_of_item_has_mode_and_no_expiry(
     assert ("players/get", {"player_id": SYNCGROUP}) in fake_ma.calls
 
 
+async def test_sleep_timer_get_end_of_item_uses_playback_owner_mode(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    """End-of-track mode lives on the playback owner (MA _resolve_playback_owner, base.py:581-597).
+
+    A grouped member's own players/get has no sleep_timer_mode; the group leader that
+    holds the timer does. Mode must come from that owner, as MA stores it there
+    (sleep_timer.py _get_sleep_timer_player → player.set_sleep_timer).
+    """
+    fake_ma.sleep_timers[PLAYER_A] = None
+    fake_ma.players[PLAYER_A] = {"player_id": PLAYER_A, "synced_to": PLAYER_B, "active_group": None}
+    fake_ma.players[PLAYER_B] = {"player_id": PLAYER_B, "synced_to": None, "active_group": SYNCGROUP}
+    fake_ma.players[SYNCGROUP] = {"player_id": SYNCGROUP, "synced_to": None, "active_group": None, "sleep_timer_mode": "end_of_item"}
+    ws = await _ws(hass_ws_client, user_token[1])
+    got = await _call(ws, type="jukebox_kiosk/sleep_timer_get", entity_id=ENTITY_A)
+    assert got["success"]
+    assert got["result"]["expires_at"] is None
+    assert got["result"]["mode"] == "end_of_item"
+    assert got["result"]["player_id"] == PLAYER_A
+    assert ("players/get", {"player_id": SYNCGROUP}) in fake_ma.calls
+
+
 async def test_sleep_timer_set_needs_positive_seconds(
     hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
 ) -> None:
