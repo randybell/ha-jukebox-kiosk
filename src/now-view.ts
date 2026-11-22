@@ -170,10 +170,6 @@ export class JbNow extends LitElement {
     });
   }
   private toast(t: string) { this._toast = t; window.clearTimeout(this._toastTimer); this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400); }
-  private async toggleAutoplay(on: boolean) {
-    try { await this.queue?.setAutoplay(on); this.toast(on ? 'Autoplay on' : 'Autoplay off'); }
-    catch { this.toast("Couldn't change Autoplay"); }
-  }
 
   // ---------- transport ----------
   private isPlaying() { return this.flag('state', this.ent?.state) === 'playing'; }
@@ -461,9 +457,8 @@ export class JbNow extends LitElement {
     const apMode = autoplayControlMode(!!this.config._backend?.ext?.autoplay, this._snap, this._snap?.repeat);
     const apOn = this._snap?.autoplay === true;
     const apTpl = apMode === 'hide' ? nothing
-      : html`<button class="apb ${apOn ? 'on' : ''}" data-action="np-autoplay" tabindex="-1" aria-pressed=${apOn ? 'true' : 'false'}
-          aria-label="Radio - Autoplay" title=${apOn ? 'Autoplay is on: more music is added when the queue runs out' : 'Autoplay is off'}
-          @pointerdown=${noFocus} @click=${() => this.toggleAutoplay(!apOn)}>${icon('autoplay', 'i xs')}<span>Radio - Autoplay</span></button>`;
+      : html`<span class="apb ${apOn ? 'on' : ''}" data-state=${apOn ? 'on' : 'off'}
+          title=${apOn ? 'Autoplay is on: more music is added when the queue runs out. Change it on the Queue screen.' : 'Autoplay is off. Change it on the Queue screen.'}>${icon('autoplay', 'i xs')}Radio - Autoplay</span>`;
     const favOn = this.isFav();
     const showFav = this.canFav();
     const sleepRem = this.sleepRemain();
@@ -600,16 +595,12 @@ export class JbNow extends LitElement {
       font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); font-variant-numeric: tabular-nums; }
     .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); color: var(--_fg); }
     .badges { display: flex; align-items: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; }
-    /* Autoplay at spot A, as MA's pill: loop icon and the word; outlined in the theme colour when off, filled with it when on (also the not-tappable indicator of a queue MA fills itself) */
-    .apb { margin-left: auto; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); min-width: var(--_touch-min); padding: 0 var(--ha-space-4, 16px);
-      border-radius: var(--ha-border-radius-pill, 9999px); border: var(--ha-border-width-md, 2px) solid var(--_active); background: transparent; color: var(--_active);
-      font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; cursor: pointer; }
-    .apb .i { width: var(--_icon); height: var(--_icon); }
+    /* Autoplay status at spot A: a read-only pill with the same size and lettering as the Playing on pill beside it (changed on the Queue screen);
+       filled with the theme active colour when on */
+    .apb { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); white-space: nowrap;
+      font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
+      padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-sel); border: var(--ha-border-width-sm, 1px) solid var(--_hairline); color: var(--_muted); }
     .apb.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); }
-    .apb:active { transform: scale(.96); }
-    .apb:disabled, .apb.ind { cursor: default; transform: none; }
-    /* repeat on (MA locks Autoplay): not tappable, shown in the theme's disabled colour */
-    .apb:disabled:not(.on) { color: var(--_disabled); border-color: var(--_disabled); }
     .pv.big { font-size: var(--ha-font-size-s, 12px); padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); }
     .where { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
       padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-sel); border: var(--ha-border-width-sm, 1px) solid var(--_hairline); color: var(--_muted); }
@@ -707,7 +698,7 @@ export class JbNow extends LitElement {
     .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: var(--_dim); }
     .vr.pending .ra { animation: jb-pulse 1s ease-in-out infinite; }
     @keyframes jb-pulse { 50% { opacity: .35; } }
-    @media (prefers-reduced-motion: reduce) { .vr.pending .ra { animation: none; } .tb:active, .sleep-strip .sp:active, .apb:active { transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .vr.pending .ra { animation: none; } .tb:active, .sleep-strip .sp:active { transform: none; } }
     .vn .else { display: block; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vr.muted .vs { opacity: var(--_dim); }
     @container vol (min-width: 600px) {
