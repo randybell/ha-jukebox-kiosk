@@ -26,6 +26,15 @@ async function tap(page, expr) {
   await page.mouse.click(r.x, r.y);
   await sleep(80);
 }
+async function hold(page, expr, ms = 700) {
+  const r = await page.evaluate((expr) => { const el = eval(expr); if (!el) return null; el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: b.width }; }, expr);
+  if (!r || !r.w) throw new Error('no element to hold: ' + expr);
+  await page.mouse.move(r.x, r.y);
+  await page.mouse.down();
+  await sleep(ms);
+  await page.mouse.up();
+  await sleep(80);
+}
 const wait = (page, fn, timeout = 5000) => page.waitForFunction(fn, { timeout, polling: 40 }).then(() => true, () => false);
 const ev = (page, expr) => page.evaluate((e) => eval(e), expr);
 // 0.7.8 #51: every screen closes the same way: a tap anywhere, or a labeled Close (the Speakers pill); Esc everywhere.
@@ -60,13 +69,14 @@ const isPill = (x, h = 48) => !!x && x.text === 'Close' && x.svg === 0 && x.h >=
   await p.close();
   // ---- Autoplay sheet + Queue search ----
   const q = await open('&tab=queue&kcaps=' + encodeURIComponent(J({ autoplay: true, autoplay_mode: true })), cfg);
-  await wait(q, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
-  await tap(q, `${QV}.querySelector('[data-action="autoplay-mode"]')`); await wait(q, `!!${QV}.querySelector('.aps')`);
-  const ap = await pill(q, `${QV}.querySelector('[data-action="ap-close"]')`);
-  check(`X4 Autoplay sheet: labeled Close pill, no X${L}`, isPill(ap, H), J(ap));
+  await wait(q, `${QV}.querySelector('[data-action="autoplay"]')`);
+  await hold(q, `${QV}.querySelector('[data-action="autoplay"]')`); await wait(q, `!!${QV}.querySelector('.aps')`);
+  const ap = await ev(q, `(() => { const b = ${QV}.querySelector('[data-action="ap-close"]'); if (!b) return null; const r = b.getBoundingClientRect();
+    return { text: b.textContent.replace(/\s+/g, ' ').trim(), action: b.getAttribute('data-action'), inSheet: !!b.closest('.aps'), h: Math.round(r.height) }; })()`);
+  check(`X4 Autoplay sheet: bottom Cancel row (data-action ap-close)${L}`, ap?.action === 'ap-close' && /Cancel/.test(ap.text) && ap.inSheet && ap.h >= 48, J(ap));
   await tap(q, `${QV}.querySelector('[data-action="ap-close"]')`); await sleep(250);
-  check(`X5 Autoplay sheet closes with Close${L}`, !(await ev(q, `!!${QV}.querySelector('.aps')`)));
-  await tap(q, `${QV}.querySelector('[data-action="autoplay-mode"]')`); await wait(q, `!!${QV}.querySelector('.aps')`); await esc(q);
+  check(`X5 Autoplay sheet closes with Cancel${L}`, !(await ev(q, `!!${QV}.querySelector('.aps')`)));
+  await hold(q, `${QV}.querySelector('[data-action="autoplay"]')`); await wait(q, `!!${QV}.querySelector('.aps')`); await esc(q);
   check(`X6 Autoplay sheet closes with Esc${L}`, !(await ev(q, `!!${QV}.querySelector('.aps')`)));
   await tap(q, `${QV}.querySelector('[data-action="queue-search"]')`); await wait(q, `!!${QV}.querySelector('.qsx')`);
   const qs = await pill(q, `${QV}.querySelector('[data-action="queue-search"]')`);

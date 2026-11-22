@@ -616,7 +616,7 @@ check('12e long-press a playlist → menu 5 (0.7.12: Open, Add to queue, Play ne
 }
 await clickEl(page, `${BV}.querySelector('[data-cat="album"]')`); await sleep(300);
 n0 = await nws(page);
-await page.evaluate((b) => [...eval(b).querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent === 'Kind of Blue').querySelector('.open').click(), BV);
+await page.evaluate((b) => [...eval(b).querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent === 'Kind of Blue').click(), BV);
 await page.waitForFunction((d) => eval(d)?.querySelectorAll('.list.tracks .row').length > 0, { timeout: 4000 }, BD);
 await sleep(200);
 const at = (await wsSince(page, n0)).find((m) => m.type === 'item_tracks');

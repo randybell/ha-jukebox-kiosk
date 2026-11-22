@@ -36,9 +36,9 @@ for (const vp of [{ width: 1024, height: 600 }, { width: 820, height: 1180 }]) {
  await tap(p, `${SV}.querySelector('[data-lcat="track"]')`); await p.waitForFunction(`${BR}.querySelectorAll('.list .row[data-type="track"]').length > 0`);
  const lib = await noButtons(p, BR, '.list .row[data-type="track"]'); check(`${tag} Library rows carry no buttons`, lib.ok, JSON.stringify(lib));
  await p.evaluate(() => __card.setConfig({ ...__card._config, library_view: 'tiles' }));
- await tap(p, `${SV}.querySelector('[data-lcat="playlist"]')`); await tap(p, `${BR}.querySelector('.grid.playlist .tile .open')`); await p.waitForFunction(`${BR}.querySelector('jb-detail')?.shadowRoot.querySelectorAll('.list.tracks .row').length > 0`);
+ await tap(p, `${SV}.querySelector('[data-lcat="playlist"]')`); await tap(p, `${BR}.querySelector('.grid.playlist .tile')`); await p.waitForFunction(`${BR}.querySelector('jb-detail')?.shadowRoot.querySelectorAll('.list.tracks .row').length > 0`);
  const pl = await noButtons(p, `${BR}.querySelector('jb-detail').shadowRoot`, '.list.tracks .row'); check(`${tag} Playlist rows carry no buttons`, pl.ok, JSON.stringify(pl));
- await tap(p, `${C}.querySelector('[data-tab="browse"]')`); await tap(p, `${SV}.querySelector('[data-lcat="artist"]')`); await tap(p, `${BR}.querySelector('.grid.artist .tile .open')`); await p.waitForFunction(`${BR}.querySelector('jb-detail')?.shadowRoot.querySelectorAll('.list.tracks .row').length > 0`);
+ await tap(p, `${C}.querySelector('[data-tab="browse"]')`); await tap(p, `${SV}.querySelector('[data-lcat="artist"]')`); await tap(p, `${BR}.querySelector('.grid.artist .tile')`); await p.waitForFunction(`${BR}.querySelector('jb-detail')?.shadowRoot.querySelectorAll('.list.tracks .row').length > 0`);
  const ar = await noButtons(p, `${BR}.querySelector('jb-detail').shadowRoot`, '.list.tracks .row'); check(`${tag} Artist rows carry no buttons`, ar.ok, JSON.stringify(ar));
  await p.close(); const s = await open(vp); await s.evaluate(() => { const x = __card.shadowRoot.querySelector('jb-search'); x._lcat = 'all'; x.setQuery('MOCK'); }); await s.waitForFunction(`${SV}.querySelectorAll('.grp.tracks .row').length > 0`);
  const se = await noButtons(s, SV, '.grp.tracks .row'); check(`${tag} Search rows carry no buttons`, se.ok, JSON.stringify(se)); await s.close();

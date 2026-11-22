@@ -213,8 +213,8 @@ for (const [vpName, vp] of [['1280x800', undefined], ['820x1180', IPAD]]) {
   await pickSrc(p, 'spotify--demo0002');
   await tap(p, `${SV}.querySelector('.lcats .lc[data-lcat=artist]')`);
   await pickSrc(p, 'all');
-  await wait(p, `${BR}.querySelector('.tile[data-type=artist] button.open')`);
-  await tap(p, `${BR}.querySelector('.tile[data-type=artist] button.open')`);
+  await wait(p, `${BR}.querySelector('.tile[data-type=artist]')`);
+  await tap(p, `${BR}.querySelector('.tile[data-type=artist]')`);
   await wait(p, `${BD}?.querySelector('[data-action=scope]')`);
   await tap(p, `${BD}.querySelector('[data-action=scope]')`);
   const chip = await wait(p, `!!${SV}.querySelector('.sc[data-scope=artist]')`);
