@@ -4,6 +4,14 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 0.9.3 — 2026-11-22
+
+- In the Library, artist, album and playlist tiles no longer have the arrow button in the top-right corner, and neither do podcast tiles when the Jukebox Kiosk integration provides podcast episodes. Tapping the tile already opens its page, so the arrow did the same thing twice. The heart in the top-left corner stays, and the small arrow at the end of Library rows hasn't changed. (#151)
+- On the Queue screen, the Autoplay pill now fills with the theme's active color when Autoplay is on, the same as on Now Playing.
+- On the Queue screen, Repeat no longer greys out the Autoplay pill. Tapping it switches Music Assistant's Autoplay on or off even while Repeat is on.
+- On the Queue screen, the small arrow next to the Autoplay pill is gone. Tap the pill to turn Autoplay on or off. When Music Assistant offers a choice of where Autoplay picks music from, press and hold the pill to open the **Autoplay from** pop-up. That pop-up now looks like the card's other pop-ups, with a **Cancel** row at the bottom (**Back** while choosing a playlist).
+- On Now Playing, **Radio - Autoplay** is now a status pill only: it matches the size and lettering of the **Playing on** pill on the same row and fills in when Autoplay is on. Tapping it does nothing; turn Autoplay on or off from the Queue screen. It is still hidden while a radio station or other live stream plays, when the queue isn't active, or when Music Assistant doesn't offer Autoplay.
+
 ## 0.9.2 — 2026-11-20
 
 - On Now Playing, the Autoplay button is now called **Radio - Autoplay**. It is no longer greyed out while Repeat is on or when Music Assistant keeps the queue going by itself: tapping it always switches Music Assistant's Autoplay on or off. It is still hidden while a radio station or other live stream plays, when the queue isn't active, or when Music Assistant doesn't offer Autoplay. The Queue's Autoplay button hasn't changed.
