@@ -44,7 +44,7 @@ export class JbQueue extends LitElement {
   private _confirm: ConfirmState | null = null;
   /** 'Removed <title>. Undo' for about 5 s after a row Remove */
   private _undo: RemovedRow | null = null;
-  /** Autoplay style sheet (chevron or long-press on the Autoplay pill) */
+  /** Autoplay from pop-up (a hold on the Autoplay pill) */
   private _ap: ApSheet | null = null;
   private _apHold?: number;
   private _apHeld = false;
@@ -70,7 +70,7 @@ export class JbQueue extends LitElement {
     try { await p; if (ok) this.toast(ok); } catch (e) { this.toast(e instanceof QueueBusy ? e.message : 'Queue action failed'); }
   }
   /** Autoplay pill: the same show/hide rules as the Now Playing button (`autoplayControlMode`).
-   *  With the autoplay_mode feature a chevron (or a long-press on the pill) opens the style sheet. */
+   *  A tap turns Autoplay on or off; with the autoplay_mode feature a hold on the pill opens the Autoplay from pop-up. */
   private autoplayTpl(s: QueueSnapshot | undefined) {
     const mode = autoplayControlMode(!!this.config?._backend?.ext?.autoplay, s, s?.repeat);
     if (mode === 'hide') return nothing;
@@ -82,15 +82,13 @@ export class JbQueue extends LitElement {
     const title = mode === 'locked' ? 'This queue already keeps playing'
       : on ? 'Autoplay is on: more music is added when the queue runs out' : 'Autoplay is off';
     const cls = mode === 'locked' ? 'on' : (on ? 'on' : '');
-    return html`<span class="apg ${modes ? 'split' : ''}"><button class="ap ${cls}" data-action="autoplay" tabindex="-1"
+    return html`<span class="apg"><button class="ap ${cls}" data-action="autoplay" tabindex="-1" aria-haspopup=${modes && !locked ? 'dialog' : nothing}
       aria-pressed=${on ? 'true' : 'false'} ?disabled=${locked}
       aria-disabled=${locked ? 'true' : nothing}
       title=${title}
       @pointerdown=${(e: PointerEvent) => { noFocus(e); hold.down(); }} @pointerup=${hold.up} @pointerleave=${hold.up} @pointercancel=${hold.up}
       @contextmenu=${(e: Event) => e.preventDefault()}
-      @click=${() => { if (locked || this._apHeld) { this._apHeld = false; return; } this.toggleAutoplay(!on); }}>${icon('autoplay', 'i xs')}Autoplay</button>${modes ? html`<button
-      class="ap apc ${on && !locked ? 'on' : ''}" data-action="autoplay-mode" tabindex="-1" aria-label="Autoplay settings" aria-haspopup="dialog" title="Autoplay settings" ?disabled=${locked}
-      @pointerdown=${noFocus} @click=${() => this.openAp()}>${icon('chev', 'i xs')}</button>` : nothing}</span>`;
+      @click=${() => { if (locked || this._apHeld) { this._apHeld = false; return; } this.toggleAutoplay(!on); }}>${icon('autoplay', 'i xs')}Autoplay</button></span>`;
   }
   private get apModes() { return !!this.config?._backend?.ext?.autoplayMode && !!this.queue?.backend?.autoplayOptions; }
   private async toggleAutoplay(on: boolean) {
@@ -146,14 +144,12 @@ export class JbQueue extends LitElement {
         <p class="aps-note">${o.followsDefault ? "Using Music Assistant's default for this speaker. " : ''}${on ? 'Used when the queue runs out.' : 'Autoplay is off. This is used when you turn it on.'}</p>`;
     return html`<div class="scrim dim" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); close(); }}></div>
       <div class="aps" role="dialog" aria-modal="true" aria-labelledby="aps-t" data-view=${ap.view}>
-        <div class="aps-h">
-          ${ap.view === 'playlists' ? html`<button class="qa" data-action="ap-back" tabindex="-1" aria-label="Back" @pointerdown=${noFocus}
-            @click=${() => (this._ap = { ...ap, view: 'modes', error: '' })}>${icon('back')}</button>` : nothing}
-          <b id="aps-t">${ap.view === 'playlists' ? 'Choose a playlist' : 'Autoplay from'}</b>
-          <button class="cls" data-action="ap-close" tabindex="-1" @pointerdown=${noFocus} @click=${close}>Close</button>
-        </div>
+        <div class="aps-h"><b id="aps-t">${ap.view === 'playlists' ? 'Choose a playlist' : 'Autoplay from'}</b></div>
         ${body}
         ${o && ap.error ? html`<div class="aps-err" role="alert">${ap.error}</div>` : nothing}
+        ${ap.view === 'playlists'
+          ? html`<button class="apx" data-action="ap-back" tabindex="-1" @pointerdown=${noFocus} @click=${() => (this._ap = { ...ap, view: 'modes', error: '' })}>${icon('back')}<span>Back</span></button>`
+          : html`<button class="apx" data-action="ap-close" tabindex="-1" @pointerdown=${noFocus} @click=${close}>${icon('close')}<span>Cancel</span></button>`}
       </div>`;
   }
   /** Play now icon: confirm first (it stops the current song for everyone), then player_queues/play_index */
@@ -394,22 +390,19 @@ export class JbQueue extends LitElement {
     .ap:disabled { color: var(--_disabled); border-color: var(--_disabled); cursor: default; } /* #113: HA disabled colours, not an ad-hoc opacity */
     .apg { margin-left: auto; align-self: center; display: inline-flex; }
     .apg .ap { margin-left: 0; }
-    .apg.split .ap:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: var(--ha-space-2, 8px); }
-    .apg.split .apc { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding: 0 var(--ha-space-2, 8px); min-width: var(--_touch-min); justify-content: center; box-shadow: inset 1px 0 0 var(--_divider); }
-    .apg.split .apc.on { box-shadow: inset 1px 0 0 var(--_hairline); }
-    .aps { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100% - 24px)); max-height: min(100%, var(--_popup-max-h));
-      padding: var(--ha-space-4, 16px) var(--ha-space-4, 16px) var(--ha-space-4, 16px); border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); overflow: auto; }
-    .aps-h { display: flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); }
-    .aps-h b { flex: 1; font-family: var(--_font-display); font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); padding-left: var(--ha-space-2, 8px); }
-    .aps-h .qa { width: var(--_touch-min); height: var(--_touch-min); display: grid; place-items: center; border-radius: var(--ha-border-radius-circle, 50%); color: var(--_inactive); }
-    .aps-h .qa:active { background: var(--_chip-sel); color: var(--_fg); }
-    .aps-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; scrollbar-width: none; }
-    .apo { display: flex; align-items: center; gap: var(--ha-space-4, 16px); min-height: 64px; padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px); border-radius: var(--ha-border-radius-lg, 12px); text-align: left; color: var(--_fg); font: inherit; }
+    /* Autoplay from pop-up: the same look as the card's other pop-ups (jb-hold-sheet): title over a divider, bold 64px rows, a Cancel (or Back) row at the bottom */
+    .aps { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100% - 32px)); max-height: min(100%, var(--_popup-max-h)); box-sizing: border-box;
+      padding: var(--ha-space-4, 16px); border-radius: var(--_dialog-radius); background: var(--_dialog-bg); border: var(--_card-border-width, 1px) solid var(--_card-border-color, var(--_surface-border)); box-shadow: var(--_dialog-shadow); display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); overflow: auto; font-family: var(--_font-body); color: var(--_fg); }
+    .aps-h { display: flex; align-items: center; min-height: var(--_touch-min); padding: 0 var(--ha-space-1, 4px) var(--ha-space-3, 12px); border-bottom: var(--ha-border-width-sm, 1px) solid var(--_divider); flex: none; }
+    .aps-h b { flex: 1; min-width: 0; font-size: var(--ha-font-size-2xl, 24px); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .aps-list { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); overflow-y: auto; min-height: 0; scrollbar-width: none; }
+    .apo { display: flex; align-items: center; gap: var(--ha-space-4, 16px); width: 100%; min-height: 64px; padding: var(--ha-space-2, 8px) var(--ha-space-5, 20px); box-sizing: border-box; border-radius: var(--ha-border-radius-xl, 16px);
+      background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); text-align: left; color: var(--_fg); font: inherit; flex: none; }
     .apo:active { background: var(--_chip-sel); }
     .apo:disabled { color: var(--_disabled); }
     .apo[aria-checked="true"] { background: var(--_chip-sel); }
     .apo span:not(.rb):not(.dot):not(.spin) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    .apo b { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .apo b { font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .apo small { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .apo .go { width: 22px; height: 22px; color: var(--_inactive); }
     .apo .pi { width: 24px; height: 24px; color: var(--_muted); }
@@ -421,6 +414,10 @@ export class JbQueue extends LitElement {
     .aps-note { font-size: var(--ha-font-size-m, 14px); color: var(--_muted); padding: 0 var(--ha-space-2, 8px); }
     .aps-msg { color: var(--_muted); font-size: var(--ha-font-size-m, 14px); padding: var(--ha-space-4, 16px) var(--ha-space-2, 8px); text-align: center; }
     .aps-err { color: var(--error-color); font-size: var(--ha-font-size-m, 14px); padding: 0 var(--ha-space-2, 8px); }
+    .apx { display: flex; align-items: center; justify-content: center; gap: var(--ha-space-4, 16px); width: 100%; min-height: 64px; margin-top: var(--ha-space-2, 8px); padding: 0 var(--ha-space-5, 20px); box-sizing: border-box; flex: none;
+      border-radius: var(--ha-border-radius-xl, 16px); background: transparent; border: var(--ha-border-width-md, 2px) solid var(--_surface-border); color: var(--_muted); font: inherit; font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-bold, 700); }
+    .apx:active { background: var(--_chip-sel); }
+    .apx .i { width: calc(var(--_icon) * 30 / 24); height: calc(var(--_icon) * 30 / 24); flex: none; }
     .live { width: 7px; height: 7px; border-radius: var(--ha-border-radius-circle, 50%); background: var(--_active); align-self: center; animation: pulse 800ms ease-in-out infinite alternate; }
     @keyframes pulse { from { opacity: 1 } to { opacity: .35 } }
     @media (prefers-reduced-motion: reduce) { .spin, .live { animation: none; } }
