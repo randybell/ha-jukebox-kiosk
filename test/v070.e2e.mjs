@@ -36,6 +36,15 @@ async function tap(page, expr) {
   await page.mouse.click(r.x, r.y);
   await sleep(80);
 }
+async function hold(page, expr, ms = 700) {
+  const r = await page.evaluate((expr) => { const el = eval(expr); if (!el) return null; el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: b.width }; }, expr);
+  if (!r || !r.w) throw new Error('no element to hold: ' + expr);
+  await page.mouse.move(r.x, r.y);
+  await page.mouse.down();
+  await sleep(ms);
+  await page.mouse.up();
+  await sleep(80);
+}
 const wait = (page, fn, timeout = 5000) => page.waitForFunction(fn, { timeout, polling: 40 }).then(() => true, () => false);
 const ev = (page, expr) => page.evaluate((e) => eval(e), expr);
 const maOf = (page, cmd) => page.evaluate((cmd) => window.__ws.filter((m) => m.type === 'ma' && m.command === cmd).map((m) => ({ ...m.args })), cmd);
@@ -241,44 +250,53 @@ const typeQ = async (page, q) => { await page.keyboard.type(q, { delay: 40 }); a
   check('AP4 tap → jukebox_kiosk/set_autoplay {enabled: true}, pill on, no raw ma command',
     sent.length === 1 && sent[0].on === true && /^media_player\./.test(sent[0].e) && (await maOf(c, 'player_queues/autoplay')).length === 0, J(sent));
   await tap(c, `__card.shadowRoot.querySelector('.tab[data-tab="now"]')`);
-  const ind = await wait(c, `${NV}.querySelector('[data-action="np-autoplay"][aria-pressed="true"]')`) && !/Autoplay/.test(await ev(c, `${NV}.querySelector('.upn')?.textContent ?? ''`));
-  const ap = await ev(c, `(() => { const b = ${NV}.querySelector('[data-action="np-autoplay"]');
-    return { has: !!b, pressed: b?.getAttribute('aria-pressed'), disabled: !!b?.disabled, tb: !!${NV}.querySelector('.tb[aria-label*="Autoplay"]'),
+  const ind = await wait(c, `${NV}.querySelector('.apb[data-state="on"]')`) && !/Autoplay/.test(await ev(c, `${NV}.querySelector('.upn')?.textContent ?? ''`));
+  const ap = await ev(c, `(() => { const b = ${NV}.querySelector('.apb');
+    return { has: !!b, state: b?.getAttribute('data-state'), tag: b?.tagName, action: b?.getAttribute('data-action'),
+      tb: !!${NV}.querySelector('.tb[aria-label*="Autoplay"]'),
       upn: ${NV}.querySelector('.upn')?.textContent?.replace(/\s+/g, ' ') }; })()`);
-  check('AP5 Now Playing: spot A Autoplay button (same state as the Queue pill), Up next no longer says Autoplay, no 7th transport button',
-    ind && ap.has && ap.pressed === 'true' && !ap.disabled && !ap.tb, J(ap));
+  check('AP5 Now Playing: spot A read-only Autoplay status pill (same state as the Queue pill), Up next no longer says Autoplay, no 7th transport button',
+    ind && ap.has && ap.state === 'on' && ap.tag === 'SPAN' && !ap.action && !ap.tb, J(ap));
 
   await c.close();
-  // Autoplay style picker (feature autoplay_mode): chevron opens the sheet, playlist chooser, saves via set_autoplay_mode
+  // Autoplay style picker (feature autoplay_mode): a hold on the pill opens the sheet, playlist chooser, saves via set_autoplay_mode
   const noMode = await open('&tab=queue&kcaps=' + AP);
   await wait(noMode, `${QV}.querySelector('.ap')`);
-  check('AP6 server without autoplay_mode: no chevron, pill unchanged', !(await ev(noMode, `!!${QV}.querySelector('[data-action="autoplay-mode"]')`)));
+  check('AP6 server without autoplay_mode: no style-picker hold (no aria-haspopup), no leftover chevron',
+    (await ev(noMode, `${QV}.querySelector('.ap').getAttribute('aria-haspopup')`)) !== 'dialog'
+    && !(await ev(noMode, `!!${QV}.querySelector('[data-action="autoplay-mode"]')`)));
   await noMode.close();
   const APM = encodeURIComponent(J({ autoplay: true, autoplay_mode: true }));
   const d = await open('&tab=queue&kcaps=' + APM);
-  await wait(d, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
-  await tap(d, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
+  await wait(d, `${QV}.querySelector('[data-action="autoplay"]')`);
+  await hold(d, `${QV}.querySelector('[data-action="autoplay"]')`);
   await wait(d, `${QV}.querySelectorAll('.aps .apo').length > 0`);
   const modes = await ev(d, `[...${QV}.querySelectorAll('.aps .apo')].map((b) => [b.dataset.mode, b.getAttribute('aria-checked'), b.querySelector('b').textContent])`);
+  const cancel = await ev(d, `(() => { const b = ${QV}.querySelector('[data-action="ap-close"]'); return b && { text: b.textContent.replace(/\s+/g, ' ').trim(), inSheet: !!b.closest('.aps'), back: !!${QV}.querySelector('[data-action="ap-back"]') }; })()`);
   check('AP7 sheet lists Automatic / Similar music / My library / A playlist, current (MA default → auto) checked, no write yet',
     J(modes.map((m) => m[2])) === J(['Automatic', 'Similar music', 'My library', 'A playlist']) && modes[0][1] === 'true'
     && /default/.test(await ev(d, `${QV}.querySelector('.aps-note').textContent`))
     && (await d.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay_mode').length)) === 0, J(modes));
+  check('AP7b modes view: bottom Cancel row (data-action ap-close), no Back row',
+    cancel && cancel.inSheet && /Cancel/.test(cancel.text) && !cancel.back, J(cancel));
   await tap(d, `${QV}.querySelector('.aps .apo[data-mode="library"]')`);
   await wait(d, `!${QV}.querySelector('.aps')`);
   let sm = await d.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay_mode').map((m) => ({ e: m.entity_id, mode: m.mode, pl: m.playlist ?? null })));
   check('AP8 My library → set_autoplay_mode {mode: library}, sheet closes, toast', sm.length === 1 && sm[0].mode === 'library' && sm[0].pl === null
     && /^media_player\./.test(sm[0].e) && /My library/.test(await ev(d, `${QV}.querySelector('.toast')?.textContent ?? ''`)), J(sm));
-  await tap(d, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
+  await hold(d, `${QV}.querySelector('[data-action="autoplay"]')`);
   await wait(d, `${QV}.querySelector('.aps .apo[data-mode="library"][aria-checked="true"]')`);
   await tap(d, `${QV}.querySelector('.aps .apo[data-mode="playlist"]')`);
   const chooser = await wait(d, `${QV}.querySelectorAll('.aps .apo[data-playlist]').length === 5`);
+  const back = await ev(d, `(() => { const b = ${QV}.querySelector('[data-action="ap-back"]'); return b && { text: b.textContent.replace(/\s+/g, ' ').trim(), inSheet: !!b.closest('.aps'), cancel: !!${QV}.querySelector('[data-action="ap-close"]') }; })()`);
   check('AP9 A playlist → chooser of library playlists, nothing saved yet', chooser && (await ev(d, `${QV}.querySelector('#aps-t').textContent`)) === 'Choose a playlist'
     && (await d.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay_mode').length)) === 1);
+  check('AP9b playlist view: bottom Back row (data-action ap-back), no Cancel row',
+    back && back.inSheet && /Back/.test(back.text) && !back.cancel, J(back));
   await tap(d, `${QV}.querySelectorAll('.aps .apo[data-playlist]')[2]`);
   await wait(d, `!${QV}.querySelector('.aps')`);
   sm = await d.evaluate(() => window.__ws.filter((m) => m.type === 'set_autoplay_mode').map((m) => ({ mode: m.mode, pl: m.playlist ?? null })));
-  await tap(d, `${QV}.querySelector('[data-action="autoplay-mode"]')`);
+  await hold(d, `${QV}.querySelector('[data-action="autoplay"]')`);
   await wait(d, `${QV}.querySelector('.aps .apo[data-mode="playlist"][aria-checked="true"]')`);
   check('AP10 playlist picked → {mode: playlist, playlist: uri}; reopening shows it checked with its name',
     sm.length === 2 && sm[1].mode === 'playlist' && sm[1].pl === 'library://playlist/903'
