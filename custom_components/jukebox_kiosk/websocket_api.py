@@ -47,7 +47,7 @@ from .const import (
     todo_verify_commands,
 )
 from .permissions import Policy, allowed_classes, check_class, check_entity, is_guest
-from .players import PlayerNotFound, entity_for_player, player_id_for_entity, queue_id_for_entity
+from .players import PlayerNotFound, entity_for_player, player_id_for_entity, player_ids, queue_id_for_entity
 
 if TYPE_CHECKING:
     from music_assistant_client import MusicAssistantClient
@@ -272,6 +272,8 @@ async def ws_capabilities(hass: HomeAssistant, connection: websocket_api.ActiveC
                 "autoplay_mode": has(PermClass.QUEUE),
                 # 0.7.2 Search source picker: jukebox_kiosk/search_providers + music/search providers=[...]
                 "search_providers": has(PermClass.READ),
+                # #99: jukebox_kiosk/player_ids, the MA player id of every MA media_player (HA entity registry)
+                "player_ids": has(PermClass.READ),
             },
         },
     )
@@ -290,6 +292,19 @@ async def ws_ma(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
     """Forward one allowlisted MA command."""
     result = await forward(hass, connection.user, msg["command"], msg["args"])
     connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/player_ids"})
+@websocket_api.async_response
+@_wrap
+async def ws_player_ids(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """#99: {entity_id: MA player_id} for every Music Assistant media_player, from HA's entity registry.
+
+    The same lookup the commands that take an entity use (players.player_id_for_entity). Entities from other
+    integrations are not listed. Needs only the registry, so it answers while Music Assistant is offline.
+    """
+    check_class(connection.user, _entry(hass).runtime_data.policy, PermClass.READ)
+    connection.send_result(msg["id"], {"players": player_ids(hass)})
 
 
 def _field(obj: Any, key: str) -> Any:
@@ -892,6 +907,7 @@ async def ws_subscribe_sleep_timer(
 HANDLERS = (
     ws_capabilities,
     ws_ma,
+    ws_player_ids,
     ws_search_providers,
     ws_queue_items,
     ws_set_autoplay,
