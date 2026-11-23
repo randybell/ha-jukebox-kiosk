@@ -13,12 +13,27 @@ class PlayerNotFound(HomeAssistantError):
     """Entity is not an MA media player."""
 
 
+def _is_ma_player(ent: er.RegistryEntry) -> bool:
+    """A media_player that Home Assistant's Music Assistant integration created.
+
+    HA's music_assistant media_player uses the MA player_id as the entity's unique_id
+    (HA 2026.11 music_assistant/entity.py:62-69, media_player.py:504, 690), so the registry is the one
+    place that ties an entity to its MA player. No name matching, no state attributes.
+    """
+    return ent.platform == MA_DOMAIN and ent.domain == "media_player"
+
+
 def player_id_for_entity(hass: HomeAssistant, entity_id: str) -> str:
     """MA player_id behind a media_player entity (registry unique_id)."""
     ent = er.async_get(hass).async_get(entity_id)
-    if ent is None or ent.platform != MA_DOMAIN or ent.domain != "media_player":
+    if ent is None or not _is_ma_player(ent):
         raise PlayerNotFound(f"{entity_id} is not a Music Assistant player")
     return ent.unique_id
+
+
+def player_ids(hass: HomeAssistant) -> dict[str, str]:
+    """Every Music Assistant media_player in the registry → its MA player_id (same rule as player_id_for_entity)."""
+    return {ent.entity_id: ent.unique_id for ent in er.async_get(hass).entities.values() if _is_ma_player(ent)}
 
 
 def queue_id_for_entity(hass: HomeAssistant, entity_id: str) -> str:

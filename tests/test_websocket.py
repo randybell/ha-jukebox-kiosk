@@ -968,3 +968,61 @@ async def test_subscribe_sleep_timer_unsub_during_owner_check(
     gate.set()
     await hass.async_block_till_done()
     assert fake_ma.subs == []
+
+
+# ---------------------------------------------------------------- #99 player ids (entity registry)
+
+
+async def test_player_ids_from_registry_only(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    """Every MA media_player → its MA player_id (registry unique_id); other integrations and MA's other entities are left out."""
+    from homeassistant.helpers import entity_registry as er
+
+    reg = er.async_get(hass)
+    reg.async_get_or_create("media_player", "cast", "cast_uid_placeholder", suggested_object_id="kitchen_speaker")
+    reg.async_get_or_create("button", "music_assistant", f"{PLAYER_A}_favorite_now_playing", suggested_object_id="kitchen_favorite")
+    # a renamed entity keeps its MA id: the id never comes from a name
+    reg.async_update_entity(ENTITY_A, new_entity_id="media_player.kitchen_renamed", name="Somewhere Else")
+    hass.states.async_set("media_player.kitchen_speaker", "playing", {"friendly_name": "Kitchen Speaker"})
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/player_ids")
+    assert res["success"]
+    assert res["result"] == {"players": {"media_player.kitchen_renamed": PLAYER_A, "media_player.den": PLAYER_B, ENTITY_G: SYNCGROUP}}
+    assert fake_ma.calls == []
+
+
+async def test_player_ids_without_music_assistant(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, ma_entry: Any) -> None:
+    """Registry only: answers while Music Assistant is not loaded."""
+    await hass.config_entries.async_unload(ma_entry.entry_id)
+    ws = await _ws(hass_ws_client, admin_token[1])
+    res = await _call(ws, type="jukebox_kiosk/player_ids")
+    assert res["success"] and res["result"]["players"][ENTITY_A] == PLAYER_A
+
+
+@pytest.mark.parametrize(
+    "options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": ["playback"]}]
+)
+async def test_player_ids_needs_read(hass: HomeAssistant, hass_ws_client: Any, user_token: Any) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    caps = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
+    assert not caps["features"]["player_ids"]
+    res = await _call(ws, type="jukebox_kiosk/player_ids")
+    assert res["error"]["code"] == "unauthorized"
+
+
+async def test_capabilities_player_ids(hass: HomeAssistant, hass_ws_client: Any, user_token: Any) -> None:
+    ws = await _ws(hass_ws_client, user_token[1])
+    r = (await _call(ws, type="jukebox_kiosk/capabilities"))["result"]
+    assert r["features"]["player_ids"]
+
+
+async def test_entity_commands_refuse_non_ma_entity(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
+    """A non-MA media_player is never matched by name or attributes, even one named like an MA player."""
+    from homeassistant.helpers import entity_registry as er
+
+    er.async_get(hass).async_get_or_create("media_player", "cast", "cast_uid_placeholder", suggested_object_id="kitchen_2")
+    hass.states.async_set("media_player.kitchen_2", "playing", {"friendly_name": "Kitchen", "active_queue": PLAYER_A, "mass_player_id": PLAYER_A})
+    ws = await _ws(hass_ws_client, admin_token[1])
+    for msg in ({"type": "jukebox_kiosk/queue_items"}, {"type": "jukebox_kiosk/sleep_timer_get"}, {"type": "jukebox_kiosk/set_autoplay", "enabled": True}):
+        res = await _call(ws, entity_id="media_player.kitchen_2", **msg)
+        assert res["error"]["code"] == "not_found", msg
+    assert fake_ma.calls == []
