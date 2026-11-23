@@ -12,9 +12,11 @@
  * (dynamic_members true); players/get group_members is the current list, also while idle; static_group_members is [] on
  * dynamic groups. set_members on an idle dynamic group answers 200 and the speaker stays idle. Dropping a non-leader takes
  * ~1 s with no gap; dropping the leader re-forms on the next member after ~5.9 s of silence; transfer is ~4.7 s of silence
- * and the source stops by itself. mass_player_id is null on HA's group and WiiM entities.
+ * and the source stops by itself.
+ * #99: HA entities are tied to MA players only by the MA player id in HA's entity registry (see PlayerIds).
  */
 import type { HomeAssistant, JukeboxCardConfig, PresetConfig, RoomConfig, TargetConfig } from '../types';
+import { isMaPlayer } from '../ma-player';
 
 export interface MaPlayer {
   player_id: string;
@@ -117,34 +119,20 @@ export function holderOf(speaker: string, players: Players, except?: string): Ma
   return undefined;
 }
 
-/* ---------------- HA ↔ MA mapping ---------------- */
-const norm = (s: unknown) => String(s ?? '').toLowerCase().replace(/\bspeaker\b/g, '').replace(/[^a-z0-9]+/g, '');
+/* ---------------- HA ↔ MA mapping (#99: by Music Assistant player id only, never by name) ---------------- */
+/** HA entity → MA player id, from Home Assistant's entity registry (jukebox_kiosk/player_ids). Only Music Assistant players
+ *  are in it: their registry unique_id is the MA player id (HA music_assistant/entity.py). */
+export type PlayerIds = ReadonlyMap<string, string>;
 export interface Room { entity: string; name: string; ma?: string }
-/** rooms → MA player ids: `ma_player` first, then MA name = room name or the entity's friendly name (minus "Speaker"). */
-export function mapRooms(rooms: Array<RoomConfig & { name: string }>, hass: HomeAssistant | undefined, players: Players): Room[] {
-  const speakers = [...players.values()].filter((p) => p.type !== 'group');
-  return rooms.map((r) => {
-    if (r.ma_player) return { entity: r.entity, name: r.name, ma: r.ma_player };
-    const keys = [r.name, hass?.states[r.entity]?.attributes?.friendly_name, r.entity.replace(/^media_player\./, '')].map(norm).filter(Boolean);
-    const hit = speakers.find((p) => keys.includes(norm(p.name)));
-    return { entity: r.entity, name: r.name, ma: hit?.player_id };
-  });
+/** rooms → MA player ids: a room's `ma_player` when it names a player Music Assistant has, else its entity's registry id.
+ *  Rooms come from roomsOf, which keeps only Music Assistant players. */
+export function mapRooms(rooms: Array<RoomConfig & { name: string }>, players: Players, ids: PlayerIds): Room[] {
+  return rooms.map((r) => ({ entity: r.entity, name: r.name, ma: r.ma_player && players.has(r.ma_player) ? r.ma_player : ids.get(r.entity) }));
 }
-/**
- * HA target entity → MA player id. Live MA 2.10.9: mass_player_id is null on group and WiiM entities, and an idle group's
- * active_queue points at whatever queue its speakers are in (e.g. Everywhere's), so it can't be trusted alone. Order:
- * mass_player_id (when set and known) → an MA group whose name is the entity's friendly name → active_queue, only while the
- * entity itself plays → any MA player with that name. Unknown → undefined (callers degrade to the HA-only mixer).
- */
-export function targetMa(entity: string, hass: HomeAssistant | undefined, players: Players): string | undefined {
-  const s = hass?.states[entity], a = s?.attributes ?? {};
-  if (typeof a.mass_player_id === 'string' && players.has(a.mass_player_id)) return a.mass_player_id;
-  const n = norm(a.friendly_name ?? entity.replace(/^media_player\./, ''));
-  const all = [...players.values()];
-  const grp = all.find((p) => p.type === 'group' && norm(p.name) === n);
-  if (grp) return grp.player_id;
-  if (typeof a.active_queue === 'string' && players.has(a.active_queue) && ['playing', 'paused', 'buffering'].includes(s?.state ?? '')) return a.active_queue;
-  return all.find((p) => norm(p.name) === n)?.player_id;
+/** HA target entity → its MA player id (registry). undefined until the ids are read, and for anything that isn't a Music
+ *  Assistant player. */
+export function targetMa(entity: string, ids: PlayerIds): string | undefined {
+  return ids.get(entity);
 }
 /** config/players/get → a group's configured members and dynamic_members flag (values.<key>.value); undefined when unreadable */
 export interface GroupConfig { members: string[]; dynamic?: boolean }
@@ -156,15 +144,18 @@ export function parseGroupConfig(raw: unknown): GroupConfig | undefined {
   return { members: arr(val('group_members')), dynamic: typeof dm === 'boolean' ? dm : undefined };
 }
 export interface Target { entity: string; name: string; members?: string[] }
-/** dynamic-mode targets: config `targets`, else every HA media_player that is an MA group/player with a queue, groups first */
-export function targetsOf(c: JukeboxCardConfig, hass?: HomeAssistant): Target[] {
+/** dynamic-mode targets: config `targets`, else every HA media_player that is an MA group/player with a queue, groups first.
+ *  #99: only Music Assistant players (targets, their members and the card's own entity); anything else is left out quietly. */
+export function targetsOf(c: JukeboxCardConfig, hass: HomeAssistant | undefined): Target[] {
   const nameOf = (e: string) => hass?.states[e]?.attributes?.friendly_name ?? e.replace(/^media_player\./, '').replace(/_/g, ' ');
+  const ma = (e: string) => isMaPlayer(hass, e);
   if (Array.isArray(c.targets) && c.targets.length)
-    return c.targets.map((t) => { const o: TargetConfig = typeof t === 'string' ? { entity: t } : t; return { entity: o.entity, name: o.name || nameOf(o.entity), members: o.members }; });
-  const out = Object.values(hass?.states ?? {}).filter((s) => s.entity_id.startsWith('media_player.') && s.attributes?.mass_player_type === 'group')
+    return c.targets.map((t) => { const o: TargetConfig = typeof t === 'string' ? { entity: t } : t; return { entity: o.entity, name: o.name || nameOf(o.entity), members: o.members?.filter(ma) }; })
+      .filter((t) => ma(t.entity));
+  const out = Object.values(hass?.states ?? {}).filter((s) => ma(s.entity_id) && s.attributes?.mass_player_type === 'group')
     .map((s) => ({ entity: s.entity_id, name: nameOf(s.entity_id) }));
   const base = c.entity;
-  if (base && !out.some((t) => t.entity === base)) out.unshift({ entity: base, name: nameOf(base) });
+  if (base && ma(base) && !out.some((t) => t.entity === base)) out.unshift({ entity: base, name: nameOf(base) });
   return out;
 }
 
@@ -243,12 +234,12 @@ export function dropBlock(target: MaPlayer | undefined, speaker: string, players
  * Presets shown in the panel: one per dynamic group whose default members MA reported (config/players/get).
  * When MA config can't be read (cfgs empty) there are none.
  */
-export function maPresets(cfgs: Map<string, GroupConfig>, players: Players, rooms: Room[], targets: Target[], hass: HomeAssistant | undefined): PresetConfig[] {
+export function maPresets(cfgs: Map<string, GroupConfig>, players: Players, rooms: Room[], targets: Target[], ids: PlayerIds): PresetConfig[] {
   const out: PresetConfig[] = [];
   const key = (t: string | undefined, ms: string[]) => `${t ?? ''}|${[...ms].sort().join(',')}`;
   const seen = new Set<string>();
   for (const t of targets) {
-    const id = targetMa(t.entity, hass, players);
+    const id = targetMa(t.entity, ids);
     const g = id ? players.get(id) : undefined, cfg = id ? cfgs.get(id) : undefined;
     if (!g || !cfg || kindOf(g, cfg) !== 'dynamic' || !cfg.members.length) continue;
     const members = cfg.members.map((m) => rooms.find((r) => r.ma === m)?.entity).filter((x): x is string => !!x);

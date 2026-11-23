@@ -127,7 +127,7 @@ export class JbNow extends LitElement {
     if (ch.size === 1 && ch.has('hass')) {
       const old = ch.get('hass') as HomeAssistant | undefined;
       if (!old || !this.hass) return true;
-      const ids = [this.eid, ...roomsOf(this.config).map((r) => r.entity)];
+      const ids = [this.eid, ...roomsOf(this.config, this.hass).map((r) => r.entity)];
       return ids.some((id) => old.states[id] !== this.hass!.states[id]);
     }
     return true;

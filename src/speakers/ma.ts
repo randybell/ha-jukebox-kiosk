@@ -1,12 +1,13 @@
 /**
  * Music Assistant player access through the card's MaBackend (jukebox_kiosk/ma):
- * players/all, config/players/get (group defaults), players/cmd/set_members, player_queues/transfer, players/cmd/stop. HA's media_player.join/unjoin are
+ * players/all, config/players/get (group defaults), players/cmd/set_members, player_queues/transfer, players/cmd/stop, and
+ * (#99) jukebox_kiosk/player_ids, each HA entity's MA player id from HA's entity registry. HA's media_player.join/unjoin are
  * never used: their ids don't match MA's speaker ids. players/cmd/ungroup is never used either.
  * Calls are serialised (one grouping change at a time) and time out.
  */
 import type { HomeAssistant } from '../types';
 import type { MaBackend } from '../backend/types';
-import { parsePlayers, parseGroupConfig, type GroupConfig, type Players } from './model';
+import { parsePlayers, parseGroupConfig, type GroupConfig, type PlayerIds, type Players } from './model';
 import { TEST_HOOKS } from '../test-hooks';
 
 export class SpeakerError extends Error {
@@ -26,6 +27,9 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 export class SpeakerStore {
   hass?: HomeAssistant;
   players: Players = new Map();
+  /** #99: HA entity → MA player id (HA's entity registry, through the integration). Read again when the registry changes. */
+  ids: PlayerIds = new Map();
+  private idsFor: unknown = null;
   /** config/players/get per group (MA 2.10.9 scope config.players.read: granted to guest, user and service roles, so not
    *  admin-only). Missing entries = unreadable: no presets. */
   configs = new Map<string, GroupConfig>();
@@ -51,9 +55,17 @@ export class SpeakerStore {
       throw new SpeakerError('failed', String(e?.message ?? e));
     }
   }
+  /** #99: the registry ids, once per registry (hass.entities is replaced when Home Assistant's registry changes) */
+  private async loadIds(): Promise<void> {
+    const reg = this.hass?.entities;
+    if (reg === this.idsFor || !this.backend?.playerIds) return;
+    this.ids = await withTimeout(this.backend.playerIds(), timeouts().call, 'player_ids');
+    this.idsFor = reg;
+  }
   async refresh(): Promise<Players> {
     try {
-      this.players = parsePlayers(await this.send('players/all', {}));
+      const [raw] = await Promise.all([this.send('players/all', {}), this.loadIds()]);
+      this.players = parsePlayers(raw);
       this.loaded = true; this.error = '';
       void this.loadConfigs();
     } catch (e: any) { this.error = String(e?.message ?? e); }

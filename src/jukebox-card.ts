@@ -19,7 +19,7 @@ import { canGroup, targetsOf, targetMa, isActive, liveCount, membersOf, pillPref
 /** the screensaver's reduced-motion class (.rm) follows the browser setting */
 const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
-import { firstMusicAssistantPlayer } from './ma-player';
+import { isMaPlayer, registryReady } from './ma-player';
 import { formatTime, formatDateWeekdayDay, startMinuteClock } from './datetime';
 import { pickBackend, createBackend, type MaBackend } from './backend';
 import { defineElement } from './define';
@@ -163,10 +163,10 @@ export class JukeboxCard extends LitElement {
   private _push?: { key: string; off?: () => void };
 
   static getConfigElement() { return document.createElement('jukebox-card-editor'); }
-  /** A new card: the first Music Assistant player HA knows (nothing else to fill in). */
-  static getStubConfig(hass?: HomeAssistant): Partial<JukeboxCardConfig> {
-    const ma = firstMusicAssistantPlayer(hass);
-    return ma ? { entity: ma } : {};
+  /** A new card starts with no speaker (Randy, Nov 19): the entity is picked in the editor, which lists only Music Assistant
+   *  players. Until then setConfig refuses the config and Home Assistant shows its standard configuration error. */
+  static getStubConfig(): Partial<JukeboxCardConfig> {
+    return {};
   }
 
   setConfig(config: JukeboxCardConfig) {
@@ -206,7 +206,7 @@ export class JukeboxCard extends LitElement {
     this.lyrics.enabled = this._config.show_lyrics !== false;
     this.syncBackend(true);
     this.queue.readsBuffer = () => !!this._config;
-    this.queue.entity = this._config.entity!;
+    this.queue.entity = this.player();
     this.queue.limitAfter = this._config.queue_limit ?? 200;
     this.armIdle();
   }
@@ -244,7 +244,7 @@ export class JukeboxCard extends LitElement {
   }
   /** kiosk: queue events pushed by the server (jukebox_kiosk/subscribe_queue) refresh the queue at once */
   private startPush() {
-    const be = this.backend, ent = this._config?.entity;
+    const be = this.backend, ent = this.player();
     if (!be?.subscribeQueue || !be.caps.queuePush || !ent || !this.isConnected || !this.hass?.connection) { this.stopPush(); return; }
     const key = `${this._bkey}|${ent}`;
     if (this._push?.key === key) return;
@@ -257,14 +257,30 @@ export class JukeboxCard extends LitElement {
   private stopPush() { this._push?.off?.(); this._push = undefined; }
   /** fixed mode: the config as given. dynamic: entity = the remembered target (when it is one of the targets) + start guard. */
   private effective(): JukeboxCardConfig {
-    const b = this._base;
+    const b = this._base, h = this.hass;
     if (b.speaker_mode !== 'dynamic') return b;
     let t = '';
     try { t = localStorage.getItem(TARGET_KEY) ?? ''; } catch { /* private mode */ }
-    const ok = !!t && (b.targets?.length ? targetsOf(b, this.hass).some((x) => x.entity === t) : t.startsWith('media_player.'))
+    // #99: only a Music Assistant player can win, so nothing is used until Home Assistant's registry says what t is
+    const ok = !!t && isMaPlayer(h, t) && (b.targets?.length ? targetsOf(b, h).some((x) => x.entity === t) : true)
       // a saved target that HA no longer has (renamed / deleted group) must not win over the configured one
-      && (!this.hass || !!this.hass.states[t] || t === b.entity);
+      && (!!h!.states[t] || t === b.entity);
     return { ...b, entity: ok ? t : b.entity, _guard: this.guard };
+  }
+  /** dynamic mode: follow effective() when what it picks changes (e.g. once Home Assistant's registry arrives) */
+  private retarget() {
+    const e = this.effective();
+    if (e.entity === this._config.entity) return;
+    this._config = e;
+    this.queue.entity = this.player();
+    this.queue.refreshSoon(0);
+    this.stopPush(); this.startPush();
+  }
+  /** #99: the card's own entity, or '' when Home Assistant's registry says it is not a Music Assistant player (the card
+   *  then shows only Home Assistant's warning, and nothing else runs). */
+  private player(): string {
+    const e = this._config?.entity ?? '';
+    return registryReady(this.hass) && !isMaPlayer(this.hass, e) ? '' : e;
   }
   /** Move the card to another group (from the Speakers panel). Allowed users only; remembered per device. */
   private onTarget = (e: CustomEvent) => {
@@ -272,7 +288,7 @@ export class JukeboxCard extends LitElement {
     if (!t || this._base?.speaker_mode !== 'dynamic' || !canGroup(this._base, this.hass?.user) || t === this._config.entity) return;
     try { localStorage.setItem(TARGET_KEY, t); } catch { /* */ }
     this._config = this.effective();
-    this.queue.entity = this._config.entity!;
+    this.queue.entity = this.player();
     this.queue.refreshSoon(0);
     this.startPush();
   };
@@ -295,7 +311,7 @@ export class JukeboxCard extends LitElement {
     if (!this.speakers.available) return true;
     const players = await this.speakers.refresh();
     await this.speakers.loadConfigs(); // the group's default speakers (config/players/get), when MA lets us read them
-    const ma = targetMa(entity, this.hass, players);
+    const ma = targetMa(entity, this.speakers.ids);
     if (!ma || isActive(players.get(ma))) return true;
     const el = this.renderRoot.querySelector('jb-speakers') as JbSpeakers | null;
     if (!el) return true;
@@ -608,7 +624,8 @@ export class JukeboxCard extends LitElement {
     const old = changed.get('hass') as HomeAssistant | undefined;
     // backend first: hass.config.components decides auto, and the stores below must not start on a stale backend
     if (changed.has('hass') && this.hass && (!old || old.config !== this.hass.config || old.connection !== this.hass.connection)) this.syncBackend();
-    if ((changed.has('hass') || changed.has('_config')) && this.hass && this._config) this.lyrics.follow(this.hass, this.hass.states[this._config.entity!]);
+    if (changed.has('hass') && this.hass && (!old || old.entities !== this.hass.entities)) { this.retarget(); this.queue.entity = this.player(); }
+    if ((changed.has('hass') || changed.has('_config')) && this.hass && this._config) { const p = this.player(); this.lyrics.follow(this.hass, p ? this.hass.states[p] : undefined); }
     if (changed.has('hass') && this.hass) {
       this.watchConn();
       if (!connected(this.hass)) setVolDown(true); else if (volDown()) volFlush(this.hass);
@@ -638,7 +655,7 @@ export class JukeboxCard extends LitElement {
     this._lostTimer = window.setTimeout(() => (this._lost = ''), 8000);
     if (this._config.entity !== base) {
       this._config = this.effective();
-      this.queue.entity = this._config.entity!;
+      this.queue.entity = this.player();
       this.queue.refreshSoon(0);
       this.stopPush(); this.startPush();
     }
@@ -649,7 +666,7 @@ export class JukeboxCard extends LitElement {
     if (!c || !h || c.speaker_mode !== 'dynamic') return 0;
     const ent = h.states[c.entity!];
     const players = this.speakers.loaded ? this.speakers.players : undefined;
-    const ma = players ? targetMa(c.entity!, h, players) : undefined;
+    const ma = players ? targetMa(c.entity!, this.speakers.ids) : undefined;
     const g = ma ? players!.get(ma) : undefined;
     const store = g && isActive(g) ? membersOf(g, players!) : undefined;
     return liveCount(ent, store, roomsOf(c, h).map((r) => h.states[r.entity]));
@@ -734,8 +751,9 @@ export class JukeboxCard extends LitElement {
   render() {
     if (!this._config) return nothing;
     const eid = this._config.entity;
-    // Home Assistant's media-control card: a configured entity that is missing shows the standard warning.
-    if (this.hass && eid && !this.hass.states[eid]) {
+    // Home Assistant's media-control card: a configured entity that is missing shows the standard warning. #99: so does one
+    // that Home Assistant's registry says is not a Music Assistant player (the card works only with Music Assistant players).
+    if (this.hass && eid && (!this.hass.states[eid] || !this.player())) {
       const loc = this.hass.localize;
       const fromHa = typeof loc === 'function'
         ? (loc('ui.panel.lovelace.warning.entity_not_found', { entity: eid }) || loc('ui.panel.lovelace.warning.entity_not_found', 'entity', eid))

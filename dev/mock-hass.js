@@ -356,6 +356,11 @@ if (st(EVERY).state !== 'idle') setState(EVERY, null, { media_position: 128, med
 for (const [id, [name, v]] of Object.entries(ROOMS))
   setState(id, st(EVERY).state === 'idle' ? 'idle' : 'playing', { friendly_name: name, volume_level: v, is_volume_muted: false, source: 'Music Assistant', supported_features: 152463, mass_player_id: null });
 setState('button.everywhere_favorite_current_song', 'unknown', { friendly_name: 'Everywhere Favorite current song' });
+// #99 nonma=1: a speaker from another integration (cast) that is named like an MA room and claims an MA queue; the card must
+// never list, match or offer it (only HA's entity registry decides what is a Music Assistant player)
+const NON_MA = params.get('nonma') === '1' ? ['media_player.kitchen_2'] : [];
+for (const id of NON_MA) setState(id, 'playing', { friendly_name: 'Kitchen Speaker', volume_level: 0.4, is_volume_muted: false, supported_features: 152463,
+  media_title: 'Not a Music Assistant song', active_queue: 'syncgroup_everywhere', mass_player_type: 'group' });
 const ma = createMa({ params, st, setState, commit: () => commit(), sleep, QS, syncNowPlaying, EVERY, libTracks, qItem });
 afterGroupState = (id) => ma.groupStateChanged(id);
 
@@ -573,13 +578,18 @@ const USER = { ...(params.get('uid') ? { id: params.get('uid') } : {}), name: pa
 // The jukebox_kiosk integration is loaded (dev/mock-kiosk.js), as in every real install; the card's backend: auto picks it.
 // kiosk=0: core Music Assistant only (the card's native backend).
 const kiosk = params.get('kiosk') !== '0' ? createKiosk({ DEMO_PROVIDERS, params, maApi: ma, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit: () => commit(), sleep, catalog: CATALOG, user: USER }) : null;
-/** entity registry display entries, like hass.entities: every MA player on its own device, plus Everywhere's MA favorite button */
+/** entity registry display entries, like hass.entities: every MA player on its own device (nonma=1: plus a cast speaker), plus Everywhere's MA favorite button */
+let regCache = { key: '', out: {} };
 function registry() {
+  // like HA: hass.entities is the same object until the registry changes (here: until an entity is added)
+  const key = Object.keys(states).join(',');
+  if (key === regCache.key) return regCache.out;
   const out = {};
   for (const id of Object.keys(states)) {
-    if (id.startsWith('media_player.')) out[id] = { entity_id: id, device_id: 'dev_' + id.slice(13), platform: 'music_assistant' };
+    if (id.startsWith('media_player.')) out[id] = { entity_id: id, device_id: 'dev_' + id.slice(13), platform: NON_MA.includes(id) ? 'cast' : 'music_assistant' };
     if (id === 'button.everywhere_favorite_current_song') out[id] = { entity_id: id, device_id: 'dev_everywhere', platform: 'music_assistant', translation_key: 'favorite_now_playing' };
   }
+  regCache = { key, out };
   return out;
 }
 /** without the integration: HA's own config_entries/get (admins only), the native backend's way to find the entry */

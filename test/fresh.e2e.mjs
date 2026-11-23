@@ -1,4 +1,4 @@
-// 0.7.9 #58 fresh install: a brand-new card with nothing typed (Home Assistant's stub config, then just the player)
+// 0.7.9 #58 fresh install: a brand-new card with nothing typed (Home Assistant's stub config, then just the player; #99: the stub has none)
 // must work for a non-admin: it finds Music Assistant through the Jukebox Kiosk integration, searches, lists the
 // library and the queue, and plays. The editor starts from the same nothing. Every id is a placeholder.
 // Usage: (starts its own dev server on a free port) node test/fresh.e2e.mjs
@@ -38,13 +38,15 @@ async function tap(p, expr) {
   await p.mouse.click(r.x, r.y); await sleep(80);
 }
 
-// 1. adding the card: Home Assistant's stub config picks the first Music Assistant player, nothing else
+// 1. adding the card: Home Assistant's stub config has no player (#99, Randy Nov 19); Home Assistant shows its configuration
+//    error until the player is picked in the editor (the harness then picks Everywhere)
 {
   const p = await open('&stub=1');
   const cfg = await ev(p, `customElements.get('jukebox-card').getStubConfig(__card.hass)`);
-  check('F1 stub config = {entity: the first Music Assistant player}, nothing else', J(cfg) === J({ entity: EV }), J(cfg));
-  const stubNone = await ev(p, `J = JSON.stringify, J(customElements.get('jukebox-card').getStubConfig({ states: {}, entities: {} }))`);
-  check('F1b no Music Assistant player yet → an empty stub (the editor asks for the player)', stubNone === '{}', stubNone);
+  check('F1 stub config is empty: no player is picked for you', J(cfg) === '{}', J(cfg));
+  const stubErr = await ev(p, `window.__stubError ?? ''`);
+  check('F1b the empty stub is refused with Home Assistant\'s media-control error (the editor asks for the player)',
+    stubErr === 'Specify an entity from within the media_player domain', stubErr);
   const who = await ev(p, `({ admin: __card.hass.user.is_admin, kiosk: __card.dataset.backend, entry: __card._config._backend?.maEntry })`);
   check('F2 non-admin, nothing set: the card uses the Jukebox Kiosk integration and learns the Music Assistant entry from it', who.admin === false && who.kiosk === 'kiosk' && who.entry === MA_ENTRY, J(who));
   const tabs = await ev(p, `[...__card.shadowRoot.querySelectorAll('.tab span')].map((t) => t.textContent.trim())`);

@@ -2,6 +2,7 @@ import { html, css, nothing, type ReactiveController, type ReactiveControllerHos
 import { keyed } from 'lit/directives/keyed.js';
 import { icon } from './icons';
 import { providerLabel } from './providers';
+import { isMaPlayer } from './ma-player';
 import { NARROW_W } from './styles';
 import type { Enqueue, HomeAssistant, JukeboxCardConfig, MaItem, RoomConfig } from './types';
 
@@ -160,12 +161,14 @@ export function unwrap(r: any, entity?: string): any {
   return d;
 }
 
-export function roomsOf(c: JukeboxCardConfig, hass?: HomeAssistant): Array<Required<Pick<RoomConfig, 'entity' | 'name'>> & RoomConfig> {
+/** The configured rooms that are Music Assistant players (#99). Anything else is left out quietly, and nothing is listed
+ *  until Home Assistant has sent its entity registry. */
+export function roomsOf(c: JukeboxCardConfig, hass: HomeAssistant | undefined): Array<Required<Pick<RoomConfig, 'entity' | 'name'>> & RoomConfig> {
   return (c.rooms ?? []).map((r) => {
     const o: RoomConfig = typeof r === 'string' ? { entity: r } : r;
     const fn = hass?.states[o.entity]?.attributes?.friendly_name as string | undefined;
     return { ...o, entity: o.entity, name: o.name || fn || o.entity.replace(/^media_player\./, '').replace(/_/g, ' ') };
-  }).filter((r) => !!r.entity);
+  }).filter((r) => isMaPlayer(hass, r.entity));
 }
 
 export function fire(el: HTMLElement, type: string, detail: any = {}) {

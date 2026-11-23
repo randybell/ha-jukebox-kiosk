@@ -141,6 +141,11 @@ export class KioskBackend implements MaBackend {
   setAutoplayMode(entity: string, mode: AutoplayMode, playlist?: string) {
     return this.ws({ type: 'set_autoplay_mode', entity_id: entity, mode, ...(mode === 'playlist' && playlist ? { playlist } : {}) });
   }
+  async playerIds() {
+    const r = await this.ws<any>({ type: 'player_ids' });
+    const raw = r?.players && typeof r.players === 'object' ? r.players : {};
+    return new Map(Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === 'string' && !!e[1]));
+  }
   async subscribeQueue(entity: string, cb: (ev: { event: string; queue_id?: string }) => void) {
     const conn = this.hass.connection;
     if (!conn?.subscribeMessage) throw new BackendError('unsupported', 'no websocket subscriptions');

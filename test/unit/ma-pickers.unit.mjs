@@ -38,7 +38,9 @@ for (const [n, multi, label] of [['entity', false, 'Player'], ['rooms', true, 'R
   const kept = Object.keys(reg).filter((id) => haKeeps(e.filter, id, reg));
   check(`P ${label}: only the Music Assistant player passes HA's filter`, J(kept) === J(['media_player.kitchen_ma']), J(kept));
 }
-check('P same rule as the stub config: firstMusicAssistantPlayer picks the same player', M.firstMusicAssistantPlayer({ entities: reg, states }) === 'media_player.kitchen_ma');
+// #99: the card's own rule (rooms, targets, the card's player) keeps exactly what the pickers offer
+const cardKeeps = Object.keys(reg).filter((id) => M.isMaPlayer({ entities: reg, states }, id));
+check('P same rule as the card: isMaPlayer keeps exactly the pickers\' Music Assistant player', J(cardKeeps) === J(['media_player.kitchen_ma']), J(cardKeeps));
 check('P no picker anywhere still lists every media_player', !flat({ speaker_mode: 'dynamic' }).some((x) => x.selector?.entity && !x.selector.entity.filter?.integration));
 
 console.log(`\n${total - failures}/${total} passed`);
