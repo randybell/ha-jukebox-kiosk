@@ -959,12 +959,12 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await p.evaluate((a, b) => {
     const seen = window.__lv4 = []; let last = '';
     const rec = () => { const k = `${window.__hass.states[a]?.state}|${window.__hass.states[b]?.state}`; if (k !== last) { last = k; seen.push(k); } };
-    rec(); window.__lv4t = setInterval(rec, 5);
+    rec(); window.__lv4rec = rec; window.__lv4t = setInterval(rec, 5);
   }, IN, OUT);
   await tap(p, `${SR}.querySelector('[data-target="${OUT}"]')`);
   await confirm(p);
   const play = await wait(p, `window.__hass.states['${OUT}'].state === 'playing'`, 8000);
-  const seq = await p.evaluate(() => { clearInterval(window.__lv4t); return window.__lv4; });
+  const seq = await p.evaluate(() => { clearInterval(window.__lv4t); window.__lv4rec(); return window.__lv4; }); // last sample: the wait may see 'playing' before the 5 ms tick does
   const srcStop = seq.includes('idle|buffering') && seq.indexOf('idle|buffering') < seq.lastIndexOf('idle|playing');
   const gap = (await p.evaluate(() => (window.__maEvents ?? []).some((e) => e.ev === 'transferred')));
   check('LV4 transfer: the source stops on its own (no stop call), the target is silent for the gap and then plays', srcStop && play && gap && (await ma(p, 'players/cmd/stop')).length === 0 && (await target(p)) === OUT, J({ seq, srcStop, play, gap, t: await target(p) }));
