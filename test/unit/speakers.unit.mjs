@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 
 const OUT = new URL('../tmp/unit-speakers/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
-const bundle = await rollup({ input: ['src/speakers/model.ts', 'src/queue-model.ts', 'src/speakers/ask-hold.ts', 'src/backend/kiosk.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
+const bundle = await rollup({ input: ['src/speakers/model.ts', 'src/queue-model.ts', 'src/speakers/ask-hold.ts', 'src/backend/kiosk.ts', 'src/shared.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
 await bundle.write({ dir: OUT, format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name]-[hash].mjs' });
 await bundle.close();
 
@@ -23,6 +23,7 @@ const M = await import(OUT + 'model.mjs');
 const Q = await import(OUT + 'queue-model.mjs');
 const AH = await import(OUT + 'ask-hold.mjs');
 const K = await import(OUT + 'kiosk.mjs');
+const S = await import(OUT + 'shared.mjs');
 
 let failures = 0, total = 0;
 function check(name, ok, info = '') { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); }
@@ -260,9 +261,11 @@ check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.is
     'media_player.x': st('media_player.x', 'idle', { friendly_name: 'Unknown', active_queue: 'grp_all' }),
     'media_player.y': st('media_player.y', 'playing', { friendly_name: 'Unknown', active_queue: 'grp_all' }),
   } };
-  check('U43 targetMa: mass_player_id null + stale active_queue on an idle group → the group with that name',
-    M.targetMa('media_player.inside', lh, lp) === 'grp_in' && M.targetMa('media_player.all_rooms', lh, lp) === 'grp_all', J([M.targetMa('media_player.inside', lh, lp)]));
-  check('U44 targetMa: active_queue only counts while the entity itself plays', M.targetMa('media_player.x', lh, lp) === undefined && M.targetMa('media_player.y', lh, lp) === 'grp_all');
+  // #99: HA's entity registry (jukebox_kiosk/player_ids) is the only link; names, active_queue and mass_player_id never count
+  const lids = new Map([['media_player.inside', 'grp_in'], ['media_player.all_rooms', 'grp_all']]);
+  check('U43 targetMa: the registry id (an idle group whose active_queue points at another group still maps to itself)',
+    M.targetMa('media_player.inside', lids) === 'grp_in' && M.targetMa('media_player.all_rooms', lids) === 'grp_all', J([M.targetMa('media_player.inside', lids)]));
+  check('U44 targetMa: no registry id → nothing (a playing entity\'s active_queue is not a player id)', M.targetMa('media_player.x', lids) === undefined && M.targetMa('media_player.y', lids) === undefined);
   const cfgIn = M.parseGroupConfig({ values: { group_members: { value: ['spk_a', 'spk_b'] }, dynamic_members: { value: true } } });
   const cfgAll = M.parseGroupConfig({ values: { group_members: { value: ['spk_a', 'spk_b'] }, dynamic_members: { value: false } } });
   check('U45 parseGroupConfig reads values.<key>.value; junk → undefined',
@@ -272,11 +275,42 @@ check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.is
   const lrooms = [{ entity: 'media_player.a', name: 'A', ma: 'spk_a' }, { entity: 'media_player.b', name: 'B', ma: 'spk_b' }];
   const tg = [{ entity: 'media_player.all_rooms', name: 'All Rooms' }, { entity: 'media_player.inside', name: 'Inside' }];
   const cf = new Map([['grp_in', cfgIn], ['grp_all', cfgAll]]);
-  const ps = M.maPresets(cf, lp, lrooms, tg, lh);
+  const ps = M.maPresets(cf, lp, lrooms, tg, lids);
   check('U47 maPresets: "<Group> default" for dynamic groups only (static Everywhere-like group skipped)',
     J(ps) === J([{ name: 'Inside default', members: ['media_player.a', 'media_player.b'], target: 'media_player.inside' }]), J(ps));
   check('U48 maPresets: no MA config (unreadable / non-admin) → no presets; an old 6th "card presets" argument is ignored',
-    J(M.maPresets(new Map(), lp, lrooms, tg, lh)) === J([]) && J(M.maPresets(cf, lp, lrooms, tg, lh, [{ name: 'X', members: ['media_player.a'] }])) === J(ps));
+    J(M.maPresets(new Map(), lp, lrooms, tg, lids)) === J([]) && J(M.maPresets(cf, lp, lrooms, tg, lids, [{ name: 'X', members: ['media_player.a'] }])) === J(ps));
+}
+
+// ---------------- #99: speakers by Music Assistant player id only ----------------
+{
+  const reg = (platform) => ({ platform });
+  const hs = {
+    entities: { 'media_player.kitchen': reg('music_assistant'), 'media_player.kitchen_speaker': reg('music_assistant'), 'media_player.den': reg('music_assistant'),
+      'media_player.cast_kitchen': reg('cast'), 'media_player.grp': reg('music_assistant'), 'media_player.tv': reg('webostv') },
+    states: Object.fromEntries(['media_player.kitchen', 'media_player.kitchen_speaker', 'media_player.den', 'media_player.cast_kitchen', 'media_player.grp', 'media_player.tv']
+      .map((e) => [e, { entity_id: e, state: 'idle', attributes: { friendly_name: e === 'media_player.cast_kitchen' ? 'Kitchen Speaker' : e.slice(13), ...(e === 'media_player.grp' || e === 'media_player.tv' ? { mass_player_type: 'group' } : {}) } }])),
+  };
+  const ip = M.parsePlayers([P('ma_kitchen', { name: 'Kitchen Speaker' }), P('ma_kitchen_speaker', { name: 'Kitchen' }), P('ma_den', { name: 'Renamed in MA' }), P('ma_grp', { type: 'group', name: 'Group' })]);
+  const ids = new Map([['media_player.kitchen', 'ma_kitchen'], ['media_player.kitchen_speaker', 'ma_kitchen_speaker'], ['media_player.den', 'ma_den'], ['media_player.grp', 'ma_grp']]);
+  const rooms = S.roomsOf({ rooms: ['media_player.kitchen', { entity: 'media_player.kitchen_speaker', name: 'Kitchen Speaker' }, 'media_player.cast_kitchen', { entity: 'media_player.den', name: 'Den' }] }, hs);
+  check('U99a roomsOf: a speaker from another integration is left out quietly (even named like an MA room)',
+    J(rooms.map((r) => r.entity)) === J(['media_player.kitchen', 'media_player.kitchen_speaker', 'media_player.den']), J(rooms));
+  check('U99b roomsOf: nothing is listed until Home Assistant has sent its entity registry',
+    S.roomsOf({ rooms: ['media_player.kitchen'] }, { states: hs.states }).length === 0 && S.roomsOf({ rooms: ['media_player.kitchen'] }, undefined).length === 0);
+  const mr = M.mapRooms(rooms, ip, ids);
+  check('U99c mapRooms: "Kitchen" and "Kitchen Speaker" stay separate, each on its own MA id (MA names crossed on purpose)',
+    mr[0].ma === 'ma_kitchen' && mr[1].ma === 'ma_kitchen_speaker', J(mr));
+  check('U99d mapRooms: a room renamed in MA (and named differently in HA) still maps by id', mr[2].ma === 'ma_den', J(mr[2]));
+  const mp = M.mapRooms([{ entity: 'media_player.kitchen', name: 'K', ma_player: 'ma_den' }, { entity: 'media_player.den', name: 'D', ma_player: 'not_an_ma_player' }], ip, ids);
+  check('U99e mapRooms: ma_player wins when it names a real MA player; otherwise the registry id', mp[0].ma === 'ma_den' && mp[1].ma === 'ma_den', J(mp));
+  check('U99f mapRooms: no ids read yet → no MA id (never a name guess)', M.mapRooms(rooms, ip, new Map()).every((r) => r.ma === undefined));
+  const tAuto = M.targetsOf({ entity: 'media_player.cast_kitchen' }, hs);
+  check('U99g targetsOf (automatic): MA groups only; a non-MA card entity is not added', J(tAuto.map((t) => t.entity)) === J(['media_player.grp']), J(tAuto));
+  const tCfg = M.targetsOf({ entity: 'media_player.grp', targets: ['media_player.tv', { entity: 'media_player.grp', members: ['media_player.kitchen', 'media_player.cast_kitchen'] }] }, hs);
+  check('U99h targetsOf (configured): non-MA targets and members are left out quietly',
+    J(tCfg.map((t) => [t.entity, t.members])) === J([['media_player.grp', ['media_player.kitchen']]]), J(tCfg));
+  check('U99i targetsOf: no registry yet → no targets', M.targetsOf({ entity: 'media_player.grp' }, { states: hs.states }).length === 0);
 }
 
 // ---------------- 0.6.3: Now Playing speaker controls ----------------

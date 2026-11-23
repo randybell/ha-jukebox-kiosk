@@ -137,6 +137,8 @@ export interface MaBackend {
   setAutoplayMode?(entity: string, mode: AutoplayMode, playlist?: string): Promise<unknown>;
   /** 0.7.2: MA's configured music providers that can search (kiosk {providers}); see search-sources.ts */
   searchProviders?(): Promise<any>;
+  /** #99: {HA entity → MA player id} for every Music Assistant media_player, from HA's entity registry (kiosk only). */
+  playerIds?(): Promise<Map<string, string>>;
   /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. */
   subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;
   /** MA sleep timer for the entity, using the entity's MA player id. Kiosk only. */

@@ -1,5 +1,5 @@
 // #106: adding the Jukebox card to a new dashboard never hard-codes media_player.everywhere.
-// A new card uses Home Assistant's stub config (the first Music Assistant player, or nothing).
+// A new card uses Home Assistant's stub config, which has no player (#99, Randy Nov 19): the player is picked in the editor.
 // With no entity, setConfig throws the same error as HA's media-control card, and no service
 // is sent to everywhere. Usage: node test/new-dashboard.e2e.mjs (starts its own dev server).
 import puppeteer from 'puppeteer-core';
@@ -35,8 +35,7 @@ async function open(q = '', page = 'index.html') {
 {
   const p = await open('&stub=1');
   const stub = await ev(p, `customElements.get('jukebox-card').getStubConfig(__card.hass)`);
-  check('N1 default mock stub is the first Music Assistant player (Everywhere is first in this mock registry)',
-    J(stub) === J({ entity: EV }), J(stub));
+  check('N1 #99 the stub picks no player, even with Music Assistant players in the registry', J(stub) === '{}', J(stub));
   const garageFirst = await ev(p, `(() => {
     const h = __card.hass;
     const entities = {};
@@ -46,8 +45,7 @@ async function open(q = '', page = 'index.html') {
     for (const [id, ent] of Object.entries(h.entities)) if (!(id in entities)) entities[id] = ent;
     return customElements.get('jukebox-card').getStubConfig({ states: h.states, entities });
   })()`);
-  check('N2 stub follows registry order: when garage is first, the new card starts on garage, not everywhere',
-    J(garageFirst) === J({ entity: GARAGE }), J(garageFirst));
+  check('N2 registry order makes no difference: still no player', J(garageFirst) === '{}', J(garageFirst));
   const none = await ev(p, `J = JSON.stringify, J(customElements.get('jukebox-card').getStubConfig({ states: {}, entities: {} }))`);
   check('N3 no Music Assistant player → empty stub {}', none === '{}', none);
   const nonMa = await ev(p, `customElements.get('jukebox-card').getStubConfig({
@@ -55,6 +53,8 @@ async function open(q = '', page = 'index.html') {
     entities: { 'media_player.tv': { entity_id: 'media_player.tv', platform: 'cast' } },
   })`);
   check('N4 a non-Music Assistant media_player is not used as the stub', J(nonMa) === '{}', J(nonMa));
+  const stubErr = await ev(p, `window.__stubError ?? ''`);
+  check('N4b the empty stub gets Home Assistant\'s configuration error from setConfig', stubErr === 'Specify an entity from within the media_player domain', stubErr);
 
   const thrown = await ev(p, `(() => {
     const el = document.createElement('jukebox-card');
@@ -99,10 +99,31 @@ async function open(q = '', page = 'index.html') {
   check('N7 a configured entity that is not found shows the Home Assistant standard warning, not the kiosk and not Everywhere',
     missing.hasWarning && /Entity not available: media_player.does_not_exist/.test(missing.text) && !missing.pill && !/Everywhere/.test(missing.text), J(missing));
 
-  // New dashboard (stub=1): the card is already configured from getStubConfig. Interact with mouse and tap at 1024x600.
+  // #99: a media_player Home Assistant has but that isn't a Music Assistant player: HA's standard warning, nothing else runs
+  const notMa = await ev(p, `(() => {
+    const n0 = window.__ws.length, c0 = window.__calls.length;
+    const el = document.createElement('jukebox-card');
+    el.setConfig({ type: 'custom:jukebox-card', entity: 'media_player.tv', rooms: ['media_player.kitchen'] });
+    const h = __card.hass;
+    el.hass = { ...h, states: { ...h.states, 'media_player.tv': { entity_id: 'media_player.tv', state: 'playing', attributes: { friendly_name: 'Everywhere', active_queue: 'syncgroup_everywhere' } } },
+      entities: { ...h.entities, 'media_player.tv': { entity_id: 'media_player.tv', platform: 'cast' } },
+      localize: (k, a, b) => k === 'ui.panel.lovelace.warning.entity_not_found' ? 'Entity not available: ' + ((a && a.entity) || b) : k };
+    document.body.append(el);
+    return el.updateComplete.then(() => new Promise((r) => setTimeout(r, 600))).then(() => {
+      const w = el.shadowRoot.querySelector('hui-warning');
+      const text = (w?.textContent ?? '').replace(/\s+/g, ' ').trim();
+      const out = { text, hasWarning: !!w, pill: !!el.shadowRoot.querySelector('.pill'), ws: window.__ws.slice(n0).filter((m) => m.entity_id === 'media_player.tv').map((m) => m.type),
+        calls: window.__calls.slice(c0).length };
+      el.remove();
+      return out;
+    });
+  })()`);
+  check('N7b #99 an entity that is not a Music Assistant player shows Home Assistant\'s standard warning; no queue, push or service call for it',
+    notMa.hasWarning && /Entity not available: media_player.tv/.test(notMa.text) && !notMa.pill && notMa.ws.length === 0 && notMa.calls === 0, J(notMa));
+
+  // New dashboard (stub=1): the stub was refused, then the player picked in the editor (Everywhere). Mouse and tap at 1024x600.
   const ent = await ev(p, `__card._config.entity`);
-  check('N8 new dashboard (stub=1) used the first Music Assistant player from the mock (a real player, not a silent default)',
-    ent === EV, ent);
+  check('N8 new dashboard (stub=1) runs on the player picked in the editor', ent === EV, ent);
   const pill = await ev(p, `__card.shadowRoot.querySelector('.pill .pn')?.textContent.trim()`);
   check('N9 the header pill uses the player friendly name', pill === 'Everywhere', pill);
 

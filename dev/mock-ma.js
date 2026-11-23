@@ -1,7 +1,7 @@
 // Mock Music Assistant players for the 0.5.0 Speakers panel (dev harness only; every id is a placeholder).
 // Reached through the kiosk mock's ma_command (logged in __calls as ma.send_command) (players/all, players/cmd/set_members, players/cmd/stop, player_queues/transfer).
 // Topology: Everywhere = STATIC sync group (garage, living, kitchen; leader garage), Indoor = DYNAMIC (preset living, kitchen),
-// Outdoor = DYNAMIC (preset garage). Speakers are WiiM-like players (provider 'wiim', hide_in_ui, not exposed to HA).
+// Outdoor = DYNAMIC (preset garage). Speakers are WiiM-like players (provider 'wiim', hide_in_ui) that MA exposes to HA as the room entities.
 // Rules modelled on MA 2.10 (see the 0.5.0 plan): groups can't nest; groups may overlap and the newest one to start takes
 // the speakers; set_members moves a speaker between playing groups (each keeps its own queue); moving a group's leader stops
 // it and it re-forms after a gap; moving its last speaker dissolves it; a member of a playing STATIC group can't be taken
@@ -35,6 +35,10 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   const EVDYN = params.get('every') === 'dyn';
   if (EVDYN) G.syncgroup_everywhere.kind = 'dynamic';
   const gidOf = (entity) => Object.keys(G).find((k) => G[k].entity === entity);
+  // #99: HA's entity registry ties each MA entity to its MA player id (unique_id); the kiosk mock's player_ids answers from it.
+  // Names differ on purpose ("Kitchen Speaker" in MA, media_player.kitchen in HA): nothing is matched by name.
+  window.__uniqueIds = { ...(window.__uniqueIds ?? {}), ...Object.fromEntries(Object.entries(G).map(([g, d]) => [d.entity, g])),
+    ...Object.fromEntries(Object.entries(ROOM_OF).map(([pid, e]) => [e, pid])) };
   const solo = {}; // speaker -> {state, title}
   const log = (window.__maLog = []);
   const events = (window.__maEvents = []);
@@ -63,7 +67,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
       const free = Object.values(SP).filter((x) => x !== s && !holder(x));
       const vol = st(ROOM_OF[s])?.attributes?.volume_level ?? 0.5;
       out.push({
-        player_id: s, provider: 'wiim', type: 'player', name: NAME[s], available: true, powered: true, hide_in_ui: true, expose_to_ha: false,
+        player_id: s, provider: 'wiim', type: 'player', name: NAME[s], available: true, powered: true, hide_in_ui: true, expose_to_ha: true,
         playback_state: h ? (isSilent(h) && isLead ? 'idle' : gState(h)) : solo[s]?.state ?? 'idle',
         group_members: isLead ? [...ms] : [], static_group_members: [],
         can_group_with: h && !isLead ? [] : free, synced_to: h && !isLead ? leader(h) : null, active_group: h ?? null,

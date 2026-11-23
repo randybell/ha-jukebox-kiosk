@@ -1,6 +1,5 @@
-// #106: a new card never hard-codes media_player.everywhere. getStubConfig / firstMusicAssistantPlayer
-// pick the first Music Assistant player (object-key order) or nothing; playMedia and friends never
-// target everywhere when entity is missing. Usage: node test/unit/stub-config.unit.mjs
+// #106: a new card never hard-codes media_player.everywhere. #99: getStubConfig picks no player at all (Randy, Nov 19);
+// ma-player.ts only tells Music Assistant players apart; playMedia and friends never target everywhere when entity is missing. Usage: node test/unit/stub-config.unit.mjs
 import { rollup } from 'rollup';
 import typescript from '@rollup/plugin-typescript';
 import resolve from '@rollup/plugin-node-resolve';
@@ -47,21 +46,15 @@ function hassOf(ids, platforms = {}) {
   return { states, entities };
 }
 
-check('S1 no hass → no player', P.firstMusicAssistantPlayer() === undefined);
-check('S2 empty entities/states → no player', P.firstMusicAssistantPlayer({ states: {}, entities: {} }) === undefined);
-check('S3 first Music Assistant player in key order (garage before everywhere)',
-  P.firstMusicAssistantPlayer(hassOf([garage, ev, living])) === garage, P.firstMusicAssistantPlayer(hassOf([garage, ev, living])));
-check('S4 when everywhere is first in the registry, the stub may pick it (it is a real MA player, not a hard-coded default)',
-  P.firstMusicAssistantPlayer(hassOf([ev, garage])) === ev);
-check('S5 non-MA media players are skipped',
-  P.firstMusicAssistantPlayer(hassOf([living, garage], { [living]: { entity_id: living, platform: 'cast' }, [garage]: ma(garage) })) === garage);
-check('S6 an MA player with no state is skipped', (() => {
-  const h = hassOf([garage, ev]);
-  delete h.states[garage];
-  return P.firstMusicAssistantPlayer(h) === ev;
-})());
-check('S7 only a light, no media_player → no player',
-  P.firstMusicAssistantPlayer(hassOf(['light.kitchen'], { 'light.kitchen': { entity_id: 'light.kitchen', platform: 'music_assistant' } })) === undefined);
+// #99 (Randy, Nov 19): no speaker is ever picked for a new card. ma-player.ts only says what is a Music Assistant player.
+check('S1 the old first-player pick is gone', !('firstMusicAssistantPlayer' in P), J(Object.keys(P)));
+check('S2 isMaPlayer: no hass / no registry → false', !P.isMaPlayer(undefined, garage) && !P.isMaPlayer({ states: {}, entities: {} }, garage));
+check('S3 isMaPlayer: registry platform music_assistant only (a cast speaker is not one, whatever its name)',
+  P.isMaPlayer(hassOf([garage]), garage) && !P.isMaPlayer(hassOf([living], { [living]: { entity_id: living, platform: 'cast' } }), living));
+check('S4 isMaPlayer: only media_player entities (an MA button is not a player)',
+  !P.isMaPlayer(hassOf(['button.x'], { 'button.x': { entity_id: 'button.x', platform: 'music_assistant' } }), 'button.x'));
+check('S5 registryReady: false until Home Assistant sends hass.entities',
+  !P.registryReady(undefined) && !P.registryReady({ states: {} }) && !P.registryReady({ states: {}, entities: {} }) && P.registryReady(hassOf([garage])));
 
 const calls = [];
 const hass = {

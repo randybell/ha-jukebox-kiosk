@@ -143,6 +143,15 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
   const nsub = await k2.subscribeQueue(ENT, () => {}).catch((x) => x);
   check('K16 subscribeQueue without a connection → BackendError unsupported', nsub instanceof B.BackendError && nsub.code === 'unsupported');
 }
+{
+  // #99: jukebox_kiosk/player_ids → Map(entity → MA player id); junk values dropped; native has no such call
+  const { hass, log } = fakeHass({ answers: { capabilities: () => ({ features: {} }), player_ids: () => ({ players: { 'media_player.kitchen': 'ma_kitchen', 'media_player.bad': 7, 'media_player.empty': '' } }) } });
+  const k = new B.KioskBackend(() => hass);
+  await k.ready;
+  const ids = await k.playerIds();
+  check('K17 playerIds: the registry map, nothing guessed', ids instanceof Map && J([...ids]) === J([['media_player.kitchen', 'ma_kitchen']]) && log.at(-1)?.type === 'jukebox_kiosk/player_ids', J([...ids]));
+  check('K18 native backend has no player ids (no Music Assistant access)', !('playerIds' in B.createBackend('native', () => hass)));
+}
 // ---------------- the Music Assistant entry, found without any setting ----------------
 {
   const { hass } = fakeHass({ answers: { capabilities: () => ({ ma_entry_id: MA_ENTRY, guest: true, features: {} }) } });

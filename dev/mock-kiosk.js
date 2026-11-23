@@ -6,7 +6,7 @@ import { createV07 } from './mock-v07.js';
 // throw. Every message is logged in window.__ws ({type, ...}). Placeholder ids only.
 //   jukebox_kiosk/capabilities, /ma {command,args} (music/favorites/* need kcaps library_write, like the library class), /queue_items, /item_tracks,
 //   /favorite_current, /unfavorite_current, /subscribe_queue, /set_autoplay, /autoplay_options, /set_autoplay_mode,
-//   /sleep_timer_get, /sleep_timer_set, /sleep_timer_clear, /subscribe_sleep_timer
+//   /sleep_timer_get, /sleep_timer_set, /sleep_timer_clear, /subscribe_sleep_timer, /player_ids
 // The /ma allowlist mirrors const.py MA_COMMANDS; metadata/get_track_lyrics refuses library tracks like the server.
 const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|players\/sleep_timer\/(get|set|clear)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item)|browse|recommendations|recommendations\/items|recently_played_items|genres\/overview|genres\/tracks|genres\/library_items|(tracks|albums|artists|playlists)\/library_items|in_progress_items)|metadata\/get_track_lyrics)$/;
 // #46: music/<type>/library_items with genre = <genre item id> (MA's genre filter) is answered by mock-v07 too
@@ -17,7 +17,9 @@ const FEATURES = { queue: true, queue_play: true, queue_edit: true, undo: true, 
   // v0.7 (read class): genres, Radio Browser "Stations by…", Discover rows, resume positions
   genres: true, radio_browse: true, discover: true, resume: true,
   // 0.7.2: the Search source picker (jukebox_kiosk/search_providers)
-  search_providers: true };
+  search_providers: true,
+  // #99: jukebox_kiosk/player_ids (HA entity → MA player id from the entity registry)
+  player_ids: true };
 const err = (code, message) => Object.assign(new Error(message), { code });
 // Autoplay style (server: autoplay_options / set_autoplay_mode over MA config/player_queues/*). Fake playlist names only.
 // apsimilar=0: no provider can find similar tracks; apmode=<mode>[:<n>] pins a style (n = playlist index).
@@ -135,6 +137,12 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
       // like websocket_api.search_providers(): available music/plugin providers with the search feature, by name
       case 'search_providers': return { providers: DEMO_PROVIDERS.filter((p) => ['music', 'plugin'].includes(p.type) && p.available && p.supported_features.includes('search') && !(params.get('norbi') === '1' && p.domain === 'radiobrowser'))
         .map((p) => ({ instance_id: p.instance_id, domain: p.domain, name: p.name })).sort((a, b) => a.name.localeCompare(b.name)) };
+      case 'player_ids': {
+        if (!features.player_ids) throw err('unauthorized', 'Unauthorized');
+        // the registry only: MA platform entities (hass.entities) with their unique_id; nothing else, no names
+        const reg = window.__hass?.entities ?? {};
+        return { players: Object.fromEntries(Object.entries(window.__uniqueIds ?? {}).filter(([e]) => reg[e]?.platform === 'music_assistant')) };
+      }
       case 'queue_items': {
         const ent = msg.entity_id, Q = QS[ent];
         if (!Q) throw err('not_found', `${ent} is not a Music Assistant player`);

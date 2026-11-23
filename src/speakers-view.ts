@@ -9,7 +9,7 @@ import type { HomeAssistant, JukeboxCardConfig, PresetConfig } from './types';
 import { SpeakerError, timeouts, type SpeakerStore } from './speakers/ma';
 import {
   mapRooms, targetMa, targetsOf, canGroup, canVolume, kindOf, isActive, membersOf, leaderOf, holderOf,
-  takeovers, takeoverText, dropBlock, planMembers, presetSpeakers, maPresets, type MaPlayer, type Players, type Room, type Takeover, type Target,
+  takeovers, takeoverText, dropBlock, planMembers, presetSpeakers, maPresets, type MaPlayer, type PlayerIds, type Players, type Room, type Takeover, type Target,
 } from './speakers/model';
 import { defineElement } from './define';
 import { AskHold } from './speakers/ask-hold';
@@ -28,6 +28,7 @@ export type { InlineRoomState as InlineRoom } from './speakers/model';
 import type { InlineRoomState as InlineRoom } from './speakers/model';
 import { TEST_HOOKS } from './test-hooks';
 interface Undo { label: string; run: () => Promise<void> }
+const NO_IDS: PlayerIds = new Map();
 /** the top-right status chip: info (auto-hides ~4 s), busy (until replaced), error, ask (an action button + dismiss) */
 type ChipKind = 'info' | 'busy' | 'error' | 'ask';
 interface Chip { text: string; kind: ChipKind; act?: { label: string; run: () => void }; n: number }
@@ -77,6 +78,8 @@ export class JbSpeakers extends LitElement {
   private _lastHassRefresh = 0;
 
   private get dynamic() { return this.config?.speaker_mode === 'dynamic'; }
+  /** #99: HA entity → MA player id (HA's entity registry), read with the players */
+  private get ids(): PlayerIds { return this.store?.ids ?? NO_IDS; }
   private get mayGroup() { return canGroup(this.config, this.hass?.user); }
   /** 0.6.4: confirm_drop: true brings back the 0.6.3 centred confirms (drop the leader, last room → Pause, takeovers) */
   private get modal() { return this.config?.confirm_drop === true; }
@@ -133,10 +136,10 @@ export class JbSpeakers extends LitElement {
   startTakeovers(entity: string, players: Players): { lines: string[]; list: Takeover[] } {
     const c = this.config, hass = this.hass;
     const t = targetsOf(c, hass).find((x) => x.entity === entity);
-    const ma = targetMa(entity, hass, players);
+    const ma = targetMa(entity, this.ids);
     const g = ma ? players.get(ma) : undefined;
     if (!g || isActive(g)) return { lines: [], list: [] };
-    const rooms = mapRooms(roomsOf(c, hass), hass, players);
+    const rooms = mapRooms(roomsOf(c, hass), players, this.ids);
     // starting speakers: the card's target members, else what players/all lists for the idle group (live 2.10.9: its current
     // members), else MA's configured defaults (config/players/get); static groups: their fixed list
     const cfg = this.store?.configs.get(ma!);
@@ -151,7 +154,7 @@ export class JbSpeakers extends LitElement {
   private nameOf(id: string, players: Players, rooms: Room[]) {
     const r = rooms.find((x) => x.ma === id);
     if (r) return r.name;
-    const t = targetsOf(this.config, this.hass).find((x) => targetMa(x.entity, this.hass, players) === id);
+    const t = targetsOf(this.config, this.hass).find((x) => targetMa(x.entity, this.ids) === id);
     return t?.name ?? players.get(id)?.name ?? id;
   }
   /** 0.6.4: show one status message in the top-right chip; it replaces whatever was there.
@@ -234,8 +237,8 @@ export class JbSpeakers extends LitElement {
   /* ---------------- grouping ---------------- */
   private ctx() {
     const c = this.config, hass = this.hass, players = this.store?.players ?? new Map();
-    const rooms = mapRooms(roomsOf(c, hass), hass, players);
-    const tMa = this.dynamic ? targetMa(c.entity!, hass, players) : undefined;
+    const rooms = mapRooms(roomsOf(c, hass), players, this.ids);
+    const tMa = this.dynamic ? targetMa(c.entity!, this.ids) : undefined;
     const tP = tMa ? players.get(tMa) : undefined;
     const active = isActive(tP);
     const members = active ? membersOf(tP, players) : [];
@@ -339,7 +342,7 @@ export class JbSpeakers extends LitElement {
     if (to.entity === from) return true;
     if (!this.store?.loaded) await this.store?.refresh();
     const y = this.ctx();
-    const dMa = targetMa(to.entity, this.hass, y.players);
+    const dMa = targetMa(to.entity, this.ids);
     if (!y.active || !y.tMa) { fire(this, 'jukebox-target', { entity: to.entity }); if (!opts.quiet) this.toast(`Now on ${to.name}`); return true; }
     if (!dMa) { this.fail(`${to.name} is not in Music Assistant`); return false; }
     const st = this.startTakeovers(to.entity, y.players);
@@ -371,7 +374,7 @@ export class JbSpeakers extends LitElement {
     const dest = targets.find((t) => t.entity === (p.target ?? this.config.entity)) ?? targets[0];
     const x0 = this.ctx();
     const want = presetSpeakers(p, x0.rooms);
-    const dMa = targetMa(dest.entity, this.hass, x0.players);
+    const dMa = targetMa(dest.entity, this.ids);
     // one confirmation for everything this preset takes
     const list = dMa ? takeovers(dMa, want, x0.players, !isActive(x0.players.get(dMa))) : [];
     if (!(await this.confirmTakeovers(`Use ${p.name}?`, list, x0.players, x0.rooms, 'Use'))) return;
@@ -421,7 +424,7 @@ export class JbSpeakers extends LitElement {
     else if (x.kind === 'static') banner = `${tName} is a fixed group in Music Assistant: no join or drop. Move to another group to change speakers.`;
     else if (x.kind === 'dynamic' && !x.active && this.store?.loaded) banner = `${tName} is not playing. Start playback to join or drop speakers (the buttons wake up), or pick a preset.`;
     // each dynamic group's MA default (config/players/get); unreadable MA config: no presets
-    const presets = may ? maPresets(this.store?.configs ?? new Map(), x.players, x.rooms, targets, this.hass) : [];
+    const presets = may ? maPresets(this.store?.configs ?? new Map(), x.players, x.rooms, targets, this.ids) : [];
     return html`<div class="scrim dim sp-scrim" @pointerdown=${(e: PointerEvent) => { e.preventDefault(); this.close(); }}></div>
       <section class="sheet" role="dialog" aria-label="Speakers" data-mode=${this.dynamic ? 'dynamic' : 'fixed'} data-guest=${may ? 'no' : 'yes'}>
         <header class="sh">
@@ -475,7 +478,7 @@ export class JbSpeakers extends LitElement {
     if (this.dynamic && this.store?.loaded && r.ma) {
       inT = x.members.includes(r.ma);
       const h = inT ? undefined : holderOf(r.ma, x.players, x.tMa);
-      const title = h ? (this.hass?.states[targetsOf(x.c, this.hass).find((t) => targetMa(t.entity, this.hass, x.players) === h.player_id)?.entity ?? '']?.attributes?.media_title as string | undefined) ?? h.current_media?.title
+      const title = h ? (this.hass?.states[targetsOf(x.c, this.hass).find((t) => targetMa(t.entity, this.ids) === h.player_id)?.entity ?? '']?.attributes?.media_title as string | undefined) ?? h.current_media?.title
         : p?.current_media?.title ?? undefined;
       if (inT) where = x.leader === r.ma && x.members.length > 1 ? 'Leads the group' : 'In this group';
       else if (h) where = `In ${this.nameOf(h.player_id, x.players, x.rooms)}${kindOf(h) === 'static' ? ' (fixed)' : ''}${title ? ` · ${title}` : ''}`;
