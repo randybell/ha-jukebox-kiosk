@@ -6,13 +6,16 @@
  *  - Every message carries `seq`, counting up by one on that subscription. A snapshot always starts over. A message
  *    older than the last one applied is dropped, so an older answer never overwrites a newer one; a missing number (or a
  *    change before any snapshot) is a gap, and the caller asks for a fresh snapshot.
+ *  - 2.4: {kind: 'offline'} means Home Assistant lost its Music Assistant connection. The lists are kept but are no longer
+ *    current (`ready` is false) until the fresh snapshot the integration sends on the same subscription once MA is back;
+ *    a change before that snapshot is a gap.
  * Pure state, no DOM and no hass calls. Unit-tested in test/unit/live.unit.mjs.
  */
 import { parsePlayers, type MaPlayer, type Players } from './model';
 
 export interface LiveMsg {
   seq: number;
-  kind: 'snapshot' | 'event';
+  kind: 'snapshot' | 'event' | 'offline';
   players?: unknown[];
   queues?: unknown[];
   event?: string;
@@ -30,8 +33,9 @@ export interface MaQueue {
   current_item_id: string | null;
 }
 export type Queues = Map<string, MaQueue>;
-/** 'ok' = applied, 'old' = older than what we have (dropped), 'gap' = a message is missing: take a fresh snapshot */
-export type Applied = 'ok' | 'old' | 'gap';
+/** 'ok' = applied, 'old' = older than what we have (dropped), 'gap' = a message is missing: take a fresh snapshot,
+ *  'offline' = Music Assistant went away (2.4): wait for the snapshot that follows when it is back */
+export type Applied = 'ok' | 'old' | 'gap' | 'offline';
 
 const obj = (v: unknown): Record<string, any> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, any>) : null);
 
@@ -68,6 +72,11 @@ export class LiveState {
     const seq = typeof msg?.seq === 'number' && Number.isFinite(msg.seq) ? msg.seq : NaN;
     if (Number.isNaN(seq)) return 'gap';
     if (msg.kind === 'snapshot') { this.snapshot(msg, seq); return 'ok'; }
+    if (msg.kind === 'offline') {
+      if (seq <= this.seq) return 'old';
+      this.seq = seq; this.ready = false;
+      return 'offline';
+    }
     if (!this.ready || seq > this.seq + 1) return 'gap';
     if (seq <= this.seq) return 'old';
     this.seq = seq;

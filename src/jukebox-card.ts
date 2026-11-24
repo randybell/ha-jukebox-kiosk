@@ -21,7 +21,8 @@ const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-m
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
 import { isMaPlayer, registryReady } from './ma-player';
 import { formatTime, formatDateWeekdayDay, startMinuteClock } from './datetime';
-import { pickBackend, createBackend, type MaBackend } from './backend';
+import { pickBackend, createBackend, MA_OFFLINE, type MaBackend } from './backend';
+import { MaStatus } from './ma-status';
 import { defineElement } from './define';
 import { libraryTabLabel, combinedOn } from './library-home';
 import { FavStore } from './favorites';
@@ -91,6 +92,7 @@ export class JukeboxCard extends LitElement {
     _station: { state: true },
     _spkEl: { state: true },
     _lost: { state: true },
+    _maOff: { state: true },
   };
   hass?: HomeAssistant;
   private _config!: JukeboxCardConfig;
@@ -141,7 +143,8 @@ export class JukeboxCard extends LitElement {
   /** 0.7.10 volume while HA is disconnected: status + flush on reconnect (see vol-send.ts) */
   private _vunsub?: () => void;
   private _conn?: HomeAssistant['connection'];
-  private onConnReady = () => { volFlush(this.hass); this.requestUpdate(); };
+  /** HA's websocket is back: send kept volume, and (2.4) read everything fresh, since changes made while it was down were missed */
+  private onConnReady = () => { volFlush(this.hass); this.freshReload(); this.requestUpdate(); };
   private onConnDown = () => setVolDown(true);
   private watchConn() {
     const c = this.hass?.connection;
@@ -152,6 +155,11 @@ export class JukeboxCard extends LitElement {
   }
   private _sunsub?: () => void;
   private _pn = -1;
+  /** 2.4: Home Assistant's Music Assistant connection (kiosk integration); the notice and the fresh reload follow it */
+  readonly ma = new MaStatus();
+  /** 2.4: Music Assistant is offline: one notice in the header, speaker and queue controls greyed out */
+  private _maOff = false;
+  private _munsub?: () => void;
   /** Music Assistant players (dynamic mode only; fixed mode never calls it) */
   readonly speakers = new SpeakerStore();
   /** v0.7 hearts: one favourites store for every view (passed down as config._favs) */
@@ -241,7 +249,33 @@ export class JukeboxCard extends LitElement {
     if (refresh && this.hass) this.queue.refreshSoon(0);
     this.startPush();
     this.speakers.syncLive(); // #103: the server may only now say it has the live feed
+    this.syncMa(); // 2.4: likewise the Music Assistant status
     this.requestUpdate();
+  }
+  /** 2.4: follow the integration's Music Assistant status while the card is on the page */
+  private syncMa() {
+    if (this.isConnected) this.ma.sync(this.backend, this.hass); else this.ma.stop();
+  }
+  /** 2.4: Music Assistant went away (notice on, Speakers panel closed: its controls are greyed out) or came back (fresh reload) */
+  private onMaStatus = (back: boolean) => {
+    this._maOff = !this.ma.online;
+    if (this._maOff) this._spk = false;
+    if (back) this.freshReload();
+  };
+  /**
+   * 2.4 fresh reload, when Music Assistant comes back or the card's own Home Assistant connection does: anything could
+   * have changed meanwhile, so nothing old is trusted. The speaker is resolved again (registry ids; dynamic mode's saved
+   * target), the queue is read again (the server works the active queue out again on the new connection), and the group
+   * configs and player list are read again. The live feed and queue push bring their own fresh state (the integration
+   * moves them to the new Music Assistant client; Home Assistant's websocket resubscribes them after a reconnect).
+   */
+  private freshReload() {
+    if (!this._base || !this.hass) return;
+    this.retarget();
+    this.queue.entity = this.player();
+    this.queue.refreshSoon(0);
+    this.speakers.reload();
+    if (this.lyrics.state.status === 'error') this.lyrics.retry();
   }
   /** kiosk: queue events pushed by the server (jukebox_kiosk/subscribe_queue) refresh the queue at once */
   private startPush() {
@@ -359,6 +393,8 @@ export class JukeboxCard extends LitElement {
     this.addEventListener('jukebox-station', this.onStation as EventListener);
     this.addEventListener('jukebox-sheet', this.onSheet as EventListener);
     this._vunsub ??= onVolState(() => this.requestUpdate());
+    this._munsub ??= this.ma.onChange(this.onMaStatus);
+    if (this.hass) this.syncMa();
     this.addEventListener('jukebox-station-close', this.onStationClose as EventListener);
     document.addEventListener('fullscreenchange', this.onFsChange);
     document.addEventListener('webkitfullscreenchange', this.onFsChange);
@@ -391,6 +427,7 @@ export class JukeboxCard extends LitElement {
     this._qunsub?.();
     this._sunsub?.(); this._sunsub = undefined; window.clearTimeout(this._lostTimer);
     this._lunsub?.(); this._lunsub = undefined;
+    this.ma.stop(); this._munsub?.(); this._munsub = undefined;
     this.stopPush();
     this.removeEventListener('pointerdown', this.onActivity, { capture: true });
     this.removeEventListener('keydown', this.onActivity, { capture: true });
@@ -635,6 +672,7 @@ export class JukeboxCard extends LitElement {
       this.queue.hass = this.hass;
       this.speakers.hass = this.hass;
       this.speakers.syncLive(); // #103: starts once hass has a connection (only while the speakers store is in use)
+      this.syncMa(); // 2.4: once hass has a connection
       const id = this._config.entity!;
       const a = this.hass.states[id], b = old?.states[id];
       if (!old) this.queue.refreshSoon(0);
@@ -773,34 +811,37 @@ export class JukeboxCard extends LitElement {
     // 0.6.3: the pill reads as a control: "Playing on: Everywhere · 3 speakers"
     const pre = pillPrefix(ent?.state);
     const inlineSpk = dyn && canGroup(this._config, this.hass?.user);
-    const view = (id: TabId, child: unknown) => html`<div class="view" data-view=${id} ?hidden=${this._tab !== id}>${child}</div>`;
+    // 2.4: while Music Assistant is offline its speaker and queue controls can't work: greyed out and not tappable (inert)
+    const off = this._maOff;
+    const view = (id: TabId, child: unknown, grey = false) => html`<div class="view ${grey ? 'ma-off' : ''}" data-view=${id} ?hidden=${this._tab !== id} ?inert=${grey}>${child}</div>`;
     const c = this._config, h = this.hass, q = this.queue, tabs = this.tabs();
     return html`
       <ha-card class="app ${prefersReducedMotion() ? 'rm' : ''}" style="${c.height ? `--_height:${c.height};` : ''}">
         <header class="top">
           <div class="brand">${icon('disc', 'i brand-i')}<span>${c.title ?? 'Jukebox'}</span></div>
-          <button class="pill" title=${c.entity!} tabindex="-1" aria-label="${pre} ${name}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk ? 'true' : 'false'}
+          <button class="pill ${off ? 'ma-off' : ''}" ?disabled=${off} title=${c.entity!} tabindex="-1" aria-label="${pre} ${name}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk ? 'true' : 'false'}
             @pointerdown=${(e: PointerEvent) => e.preventDefault()}
             @click=${() => { this.closeSheet(); this._spk = !this._spk; }}>${icon('group', 'i xs')}<span class="pt"><span class="pnm"><span class="pl">${pre}</span> <span class="pn">${name}</span></span> ${dyn
               ? html`<b>· ${!ent && this.hass ? 'not found' : ent?.state === 'buffering' ? 'regrouping…' : live ? `${live} speaker${live === 1 ? '' : 's'}` : 'idle'}</b>`
               : rooms ? html`<b>· ${rooms} room${rooms === 1 ? '' : 's'} synced</b>` : nothing}</span>${icon('chev', 'i xs pc')}</button>
           ${volDown() ? html`<span class="lost" role="status" data-status="reconnecting">Reconnecting to Home Assistant…</span>`
+            : off ? html`<span class="lost" role="status" data-status="ma-offline">${MA_OFFLINE}</span>`
             : this._lost ? html`<span class="lost" role="status">${this._lost}</span>` : nothing}
           <div class="spacer"></div>
           <div class="clock">${this.timeStr()}</div>
         </header>
         <main class="np">
-          ${view('now', html`<jb-now .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
+          ${view('now', html`<jb-now .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} .maOffline=${off} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
           ${combinedOn(c)
             ? view('browse', html`<jb-search combined .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-search>`)
             : html`${view('browse', html`<jb-browse .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-browse>`)}
           ${view('search', html`<jb-search .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'search'}></jb-search>`)}`}
-          ${view('queue', html`<jb-queue .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'queue'}></jb-queue>`)}
+          ${view('queue', html`<jb-queue .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'queue'}></jb-queue>`, off)}
           <!-- inside the middle: the fitted header and tab bar stay visible and tappable while the panel is open -->
           <jb-station-confirm .state=${this._stAsk ? { kind: 'station', item: this._stAsk.item, run: () => this.stAnswer(true) } : null}
             .cancel=${() => this.stAnswer(false)}></jb-station-confirm>
           <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null}></jb-station>
-          <jb-speakers .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver}></jb-speakers>
+          <jb-speakers class=${off ? 'ma-off' : ''} ?inert=${off} .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver}></jb-speakers>
           <jb-hold-sheet .state=${this._sheet}></jb-hold-sheet>
         </main>
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
@@ -850,6 +891,9 @@ export class JukeboxCard extends LitElement {
     .pill .pc { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); opacity: .7; margin-left: -2px; }
     .lost { margin-left: var(--ha-space-2, 8px); font-size: var(--ha-font-size-m, 14px); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .pill { color: var(--_fg); min-height: var(--_touch-min); cursor: pointer; } .pill:active { background: var(--_chip-sel); }
+    /* 2.4: Music Assistant is offline: its speaker and queue controls are greyed out (and inert) until it is back */
+    .ma-off { opacity: var(--_dim); filter: grayscale(1); pointer-events: none; }
+    .pill.ma-off { cursor: default; }
     .spacer { flex: 1; }
     .clock { white-space: nowrap; flex: none; font-size: clamp(var(--ha-font-size-l, 16px), 3.5cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
     .np { container: np / size; min-height: 0; position: relative; overflow: hidden; background: transparent; }

@@ -38,6 +38,7 @@ interface Pending<T> { v: T; t: number }
 export class JbNow extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, queue: { attribute: false }, active: { type: Boolean }, lyrics: { attribute: false }, spk: { attribute: false },
+    maOffline: { attribute: false },
     _overlay: { state: true }, _tick: { state: true }, _snap: { state: true }, _toast: { state: true },
     _sleepOpen: { state: true }, _sleepExpires: { state: true }, _sleepMins: { state: true }, _sleepMode: { state: true },
   };
@@ -48,6 +49,8 @@ export class JbNow extends LitElement {
   lyrics?: LyricsStore;
   /** 0.6.3: set by the card when this user may change speakers in dynamic mode; undefined = volume only */
   spk?: InlineSpeakers;
+  /** 2.4: set by the card while Music Assistant is offline: the speaker rows and Up next are greyed out and not tappable */
+  maOffline = false;
   private _spkUnsub?: () => void;
   /** last inline state key: re-render only when the room buttons would change */
   private _spkKey = '';
@@ -470,6 +473,7 @@ export class JbNow extends LitElement {
       html`<button class="tb ${cls} ${on ? 'on' : ''}" tabindex="-1" aria-label=${label} title=${label} aria-pressed=${on === undefined ? nothing : on ? 'true' : 'false'}
         ?disabled=${dis} @pointerdown=${noFocus} @click=${fn}>${icon(ic)}${dot ? html`<i class="dot"></i>` : nothing}</button>`;
     const showLyr = !idle && this.config.show_lyrics !== false && !!this.lyrics;
+    const off = this.maOffline;
     // #51: while the sleep choices are open, a tap anywhere else closes them (the tap does nothing else)
     const slx = this._sleepOpen ? html`<div class="slx" data-action="sleep-close" @pointerdown=${this.sleepAway}></div>` : nothing;
     return html`<div class="nw ${idle ? 'idle' : ''} ${this._sleepOpen ? 'sl-open' : ''}" data-state=${e?.state ?? 'unknown'}>${slx}
@@ -522,13 +526,13 @@ export class JbNow extends LitElement {
           ${tb('rp', repeat === 'one' ? 'repeatone' : 'repeat', REPEAT_LABEL[repeat], () => this.cycleRepeat(), repeat !== 'off', repeat !== 'off')}
           ${showFav ? tb('fv', favOn ? 'heart' : 'heartline', favOn ? 'Remove from favorites' : 'Add to favorites', () => this.toggleFavorite(), favOn, false, idle) : nothing}
         </div>
-        ${nextIt ? html`<button class="upn panel" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
+        ${nextIt ? html`<button class="upn panel ${off ? 'ma-off' : ''}" ?inert=${off} tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
             <span class="eyebrow">Up next</span><b>${nextIt.media_title}</b>${provTpl(nextIt.media_content_id)}
             <span class="more">${more ? `+ ${more} more` : ''}</span></button>`
-          : autoplay && cur ? html`<button class="upn panel ap" tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
+          : autoplay && cur ? html`<button class="upn panel ap ${off ? 'ma-off' : ''}" ?inert=${off} tabindex="-1" @pointerdown=${noFocus} @click=${() => fire(this, 'jukebox-nav', { tab: 'queue' })}>
             <span class="eyebrow">Autoplay</span><b>Autoplay will add more when this ends</b></button>` : nothing}
         <div class="volw">
-          <div class="vol panel ${this.spk ? 'acts' : ''}">
+          <div class="vol panel ${this.spk ? 'acts' : ''} ${off ? 'ma-off' : ''}" ?inert=${off}>
             ${this.volRow(this.eid, where, true)}
             ${rooms.length ? html`<div class="rooms">${rooms.map((r) => this.volRow(r.entity, r.name, false, this.spk?.inline(r.entity)))}</div>` : nothing}
           </div>
@@ -542,6 +546,8 @@ export class JbNow extends LitElement {
 
   static styles = [tokens, base, mediaStyles, css`
     :host { display: block; height: 100%; min-height: 0; color: var(--_fg); font-family: var(--_font-body); }
+    /* 2.4: Music Assistant is offline: speaker rows and Up next greyed out (and inert) until it is back */
+    .ma-off { opacity: var(--_dim); filter: grayscale(1); pointer-events: none; }
     .nw { position: relative; height: 100%; display: grid; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain;
       grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: clamp(var(--ha-space-4, 16px), 4cqi, var(--ha-space-6, 24px));
       /* #117: the side margin grows with the card (none beyond --_pad on the narrowest cards, so seven 48px transport buttons always fit) */

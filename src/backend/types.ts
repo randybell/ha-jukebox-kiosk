@@ -37,12 +37,17 @@ export interface Caps {
   libraryWrite: boolean;
   /** #103: jukebox_kiosk/subscribe_live, MA's players and queues pushed live (snapshot + numbered changes) */
   live: boolean;
+  /** 2.4: jukebox_kiosk/subscribe_ma_status, whether Home Assistant holds a working Music Assistant connection */
+  maStatus: boolean;
 }
 /** #100: what the card says when the speaker plays no queue (new wording; Jukebox Themes owns it) */
 export const NO_QUEUE = 'Nothing queued on this speaker';
+/** 2.4: the card's one notice while Home Assistant has no Music Assistant connection (new wording; Jukebox Themes owns it) */
+export const MA_OFFLINE = 'Music Assistant is offline';
 export const NO_CAPS: Caps = {
   send: false, queue: false, queuePlay: false, queueEdit: false, undo: false, queueBuffer: false,
   trackLists: false, podcastEpisodes: false, lyrics: false, speakers: false, unfavorite: false, queuePush: false, libraryWrite: false, live: false,
+  maStatus: false,
 };
 
 /**
@@ -153,7 +158,11 @@ export interface MaBackend {
   /** #103 live feed (kiosk only): a snapshot of MA's players and queues, then each change MA pushes, numbered (seq).
    *  Resolves an unsubscribe function. */
   subscribeLive?(cb: (msg: LiveMsg) => void): Promise<() => void>;
-  /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. */
+  /** 2.4 (kiosk only): {connected} now and whenever Home Assistant's Music Assistant connection goes away or comes back.
+   *  Resolves an unsubscribe function. */
+  subscribeMaStatus?(cb: (ev: { connected: boolean }) => void): Promise<() => void>;
+  /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. 2.4: also {event: 'offline'} when
+   *  Music Assistant goes away, and {event: 'queue_changed'} once it is back. */
   subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;
   /** MA sleep timer for the entity, using the entity's MA player id. Kiosk only. */
   sleepTimerGet?(entity: string): Promise<unknown>;

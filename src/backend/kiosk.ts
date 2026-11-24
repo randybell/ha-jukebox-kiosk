@@ -7,6 +7,7 @@
  *   jukebox_kiosk/favorite_current, jukebox_kiosk/unfavorite_current, jukebox_kiosk/subscribe_queue
  *   jukebox_kiosk/subscribe_live        -> #103 MA's players and queues: snapshot, then numbered changes
  *   jukebox_kiosk/active_queue          -> #100 the entity's active queue by Music Assistant's rule (or null)
+ *   jukebox_kiosk/subscribe_ma_status   -> 2.4 {connected}: Home Assistant's Music Assistant connection, now and on change
  */
 import type { HomeAssistant } from '../types';
 import type { LiveMsg } from '../speakers/live';
@@ -22,6 +23,8 @@ const OPTIMISTIC: Caps = {
   libraryWrite: false,
   // #103: an integration older than the card has no subscribe_live; asked for only once the server lists it
   live: false,
+  // 2.4: likewise subscribe_ma_status (nothing is shown as offline until the server can say so)
+  maStatus: false,
 };
 export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
   const b = (k: string, d = false) => (f && typeof f[k] === 'boolean' ? (f[k] as boolean) : d);
@@ -29,7 +32,7 @@ export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
     send: b('ma_commands', true), queue: b('queue', true), queuePlay: b('queue_play'), queueEdit: b('queue_edit'),
     undo: b('undo'), queueBuffer: b('queue', true), trackLists: b('track_lists'), podcastEpisodes: b('podcast_episodes'),
     lyrics: b('lyrics'), speakers: b('speakers'), unfavorite: b('unfavorite'), queuePush: b('queue_push'),
-    libraryWrite: b('library_write'), live: b('live_feed'),
+    libraryWrite: b('library_write'), live: b('live_feed'), maStatus: b('ma_status'),
   };
 }
 /**
@@ -163,6 +166,13 @@ export class KioskBackend implements MaBackend {
     const conn = this.hass.connection;
     if (!conn?.subscribeMessage) throw new BackendError('unsupported', 'no websocket subscriptions');
     const unsub = await conn.subscribeMessage(cb, { type: `${KIOSK_DOMAIN}/subscribe_live` });
+    return () => { void Promise.resolve(unsub()).catch(() => undefined); };
+  }
+  /** 2.4: jukebox_kiosk/subscribe_ma_status ({connected} at once, then on every change) */
+  async subscribeMaStatus(cb: (ev: { connected: boolean }) => void) {
+    const conn = this.hass.connection;
+    if (!conn?.subscribeMessage) throw new BackendError('unsupported', 'no websocket subscriptions');
+    const unsub = await conn.subscribeMessage(cb, { type: `${KIOSK_DOMAIN}/subscribe_ma_status` });
     return () => { void Promise.resolve(unsub()).catch(() => undefined); };
   }
   async subscribeQueue(entity: string, cb: (ev: { event: string; queue_id?: string }) => void) {

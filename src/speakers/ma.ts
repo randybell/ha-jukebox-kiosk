@@ -7,9 +7,9 @@
  * #103: while the store is in use it also holds jukebox_kiosk/subscribe_live (see live.ts): MA's pushed changes update
  * the player list the moment they arrive. A players/all answer is used only when no live change landed while it was on
  * its way, so an older answer can't overwrite a newer change. A missing message number brings a fresh snapshot. Screen
- * updates are batched per frame. players/all polling stays until Build 1 piece 5 (after piece 4 re-attaches the feed
- * when Home Assistant restarts its Music Assistant connection); until then it also keeps the list right if the feed's
- * connection is lost.
+ * updates are batched per frame. 2.4: when Home Assistant restarts its Music Assistant connection the integration moves
+ * the feed to the new client: an 'offline' message, then a fresh snapshot on the same subscription. players/all polling
+ * stays until Build 1 piece 5.
  */
 import type { HomeAssistant } from '../types';
 import type { MaBackend } from '../backend/types';
@@ -98,6 +98,17 @@ export class SpeakerStore {
     this.emit();
     return this.players;
   }
+  /** 2.4 fresh reload (Music Assistant came back, or the card's Home Assistant connection did): the registry ids, the
+   *  group configs and, while players/all polling remains (until piece 5), one players/all again. The live feed brings
+   *  its own fresh snapshot (the integration sends one on the same subscription; Home Assistant's websocket resubscribes
+   *  after a reconnect); a feed that failed to start is tried again. */
+  reload() {
+    this.idsFor = null;
+    this.configs.clear(); this.configTried.clear();
+    if (!this.timer) return;
+    this.syncLive();
+    void this.refresh();
+  }
   /** read each group's MA config once (failures are remembered and not retried until reset) */
   async loadConfigs(force = false): Promise<void> {
     if (force) { this.configs.clear(); this.configTried.clear(); }
@@ -178,6 +189,7 @@ export class SpeakerStore {
   private onLive(m: LiveMsg) {
     const r = this.live.apply(m);
     if (r === 'old') return;
+    if (r === 'offline') { this.emitSoon(); return; } // 2.4: the integration sends a fresh snapshot here once MA is back
     if (r === 'gap') { this.stopLive(); this.syncLive(); return; } // a message went missing: start over with a fresh snapshot
     this.rev++;
     this.players = this.live.players;
