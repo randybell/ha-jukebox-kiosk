@@ -88,6 +88,9 @@ export class JbNow extends LitElement {
       if (this._sleepExpires && remainFromExpires(this._sleepExpires) <= 0) this.onSleepExpired();
     }, 1000);
     this.watchSleep();
+    // Re-attach (HA view / edit mode): updated() does not run again, so bind and
+    // measure here. --_art-side was cleared on disconnect so a stale px is not kept.
+    if (this.hasUpdated) this.bindArtSide();
   }
   /** 0.7.9 #59: the speaker list scrolls inside its own area when it doesn't fit (0.8.8: only the rooms scroll, the lead row stays fixed); mark the edges so the "More speakers" hint and fades show */
   private _volEl?: HTMLElement;
@@ -99,6 +102,35 @@ export class JbNow extends LitElement {
     w.classList.toggle('more-b', over && v.scrollTop + v.clientHeight < v.scrollHeight - 1);
     w.classList.toggle('more-t', over && v.scrollTop > 1);
   };
+  /** #159: landscape cover side, in layout px. clientWidth/Height of .nw stay in
+   *  pre-zoom px in WebKit and Chrome. WebKit's cqh/cqw under the card's zoom
+   *  are already the zoomed size, so min(100cqh - 40px, 46cqw) is applied in
+   *  layout px and then zoomed again, and the square overflows the row. */
+  private _artNw?: HTMLElement;
+  private _artRo?: ResizeObserver;
+  private syncArtSide = () => {
+    const nw = this.renderRoot.querySelector('.nw') as HTMLElement | null;
+    if (!nw) return;
+    const w = nw.clientWidth, h = nw.clientHeight;
+    // Same test as @container np (orientation: landscape) and (min-width: 700px), in layout px
+    if (w < 700 || w < h) { this.style.removeProperty('--_art-side'); return; }
+    const cs = getComputedStyle(nw);
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const side = Math.max(0, Math.min(h - pad, 0.46 * w)); // 46% = the landscape 46cqw cap
+    this.style.setProperty('--_art-side', `${side}px`);
+  };
+  /** Watch .nw and set --_art-side from its current layout box. Used from updated()
+   *  and from connectedCallback after a re-attach (when updated() will not run). */
+  private bindArtSide() {
+    const nw = this.renderRoot.querySelector('.nw') as HTMLElement | null;
+    if (!nw) return;
+    if (nw !== this._artNw || !this._artRo) {
+      this._artRo?.disconnect();
+      this._artNw = nw;
+      if (typeof ResizeObserver !== 'undefined') { this._artRo = new ResizeObserver(this.syncArtSide); this._artRo.observe(nw); }
+    }
+    this.syncArtSide();
+  }
   protected updated() {
     const v = this.renderRoot.querySelector('.rooms') as HTMLElement | null;
     if (v && v !== this._volEl) {
@@ -109,9 +141,12 @@ export class JbNow extends LitElement {
       if (typeof ResizeObserver !== 'undefined') { this._volRo = new ResizeObserver(this.volEdges); this._volRo.observe(v); const panel = v.closest('.vol'); if (panel) this._volRo.observe(panel); }
     }
     this.volEdges();
+    this.bindArtSide();
   }
   disconnectedCallback() {
     super.disconnectedCallback();
+    this._artRo?.disconnect(); this._artRo = undefined; this._artNw = undefined;
+    this.style.removeProperty('--_art-side');
     this._volRo?.disconnect(); this._volRo = undefined; this._volEl = undefined;
     window.clearInterval(this._timer);
     this.unwatchSleep();
@@ -726,7 +761,10 @@ export class JbNow extends LitElement {
       .info > * { flex-shrink: 0; }
       .info > .volw { flex: 0 1 auto; min-height: 96px; }
       .volw > .vol { min-height: 0; max-height: 100%; }
-      .art { width: min(calc(100cqh - 40px), 46cqw); align-self: center; }
+      /* #159: --_art-side is min(row minus its padding, 46% of its width) in
+         layout px (see syncArtSide). The cqh/cqw fallback is the same size when
+         zoom is 1, and in Chrome, where those units are already layout px. */
+      .art { width: var(--_art-side, min(calc(100cqh - 40px), 46cqw)); align-self: center; }
       .info { max-width: none; gap: var(--ha-space-2, 8px); }
       .ti { font-size: clamp(var(--ha-font-size-3xl, 28px), 3.4cqw, var(--ha-font-size-5xl, 40px)); }
       .vs { --_slider-h: 6px; --_slider-knob: 20px; }
