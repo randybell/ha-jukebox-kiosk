@@ -9,9 +9,15 @@ import pytest
 
 from homeassistant.core import HomeAssistant
 
-from .conftest import ENTITY_A, ENTITY_G, PLAYER_A, PLAYER_B, SYNCGROUP, FakeMa
+from .conftest import ENTITY_A, ENTITY_G, PLAYER_A, PLAYER_B, SYNCGROUP, FakeMa, seed_playing
 
 pytestmark = pytest.mark.usefixtures("kiosk")
+
+
+@pytest.fixture(autouse=True)
+def _playing(fake_ma: FakeMa) -> None:
+    """#100: every speaker plays its own active queue unless a test says otherwise (tests/test_active_queue.py)."""
+    seed_playing(fake_ma)
 
 
 async def _ws(hass_ws_client: Any, token: str) -> Any:
@@ -287,7 +293,8 @@ async def test_subscribe_queue_push(hass: HomeAssistant, hass_ws_client: Any, us
     res = await _call(ws, type="jukebox_kiosk/subscribe_queue", entity_id=ENTITY_G)
     assert res["success"] and res["result"]["queue_id"] == SYNCGROUP
     cb, events, id_filter = fake_ma.subs[0]
-    assert id_filter == SYNCGROUP and {e.value for e in events} == {"queue_updated", "queue_items_updated"}
+    # #100: listens to player and queue changes for every id, so it can follow the active queue
+    assert id_filter is None and {"queue_updated", "queue_items_updated", "player_updated"} <= {e.value for e in events}
     cb(SimpleNamespace(event=SimpleNamespace(value="queue_items_updated"), object_id=SYNCGROUP))
     ev = await ws.receive_json()
     assert ev["type"] == "event" and ev["event"] == {"event": "queue_items_updated", "queue_id": SYNCGROUP}

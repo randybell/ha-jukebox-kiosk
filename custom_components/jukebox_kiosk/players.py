@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
@@ -36,12 +38,38 @@ def player_ids(hass: HomeAssistant) -> dict[str, str]:
     return {ent.entity_id: ent.unique_id for ent in er.async_get(hass).entities.values() if _is_ma_player(ent)}
 
 
-def queue_id_for_entity(hass: HomeAssistant, entity_id: str) -> str:
-    """Active MA queue for an entity: state attr `active_queue`, else its player id."""
-    player_id = player_id_for_entity(hass, entity_id)
-    state = hass.states.get(entity_id)
-    active = state.attributes.get("active_queue") if state else None
-    return active if isinstance(active, str) and active else player_id
+def _field(obj: Any, key: str) -> Any:
+    """A field of an MA model (music-assistant-client keeps models) or of a plain dict."""
+    return obj.get(key) if isinstance(obj, dict) else getattr(obj, key, None)
+
+
+def active_queue_id(client: Any, player_id: str) -> str | None:
+    """#100: the one active-queue rule, Music Assistant's own app rule (frontend 2.17.297.post3 helpers.ts:248-261
+    `resolvePlayerQueue`), read from the player and queue lists the MA client keeps current from MA's events.
+
+    1. The player's active_source, when it names a queue: that queue.
+    2. With no active_source: the player's own queue, only when that queue is active.
+    3. Otherwise no queue (None). An external source (Spotify Connect, AirPlay, line-in...) is attached to no queue.
+
+    MA already resolves active_source for a synced follower or a member of an active group to the leader's / group's
+    source (server models/player.py __final_active_source), the same owner walk as players/controller.py
+    get_active_queue and as the sleep timer's _playback_owner_id, so the three agree on group and sync members.
+    """
+    players = getattr(client, "players", None)
+    queues = getattr(client, "player_queues", None)
+    player = players.get(player_id) if players is not None else None
+    if player is None or queues is None:
+        return None
+    source = _field(player, "active_source")
+    if isinstance(source, str) and source:
+        return source if queues.get(source) is not None else None
+    own = queues.get(player_id)
+    return player_id if own is not None and _field(own, "active") is True else None
+
+
+def queue_id_for_entity(hass: HomeAssistant, client: Any, entity_id: str) -> str | None:
+    """Active MA queue for an MA media_player entity (active_queue_id on its registry player id), or None."""
+    return active_queue_id(client, player_id_for_entity(hass, entity_id))
 
 
 def entity_for_player(hass: HomeAssistant, player_id: str) -> str | None:

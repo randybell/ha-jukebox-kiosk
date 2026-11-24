@@ -187,8 +187,15 @@ def ma_entry(hass: HomeAssistant, fake_ma: FakeMa) -> MockConfigEntry:
     for pid, ent in ((PLAYER_A, ENTITY_A), (PLAYER_B, ENTITY_B), (SYNCGROUP, ENTITY_G)):
         reg.async_get_or_create("media_player", "music_assistant", pid, suggested_object_id=ent.split(".")[1],
                                 config_entry=entry)
-        hass.states.async_set(ent, "playing", {"active_queue": pid})
+        hass.states.async_set(ent, "playing", {})
     return entry
+
+
+def seed_playing(fake_ma: FakeMa, *pids: str) -> None:
+    """#100: each player plays its own active queue (MA: active_source = own queue id), in the client's in-memory lists."""
+    for pid in pids or (PLAYER_A, PLAYER_B, SYNCGROUP):
+        fake_ma.players[pid] = {"player_id": pid, "active_source": pid}
+        fake_ma.player_queues[pid] = {"queue_id": pid, "active": True}
 
 
 @pytest.fixture

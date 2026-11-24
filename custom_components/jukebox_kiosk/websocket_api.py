@@ -49,7 +49,7 @@ from .const import (
     todo_verify_commands,
 )
 from .permissions import Policy, allowed_classes, check_class, check_entity, is_guest
-from .players import PlayerNotFound, entity_for_player, player_id_for_entity, player_ids, queue_id_for_entity
+from .players import PlayerNotFound, active_queue_id, entity_for_player, player_id_for_entity, player_ids, queue_id_for_entity
 
 if TYPE_CHECKING:
     from music_assistant_client import MusicAssistantClient
@@ -278,6 +278,8 @@ async def ws_capabilities(hass: HomeAssistant, connection: websocket_api.ActiveC
                 "player_ids": has(PermClass.READ),
                 # #103: jukebox_kiosk/subscribe_live, MA's players and queues as a snapshot, then each pushed change
                 "live_feed": has(PermClass.READ),
+                # #100: jukebox_kiosk/active_queue, the entity's active queue by Music Assistant's rule (or null)
+                "active_queue": has(PermClass.READ),
             },
         },
     )
@@ -313,6 +315,23 @@ async def ws_player_ids(hass: HomeAssistant, connection: websocket_api.ActiveCon
 
 def _field(obj: Any, key: str) -> Any:
     return obj.get(key) if isinstance(obj, dict) else getattr(obj, key, None)
+
+
+# #100: the speaker plays no queue (idle, or an external source). A normal answer, not a failure.
+NO_QUEUE = "Nothing queued on this speaker"
+
+
+def _queue_or_none(hass: HomeAssistant, client: MusicAssistantClient, entity_id: str) -> str | None:
+    """The entity's active queue by the one rule (players.active_queue_id), or None."""
+    return queue_id_for_entity(hass, client, entity_id)
+
+
+def _queue_or_raise(hass: HomeAssistant, client: MusicAssistantClient, entity_id: str) -> str:
+    """The entity's active queue, or KioskError no_queue for commands that need one."""
+    queue_id = _queue_or_none(hass, client, entity_id)
+    if queue_id is None:
+        raise KioskError("no_queue", NO_QUEUE)
+    return queue_id
 
 
 def _plain(value: Any) -> str:
@@ -375,7 +394,15 @@ async def ws_queue_items(hass: HomeAssistant, connection: websocket_api.ActiveCo
     user = connection.user
     check_class(user, policy, PermClass.READ)
     check_entity(user, msg["entity_id"], control=False)
-    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    queue_id = _queue_or_none(hass, client, msg["entity_id"])
+    if queue_id is None:
+        # #100: no active queue is a normal answer (MA's app shows no queue too), not an error
+        connection.send_result(
+            msg["id"],
+            {"queue_id": None, "no_queue": True, "current_index": None, "index_in_buffer": None,
+             "current_item_id": None, "total": 0, "offset": 0, "items": []},
+        )
+        return
     queue = await _send(client, "player_queues/get", queue_id=queue_id) or {}
     current = queue.get("current_index")
     cur = current if isinstance(current, int) and current >= 0 else 0
@@ -440,7 +467,7 @@ async def ws_set_autoplay(hass: HomeAssistant, connection: websocket_api.ActiveC
     user = connection.user
     check_class(user, policy, PermClass.QUEUE)
     check_entity(user, msg["entity_id"], control=True)
-    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    queue_id = _queue_or_raise(hass, client, msg["entity_id"])
     enabled = msg["enabled"]
     try:
         await _send(client, AUTOPLAY_COMMAND, queue_id=queue_id, autoplay_enabled=enabled)
@@ -508,7 +535,7 @@ async def ws_autoplay_options(hass: HomeAssistant, connection: websocket_api.Act
     user = connection.user
     check_class(user, policy, PermClass.QUEUE)
     check_entity(user, msg["entity_id"], control=True)
-    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    queue_id = _queue_or_raise(hass, client, msg["entity_id"])
     connection.send_result(msg["id"], await _autoplay_options(client, queue_id))
 
 
@@ -532,7 +559,7 @@ async def ws_set_autoplay_mode(hass: HomeAssistant, connection: websocket_api.Ac
     user = connection.user
     check_class(user, policy, PermClass.QUEUE)
     check_entity(user, msg["entity_id"], control=True)
-    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    queue_id = _queue_or_raise(hass, client, msg["entity_id"])
     opts = await _autoplay_options(client, queue_id)
     mode = msg["mode"]
     if not any(m["mode"] == mode and m["available"] for m in opts["modes"]):
@@ -614,7 +641,9 @@ async def ws_favorite_current(
     user = connection.user
     check_class(user, policy, PermClass.LIBRARY)
     check_entity(user, msg["entity_id"], control=True)
-    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    queue_id = _queue_or_none(hass, client, msg["entity_id"])
+    if queue_id is None:
+        raise KioskError("not_found", "Nothing is playing")
     queue = await _send(client, "player_queues/get", queue_id=queue_id) or {}
     media = (queue.get("current_item") or {}).get("media_item") or {}
     uri = media.get("uri") or ""
@@ -639,7 +668,9 @@ async def ws_unfavorite_current(
     user = connection.user
     check_class(user, policy, PermClass.LIBRARY)
     check_entity(user, msg["entity_id"], control=True)
-    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    queue_id = _queue_or_none(hass, client, msg["entity_id"])
+    if queue_id is None:
+        raise KioskError("not_found", "Nothing is playing")
     queue = await _send(client, "player_queues/get", queue_id=queue_id) or {}
     media = (queue.get("current_item") or {}).get("media_item") or {}
     uri = media.get("uri") or ""
@@ -654,6 +685,23 @@ async def ws_unfavorite_current(
 
 
 @websocket_api.websocket_command(
+    {probatio.Required("type"): f"{DOMAIN}/active_queue", probatio.Required("entity_id"): str}
+)
+@websocket_api.async_response
+@_wrap
+async def ws_active_queue(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """#100: {"queue_id": ...} the entity's active queue by the one rule (players.active_queue_id), or null.
+
+    For card code that reads the playing queue itself (the lyrics lookup), so it never guesses from HA's active_queue.
+    """
+    _e, policy, client = _context(hass)
+    user = connection.user
+    check_class(user, policy, PermClass.READ)
+    check_entity(user, msg["entity_id"], control=False)
+    connection.send_result(msg["id"], {"queue_id": _queue_or_none(hass, client, msg["entity_id"])})
+
+
+@websocket_api.websocket_command(
     {probatio.Required("type"): f"{DOMAIN}/subscribe_queue", probatio.Required("entity_id"): str}
 )
 @websocket_api.async_response
@@ -661,26 +709,37 @@ async def ws_unfavorite_current(
 async def ws_subscribe_queue(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    """Push a small event whenever the entity's MA queue or its items change."""
+    """Push a small event whenever the entity's active MA queue or its items change.
+
+    #100: the queue followed is the one the active-queue rule gives, worked out again on every player or queue change
+    (from the MA client's in-memory lists, no MA call). When it moves (the speaker joins or leaves a group, starts or
+    stops playing its own queue, or an external source takes over), {"event": "queue_changed", "queue_id": new or null}
+    is sent, so the Queue screen follows the music. Item changes are sent only for the queue being followed.
+    """
     _e, policy, client = _context(hass)
     user = connection.user
     check_class(user, policy, PermClass.READ)
     check_entity(user, msg["entity_id"], control=False)
-    queue_id = queue_id_for_entity(hass, msg["entity_id"])
+    player_id = player_id_for_entity(hass, msg["entity_id"])
+    held: dict[str, str | None] = {"queue": active_queue_id(client, player_id)}
     msg_id = msg["id"]
 
     @callback
     def _on_event(event: Any) -> None:
         name = str(getattr(getattr(event, "event", None), "value", getattr(event, "event", "")))
-        connection.send_message(
-            websocket_api.event_message(msg_id, {"event": name, "queue_id": getattr(event, "object_id", queue_id)})
-        )
+        # the client updates its own lists before subscribers run (both are its listeners, in order)
+        now = active_queue_id(client, player_id)
+        if now != held["queue"]:
+            held["queue"] = now
+            connection.send_message(websocket_api.event_message(msg_id, {"event": "queue_changed", "queue_id": now}))
+            return
+        if name in QUEUE_EVENTS and now is not None and getattr(event, "object_id", None) == now:
+            connection.send_message(websocket_api.event_message(msg_id, {"event": name, "queue_id": now}))
 
     from music_assistant_models.enums import EventType  # noqa: PLC0415
 
-    unsub = client.subscribe(_on_event, tuple(EventType(e) for e in QUEUE_EVENTS), queue_id)
-    connection.subscriptions[msg_id] = unsub
-    connection.send_result(msg_id, {"queue_id": queue_id})
+    connection.subscriptions[msg_id] = client.subscribe(_on_event, tuple(EventType(e) for e in LIVE_EVENTS), None)
+    connection.send_result(msg_id, {"queue_id": held["queue"]})
 
 
 def _live_dict(obj: Any) -> dict[str, Any] | None:
@@ -1015,6 +1074,7 @@ HANDLERS = (
     ws_item_tracks,
     ws_favorite_current,
     ws_unfavorite_current,
+    ws_active_queue,
     ws_subscribe_queue,
     ws_subscribe_live,
     ws_sleep_timer_get,

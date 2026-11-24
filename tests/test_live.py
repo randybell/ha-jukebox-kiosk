@@ -9,7 +9,7 @@ import pytest
 
 from homeassistant.core import HomeAssistant
 
-from .conftest import PLAYER_A, PLAYER_B, SYNCGROUP, FakeMa
+from .conftest import PLAYER_A, PLAYER_B, SYNCGROUP, FakeMa, seed_playing
 
 pytestmark = pytest.mark.usefixtures("kiosk")
 
@@ -143,7 +143,8 @@ async def test_empty_client_lists(hass: HomeAssistant, hass_ws_client: Any, admi
 async def test_old_subscribe_queue_still_answers(
     hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
 ) -> None:
-    """The entity-pinned push stays registered for cached older cards."""
+    """The entity push stays registered for cached older cards."""
+    seed_playing(fake_ma, SYNCGROUP)
     ws = await hass_ws_client(access_token=user_token[1])
     res = await _call(ws, type="jukebox_kiosk/subscribe_queue", entity_id="media_player.everywhere")
     assert res["success"] and res["result"]["queue_id"] == SYNCGROUP
