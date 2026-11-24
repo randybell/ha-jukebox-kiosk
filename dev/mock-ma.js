@@ -71,6 +71,8 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
         playback_state: h ? (isSilent(h) && isLead ? 'idle' : gState(h)) : solo[s]?.state ?? 'idle',
         group_members: isLead ? [...ms] : [], static_group_members: [],
         can_group_with: h && !isLead ? [] : free, synced_to: h && !isLead ? leader(h) : null, active_group: h ?? null,
+        // #100: MA's final active_source: the group's for a member, else its own queue (MA's fallback)
+        active_source: h ?? s,
         supported_features: ['volume_set', 'volume_mute', 'pause', 'set_members'], volume_level: vol,
         current_media: h ? { title: st(G[h].entity)?.attributes?.media_title ?? null } : solo[s] ? { title: solo[s].title } : null,
       });
@@ -81,7 +83,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
         playback_state: active(g) ? gState(g) : 'idle',
         // live: an idle dynamic group still lists its (default / last set) members
         group_members: d.kind === 'static' ? [...d.members] : active(g) ? [...d.members] : [...(d.idle ?? d.preset)],
-        static_group_members: d.kind === 'static' ? [...d.preset] : [], can_group_with: [], synced_to: null, active_group: null,
+        static_group_members: d.kind === 'static' ? [...d.preset] : [], can_group_with: [], synced_to: null, active_group: null, active_source: g,
         supported_features: d.kind === 'static' ? ['volume_set', 'volume_mute', 'pause'] : ['volume_set', 'volume_mute', 'pause', 'set_members'],
         volume_level: st(d.entity)?.attributes?.volume_level ?? 0.5,
         current_media: active(g) ? { title: st(d.entity)?.attributes?.media_title ?? null } : null,

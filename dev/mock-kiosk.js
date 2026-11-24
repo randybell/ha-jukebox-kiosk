@@ -6,7 +6,11 @@ import { createV07 } from './mock-v07.js';
 // throw. Every message is logged in window.__ws ({type, ...}). Placeholder ids only.
 //   jukebox_kiosk/capabilities, /ma {command,args} (music/favorites/* need kcaps library_write, like the library class), /queue_items, /item_tracks,
 //   /favorite_current, /unfavorite_current, /subscribe_queue, /set_autoplay, /autoplay_options, /set_autoplay_mode,
-//   /sleep_timer_get, /sleep_timer_set, /sleep_timer_clear, /subscribe_sleep_timer, /player_ids, /subscribe_live
+//   /sleep_timer_get, /sleep_timer_set, /sleep_timer_clear, /subscribe_sleep_timer, /player_ids, /subscribe_live, /active_queue
+// #100: every queue command uses the server's one active-queue rule (players.active_queue_id): the player's active_source
+// when it names a queue, else its own queue only when active, else none (no_queue). window.__setActiveSource(playerId, v)
+// overrides a player's active_source (an outside source such as 'spotify_connect', or null); /subscribe_queue sends
+// {event: 'queue_changed'} when the followed queue moves, like the server.
 // #103 /subscribe_live: like the server, one snapshot ({seq: 1, kind: 'snapshot', players, queues}) and then, after each
 // mock state change (commit), the players and queues that changed as MA pushes them (player_added/updated/removed,
 // queue_updated, queue_items_updated), seq + 1 each. Test hooks in window.__live: subs(), snapshots, sent (all messages),
@@ -25,7 +29,10 @@ const FEATURES = { queue: true, queue_play: true, queue_edit: true, undo: true, 
   // #99: jukebox_kiosk/player_ids (HA entity → MA player id from the entity registry)
   player_ids: true,
   // #103: jukebox_kiosk/subscribe_live (snapshot of MA's players and queues, then numbered changes)
-  live_feed: true };
+  live_feed: true,
+  // #100: jukebox_kiosk/active_queue
+  active_queue: true };
+const NO_QUEUE = 'Nothing queued on this speaker';
 const err = (code, message) => Object.assign(new Error(message), { code });
 // Autoplay style (server: autoplay_options / set_autoplay_mode over MA config/player_queues/*). Fake playlist names only.
 // apsimilar=0: no provider can find similar tracks; apmode=<mode>[:<n>] pins a style (n = playlist index).
@@ -57,17 +64,32 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
   const apSimilar = params.get('apsimilar') !== '0';
   const [apM0, apN0] = (params.get('apmode') ?? '').split(':');
   const apState = (Q) => (Q.ap ??= { mode: AP_MODES.includes(apM0) ? apM0 : 'global', playlist: apM0 === 'playlist' ? AP_PLAYLISTS[Number(apN0) || 0].uri : null });
-  const apOpts = (ent) => {
+  // #100: the one active-queue rule (server players.active_queue_id). Entities without a mock queue are not MA players here.
+  const qEntOf = (qid) => Object.keys(QS).find((k) => playerIdFor(k) === qid);
+  const srcOverride = (window.__activeSource = window.__activeSource ?? {});
+  const activeQueueFor = (ent) => {
+    const pid = playerIdFor(ent);
+    if (!pid || !QS[ent]) throw err('not_found', `${ent} is not a Music Assistant player`);
+    const p = livePlayers().find((x) => x.player_id === pid);
+    const src = pid in srcOverride ? srcOverride[pid] : p && 'active_source' in p ? p.active_source : pid;
+    if (src) return qEntOf(src) ? src : null;
     const Q = QS[ent];
-    if (!Q) throw err('not_found', `${ent} is not a Music Assistant player`);
+    return Q.items.length > 0 && Q.active !== false ? pid : null;
+  };
+  const needQueue = (ent) => { const q = activeQueueFor(ent); if (!q) throw err('no_queue', NO_QUEUE); return q; };
+  const apOpts = (ent) => {
+    const qid = needQueue(ent), Q = QS[qEntOf(qid)];
     const a = apState(Q), follows = a.mode === 'global';
     const pl = AP_PLAYLISTS.find((p) => p.uri === a.playlist) ?? null;
-    return { queue_id: st(ent).attributes.active_queue, mode: follows ? 'auto' : a.mode, follows_default: follows, playlist: follows ? null : pl,
+    return { queue_id: qid, mode: follows ? 'auto' : a.mode, follows_default: follows, playlist: follows ? null : pl,
       modes: AP_MODES.map((m) => ({ mode: m, available: m !== 'similar' || apSimilar })), playlists: AP_PLAYLISTS };
   };
-  const entOf = (qid) => Object.keys(QS).find((k) => st(k)?.attributes?.active_queue === qid);
-  const push = (qid) => { for (const s of subs.values()) if (!qid || st(s.entity)?.attributes?.active_queue === qid) s.cb({ event: 'queue_updated', queue_id: qid }); };
-  window.__kioskPush = (entity = 'media_player.everywhere') => push(st(entity)?.attributes?.active_queue);
+  const aqSafe = (ent) => { try { return activeQueueFor(ent); } catch { return null; } };
+  const push = (qid) => { for (const s of subs.values()) if (!qid || s.queue === qid) s.cb({ event: 'queue_updated', queue_id: qid }); };
+  window.__kioskPush = (entity = 'media_player.everywhere') => push(aqSafe(entity));
+  // like the server's subscribe_queue: the followed queue is worked out again on every change
+  window.__queueTick = () => { for (const s of subs.values()) { const q = aqSafe(s.entity); if (q !== s.queue) { s.queue = q; s.cb({ event: 'queue_changed', queue_id: q }); } } };
+  window.__setActiveSource = (pid, v) => { if (v === undefined) delete srcOverride[pid]; else srcOverride[pid] = v; commit(); };
   window.__kioskSubs = () => [...subs.values()].map((s) => s.entity);
   const bufOf = (Q) => (typeof Q.buf === 'number' ? Q.buf : Q.index + (params.get('qbuf') === '1' ? 1 : 0));
   // provider copy of a library track (what MA's queue holds as current_item.media_item for a streamed track)
@@ -122,7 +144,7 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
     if (command === 'player_queues/play_index' && !features.queue_play) throw err('unauthorized', 'Unauthorized');
     const r = await maApi.command(command, args);
     if (command === 'player_queues/get') {
-      const Q = QS[entOf(args.queue_id)];
+      const Q = QS[qEntOf(args.queue_id)];
       const cur = Q?.items[Q.index];
       if (cur && r?.current_item) r.current_item.media_item = provider(cur._t);
     }
@@ -143,6 +165,10 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
       // like websocket_api.search_providers(): available music/plugin providers with the search feature, by name
       case 'search_providers': return { providers: DEMO_PROVIDERS.filter((p) => ['music', 'plugin'].includes(p.type) && p.available && p.supported_features.includes('search') && !(params.get('norbi') === '1' && p.domain === 'radiobrowser'))
         .map((p) => ({ instance_id: p.instance_id, domain: p.domain, name: p.name })).sort((a, b) => a.name.localeCompare(b.name)) };
+      case 'active_queue': {
+        if (!features.active_queue) throw err('unknown_command', 'Unknown command jukebox_kiosk/active_queue');
+        return { queue_id: activeQueueFor(msg.entity_id) };
+      }
       case 'player_ids': {
         if (!features.player_ids) throw err('unauthorized', 'Unauthorized');
         // the registry only: MA platform entities (hass.entities) with their unique_id; nothing else, no names
@@ -150,24 +176,24 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
         return { players: Object.fromEntries(Object.entries(window.__uniqueIds ?? {}).filter(([e]) => reg[e]?.platform === 'music_assistant')) };
       }
       case 'queue_items': {
-        const ent = msg.entity_id, Q = QS[ent];
-        if (!Q) throw err('not_found', `${ent} is not a Music Assistant player`);
+        const ent = msg.entity_id, qid = activeQueueFor(ent);
+        if (!qid) return { queue_id: null, no_queue: true, current_index: null, index_in_buffer: null, current_item_id: null, total: 0, offset: 0, items: [] };
+        const Q = QS[qEntOf(qid)];
         const cur = Math.max(0, Q.index), off = Math.max(0, cur - (msg.limit_before ?? 1));
         const lim = (cur - off) + 1 + (msg.limit_after ?? 100);
         const curIt = Q.items[Q.index];
         const curUri = curIt?.media_content_id || curIt?._t?.uri || '';
         const curType = params.get('qtype') || Q.current_media_type || ( /:\/\/radio\//.test(curUri) ? 'radio' : /:\/\/audio_source\//.test(curUri) ? 'audio_source' : 'track');
-        return { queue_id: st(ent).attributes.active_queue, current_index: Q.index < 0 ? null : Q.index, index_in_buffer: Q.index < 0 ? null : bufOf(Q),
+        return { queue_id: qid, current_index: Q.index < 0 ? null : Q.index, index_in_buffer: Q.index < 0 ? null : bufOf(Q),
           current_item_id: curIt?.queue_item_id ?? null, total: Q.items.length, offset: off, items: Q.items.slice(off, off + lim).map(qPub),
           ...(features.autoplay ? { autoplay: !!Q.autoplay, dynamic: !!(Q.dynamic || params.get('qdyn') === '1'), active: Q.active !== false && params.get('qactive') !== '0', current_media_type: curType,
             repeat_mode: ['off', 'one', 'all'].includes(params.get('qrepeat') || st(ent)?.attributes?.repeat) ? (params.get('qrepeat') || st(ent).attributes.repeat) : 'off' } : {}) };
       }
       case 'set_autoplay': {
         if (!features.autoplay) throw err('unauthorized', 'Unauthorized');
-        const Q = QS[msg.entity_id];
-        if (!Q) throw err('not_found', `${msg.entity_id} is not a Music Assistant player`);
+        const qid = needQueue(msg.entity_id), Q = QS[qEntOf(qid)];
         Q.autoplay = !!msg.enabled;
-        return { queue_id: st(msg.entity_id).attributes.active_queue, autoplay: Q.autoplay };
+        return { queue_id: qid, autoplay: Q.autoplay };
       }
       case 'autoplay_options': {
         if (!features.autoplay_mode) throw err('unauthorized', 'Unauthorized');
@@ -175,7 +201,7 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
       }
       case 'set_autoplay_mode': {
         if (!features.autoplay_mode) throw err('unauthorized', 'Unauthorized');
-        const o = apOpts(msg.entity_id), Q = QS[msg.entity_id];
+        const o = apOpts(msg.entity_id), Q = QS[qEntOf(o.queue_id)];
         if (!o.modes.some((m) => m.mode === msg.mode && m.available)) throw err('unsupported', `Autoplay style ${msg.mode} is not available`);
         if (msg.mode === 'playlist' && !AP_PLAYLISTS.some((p) => p.uri === msg.playlist)) throw err('invalid_args', 'Only playlists in the library can be used');
         if (msg.mode !== 'playlist' && msg.playlist) throw err('invalid_args', 'playlist is only used with the playlist style');
@@ -201,14 +227,16 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
       case 'favorite_current': {
         // like the server: the Library class (library_write here) and something playing
         if (!features.library_write) throw err('unauthorized', 'Unauthorized');
-        const Q = QS[msg.entity_id]; const cur = Q?.items[Q.index];
+        const aq = activeQueueFor(msg.entity_id), Q = aq ? QS[qEntOf(aq)] : undefined; const cur = Q?.items[Q.index];
         if (!cur) throw err('not_found', 'Nothing is playing');
         cur._t.favorite = true; commit();
         return { uri: cur._t.uri };
       }
       case 'unfavorite_current': {
         if (!features.unfavorite) throw err('unauthorized', 'Unauthorized');
-        const Q = QS[msg.entity_id]; const cur = Q?.items[Q.index]; if (cur) cur._t.favorite = false; commit();
+        const aq = activeQueueFor(msg.entity_id);
+        if (!aq) throw err('not_found', 'Nothing is playing');
+        const Q = QS[qEntOf(aq)]; const cur = Q?.items[Q.index]; if (cur) cur._t.favorite = false; commit();
         return null;
       }
       case 'sleep_timer_get': {
@@ -314,7 +342,7 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
       if (msg.type !== 'jukebox_kiosk/subscribe_queue') throw err('unknown_command', msg.type);
       log.push({ ...structuredClone(msg), type: 'subscribe_queue' });
       if (!features.queue_push) throw err('unauthorized', 'Unauthorized');
-      const id = ++sid; subs.set(id, { entity: msg.entity_id, cb });
+      const id = ++sid; subs.set(id, { entity: msg.entity_id, cb, queue: aqSafe(msg.entity_id) });
       return async () => { subs.delete(id); };
     },
   };
