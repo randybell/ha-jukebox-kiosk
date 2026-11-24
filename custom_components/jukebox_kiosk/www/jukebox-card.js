@@ -1125,7 +1125,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
             ${this.volRow(this.eid,m,!0)}
             ${f.length?I`<div class="rooms">${f.map(e=>this.volRow(e.entity,e.name,!1,this.spk?.inline(e.entity)))}</div>`:B}
           </div>
-          <button class="vmore" tabindex="-1" aria-label="More speakers below" @pointerdown=${_e}
+          <button class="vmore ${E?"ma-off":""}" ?inert=${E} tabindex="-1" aria-label="More speakers below" @pointerdown=${_e}
             @click=${()=>{const e=this.renderRoot.querySelector(".rooms");e?.scrollBy({top:Math.max(40,.75*e.clientHeight),behavior:"smooth"})}}>${de("chev","i xs")}More speakers</button>
         </div>
       </div>
@@ -1250,6 +1250,7 @@ const x=globalThis,k=e=>e,$=x.trustedTypes,q=$?$.createPolicy("lit-html",{create
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
+    .vmore.ma-off { cursor: default; }
     .vmore .i { width: calc(var(--_icon) * 12 / 24); height: calc(var(--_icon) * 12 / 24); }
     .volw.more-b .vmore { display: inline-flex; }
     /* #117: the 48px More speakers pill gets its own strip under the speaker list instead of floating over a slider (two targets on one spot) */
