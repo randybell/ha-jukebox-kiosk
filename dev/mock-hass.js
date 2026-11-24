@@ -366,7 +366,7 @@ afterGroupState = (id) => ma.groupStateChanged(id);
 
 const listeners = new Set();
 export const onHass = (fn) => listeners.add(fn);
-function commit() { hass = makeHass(); window.__hass = hass; listeners.forEach((f) => f(hass)); }
+function commit() { hass = makeHass(); window.__hass = hass; listeners.forEach((f) => f(hass)); window.__liveTick?.(); }
 
 function delayFor(name) {
   let ms = mock.latency;

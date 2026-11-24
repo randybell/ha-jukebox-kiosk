@@ -6,7 +6,11 @@ import { createV07 } from './mock-v07.js';
 // throw. Every message is logged in window.__ws ({type, ...}). Placeholder ids only.
 //   jukebox_kiosk/capabilities, /ma {command,args} (music/favorites/* need kcaps library_write, like the library class), /queue_items, /item_tracks,
 //   /favorite_current, /unfavorite_current, /subscribe_queue, /set_autoplay, /autoplay_options, /set_autoplay_mode,
-//   /sleep_timer_get, /sleep_timer_set, /sleep_timer_clear, /subscribe_sleep_timer, /player_ids
+//   /sleep_timer_get, /sleep_timer_set, /sleep_timer_clear, /subscribe_sleep_timer, /player_ids, /subscribe_live
+// #103 /subscribe_live: like the server, one snapshot ({seq: 1, kind: 'snapshot', players, queues}) and then, after each
+// mock state change (commit), the players and queues that changed as MA pushes them (player_added/updated/removed,
+// queue_updated, queue_items_updated), seq + 1 each. Test hooks in window.__live: subs(), snapshots, sent (all messages),
+// skip() (lose the next message number: a gap), push(id, data) (one player_updated), hold(on) (keep messages back), flush().
 // The /ma allowlist mirrors const.py MA_COMMANDS; metadata/get_track_lyrics refuses library tracks like the server.
 const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|players\/sleep_timer\/(get|set|clear)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item)|browse|recommendations|recommendations\/items|recently_played_items|genres\/overview|genres\/tracks|genres\/library_items|(tracks|albums|artists|playlists)\/library_items|in_progress_items)|metadata\/get_track_lyrics)$/;
 // #46: music/<type>/library_items with genre = <genre item id> (MA's genre filter) is answered by mock-v07 too
@@ -19,7 +23,9 @@ const FEATURES = { queue: true, queue_play: true, queue_edit: true, undo: true, 
   // 0.7.2: the Search source picker (jukebox_kiosk/search_providers)
   search_providers: true,
   // #99: jukebox_kiosk/player_ids (HA entity → MA player id from the entity registry)
-  player_ids: true };
+  player_ids: true,
+  // #103: jukebox_kiosk/subscribe_live (snapshot of MA's players and queues, then numbered changes)
+  live_feed: true };
 const err = (code, message) => Object.assign(new Error(message), { code });
 // Autoplay style (server: autoplay_options / set_autoplay_mode over MA config/player_queues/*). Fake playlist names only.
 // apsimilar=0: no provider can find similar tracks; apmode=<mode>[:<n>] pins a style (n = playlist index).
@@ -226,6 +232,67 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
       default: throw err('unknown_command', `Unknown command ${type}`);
     }
   }
+  // ---- #103 live feed ----
+  const liveSubs = new Map(); // id -> {cb, seq, players: Map(pid -> json), queues: Map(qid -> json), items: Map(qid -> sig)}
+  const L = (window.__live = { snapshots: 0, sent: [], held: [], holding: false, skipNext: false,
+    subs: () => liveSubs.size,
+    skip() { L.skipNext = true; },
+    hold(on) { L.holding = !!on; if (!on) L.flush(); },
+    flush() { const h = L.held.splice(0); for (const f of h) f(); },
+    push(pid, data) { for (const s of liveSubs.values()) send(s, { kind: 'event', event: 'player_updated', object_id: pid, data: { player_id: pid, ...data } }); } });
+  const livePlayers = () => (typeof window.__ma?.players === 'function' ? window.__ma.players() : []);
+  const liveQueues = () => {
+    const out = [];
+    for (const [ent, Q] of Object.entries(QS)) {
+      const qid = playerIdFor(ent);
+      if (!qid || !Q) continue;
+      const cur = Q.items[Q.index];
+      out.push({ queue_id: qid, display_name: st(ent)?.attributes?.friendly_name ?? qid, active: Q.items.length > 0 && Q.active !== false,
+        state: st(ent)?.state ?? 'idle', items: Q.items.length, current_index: Q.index < 0 ? null : Q.index,
+        current_item: cur ? { queue_item_id: cur.queue_item_id } : null, _sig: Q.items.map((i) => i.queue_item_id).join(',') });
+    }
+    return out;
+  };
+  const clean = (q) => { const { _sig, ...rest } = q; return rest; };
+  function send(sub, payload) {
+    if (L.skipNext) { L.skipNext = false; sub.seq++; }
+    const m = { seq: ++sub.seq, ...structuredClone(payload) };
+    const deliver = () => { if (liveSubs.has(sub.id)) { L.sent.push(m); sub.cb(m); } };
+    if (L.holding) L.held.push(deliver); else setTimeout(deliver, 0);
+  }
+  function snapshot(sub) {
+    const players = livePlayers(), queues = liveQueues();
+    sub.players = new Map(players.map((p) => [p.player_id, JSON.stringify(p)]));
+    sub.queues = new Map(queues.map((q) => [q.queue_id, JSON.stringify(clean(q))]));
+    sub.items = new Map(queues.map((q) => [q.queue_id, q._sig]));
+    sub.seq = 0; L.snapshots++;
+    send(sub, { kind: 'snapshot', players, queues: queues.map(clean) });
+  }
+  let liveTimer = 0;
+  window.__liveTick = () => {
+    if (!liveSubs.size || liveTimer) return;
+    liveTimer = setTimeout(() => {
+      liveTimer = 0;
+      const players = livePlayers(), queues = liveQueues();
+      for (const sub of liveSubs.values()) {
+        const seen = new Set();
+        for (const p of players) {
+          seen.add(p.player_id);
+          const j = JSON.stringify(p), old = sub.players.get(p.player_id);
+          if (old === j) continue;
+          sub.players.set(p.player_id, j);
+          send(sub, { kind: 'event', event: old === undefined ? 'player_added' : 'player_updated', object_id: p.player_id, data: p });
+        }
+        for (const pid of [...sub.players.keys()]) if (!seen.has(pid)) { sub.players.delete(pid); send(sub, { kind: 'event', event: 'player_removed', object_id: pid, data: null }); }
+        for (const q of queues) {
+          const j = JSON.stringify(clean(q)), old = sub.queues.get(q.queue_id), itemsChanged = sub.items.get(q.queue_id) !== q._sig;
+          if (old === j && !itemsChanged) continue;
+          sub.queues.set(q.queue_id, j); sub.items.set(q.queue_id, q._sig);
+          send(sub, { kind: 'event', event: old === undefined ? 'queue_added' : itemsChanged ? 'queue_items_updated' : 'queue_updated', object_id: q.queue_id, data: clean(q) });
+        }
+      }
+    }, 0);
+  };
   const connection = {
     sendMessagePromise: callWS,
     async subscribeMessage(cb, msg) {
@@ -233,6 +300,16 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
         log.push({ ...structuredClone(msg), type: 'subscribe_sleep_timer' });
         const id = ++sid; sleepSubs.set(id, { entity: msg.entity_id, cb });
         return async () => { sleepSubs.delete(id); };
+      }
+      if (msg.type === 'jukebox_kiosk/subscribe_live') {
+        log.push({ ...structuredClone(msg), type: 'subscribe_live' });
+        await sleep(20);
+        if (kfail === 'subscribe_live') throw err('home_assistant_error', 'mock: subscribe_live failed');
+        if (!features.live_feed) throw err('unknown_command', 'Unknown command jukebox_kiosk/subscribe_live');
+        const id = ++sid, sub = { id, cb, seq: 0 };
+        liveSubs.set(id, sub);
+        snapshot(sub);
+        return async () => { liveSubs.delete(id); };
       }
       if (msg.type !== 'jukebox_kiosk/subscribe_queue') throw err('unknown_command', msg.type);
       log.push({ ...structuredClone(msg), type: 'subscribe_queue' });
