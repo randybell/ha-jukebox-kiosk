@@ -4,10 +4,12 @@
  * (#99) jukebox_kiosk/player_ids, each HA entity's MA player id from HA's entity registry. HA's media_player.join/unjoin are
  * never used: their ids don't match MA's speaker ids. players/cmd/ungroup is never used either.
  * Calls are serialised (one grouping change at a time) and time out.
- * #103: while the store is in use it also holds jukebox_kiosk/subscribe_live (see live.ts). Once its snapshot is in, the
- * live feed is the one source of the player list: a players/all answer never replaces it, so an older answer can't
- * overwrite a newer change. A missing message number brings a fresh snapshot. Screen updates are batched per frame.
- * (players/all polling itself is removed in Build 1 piece 5; until then it only matters without the live feed.)
+ * #103: while the store is in use it also holds jukebox_kiosk/subscribe_live (see live.ts): MA's pushed changes update
+ * the player list the moment they arrive. A players/all answer is used only when no live change landed while it was on
+ * its way, so an older answer can't overwrite a newer change. A missing message number brings a fresh snapshot. Screen
+ * updates are batched per frame. players/all polling stays until Build 1 piece 5 (after piece 4 re-attaches the feed
+ * when Home Assistant restarts its Music Assistant connection); until then it also keeps the list right if the feed's
+ * connection is lost.
  */
 import type { HomeAssistant } from '../types';
 import type { MaBackend } from '../backend/types';
@@ -88,8 +90,8 @@ export class SpeakerStore {
     const rev = this.rev;
     try {
       const [raw] = await Promise.all([this.send('players/all', {}), this.loadIds()]);
-      // #103: with the live feed in, MA's pushed changes are the player list (the answer may also predate one of them)
-      if (!this.live.ready && rev === this.rev) this.players = parsePlayers(raw);
+      // #103: a live change that landed while this was on its way is newer than the answer: keep it
+      if (rev === this.rev) this.players = parsePlayers(raw);
       this.loaded = true; this.error = '';
       void this.loadConfigs();
     } catch (e: any) { this.error = String(e?.message ?? e); }

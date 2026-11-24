@@ -7,12 +7,13 @@ import { mkdirSync } from 'node:fs';
 
 const OUT = new URL('../tmp/unit-live/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
-const bundle = await rollup({ input: ['src/speakers/live.ts', 'src/backend/kiosk.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
+const bundle = await rollup({ input: ['src/speakers/live.ts', 'src/backend/kiosk.ts', 'src/speakers/ma.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
 await bundle.write({ dir: OUT, format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name]-[hash].mjs' });
 await bundle.close();
 
 const { LiveState, parseQueue } = await import(OUT + 'live.mjs');
 const K = await import(OUT + 'kiosk.mjs');
+const MA = await import(OUT + 'ma.mjs');
 
 let failures = 0, total = 0;
 function check(name, ok, info = '') { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); }
@@ -59,6 +60,27 @@ const evt = (seq, event, object_id, data) => ({ seq, kind: 'event', event, objec
 }
 {
   check('U22 capsFromServer: live only when the server lists live_feed', K.capsFromServer({ live_feed: true }).live === true && K.capsFromServer({}).live === false && K.capsFromServer(undefined).live === false);
+}
+{
+  // SpeakerStore: a players/all answer that was on its way while a live change landed is older: it must not overwrite it
+  globalThis.window ??= globalThis;
+  let answer;
+  const be = { caps: { send: true, speakers: true, live: true }, send: () => new Promise((r) => { answer = r; }), playerIds: async () => new Map(), onChange: () => () => {} };
+  const store = new MA.SpeakerStore(be);
+  store.hass = { entities: {} };
+  store.onLive(snap());
+  const p = store.refresh();
+  store.onLive(evt(2, 'player_updated', A, { player_id: A, synced_to: B }));
+  await new Promise((r) => setTimeout(r, 0));
+  answer([{ ...pA }, pB, pG]); // the answer predates the change (A not synced yet)
+  await p;
+  check('U23 a players/all answer older than a live change does not overwrite it', store.players.get(A).synced_to === B, J(store.players.get(A)));
+  const p2 = store.refresh();
+  await new Promise((r) => setTimeout(r, 0));
+  answer([{ ...pA, volume_level: 77 }, pB, pG]);
+  await p2;
+  check('U24 a players/all answer with no live change meanwhile is used (keeps the list right if the feed goes quiet)', store.players.get(A).volume_level === 77);
+  check('U25 a gap asks for a fresh snapshot (closes, then re-subscribes only while in use)', (() => { store.onLive(evt(9, 'player_updated', A, { player_id: A })); return store.live.ready === false; })());
 }
 
 console.log(`\n${total - failures}/${total} live checks passed`);

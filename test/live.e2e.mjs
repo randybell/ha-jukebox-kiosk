@@ -134,6 +134,18 @@ const openPanel = async (p) => { await ev(p, `__card.shadowRoot.querySelector('.
   await p.close();
 }
 
+{
+  // the feed goes quiet (its Music Assistant connection is gone until piece 4 re-attaches it): reading players/all again
+  // still keeps the panel right, as before
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}`, null);
+  await openPanel(p);
+  await ev(p, `window.__live.hold(true)`);
+  await ev(p, `window.__ma.force('syncgroup_mock_indoor', 'playing', [window.__ma.SP.living, window.__ma.SP.kitchen, window.__ma.SP.garage])`);
+  const moved = await wait(p, `J([...${SR}.querySelectorAll('[data-room].in')].map((r) => r.dataset.room).sort()) === J(['${G}', '${K}', '${L}'])`, 6000);
+  check('LF18 with the feed quiet, the next players/all read still shows the change', moved, J(await roomsIn(p)));
+  await p.close();
+}
+
 await browser.close();
 console.log(`\n${total - failures}/${total} live feed checks passed`);
 process.exit(failures ? 1 : 0);
