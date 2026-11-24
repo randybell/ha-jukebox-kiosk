@@ -123,7 +123,8 @@ async function qsheet(p, id, action) {
   await p.evaluate((b) => [...eval(b).shadowRoot.querySelectorAll('[data-cat="playlist"]')][0]?.click(), BR);
   await sleep(400);
   n = await nws(p);
-  await p.evaluate((b) => [...eval(b).shadowRoot.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent === 'Long Drive').click(), BR);
+  // a real tap: the tile opens on pointer events, a scripted .click() does not reach it
+  { const r = await p.evaluate((b) => { const t = [...eval(b).shadowRoot.querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent === 'Long Drive'); t.scrollIntoView({ block: 'nearest' }); const q = t.getBoundingClientRect(); return { x: q.x + q.width / 2, y: q.y + q.height / 2 }; }, BR); await p.mouse.click(r.x, r.y); }
   await sleep(600);
   for (let i = 0; i < 8; i++) { await p.evaluate((b) => { const s = eval(b)?.querySelector('.scroll'); if (s) { s.scrollTop = s.scrollHeight; s.dispatchEvent(new Event('scroll')); } }, BDs); await sleep(250); }
   m = (await ws(p, n)).filter((x) => x.type === 'item_tracks');

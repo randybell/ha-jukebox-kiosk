@@ -616,7 +616,8 @@ check('12e long-press a playlist → menu 5 (0.7.12: Open, Add to queue, Play ne
 }
 await clickEl(page, `${BV}.querySelector('[data-cat="album"]')`); await sleep(300);
 n0 = await nws(page);
-await page.evaluate((b) => [...eval(b).querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent === 'Kind of Blue').click(), BV);
+// a real tap: the tile opens on pointer events, a scripted .click() does not reach it
+{ const r = await page.evaluate((b) => { const t = [...eval(b).querySelectorAll('.tile')].find((t) => t.querySelector('b').textContent === 'Kind of Blue'); t.scrollIntoView({ block: 'nearest' }); const q = t.getBoundingClientRect(); return { x: q.x + q.width / 2, y: q.y + q.height / 2 }; }, BV); await page.mouse.click(r.x, r.y); }
 await page.waitForFunction((d) => eval(d)?.querySelectorAll('.list.tracks .row').length > 0, { timeout: 4000 }, BD);
 await sleep(200);
 const at = (await wsSince(page, n0)).find((m) => m.type === 'item_tracks');
