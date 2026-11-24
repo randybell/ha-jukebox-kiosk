@@ -70,7 +70,8 @@ export class JbQueue extends LitElement {
     try { await p; if (ok) this.toast(ok); } catch (e) { this.toast(e instanceof QueueBusy ? e.message : 'Queue action failed'); }
   }
   /** Autoplay pill: the same show/hide rules as the Now Playing button (`autoplayControlMode`).
-   *  A tap turns Autoplay on or off; with the autoplay_mode feature a hold on the pill opens the Autoplay from pop-up. */
+   *  A tap turns Autoplay on or off; with the autoplay_mode feature a hold on the pill opens the Autoplay from pop-up.
+   *  A self-refilling (dynamic) queue shows a clear on indicator that cannot be tapped or held. */
   private autoplayTpl(s: QueueSnapshot | undefined) {
     const mode = autoplayControlMode(!!this.config?._backend?.ext?.autoplay, s, s?.repeat);
     if (mode === 'hide') return nothing;
@@ -81,9 +82,9 @@ export class JbQueue extends LitElement {
     } : { down: () => undefined, up: () => undefined };
     const title = mode === 'locked' ? 'This queue already keeps playing'
       : on ? 'Autoplay is on: more music is added when the queue runs out' : 'Autoplay is off';
-    const cls = mode === 'locked' ? 'on' : (on ? 'on' : '');
-    return html`<span class="apg"><button class="ap ${cls}" data-action="autoplay" tabindex="-1" aria-haspopup=${modes && !locked ? 'dialog' : nothing}
-      aria-pressed=${on ? 'true' : 'false'} ?disabled=${locked}
+    const shownOn = locked || on;
+    return html`<span class="apg"><button class="ap ${shownOn ? 'on' : ''}" data-action="autoplay" tabindex="-1" aria-haspopup=${modes && !locked ? 'dialog' : nothing}
+      aria-pressed=${shownOn ? 'true' : 'false'}
       aria-disabled=${locked ? 'true' : nothing}
       title=${title}
       @pointerdown=${(e: PointerEvent) => { noFocus(e); hold.down(); }} @pointerup=${hold.up} @pointerleave=${hold.up} @pointercancel=${hold.up}
@@ -387,7 +388,7 @@ export class JbQueue extends LitElement {
     .ap { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); background: var(--_chip-bg); color: var(--_muted); font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); cursor: pointer; }
     .ap.on { background: var(--_active); color: var(--_on-accent); border-color: var(--_active); } /* same active treatment as Now Playing .apb.on */
-    .ap:disabled { color: var(--_disabled); border-color: var(--_disabled); cursor: default; } /* #113: HA disabled colours, not an ad-hoc opacity */
+    .ap[aria-disabled="true"] { cursor: default; } /* locked: looks on, not tappable; :disabled would grey the on colours */
     .apg { margin-left: auto; align-self: center; display: inline-flex; }
     .apg .ap { margin-left: 0; }
     /* Autoplay from pop-up: the same look as the card's other pop-ups (jb-hold-sheet): title over a divider, bold 64px rows, a Cancel (or Back) row at the bottom */

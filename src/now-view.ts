@@ -493,10 +493,11 @@ export class JbNow extends LitElement {
     // the Autoplay-only Up next panel (queue ends, Autoplay will add more): server lists it, MA says it is on, queue not dynamic
     const autoplay = !!this.config._backend?.ext?.autoplay && this._snap?.autoplay === true && !this._snap?.dynamic;
     const apMode = autoplayControlMode(!!this.config._backend?.ext?.autoplay, this._snap, this._snap?.repeat);
-    const apOn = this._snap?.autoplay === true;
+    // same on-state as the Queue pill: a self-refilling (dynamic / locked) queue counts as on
+    const apOn = apMode === 'locked' || this._snap?.autoplay === true;
     const apTpl = apMode === 'hide' ? nothing
       : html`<span class="apb ${apOn ? 'on' : ''}" data-state=${apOn ? 'on' : 'off'}
-          title=${apOn ? 'Autoplay is on: more music is added when the queue runs out. Change it on the Queue screen.' : 'Autoplay is off. Change it on the Queue screen.'}>${icon('autoplay', 'i xs')}Radio - Autoplay</span>`;
+          title=${apMode === 'locked' ? 'This queue already keeps playing' : apOn ? 'Autoplay is on: more music is added when the queue runs out. Change it on the Queue screen.' : 'Autoplay is off. Change it on the Queue screen.'}>${icon('autoplay', 'i xs')}Radio - Autoplay</span>`;
     const favOn = this.isFav();
     const showFav = this.canFav();
     const sleepRem = this.sleepRemain();
