@@ -66,7 +66,8 @@ async function qsheet(p, id, action) {
   check('A1 backend: auto + jukebox_kiosk in hass.config.components → kiosk (data-backend)', b === 'kiosk', b);
   check('A2 capabilities asked once, queue window from jukebox_kiosk/queue_items {entity_id, limit_before 1}',
     m.filter((x) => x.type === 'capabilities').length === 1 && m.some((x) => x.type === 'queue_items' && x.entity_id === EV && x.limit_before === 1), J(m.map((x) => x.type)));
-  check('A3 queue push subscribed for the target (jukebox_kiosk/subscribe_queue)', J(await ev(p, `window.__kioskSubs()`)) === J([EV]));
+  // 2.5: the queue follows the live feed (jukebox_kiosk/subscribe_live), no longer the entity-pinned subscribe_queue
+  check('A3 queue push from the live feed for the card (subscribe_live), no subscribe_queue', (await ev(p, `window.__live.subs()`)) === 1 && J(await ev(p, `window.__kioskSubs()`)) === '[]');
   const rows = await ev(p, `${QV}.querySelectorAll('.qr.next').length`);
   check('A4 Up next rows rendered from the WS window', rows > 3, String(rows));
   check('A5 no mass_queue services used', (await mqCalls(p)).length === 0 && (await ev(p, `window.__calls.filter((c) => c.domain === 'mass_queue').length`)) === 0, J(await mqCalls(p)));

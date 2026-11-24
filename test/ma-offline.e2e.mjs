@@ -109,12 +109,12 @@ const greyed = (p) => ev(p, `JSON.stringify({
 }
 
 {
-  // fixed mode: no live feed, the notice still shows (the status is the card's own subscription)
+  // fixed mode: the notice shows too; since 2.5 the card holds its one live feed in every speaker_mode (it drives the Queue screen)
   const p = await open('&tab=queue');
   await wait(p, `${QV}.querySelectorAll('.qr[data-id], .qg [data-id]').length > 0`);
   await ev(p, `window.__maOffline(true)`);
-  check('MO14 fixed mode: the notice shows too, the Queue screen is greyed out, and no live feed is opened',
-    await wait(p, OFF_SHOWN) && (await greyed(p)).queue && (await count(p, 'subscribe_live')) === 0);
+  check('MO14 fixed mode: the notice shows too, the Queue screen is greyed out, and the card holds one live feed (2.5)',
+    await wait(p, OFF_SHOWN) && (await greyed(p)).queue && (await count(p, 'subscribe_live')) === 1, await count(p, 'subscribe_live'));
   await ev(p, `window.__setAttrs('media_player.everywhere', {}, 'unavailable')`); // HA's MA entities go unavailable too
   await sleep(800);
   check('MO14b one notice only: the Queue screen keeps its last songs (greyed) instead of a second "Queue unavailable" error',

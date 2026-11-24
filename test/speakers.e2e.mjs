@@ -356,8 +356,12 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   const leadRoom = lead === 'wiim_mock_kitchen' ? KIT : LIV;
   await wait(p, `${act(leadRoom)}?.dataset.act === 'drop'`);
   check('L1 leader_drop: allow → the leader row offers Drop', (await ev(p, `${act(leadRoom)}.dataset.act`)) === 'drop');
+  // 2.5: the drop is answered by MA's change message on the live feed (no polling), which the mock sends at once; hold the
+  // feed so the check sees the drop in flight, as it is while real MA regroups
+  await ev(p, `window.__live.hold(true)`);
   await tap(p, act(leadRoom));
   const modalL = await ev(p, MODALQ), cL = await chip(p);
+  await ev(p, `window.__live.hold(false)`);
   check('L2 dropping the leader: no dialog; the chip says "Regrouping…" (0.6.4)', !modalL && cL?.text === 'Regrouping…' && cL?.kind === 'busy', J({ modalL, cL }));
   const sawBuf = await wait(p, `window.__hass.states['${IN}'].state === 'buffering'`, 2000);
   const rg = await wait(p, `${SR}.querySelector('.stl')?.textContent.includes('Regrouping…')`, 1500);

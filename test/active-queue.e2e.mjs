@@ -36,7 +36,9 @@ async function open(query = KC) {
   const qi = await ev(p, `window.__ws.filter((m) => m.type === 'queue_items').length`);
   check('AQ1 a speaker playing its queue: the Queue screen lists it', (await rows(p)) > 0 && qi >= 1, String(await rows(p)));
   check('AQ1b the Autoplay pill shows for the playing queue', await wait(p, `!!${QV}.querySelector('button.ap')`));
-  check('AQ2 the card follows the server\'s queue (jukebox_kiosk/subscribe_queue is held)', await ev(p, `window.__kioskSubs().includes('${EVERY}')`));
+  // 2.5: from the live feed's active queues (the server's rule), no longer the entity-pinned subscribe_queue
+  check('AQ2 the card follows the server\'s queue from the live feed (subscribe_live held, no subscribe_queue)', await ev(p, `window.__live.subs() === 1 && window.__kioskSubs().length === 0
+    && __card.speakers.live.activeQueue('${PID}') === '${PID}'`));
 
   // an outside source takes over (Spotify Connect): MA's active_source names no queue
   await ev(p, `window.__setActiveSource('${PID}', 'spotify_connect')`);
