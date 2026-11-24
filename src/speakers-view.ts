@@ -55,7 +55,7 @@ export class JbSpeakers extends LitElement {
   config!: JukeboxCardConfig;
   store?: SpeakerStore;
   open = false;
-  /** 0.6.3: Now Playing shows Drop/Add per room: keep the MA player list fresh (slower poll) while the panel is closed */
+  /** 0.6.3: Now Playing shows Drop/Add per room: redraw on MA player changes while the panel is closed too */
   keep = false;
   private _ask: Ask | null = null;
   private _chip: Chip | null = null;
@@ -75,7 +75,6 @@ export class JbSpeakers extends LitElement {
   private mute = new Map<string, Pending<boolean>>();
   private senders = new Map<string, ReturnType<typeof throttle<[number]>>>();
   private stateFns = new Set<() => void>();
-  private _lastHassRefresh = 0;
 
   private get dynamic() { return this.config?.speaker_mode === 'dynamic'; }
   /** #99: HA entity → MA player id (HA's entity registry), read with the players */
@@ -85,20 +84,14 @@ export class JbSpeakers extends LitElement {
   private get modal() { return this.config?.confirm_drop === true; }
 
   protected willUpdate(ch: PropertyValues) {
+    // 2.5: the store follows Music Assistant's live feed for the whole card (started and stopped by the card); this only
+    // redraws on its changes while the panel or Now Playing's room buttons show them. No polling and no re-reading.
     if (ch.has('open') || ch.has('store') || ch.has('keep') || ch.has('config')) {
       const want = this.dynamic && !!this.store && (this.open || (this.keep && this.mayGroup));
       if (want) {
         if (!this._unsub) this._unsub = this.store!.onChange(() => this._tick++) as any;
-        this.store!.start(!this.open);
-      } else { this.store?.stopPolling(); this._unsub?.(); this._unsub = undefined; }
-    }
-    // inline (panel closed): HA saw the target or a room change → read MA again soon (at most once a second)
-    if (ch.has('hass') && !this.open && this.keep && this._unsub && this.store?.loaded) {
-      const old = ch.get('hass') as HomeAssistant | undefined;
-      const ids = [this.config?.entity!, ...roomsOf(this.config, this.hass).map((r) => r.entity)];
-      if (old && ids.some((id) => old.states[id]?.state !== this.hass?.states[id]?.state) && Date.now() - this._lastHassRefresh > 1000) {
-        this._lastHassRefresh = Date.now(); void this.store.refresh();
-      }
+        this.store!.useConfigs(); // the presets need each group's MA default
+      } else { this._unsub?.(); this._unsub = undefined; }
     }
   }
   protected updated() { for (const f of this.stateFns) f(); }
@@ -122,7 +115,7 @@ export class JbSpeakers extends LitElement {
   }
   /** 0.6.3: 'Regrouping…' for Now Playing */
   inlineRegrouping() { return this.dynamic && !!this.store?.loaded && this.regrouping(this.ctx()); }
-  disconnectedCallback() { super.disconnectedCallback(); window.clearTimeout(this._regroupTimer); window.clearTimeout(this._chipTimer); this.store?.stopPolling(); this._unsub?.(); this._unsub = undefined; }
+  disconnectedCallback() { super.disconnectedCallback(); window.clearTimeout(this._regroupTimer); window.clearTimeout(this._chipTimer); this._unsub?.(); this._unsub = undefined; }
   connectedCallback() { super.connectedCallback(); if (this.hasUpdated) this.requestUpdate('keep'); }
 
   /* ---------------- public: start confirmation (used by the card's start guard, panel open or not) ---------------- */
@@ -274,7 +267,6 @@ export class JbSpeakers extends LitElement {
       this.status(`${room.name} joined ${tName}`, staticStop ? {} : { undo: { label: `${room.name} joined`, run: async () => { if (back) await this.store!.setMembers(back, [s], []); else await this.store!.setMembers(t, [], [s]); } } });
     } catch (e) {
       this.fail(`Couldn't add ${room.name}: ${errText(e)}`);
-      void this.store!.refresh();
     } finally { this.setBusy(room.ma); }
   }
   async drop(room: Room) {
@@ -314,7 +306,6 @@ export class JbSpeakers extends LitElement {
     } catch (e) {
       if (isLeader) this.endRegroup();
       this.fail(`Couldn't drop ${room.name}: ${errText(e)}`);
-      void this.store!.refresh();
     } finally { this.setBusy(room.ma); }
   }
   /** 'Regrouping…' until the group plays again on a new leader (or 15 s) */
@@ -340,7 +331,7 @@ export class JbSpeakers extends LitElement {
     const x = this.ctx();
     const from = x.c.entity!;
     if (to.entity === from) return true;
-    if (!this.store?.loaded) await this.store?.refresh();
+    if (!this.store?.loaded) await this.store?.ready();
     const y = this.ctx();
     const dMa = targetMa(to.entity, this.ids);
     if (!y.active || !y.tMa) { fire(this, 'jukebox-target', { entity: to.entity }); if (!opts.quiet) this.toast(`Now on ${to.name}`); return true; }
@@ -364,13 +355,12 @@ export class JbSpeakers extends LitElement {
     } catch (e) {
       fire(this, 'jukebox-target', { entity: from }); // revert
       this.fail(`Couldn't move to ${to.name}: ${errText(e)}. Still on ${fromName}.`);
-      void this.store!.refresh();
       return false;
     } finally { this.setBusy(to.entity); }
   }
   async applyPreset(p: PresetConfig) {
     const targets = targetsOf(this.config, this.hass);
-    if (!this.store?.loaded) await this.store?.refresh();
+    if (!this.store?.loaded) await this.store?.ready();
     const dest = targets.find((t) => t.entity === (p.target ?? this.config.entity)) ?? targets[0];
     const x0 = this.ctx();
     const want = presetSpeakers(p, x0.rooms);
@@ -401,7 +391,6 @@ export class JbSpeakers extends LitElement {
       }
     } catch (e) {
       this.fail(`Couldn't apply ${p.name}: ${errText(e)}`);
-      void this.store?.refresh();
     } finally { this.setBusy('preset:' + p.name); }
   }
 

@@ -4,8 +4,10 @@
  *   jukebox_kiosk/ma {command, args}    -> one allowlisted MA command (the server checks class + entity permission)
  *   jukebox_kiosk/queue_items           -> queue window in the QueueItem shape, plus queue id / indexes / total
  *   jukebox_kiosk/item_tracks           -> server-paged track lists (page is 1-based on the wire)
- *   jukebox_kiosk/favorite_current, jukebox_kiosk/unfavorite_current, jukebox_kiosk/subscribe_queue
- *   jukebox_kiosk/subscribe_live        -> #103 MA's players and queues: snapshot, then numbered changes
+ *   jukebox_kiosk/favorite_current, jukebox_kiosk/unfavorite_current
+ *   jukebox_kiosk/subscribe_live        -> #103 MA's players and queues: snapshot, then numbered changes; 2.5 also each
+ *                                          player's active queue (the card's queue follows it; subscribe_queue is no
+ *                                          longer used by the card)
  *   jukebox_kiosk/active_queue          -> #100 the entity's active queue by Music Assistant's rule (or null)
  *   jukebox_kiosk/subscribe_ma_status   -> 2.4 {connected}: Home Assistant's Music Assistant connection, now and on change
  */
@@ -18,7 +20,7 @@ export const KIOSK_PAGE_SIZE = 100;
 /** caps until the server answers: optimistic (the server enforces permissions anyway) */
 const OPTIMISTIC: Caps = {
   send: true, queue: true, queuePlay: true, queueEdit: true, undo: true, queueBuffer: true,
-  trackLists: true, podcastEpisodes: true, lyrics: true, speakers: true, unfavorite: true, queuePush: true,
+  trackLists: true, podcastEpisodes: true, lyrics: true, speakers: true, unfavorite: true,
   // shown only once the server lists it (a guest without the library class never sees a heart flash in)
   libraryWrite: false,
   // #103: an integration older than the card has no subscribe_live; asked for only once the server lists it
@@ -31,7 +33,7 @@ export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
   return {
     send: b('ma_commands', true), queue: b('queue', true), queuePlay: b('queue_play'), queueEdit: b('queue_edit'),
     undo: b('undo'), queueBuffer: b('queue', true), trackLists: b('track_lists'), podcastEpisodes: b('podcast_episodes'),
-    lyrics: b('lyrics'), speakers: b('speakers'), unfavorite: b('unfavorite'), queuePush: b('queue_push'),
+    lyrics: b('lyrics'), speakers: b('speakers'), unfavorite: b('unfavorite'),
     libraryWrite: b('library_write'), live: b('live_feed'), maStatus: b('ma_status'),
   };
 }
@@ -173,12 +175,6 @@ export class KioskBackend implements MaBackend {
     const conn = this.hass.connection;
     if (!conn?.subscribeMessage) throw new BackendError('unsupported', 'no websocket subscriptions');
     const unsub = await conn.subscribeMessage(cb, { type: `${KIOSK_DOMAIN}/subscribe_ma_status` });
-    return () => { void Promise.resolve(unsub()).catch(() => undefined); };
-  }
-  async subscribeQueue(entity: string, cb: (ev: { event: string; queue_id?: string }) => void) {
-    const conn = this.hass.connection;
-    if (!conn?.subscribeMessage) throw new BackendError('unsupported', 'no websocket subscriptions');
-    const unsub = await conn.subscribeMessage(cb, { type: `${KIOSK_DOMAIN}/subscribe_queue`, entity_id: entity });
     return () => { void Promise.resolve(unsub()).catch(() => undefined); };
   }
   sleepTimerGet(entity: string) {

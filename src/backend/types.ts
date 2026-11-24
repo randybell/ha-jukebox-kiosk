@@ -27,12 +27,10 @@ export interface Caps {
   /** podcast episode lists */
   podcastEpisodes: boolean;
   lyrics: boolean;
-  /** Speakers panel grouping (players/all, set_members, transfer) */
+  /** Speakers panel grouping (set_members, transfer; the players come from the live feed) */
   speakers: boolean;
   /** Remove the playing track from favorites */
   unfavorite: boolean;
-  /** server pushes queue changes (no polling needed after a change) */
-  queuePush: boolean;
   /** add / remove favorites by uri (music/favorites/*, permission class library): the Search radio heart */
   libraryWrite: boolean;
   /** #103: jukebox_kiosk/subscribe_live, MA's players and queues pushed live (snapshot + numbered changes) */
@@ -46,7 +44,7 @@ export const NO_QUEUE = 'Nothing queued on this speaker';
 export const MA_OFFLINE = 'Music Assistant is offline';
 export const NO_CAPS: Caps = {
   send: false, queue: false, queuePlay: false, queueEdit: false, undo: false, queueBuffer: false,
-  trackLists: false, podcastEpisodes: false, lyrics: false, speakers: false, unfavorite: false, queuePush: false, libraryWrite: false, live: false,
+  trackLists: false, podcastEpisodes: false, lyrics: false, speakers: false, unfavorite: false, libraryWrite: false, live: false,
   maStatus: false,
 };
 
@@ -161,9 +159,6 @@ export interface MaBackend {
   /** 2.4 (kiosk only): {connected} now and whenever Home Assistant's Music Assistant connection goes away or comes back.
    *  Resolves an unsubscribe function. */
   subscribeMaStatus?(cb: (ev: { connected: boolean }) => void): Promise<() => void>;
-  /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. 2.4: also {event: 'offline'} when
-   *  Music Assistant goes away, and {event: 'queue_changed'} once it is back. */
-  subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;
   /** MA sleep timer for the entity, using the entity's MA player id. Kiosk only. */
   sleepTimerGet?(entity: string): Promise<unknown>;
   sleepTimerSet?(entity: string, seconds: number): Promise<unknown>;

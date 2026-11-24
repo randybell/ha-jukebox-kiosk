@@ -9,15 +9,25 @@
  *  - 2.4: {kind: 'offline'} means Home Assistant lost its Music Assistant connection. The lists are kept but are no longer
  *    current (`ready` is false) until the fresh snapshot the integration sends on the same subscription once MA is back;
  *    a change before that snapshot is a gap.
+ *  - 2.5: the integration also says which queue each player is playing, by the one active-queue rule (Music Assistant's
+ *    app rule, worked out in the integration only): `active_queues` in the snapshot, then {kind: 'active_queue',
+ *    player_id, queue_id} right after the change that moved one. The card follows its speaker's queue from these
+ *    (queue-follow.ts) and keeps no copy of the rule. A snapshot without `active_queues` (an older integration) leaves
+ *    `followsQueues` false.
  * Pure state, no DOM and no hass calls. Unit-tested in test/unit/live.unit.mjs.
  */
 import { parsePlayers, type MaPlayer, type Players } from './model';
 
 export interface LiveMsg {
   seq: number;
-  kind: 'snapshot' | 'event' | 'offline';
+  kind: 'snapshot' | 'event' | 'offline' | 'active_queue';
   players?: unknown[];
   queues?: unknown[];
+  /** 2.5 snapshot: player id → the queue it plays (null: none) */
+  active_queues?: Record<string, unknown>;
+  /** 2.5 active_queue message */
+  player_id?: string;
+  queue_id?: string | null;
   event?: string;
   object_id?: string | null;
   data?: unknown;
@@ -58,15 +68,24 @@ export class LiveState {
   ready = false;
   players: Players = new Map();
   queues: Queues = new Map();
-  /** queue_items_updated count per queue: the queue's songs changed (the Queue screen reloads them in piece 3) */
+  /** queue_items_updated count per queue: the queue's songs changed */
   itemsRev = new Map<string, number>();
+  /** 2.5: player id → the queue it plays by the integration's one rule (a missing player: none) */
+  activeQueues = new Map<string, string | null>();
+  /** 2.5: the snapshot carried `active_queues`, so activeQueues is kept current */
+  followsQueues = false;
   /** MA's player dicts as received; a player_updated is merged into them, as MA's app does (Object.assign) */
   private raw = new Map<string, Record<string, any>>();
   /** MA's queue dicts as received, merged the same way */
   private rawQ = new Map<string, Record<string, any>>();
 
   /** forget everything (a new subscription starts with a snapshot) */
-  reset() { this.seq = 0; this.ready = false; this.players = new Map(); this.queues = new Map(); this.itemsRev = new Map(); this.raw = new Map(); this.rawQ = new Map(); }
+  reset() {
+    this.seq = 0; this.ready = false; this.players = new Map(); this.queues = new Map(); this.itemsRev = new Map(); this.raw = new Map(); this.rawQ = new Map();
+    this.activeQueues = new Map(); this.followsQueues = false;
+  }
+  /** 2.5: the queue `playerId` plays (null: none, or not known) */
+  activeQueue(playerId: string | undefined): string | null { return (playerId && this.activeQueues.get(playerId)) || null; }
 
   apply(msg: LiveMsg): Applied {
     const seq = typeof msg?.seq === 'number' && Number.isFinite(msg.seq) ? msg.seq : NaN;
@@ -80,6 +99,13 @@ export class LiveState {
     if (!this.ready || seq > this.seq + 1) return 'gap';
     if (seq <= this.seq) return 'old';
     this.seq = seq;
+    if (msg.kind === 'active_queue') {
+      if (typeof msg.player_id === 'string' && msg.player_id) {
+        const q = typeof msg.queue_id === 'string' && msg.queue_id ? msg.queue_id : null;
+        const next = new Map(this.activeQueues); next.set(msg.player_id, q); this.activeQueues = next;
+      }
+      return 'ok';
+    }
     this.change(String(msg.event ?? ''), typeof msg.object_id === 'string' ? msg.object_id : null, msg.data);
     return 'ok';
   }
@@ -91,6 +117,9 @@ export class LiveState {
     this.queues = new Map(); this.rawQ = new Map();
     for (const q of Array.isArray(msg.queues) ? msg.queues : []) { const x = parseQueue(q); if (x) { this.queues.set(x.queue_id, x); this.rawQ.set(x.queue_id, { ...(q as object) }); } }
     this.itemsRev = new Map();
+    const aq = obj(msg.active_queues);
+    this.followsQueues = !!aq;
+    this.activeQueues = new Map(Object.entries(aq ?? {}).map(([pid, q]) => [pid, typeof q === 'string' && q ? q : null]));
     this.seq = seq; this.ready = true;
   }
 
@@ -116,6 +145,7 @@ export class LiveState {
         // MA's app drops the player's own queue with it
         if (this.queues.has(id)) { const q = new Map(this.queues); q.delete(id); this.queues = q; }
         this.itemsRev.delete(id);
+        if (this.activeQueues.has(id)) { const a = new Map(this.activeQueues); a.delete(id); this.activeQueues = a; }
         return;
       }
       case 'queue_added':

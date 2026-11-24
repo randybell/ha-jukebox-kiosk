@@ -15,6 +15,8 @@ import './station-sheet';
 import './station-confirm';
 import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
+import { QueueFollow } from './speakers/queue-follow';
+import type { LiveMsg } from './speakers/live';
 import { canGroup, targetsOf, targetMa, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
 /** the screensaver's reduced-motion class (.rm) follows the browser setting */
 const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -160,15 +162,18 @@ export class JukeboxCard extends LitElement {
   /** 2.4: Music Assistant is offline: one notice in the header, speaker and queue controls greyed out */
   private _maOff = false;
   private _munsub?: () => void;
-  /** Music Assistant players (dynamic mode only; fixed mode never calls it) */
+  /** Music Assistant's players and queues from the live feed, while the card is on the page (2.5: every speaker_mode,
+   *  one path; nothing is polled). The Queue screen follows its speaker's queue from the same feed (queue-follow.ts). */
   readonly speakers = new SpeakerStore();
+  /** 2.5: which queue the card's speaker plays, from the live feed */
+  private readonly _follow = new QueueFollow();
+  private _funsub?: () => void;
   /** v0.7 hearts: one favourites store for every view (passed down as config._favs) */
   readonly favs = new FavStore();
   /** Music Assistant backend (kiosk / native), shared by queue, lyrics, speakers and the views */
   backend?: MaBackend;
   private _bkey = '';
   private _bunsub?: () => void;
-  private _push?: { key: string; off?: () => void };
 
   static getConfigElement() { return document.createElement('jukebox-card-editor'); }
   /** A new card starts with no speaker (Randy, Nov 19): the entity is picked in the editor, which lists only Music Assistant
@@ -228,7 +233,7 @@ export class JukeboxCard extends LitElement {
     const kind = pickBackend(this.hass), key = kind;
     if (key !== this._bkey || !this.backend) {
       this._bkey = key;
-      this._bunsub?.(); this.stopPush();
+      this._bunsub?.(); this._follow.reset();
       const be = createBackend(kind, () => this.hass);
       this.backend = be;
       this.queue.backend = be; this.lyrics.backend = be; this.speakers.backend = be;
@@ -247,7 +252,6 @@ export class JukeboxCard extends LitElement {
     if (this._tab !== 'now' && !this.tabs().some((t) => t.id === this._tab)) this._tab = 'now';
     this.queue.configForRemove = this._config;
     if (refresh && this.hass) this.queue.refreshSoon(0);
-    this.startPush();
     this.speakers.syncLive(); // #103: the server may only now say it has the live feed
     this.syncMa(); // 2.4: likewise the Music Assistant status
     this.requestUpdate();
@@ -278,19 +282,17 @@ export class JukeboxCard extends LitElement {
     this.speakers.reload();
     if (this.lyrics.state.status === 'error') this.lyrics.retry();
   }
-  /** kiosk: queue events pushed by the server (jukebox_kiosk/subscribe_queue) refresh the queue at once */
-  private startPush() {
-    const be = this.backend, ent = this.player();
-    if (!be?.subscribeQueue || !be.caps.queuePush || !ent || !this.isConnected || !this.hass?.connection) { this.stopPush(); return; }
-    const key = `${this._bkey}|${ent}`;
-    if (this._push?.key === key) return;
-    this.stopPush();
-    const p: { key: string; off?: () => void } = { key };
-    this._push = p;
-    be.subscribeQueue(ent, () => this.queue.refreshSoon()).then((off) => { if (this._push === p) p.off = off; else off(); })
-      .catch((e) => { console.warn('[jukebox-card] queue push unavailable', e); });
-  }
-  private stopPush() { this._push?.off?.(); this._push = undefined; }
+  /** the card's speaker's Music Assistant player id (HA's entity registry, through the integration) */
+  private playerId(): string | undefined { const p = this.player(); return p ? this.speakers.ids.get(p) : undefined; }
+  /**
+   * 2.5: the live feed drives the queue once its snapshot carries the active queues and the card's speaker has its Music
+   * Assistant id (queue-follow.ts). Until then, and with no feed at all (the native backend, which has no Music
+   * Assistant access, or an integration without the live feed), Home Assistant state changes do, as they always have
+   * for the native backend.
+   */
+  private feedDrivesQueue() { return QueueFollow.active(this.speakers.live, this.playerId()); }
+  /** 2.5: each live message: read the queue again when its speaker's queue moved or changed (replaces subscribe_queue) */
+  private onFeed = (m: LiveMsg) => { if (this._follow.apply(m, this.speakers.live, this.playerId())) this.queue.refreshSoon(); };
   /** fixed mode: the config as given. dynamic: entity = the remembered target (when it is one of the targets) + start guard. */
   private effective(): JukeboxCardConfig {
     const b = this._base, h = this.hass;
@@ -310,7 +312,6 @@ export class JukeboxCard extends LitElement {
     this._config = e;
     this.queue.entity = this.player();
     this.queue.refreshSoon(0);
-    this.stopPush(); this.startPush();
   }
   /** #99: the card's own entity, or '' when Home Assistant's registry says it is not a Music Assistant player (the card
    *  then shows only Home Assistant's warning, and nothing else runs). */
@@ -326,7 +327,6 @@ export class JukeboxCard extends LitElement {
     this._config = this.effective();
     this.queue.entity = this.player();
     this.queue.refreshSoon(0);
-    this.startPush();
   };
   private onSpeakers = (e: CustomEvent) => { this._spk = e.detail?.open !== false; };
   private onStation = (e: CustomEvent) => { if (e.detail?.item) this._station = { item: e.detail.item, tab: this._tab }; };
@@ -345,8 +345,10 @@ export class JukeboxCard extends LitElement {
     const st = this.hass?.states[entity]?.state;
     if (st === 'playing' || st === 'paused') return true;
     if (!this.speakers.available) return true;
-    const players = await this.speakers.refresh();
+    // 2.5: the player list the live feed keeps (nothing is read; at most its first snapshot is waited for)
+    if (!(await this.speakers.ready())) return true;
     await this.speakers.loadConfigs(); // the group's default speakers (config/players/get), when MA lets us read them
+    const players = this.speakers.players;
     const ma = targetMa(entity, this.speakers.ids);
     if (!ma || isActive(players.get(ma))) return true;
     const el = this.renderRoot.querySelector('jb-speakers') as JbSpeakers | null;
@@ -379,6 +381,8 @@ export class JukeboxCard extends LitElement {
     this.renderRoot?.addEventListener?.('focusin', this.onFocusIn as EventListener);
     this._lunsub ??= this.lyrics.subscribe((st) => { if (st.status !== this._lstatus) { this._lstatus = st.status; this.requestUpdate(); } });
     this._sunsub ??= this.speakers.onChange(() => { const n = this.pillCount(); if (n !== this._pn) { this._pn = n; this.requestUpdate(); } }) as any;
+    this._funsub ??= this.speakers.onMessage(this.onFeed) as any;
+    this.speakers.start(); // the live feed itself starts once hass has a connection and the server lists it
     this._qunsub = this.queue.subscribe(() => { this._qcount = this.queue.remaining; this._qart = this.art(); }) as any;
     this.addEventListener('pointerdown', this.onActivity, { capture: true });
     this.addEventListener('keydown', this.onActivity, { capture: true });
@@ -429,7 +433,7 @@ export class JukeboxCard extends LitElement {
     this._sunsub?.(); this._sunsub = undefined; window.clearTimeout(this._lostTimer);
     this._lunsub?.(); this._lunsub = undefined;
     this.ma.stop(); this._munsub?.(); this._munsub = undefined;
-    this.stopPush();
+    this.speakers.close(); this._funsub?.(); this._funsub = undefined; this._follow.reset();
     this.removeEventListener('pointerdown', this.onActivity, { capture: true });
     this.removeEventListener('keydown', this.onActivity, { capture: true });
     this.removeEventListener('jukebox-played', this.onPlayed as EventListener);
@@ -443,7 +447,6 @@ export class JukeboxCard extends LitElement {
     this.removeEventListener('jukebox-station', this.onStation as EventListener);
     this.removeEventListener('jukebox-sheet', this.onSheet as EventListener);
     this.removeEventListener('jukebox-station-close', this.onStationClose as EventListener);
-    this.speakers.stopPolling();
     document.removeEventListener('fullscreenchange', this.onFsChange);
     document.removeEventListener('webkitfullscreenchange', this.onFsChange);
     window.removeEventListener('keydown', this.onKeyCap, true);
@@ -668,16 +671,16 @@ export class JukeboxCard extends LitElement {
     if (changed.has('hass') && this.hass) {
       this.watchConn();
       if (!connected(this.hass)) setVolDown(true); else if (volDown()) volFlush(this.hass);
-      if (!this._push) this.startPush();
       this.dropLostTarget();
       this.queue.hass = this.hass;
       this.speakers.hass = this.hass;
-      this.speakers.syncLive(); // #103: starts once hass has a connection (only while the speakers store is in use)
+      this.speakers.syncLive(); // #103: starts once hass has a connection (and keeps the registry ids current)
       this.syncMa(); // 2.4: once hass has a connection
       const id = this._config.entity!;
       const a = this.hass.states[id], b = old?.states[id];
       if (!old) this.queue.refreshSoon(0);
-      else if (a !== b && (a?.state !== b?.state || a?.attributes?.media_content_id !== b?.attributes?.media_content_id
+      // without the live feed driving it (see feedDrivesQueue), the queue follows Home Assistant's state changes
+      else if (a !== b && !this.feedDrivesQueue() && (a?.state !== b?.state || a?.attributes?.media_content_id !== b?.attributes?.media_content_id
         || a?.attributes?.media_title !== b?.attributes?.media_title || a?.attributes?.shuffle !== b?.attributes?.shuffle)) this.queue.refreshSoon();
     }
   }
@@ -698,7 +701,6 @@ export class JukeboxCard extends LitElement {
       this._config = this.effective();
       this.queue.entity = this.player();
       this.queue.refreshSoon(0);
-      this.stopPush(); this.startPush();
     }
   }
   /** speakers on the pill (see liveCount) */
