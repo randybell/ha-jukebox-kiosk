@@ -4,6 +4,24 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 1.0.0 — 2026-11-24
+
+- The card and the Jukebox Kiosk integration must be updated together. A card you already have keeps its speaker if that speaker is a Music Assistant player. A new card starts with no speaker: pick one under **Player** in the card's settings, or the card shows "Specify an entity from within the media_player domain".
+- The card now finds speakers by their Music Assistant player id from Home Assistant's entity registry, instead of matching names. Only Music Assistant players are listed for rooms and targets; other media players are left out. A configured player that is not a Music Assistant player shows Home Assistant's entity warning. (#99)
+- Speakers and the Queue screen now follow Music Assistant as soon as something changes, instead of the card checking over and over. Changes made in Music Assistant's own app show on the card without waiting. (#103)
+- The Queue screen now follows the queue Music Assistant is actually playing on that speaker, the same way Music Assistant's own app does. If the speaker is idle, or is playing from another source (for example AirPlay or Spotify Connect) so there is no Music Assistant queue, the Queue screen says **Nothing queued on this speaker** instead of showing an error, and Autoplay is hidden. When a queue starts on that speaker, the Queue screen picks it up by itself. (#100)
+- When Home Assistant loses its connection to Music Assistant, the header shows **Music Assistant is offline**. The speaker button in the header, the Speakers panel, the speaker rows and **More speakers** button on Now Playing, the Up next strip, and the Queue screen are greyed out and can't be used, and an open Speakers panel closes. Library and Search are unchanged. When Music Assistant comes back, the card reloads the speakers and the queue so they match what is playing now.
+- On Now Playing in landscape, the album art is now sized from the actual size of its row, so it stays a fitted square and no longer overflows or gets clipped at the sides after the screen saver or Stage closes, or when the layout changes (for example full screen, turning the screen, or leaving the card and coming back). (#159)
+- When Music Assistant keeps the queue going by itself, the Autoplay pill on the Queue screen now shows clearly on (filled with the theme's active color), and the **Radio - Autoplay** pill on Now Playing shows on to match. The pills still cannot be tapped in that state. (#157, #158)
+
+## 0.9.3 — 2026-11-22
+
+- In the Library, artist, album and playlist tiles no longer have the arrow button in the top-right corner, and neither do podcast tiles when the Jukebox Kiosk integration provides podcast episodes. Tapping the tile already opens its page, so the arrow did the same thing twice. The heart in the top-left corner stays, and the small arrow at the end of Library rows hasn't changed. (#151)
+- On the Queue screen, the Autoplay pill now fills with the theme's active color when Autoplay is on, the same as on Now Playing.
+- On the Queue screen, Repeat no longer greys out the Autoplay pill. Tapping it switches Music Assistant's Autoplay on or off even while Repeat is on.
+- On the Queue screen, the small arrow next to the Autoplay pill is gone. Tap the pill to turn Autoplay on or off. When Music Assistant offers a choice of where Autoplay picks music from, press and hold the pill to open the **Autoplay from** pop-up. That pop-up now looks like the card's other pop-ups, with a **Cancel** row at the bottom (**Back** while choosing a playlist).
+- On Now Playing, **Radio - Autoplay** is now a status pill only: it matches the size and lettering of the **Playing on** pill on the same row and fills in when Autoplay is on. Tapping it does nothing; turn Autoplay on or off from the Queue screen. It is still hidden while a radio station or other live stream plays, when the queue isn't active, or when Music Assistant doesn't offer Autoplay.
+
 ## 0.9.2 — 2026-11-20
 
 - On Now Playing, the Autoplay button is now called **Radio - Autoplay**. It is no longer greyed out while Repeat is on or when Music Assistant keeps the queue going by itself: tapping it always switches Music Assistant's Autoplay on or off. It is still hidden while a radio station or other live stream plays, when the queue isn't active, or when Music Assistant doesn't offer Autoplay. The Queue's Autoplay button hasn't changed.
