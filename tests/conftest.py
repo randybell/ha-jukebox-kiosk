@@ -53,6 +53,22 @@ def _qi(n: int) -> dict[str, Any]:
     }
 
 
+class FakePlayers(dict):
+    """players/get answers by id, and the client's in-memory player list (client.players.players)."""
+
+    @property
+    def players(self) -> list[Any]:
+        return list(self.values())
+
+
+class FakeQueues(dict):
+    """The client's in-memory queue list (client.player_queues.player_queues)."""
+
+    @property
+    def player_queues(self) -> list[Any]:
+        return list(self.values())
+
+
 class FakeMa:
     """Records send_command calls and answers from a small table."""
 
@@ -62,7 +78,8 @@ class FakeMa:
         self.queue = [_qi(n) for n in range(10)]
         self.subs: list[tuple[Any, Any, Any]] = []
         self.sleep_timers: dict[str, float | None] = {}
-        self.players: dict[str, dict[str, Any]] = {}
+        self.players: FakePlayers = FakePlayers()
+        self.player_queues: FakeQueues = FakeQueues()
         self.get_hook: Any = None  # optional awaitable run before players/get
         self.autoplay_key = "autoplay_enabled"  # older MA: "dont_stop_the_music_enabled"; None: no field
         self.active = True

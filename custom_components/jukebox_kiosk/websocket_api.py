@@ -30,6 +30,8 @@ from .const import (
     AUTOPLAY_MODES,
     AUTOPLAY_PLAYLIST_KEY,
     DOMAIN,
+    LIVE_EVENTS,
+    LIVE_QUEUE_EVENTS,
     MA_COMMANDS,
     NO_WRITE_ARG_KEYS,
     PLAYER_ARG_KEYS,
@@ -274,6 +276,8 @@ async def ws_capabilities(hass: HomeAssistant, connection: websocket_api.ActiveC
                 "search_providers": has(PermClass.READ),
                 # #99: jukebox_kiosk/player_ids, the MA player id of every MA media_player (HA entity registry)
                 "player_ids": has(PermClass.READ),
+                # #103: jukebox_kiosk/subscribe_live, MA's players and queues as a snapshot, then each pushed change
+                "live_feed": has(PermClass.READ),
             },
         },
     )
@@ -679,6 +683,101 @@ async def ws_subscribe_queue(
     connection.send_result(msg_id, {"queue_id": queue_id})
 
 
+def _live_dict(obj: Any) -> dict[str, Any] | None:
+    """A player or queue from the MA client's in-memory lists (a model with to_dict, or a plain dict) as a dict."""
+    if isinstance(obj, dict):
+        return obj
+    to_dict = getattr(obj, "to_dict", None)
+    if not callable(to_dict):
+        return None
+    try:
+        out = to_dict()
+    except Exception:  # noqa: BLE001 - one bad model must not break the snapshot
+        return None
+    return out if isinstance(out, dict) else None
+
+
+def _live_items(container: Any, attr: str) -> list[dict[str, Any]]:
+    """client.players.players / client.player_queues.player_queues as dicts (the lists the client keeps from MA's events)."""
+    items = getattr(container, attr, None) if container is not None else None
+    if callable(items):  # pragma: no cover - defensive, both are properties in music-assistant-client 1.5/1.6
+        items = items()
+    out: list[dict[str, Any]] = []
+    for item in items or ():
+        data = _live_dict(item)
+        if data is not None:
+            out.append(data)
+    return out
+
+
+def _may_read_queue(hass: HomeAssistant, user: User | None, queue_id: Any) -> bool:
+    """Queues reach a non-admin only for players whose Home Assistant entity they may read (as player_queues/get)."""
+    if user is not None and user.is_admin:
+        return True
+    if not isinstance(queue_id, str) or not queue_id:
+        return False
+    entity_id = entity_for_player(hass, queue_id)
+    if entity_id is None:
+        return False
+    try:
+        check_entity(user, entity_id, control=False)
+    except Unauthorized:
+        return False
+    return True
+
+
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/subscribe_live"})
+@websocket_api.async_response
+@_wrap
+async def ws_subscribe_live(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """#103: Music Assistant's players and queues, live, the way Music Assistant's own app keeps them.
+
+    One full snapshot first ({"seq": 1, "kind": "snapshot", "players": [...], "queues": [...]}), built from the lists
+    the MA client already keeps in memory (no MA call), then every pushed change as
+    {"seq": n, "kind": "event", "event": ..., "object_id": ..., "data": ...}. `seq` counts up by one per message on
+    this subscription, so the card can tell a missed or late message and ask for a fresh snapshot.
+
+    Players are sent as players/all sends them (permission class read). Queues reach a non-admin only for players
+    whose entity they may read, as player_queues/get. queue_time_updated is not forwarded.
+    """
+    _e, policy, client = _context(hass)
+    user = connection.user
+    check_class(user, policy, PermClass.READ)
+    msg_id = msg["id"]
+    state = {"seq": 0}
+
+    def _emit(payload: dict[str, Any]) -> None:
+        state["seq"] += 1
+        connection.send_message(websocket_api.event_message(msg_id, {"seq": state["seq"], **payload}))
+
+    @callback
+    def _on_event(event: Any) -> None:
+        name = str(getattr(getattr(event, "event", None), "value", getattr(event, "event", "")))
+        if name not in LIVE_EVENTS:
+            return
+        object_id = getattr(event, "object_id", None)
+        if name in LIVE_QUEUE_EVENTS and not _may_read_queue(hass, user, object_id):
+            return
+        data = getattr(event, "data", None)
+        if data is not None and not isinstance(data, (dict, list, str, int, float, bool)):
+            data = _live_dict(data)
+        _emit({"kind": "event", "event": name, "object_id": object_id, "data": data})
+
+    from music_assistant_models.enums import EventType  # noqa: PLC0415
+
+    # listen first, then read the lists, with no await in between: no change can fall between the two
+    connection.subscriptions[msg_id] = client.subscribe(_on_event, tuple(EventType(e) for e in LIVE_EVENTS), None)
+    players = _live_items(getattr(client, "players", None), "players")
+    queues = [
+        q for q in _live_items(getattr(client, "player_queues", None), "player_queues")
+        if _may_read_queue(hass, user, q.get("queue_id"))
+    ]
+    connection.send_result(msg_id)
+    _emit({"kind": "snapshot", "players": players, "queues": queues})
+
+
 def _expires_payload(raw: Any) -> dict[str, Any]:
     """Shape MA's sleep_timer get/set return (unix seconds or None) for the card."""
     exp = raw if isinstance(raw, (int, float)) and raw > 0 else None
@@ -917,6 +1016,7 @@ HANDLERS = (
     ws_favorite_current,
     ws_unfavorite_current,
     ws_subscribe_queue,
+    ws_subscribe_live,
     ws_sleep_timer_get,
     ws_sleep_timer_set,
     ws_sleep_timer_clear,
