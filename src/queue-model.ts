@@ -84,6 +84,8 @@ export class QueueModel {
   private subs = new Set<(s: QueueSnapshot) => void>();
   private seq = 0;
   private timer?: number;
+  /** 2.4: Music Assistant is offline (set by the card) */
+  private offline = false;
 
   subscribe(fn: (s: QueueSnapshot) => void) { this.subs.add(fn); fn(this.snap); return () => this.subs.delete(fn); }
   private set(p: Partial<QueueSnapshot>) { this.snap = { ...this.snap, ...p }; this.subs.forEach((f) => f(this.snap)); }
@@ -101,11 +103,23 @@ export class QueueModel {
     return this.upNext.length;
   }
 
+  /**
+   * 2.4: while Music Assistant is offline nothing is read (it could only fail, and the card already shows its one
+   * "Music Assistant is offline" notice): the last queue stays, greyed out by the card, and an answer still on its way is
+   * dropped. The card reads the queue fresh when Music Assistant is back.
+   */
+  setOffline(off: boolean) {
+    if (off === this.offline) return;
+    this.offline = off;
+    if (!off) return;
+    this.seq++; window.clearTimeout(this.timer);
+    if (this.snap.loading || this.snap.error) this.set({ loading: false, error: '' });
+  }
   /** Debounced refresh (state changes arrive in bursts). */
   refreshSoon(ms = 350) { window.clearTimeout(this.timer); this.timer = window.setTimeout(() => this.refresh(), ms); }
 
   async refresh() {
-    const hass = this.hass; if (!hass) return;
+    const hass = this.hass; if (!hass || this.offline) return;
     if (!this.entity) { this.set({ loading: false, error: '' }); return; }
     const seq = ++this.seq;
     this.set({ loading: true });

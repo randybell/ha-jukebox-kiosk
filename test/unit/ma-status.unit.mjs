@@ -7,13 +7,18 @@ import { mkdirSync } from 'node:fs';
 
 const OUT = new URL('../tmp/unit-ma-status/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
-const bundle = await rollup({ input: ['src/ma-status.ts', 'src/backend/kiosk.ts', 'src/backend/types.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
+const bundle = await rollup({ input: ['src/ma-status.ts', 'src/backend/kiosk.ts', 'src/backend/types.ts', 'src/queue-model.ts'], plugins: [resolve(), typescript({ tsconfig: './tsconfig.json', outDir: OUT, noEmitOnError: true })] });
 await bundle.write({ dir: OUT, format: 'es', entryFileNames: '[name].mjs', chunkFileNames: '[name]-[hash].mjs' });
 await bundle.close();
 
 const { MaStatus } = await import(OUT + 'ma-status.mjs');
 const K = await import(OUT + 'kiosk.mjs');
 const T = await import(OUT + 'types.mjs');
+globalThis.window ??= globalThis;
+globalThis.HTMLElement ??= class {};
+globalThis.customElements ??= { get: () => undefined, define: () => {} };
+globalThis.document ??= { createElement: () => ({}), createComment: () => ({}), createTreeWalker: () => ({}), importNode: () => ({}) };
+const { QueueModel } = await import(OUT + 'queue-model.mjs');
 
 let failures = 0, total = 0;
 function check(name, ok, info = '') { total++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`); }
@@ -83,6 +88,31 @@ const hass = { connection: {} };
   s.sync(be, hass); s.stop(); await tick(); await tick();
   late({ connected: false });
   check('MS13 a subscription stopped before it resolved is closed, and its messages are ignored', be.unsubs === 1 && s.online && heard.length === 0);
+}
+{
+  // the queue model reads nothing while Music Assistant is offline; the last queue stays; an answer on its way is dropped
+  let calls = 0, answer;
+  const win = (n) => ({ items: Array.from({ length: n }, (_, i) => ({ queue_item_id: `q${i}`, media_title: `S${i}` })), queueId: 'qid', currentIndex: 0, total: n });
+  const q = new QueueModel();
+  q.hass = { states: {} }; q.entity = 'media_player.room';
+  q.backend = { queueWindow: () => { calls++; return new Promise((r) => { answer = r; }); } };
+  const p1 = q.refresh(); answer(win(3)); await p1;
+  const p2 = q.refresh();
+  q.setOffline(true);
+  answer(win(9)); await p2;
+  check('MQ1 offline: the answer that was on its way is dropped, the last queue stays, no error and not loading',
+    q.snap.items.length === 3 && !q.snap.error && !q.snap.loading, J({ n: q.snap.items.length, e: q.snap.error, l: q.snap.loading }));
+  const c0 = calls;
+  await q.refresh();
+  check('MQ2 offline: refresh reads nothing', calls === c0);
+  q.setOffline(false);
+  const p3 = q.refresh(); answer(win(5)); await p3;
+  check('MQ3 back: the queue is read again', calls === c0 + 1 && q.snap.items.length === 5);
+  q.backend = { queueWindow: async () => { throw new Error('Music Assistant is not loaded'); } };
+  await q.refresh();
+  const hadError = !!q.snap.error;
+  q.setOffline(true);
+  check('MQ4 going offline clears an error that came just before it (the header notice says it once)', hadError && !q.snap.error);
 }
 console.warn = origWarn;
 console.log(`\n${total - failures}/${total} ma-status checks passed`);

@@ -259,6 +259,7 @@ export class JukeboxCard extends LitElement {
   /** 2.4: Music Assistant went away (notice on, Speakers panel closed: its controls are greyed out) or came back (fresh reload) */
   private onMaStatus = (back: boolean) => {
     this._maOff = !this.ma.online;
+    this.queue.setOffline(this._maOff);
     if (this._maOff) this._spk = false;
     if (back) this.freshReload();
   };

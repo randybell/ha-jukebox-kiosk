@@ -105,6 +105,12 @@ const greyed = (p) => ev(p, `JSON.stringify({
   await ev(p, `window.__maOffline(true)`);
   check('MO14 fixed mode: the notice shows too, the Queue screen is greyed out, and no live feed is opened',
     await wait(p, OFF_SHOWN) && (await greyed(p)).queue && (await count(p, 'subscribe_live')) === 0);
+  await ev(p, `window.__setAttrs('media_player.everywhere', {}, 'unavailable')`); // HA's MA entities go unavailable too
+  await sleep(800);
+  check('MO14b one notice only: the Queue screen keeps its last songs (greyed) instead of a second "Queue unavailable" error',
+    (await ev(p, `!/Queue unavailable/.test(${QV}.textContent) && ${QV}.querySelectorAll('.qr[data-id], .qg [data-id]').length > 0`)) && !(await ev(p, `__card.queue.snap.error`)),
+    await ev(p, `${QV}.querySelector('.empty')?.textContent.trim() ?? ''`));
+  await ev(p, `window.__setAttrs('media_player.everywhere', {}, 'playing')`);
   const qi = await count(p, 'queue_items');
   await ev(p, `window.__maOffline(false)`);
   check('MO15 fixed mode: back by itself, with a fresh queue read and the queue rows shown', await wait(p, `!(${OFF_SHOWN})`)
