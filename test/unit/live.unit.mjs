@@ -82,6 +82,49 @@ const evt = (seq, event, object_id, data) => ({ seq, kind: 'event', event, objec
   check('U24 a players/all answer with no live change meanwhile is used (keeps the list right if the feed goes quiet)', store.players.get(A).volume_level === 77);
   check('U25 a gap asks for a fresh snapshot (closes, then re-subscribes only while in use)', (() => { store.onLive(evt(9, 'player_updated', A, { player_id: A })); return store.live.ready === false; })());
 }
+{
+  // 2.4: Home Assistant lost its Music Assistant connection: 'offline', then the fresh snapshot on the same subscription
+  const s = new LiveState();
+  s.apply(snap());
+  s.apply(evt(2, 'player_updated', A, { player_id: A, volume_level: 40 }));
+  check('LO1 offline (next number) is applied: the lists stay but are no longer current', s.apply({ seq: 3, kind: 'offline' }) === 'offline' && s.ready === false && s.players.size === 3 && s.seq === 3);
+  check('LO2 a change after offline and before the fresh snapshot is a gap', s.apply(evt(4, 'player_updated', A, { player_id: A })) === 'gap');
+  const fresh = { seq: 4, kind: 'snapshot', players: [{ ...pA, volume_level: 12 }], queues: [{ queue_id: GRP, active: true, items: 2 }] };
+  check('LO3 the fresh snapshot (seq counting on) replaces everything, and changes follow it', s.apply(fresh) === 'ok' && s.ready && s.players.size === 1 && s.players.get(A).volume_level === 12
+    && s.queues.size === 1 && s.apply(evt(5, 'player_updated', A, { player_id: A, volume_level: 13 })) === 'ok' && s.players.get(A).volume_level === 13);
+  check('LO4 a repeated (old) offline is dropped', s.apply({ seq: 5, kind: 'offline' }) === 'old' && s.ready);
+  const t = new LiveState();
+  check('LO5 a subscription made while MA is offline starts with offline (seq 1), then the snapshot', t.apply({ seq: 1, kind: 'offline' }) === 'offline' && !t.ready && t.apply(snap(2)) === 'ok' && t.ready && t.seq === 2);
+}
+{
+  // SpeakerStore: offline is not a gap (no resubscribe); reload() reads the registry ids, group configs and players again
+  globalThis.window ??= globalThis;
+  let subs = 0, ids = 0, alls = 0;
+  const be = { caps: { send: true, speakers: true, live: true }, subscribeLive: async () => { subs++; return () => {}; },
+    send: async (c) => { if (c === 'players/all') alls++; return c === 'players/all' ? [pA, pB, pG] : {}; }, playerIds: async () => { ids++; return new Map(); }, onChange: () => () => {} };
+  const store = new MA.SpeakerStore(be);
+  const reg = {};
+  store.hass = { entities: reg, connection: {} };
+  store.start();
+  await new Promise((r) => setTimeout(r, 10));
+  store.onLive(snap());
+  const subs0 = subs;
+  store.onLive({ seq: 2, kind: 'offline' });
+  check('LO6 offline keeps the live subscription (no resubscribe) and marks the feed not current', subs === subs0 && store.live.ready === false, J({ subs, subs0 }));
+  store.configTried.add(GRP); store.configs.set(GRP, { members: [] });
+  const ids0 = ids, alls0 = alls;
+  store.reload();
+  await new Promise((r) => setTimeout(r, 10));
+  check('LO7 reload reads the registry ids (same registry), group configs and players/all again', ids === ids0 + 1 && alls === alls0 + 1 && store.configTried.has(GRP), J({ ids, ids0, alls, alls0 }));
+  store.stopPolling?.();
+  store.stopLive();
+  const idle = new MA.SpeakerStore(be);
+  idle.hass = { entities: reg, connection: {} };
+  const a1 = alls;
+  idle.reload();
+  await new Promise((r) => setTimeout(r, 10));
+  check('LO8 a store not in use (fixed mode) makes no MA call on reload', alls === a1);
+}
 
 console.log(`\n${total - failures}/${total} live checks passed`);
 process.exit(failures ? 1 : 0);

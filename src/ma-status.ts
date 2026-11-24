@@ -14,6 +14,8 @@ export class MaStatus {
   /** false only while the integration says Home Assistant has no Music Assistant connection */
   online = true;
   private sub?: { be: MaBackend; off?: () => void; closed: boolean };
+  /** the backend whose subscription failed: not asked again on every hass update (a new backend, or stop(), clears it) */
+  private failed?: MaBackend;
   private fns = new Set<(back: boolean) => void>();
 
   onChange(fn: (back: boolean) => void) { this.fns.add(fn); return () => { this.fns.delete(fn); }; }
@@ -21,7 +23,7 @@ export class MaStatus {
   /** subscribe for this backend once it can say (caps.maStatus) and hass has a websocket; anything else stops */
   sync(be: MaBackend | undefined, hass: HomeAssistant | undefined) {
     if (!be?.subscribeMaStatus || !be.caps.maStatus || !hass?.connection) { this.stop(); return; }
-    if (this.sub?.be === be) return;
+    if (this.sub?.be === be || this.failed === be) return;
     this.stop();
     const sub: { be: MaBackend; off?: () => void; closed: boolean } = { be, closed: false };
     this.sub = sub;
@@ -29,7 +31,7 @@ export class MaStatus {
       .then((off) => { if (sub.closed) off(); else sub.off = off; })
       .catch((e) => {
         console.warn('[jukebox-card] Music Assistant status unavailable', e);
-        if (this.sub === sub) { sub.closed = true; this.sub = undefined; this.set(true, false); }
+        if (this.sub === sub) { sub.closed = true; this.sub = undefined; this.failed = be; this.set(true, false); }
       });
   }
 
@@ -37,6 +39,7 @@ export class MaStatus {
   stop() {
     const sub = this.sub;
     this.sub = undefined;
+    this.failed = undefined;
     if (sub) { sub.closed = true; sub.off?.(); }
     this.set(true, false);
   }
