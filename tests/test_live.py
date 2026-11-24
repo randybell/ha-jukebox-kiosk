@@ -136,7 +136,7 @@ async def test_empty_client_lists(hass: HomeAssistant, hass_ws_client: Any, admi
     res = await _call(ws, type="jukebox_kiosk/subscribe_live")
     assert res["success"]
     snap = (await ws.receive_json())["event"]
-    assert snap == {"seq": 1, "kind": "snapshot", "players": [], "queues": []}
+    assert snap == {"seq": 1, "kind": "snapshot", "players": [], "queues": [], "active_queues": {}}
     await _call(ws, type="unsubscribe_events", subscription=res["id"])
 
 

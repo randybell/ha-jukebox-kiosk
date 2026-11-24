@@ -50,7 +50,7 @@ from .const import (
 )
 from .link import MaLink, async_get_link
 from .permissions import Policy, allowed_classes, check_class, check_entity, is_guest
-from .players import PlayerNotFound, active_queue_id, entity_for_player, player_id_for_entity, player_ids, queue_id_for_entity
+from .players import PlayerNotFound, active_queue_id, active_queues, entity_for_player, player_id_for_entity, player_ids, queue_id_for_entity
 
 if TYPE_CHECKING:
     from music_assistant_client import MusicAssistantClient
@@ -783,6 +783,9 @@ async def ws_subscribe_queue(
 ) -> None:
     """Push a small event whenever the entity's active MA queue or its items change.
 
+    2.5: the card no longer uses this (it follows its queue from subscribe_live's active queues). It stays registered for
+    one release so a tablet still running a cached older card keeps working until it reloads (SOW 5, 6).
+
     #100: the queue followed is the one the active-queue rule gives, worked out again on every player or queue change
     (from the MA client's in-memory lists, no MA call). When it moves (the speaker joins or leaves a group, starts or
     stops playing its own queue, or an external source takes over), {"event": "queue_changed", "queue_id": new or null}
@@ -900,6 +903,11 @@ async def ws_subscribe_live(
 
     Players are sent as players/all sends them (permission class read). Queues reach a non-admin only for players
     whose entity they may read, as player_queues/get. queue_time_updated is not forwarded.
+
+    2.5: the feed also says which queue each player is playing, by the one active-queue rule (players.active_queue_id,
+    Music Assistant's app rule), so the card follows its speaker's queue from the feed and never needs its own copy of
+    the rule: the snapshot carries "active_queues" ({player_id: queue_id or null}), and after any change that moves
+    one, {"seq": n, "kind": "active_queue", "player_id": ..., "queue_id": ... or null} follows the change's own message.
     """
     link = _link(hass)
     policy = _entry(hass).runtime_data.policy
@@ -907,23 +915,34 @@ async def ws_subscribe_live(
     check_class(user, policy, PermClass.READ)
     msg_id = msg["id"]
     state = {"seq": 0}
+    # 2.5: each player's active queue as last sent (a player missing here counts as no queue)
+    held: dict[str, str | None] = {}
 
     def _emit(payload: dict[str, Any]) -> None:
         state["seq"] += 1
         connection.send_message(websocket_api.event_message(msg_id, {"seq": state["seq"], **payload}))
 
+    def _follow_queues(client: Any) -> None:
+        # the client updates its own lists before subscribers run (both are its listeners, in order)
+        now = active_queues(client)
+        for player_id, queue_id in now.items():
+            if held.get(player_id) != queue_id:
+                _emit({"kind": "active_queue", "player_id": player_id, "queue_id": queue_id})
+        held.clear()
+        held.update(now)
+
     @callback
-    def _on_event(_client: Any, event: Any) -> None:
+    def _on_event(client: Any, event: Any) -> None:
         name = str(getattr(getattr(event, "event", None), "value", getattr(event, "event", "")))
         if name not in LIVE_EVENTS:
             return
         object_id = getattr(event, "object_id", None)
-        if name in LIVE_QUEUE_EVENTS and not _may_read_queue(hass, user, object_id):
-            return
-        data = getattr(event, "data", None)
-        if data is not None and not isinstance(data, (dict, list, str, int, float, bool)):
-            data = _live_dict(data)
-        _emit({"kind": "event", "event": name, "object_id": object_id, "data": data})
+        if name not in LIVE_QUEUE_EVENTS or _may_read_queue(hass, user, object_id):
+            data = getattr(event, "data", None)
+            if data is not None and not isinstance(data, (dict, list, str, int, float, bool)):
+                data = _live_dict(data)
+            _emit({"kind": "event", "event": name, "object_id": object_id, "data": data})
+        _follow_queues(client)
 
     def _snapshot(client: Any) -> None:
         players = _live_items(getattr(client, "players", None), "players")
@@ -931,7 +950,9 @@ async def ws_subscribe_live(
             q for q in _live_items(getattr(client, "player_queues", None), "player_queues")
             if _may_read_queue(hass, user, q.get("queue_id"))
         ]
-        _emit({"kind": "snapshot", "players": players, "queues": queues})
+        held.clear()
+        held.update(active_queues(client))
+        _emit({"kind": "snapshot", "players": players, "queues": queues, "active_queues": dict(held)})
 
     @callback
     def _changed(client: Any | None) -> None:

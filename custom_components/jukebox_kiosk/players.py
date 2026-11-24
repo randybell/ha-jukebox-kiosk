@@ -67,6 +67,22 @@ def active_queue_id(client: Any, player_id: str) -> str | None:
     return player_id if own is not None and _field(own, "active") is True else None
 
 
+def active_queues(client: Any) -> dict[str, str | None]:
+    """2.5: every player's active queue by the one rule (active_queue_id), from the MA client's in-memory lists.
+
+    The live feed sends this with its snapshot and then each change, so the card follows the queue that's playing on
+    its speaker without a copy of the rule and without the old entity-pinned subscribe_queue.
+    """
+    players = getattr(client, "players", None)
+    items = getattr(players, "players", None) if players is not None else None
+    out: dict[str, str | None] = {}
+    for player in items or ():
+        player_id = _field(player, "player_id")
+        if isinstance(player_id, str) and player_id:
+            out[player_id] = active_queue_id(client, player_id)
+    return out
+
+
 def queue_id_for_entity(hass: HomeAssistant, client: Any, entity_id: str) -> str | None:
     """Active MA queue for an MA media_player entity (active_queue_id on its registry player id), or None."""
     return active_queue_id(client, player_id_for_entity(hass, entity_id))
