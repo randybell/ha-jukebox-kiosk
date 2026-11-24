@@ -59,6 +59,12 @@ async function open(query = KC) {
 
   const qid = await ev(p, `__card.queue.snap.queueId`);
   check('AQ9 the queue id the card uses is the active queue the server named', qid === PID, String(qid));
+
+  // players.active_queue_id needs the own queue to be active, not to have songs: an active, empty own queue is that queue
+  await ev(p, `(window.__queues['${EVERY}'].items = [], window.__queues['${EVERY}'].index = -1, window.__queues['${EVERY}'].active = true, window.__setActiveSource('${PID}', null), window.__kioskPush('${EVERY}'))`);
+  const emptyOwn = await wait(p, `${QV}.querySelector('.empty') && !${QV}.querySelector('.empty[data-empty="no-queue"]') && /The queue is empty/.test(${QV}.querySelector('.empty b').textContent)`);
+  const aq = await p.evaluate(() => window.__hass.callWS({ type: 'jukebox_kiosk/active_queue', entity_id: 'media_player.everywhere' }));
+  check('AQ9b no active_source and an active but empty own queue: that queue ("The queue is empty"), not "Nothing queued"', emptyOwn && aq?.queue_id === PID, `${await emptyText(p)} ${J(aq)}`);
   await p.close();
 }
 
