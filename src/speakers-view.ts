@@ -133,7 +133,7 @@ export class JbSpeakers extends LitElement {
     const g = ma ? players.get(ma) : undefined;
     if (!g || isActive(g)) return { lines: [], list: [] };
     const rooms = mapRooms(roomsOf(c, hass), players, this.ids);
-    // starting speakers: the card's target members, else what players/all lists for the idle group (live 2.10.9: its current
+    // starting speakers: the card's target members, else what Music Assistant lists for the idle group (live 2.10.9: its current
     // members), else MA's configured defaults (config/players/get); static groups: their fixed list
     const cfg = this.store?.configs.get(ma!);
     const would = t?.members?.length ? t.members.map((e) => rooms.find((r) => r.entity === e)?.ma).filter((x): x is string => !!x)

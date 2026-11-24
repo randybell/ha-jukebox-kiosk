@@ -1,7 +1,7 @@
 /**
  * Speakers (0.5.0): pure helpers, no DOM, no hass calls. Unit-tested in test/unit/speakers.unit.mjs.
  *
- * Music Assistant facts this relies on (MA 2.10, players/all):
+ * Music Assistant facts this relies on (MA 2.10 player dicts, as players/all and the live feed send them):
  *  - group players (provider sync_group, type 'group'): static groups have static_group_members and no 'set_members'
  *    feature; dynamic groups support 'set_members' and have static_group_members = [] (their configured members are
  *    only a starting list, applied when the group powers on).
@@ -34,12 +34,23 @@ export interface MaPlayer {
   supported_features: string[];
   volume_level: number | null;
   current_media?: { title?: string; artist?: string; uri?: string } | null;
+  /* 2.6 groundwork: the rest of the Music Assistant fields the Build 3 Speakers panel needs (models 1.1.205 player.py),
+   * carried by the live feed and kept here. Nothing in Build 1 reads them. */
+  /** MA's group volume (0-100) of a group or a sync leader, null when MA has none */
+  group_volume: number | null;
+  group_volume_muted: boolean | null;
+  /** 'none', 'native', or the id of the control MA uses (PLAYER_CONTROL_*) */
+  volume_control: string;
+  mute_control: string;
+  enabled: boolean;
+  hide_in_ui: boolean;
 }
 export type Players = Map<string, MaPlayer>;
 export type Kind = 'static' | 'dynamic' | 'player';
 
 const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []);
-/** players/all → Map by player_id. Accepts a list or {items}. Unknown shapes give an empty map. Nothing is filtered on hide_in_ui. */
+/** MA player dicts (the live feed; the same shape as players/all) → Map by player_id. Accepts a list or {items}. Unknown
+ *  shapes give an empty map. Nothing is filtered on hide_in_ui or enabled (that is Build 3's list filtering). */
 export function parsePlayers(raw: unknown): Players {
   const list: any[] = Array.isArray(raw) ? raw : Array.isArray((raw as any)?.items) ? (raw as any).items : [];
   const m: Players = new Map();
@@ -54,6 +65,11 @@ export function parsePlayers(raw: unknown): Players {
       active_group: typeof p.active_group === 'string' ? p.active_group : null,
       supported_features: arr(p.supported_features), volume_level: typeof p.volume_level === 'number' ? p.volume_level : null,
       current_media: p.current_media && typeof p.current_media === 'object' ? p.current_media : null,
+      group_volume: typeof p.group_volume === 'number' ? p.group_volume : null,
+      group_volume_muted: typeof p.group_volume_muted === 'boolean' ? p.group_volume_muted : null,
+      volume_control: typeof p.volume_control === 'string' ? p.volume_control : 'none',
+      mute_control: typeof p.mute_control === 'string' ? p.mute_control : 'none',
+      enabled: p.enabled !== false, hide_in_ui: p.hide_in_ui === true,
     });
   }
   return m;

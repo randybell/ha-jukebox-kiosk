@@ -200,5 +200,25 @@ const evt = (seq, event, object_id, data) => ({ seq, kind: 'event', event, objec
   store.close();
 }
 
+{
+  // 2.6 groundwork: every Music Assistant field the Build 3 Speakers panel needs comes through the feed and is kept
+  const s = new LiveState();
+  const full = { player_id: 'grp_full', type: 'group', name: 'Upstairs', group_members: [A, B], static_group_members: [], synced_to: null, active_group: null,
+    can_group_with: [A, B, 'player_c'], supported_features: ['set_members', 'volume_set'], group_volume: 42, group_volume_muted: false,
+    volume_control: 'native', mute_control: 'none', enabled: true, available: true, hide_in_ui: true };
+  s.apply({ seq: 1, kind: 'snapshot', players: [full], queues: [] });
+  const g = s.players.get('grp_full');
+  check('G1 type, members, sync, can_group_with, features, group volume/mute, controls, enabled, available, hide_in_ui are all kept',
+    g.type === 'group' && J(g.group_members) === J([A, B]) && J(g.static_group_members) === '[]' && g.synced_to === null && g.active_group === null
+    && J(g.can_group_with) === J([A, B, 'player_c']) && g.supported_features.includes('set_members') && g.group_volume === 42 && g.group_volume_muted === false
+    && g.volume_control === 'native' && g.mute_control === 'none' && g.enabled === true && g.available === true && g.hide_in_ui === true, J(g));
+  s.apply({ seq: 2, kind: 'event', event: 'player_updated', object_id: 'grp_full', data: { player_id: 'grp_full', group_volume: 10, group_volume_muted: true, enabled: false } });
+  const h = s.players.get('grp_full');
+  check('G2 …and follow MA\'s changes (merged like MA\'s app)', h.group_volume === 10 && h.group_volume_muted === true && h.enabled === false && h.hide_in_ui === true);
+  s.apply({ seq: 3, kind: 'event', event: 'player_added', object_id: 'bare', data: { player_id: 'bare' } });
+  const b = s.players.get('bare');
+  check('G3 missing fields read as MA\'s defaults (no group volume, no control, enabled, shown)', b.group_volume === null && b.group_volume_muted === null && b.volume_control === 'none' && b.enabled && !b.hide_in_ui);
+}
+
 console.log(`\n${total - failures}/${total} live checks passed`);
 process.exit(failures ? 1 : 0);
