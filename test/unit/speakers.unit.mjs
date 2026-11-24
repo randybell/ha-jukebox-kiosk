@@ -158,7 +158,18 @@ async function model(hass) {
   const { hass, calls } = fakeHass(false);
   const qm = await model(hass);
   await qm.refresh();
-  check('U27 no queue_id from the server → the entity\'s active_queue', qm.snap.queueId === 'syncgroup_placeholder');
+  check('U27 #100 no queue_id from the server → no queue id (HA\'s active_queue attribute is never read)', qm.snap.queueId === undefined, String(qm.snap.queueId));
+}
+{
+  const { hass } = fakeHass();
+  const base = hass.callWS;
+  hass.callWS = async (msg) => String(msg.type).endsWith('/queue_items')
+    ? { queue_id: null, no_queue: true, current_index: null, index_in_buffer: null, current_item_id: null, total: 0, offset: 0, items: [] }
+    : base(msg);
+  const qm = await model(hass);
+  await qm.refresh();
+  const s = qm.snap;
+  check('U27b #100 no_queue → a normal empty state (noQueue, no error, no rows, no queue id)', s.noQueue === true && s.error === '' && s.items.length === 0 && s.queueId === undefined && !s.loading, JSON.stringify(s));
 }
 // ---------------- queue rows: Remove + Undo ----------------
 function undoHass({ addFail = false, itemsFail = false } = {}) {

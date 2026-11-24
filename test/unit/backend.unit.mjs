@@ -90,7 +90,10 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
     J(log.at(-1)) === J({ type: 'jukebox_kiosk/queue_items', entity_id: ENT, limit_before: 1, limit_after: 50 })
     && w.items.length === 2 && w.queueId === QID && w.currentIndex === 7 && w.bufferIndex === 8 && w.total === 40 && w.currentItemId === 'qi-7', J(w));
   const acts = [];
-  for (const a of ['play', 'up', 'down', 'next', 'remove']) { await k.queueAction(ENT, a, 'qi-9'); acts.push(log.at(-1)); }
+  for (const a of ['play', 'up', 'down', 'next', 'remove']) { await k.queueAction(ENT, a, 'qi-9', w.queueId); acts.push(log.at(-1)); }
+  const n0 = log.length, noQ = await k.queueAction(ENT, 'play', 'qi-9').catch((x) => x);
+  check('K4b #100 row action without the window\'s queue id: refused, nothing sent (HA\'s active_queue is never used)',
+    noQ?.message === 'Nothing queued on this speaker' && log.length === n0, String(noQ?.message));
   const want = [
     ['player_queues/play_index', { queue_id: QID, index: 'qi-9' }],
     ['player_queues/move_item', { queue_id: QID, queue_item_id: 'qi-9', pos_shift: -1 }],
@@ -211,19 +214,28 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
   check('N2 native: queue edits / track lists / unfavorite / raw commands are unsupported', e?.code === 'unsupported' && !n.caps.queueEdit && !n.caps.lyrics && !n.caps.send
     && (await n.itemTracks().catch((x) => x.code)) === 'unsupported' && (await n.send('x').catch((x) => x.code)) === 'unsupported');
 }
+{
+  const { hass } = fakeHass({ components: ['music_assistant'] });
+  hass.callService = async () => { throw Object.assign(new Error('No active queue found'), { code: 'home_assistant_error' }); };
+  const w = await new B.NativeBackend(() => hass).queueWindow(ENT, 10);
+  check('N3 #100 native: HA\'s "No active queue found" is the normal no-queue answer, not a failure', w.noQueue === true && w.items.length === 0, J(w));
+  hass.callService = async () => { throw new Error('Connection lost'); };
+  const e = await new B.NativeBackend(() => hass).queueWindow(ENT, 10).catch((x) => x);
+  check('N4 other get_queue failures still fail', e instanceof Error && /Connection lost/.test(e.message));
+}
 // ---------------- LyricsStore on the kiosk backend ----------------
 const playing = (uri, title = 'Placeholder Song', artist = 'Placeholder Band') => ({ entity_id: ENT, state: 'playing', attributes: { active_queue: QID, media_title: title, media_artist: artist, media_content_id: uri, media_duration: 200 } });
 const libItem = (n = 'Placeholder Song') => ({ item_id: '1', provider: 'library', name: n, uri: 'library://track/1', media_type: 'track', metadata: {},
   provider_mappings: [{ item_id: 'PROVIDER_TRACK_ID', provider_instance: 'apple_music--XXXXXXXX', available: true }] });
 const provItem = (n = 'Placeholder Song') => ({ item_id: 'PROVIDER_TRACK_ID', provider: 'apple_music--XXXXXXXX', name: n, uri: 'apple_music--XXXXXXXX://track/PROVIDER_TRACK_ID', media_type: 'track', metadata: {} });
-async function lyricsRun(maAnswer, { feats = { lyrics: true, ma_commands: true }, uri = 'library://track/1' } = {}) {
+async function lyricsRun(maAnswer, { feats = { lyrics: true, ma_commands: true }, uri = 'library://track/1', aq = () => ({ queue_id: QID }) } = {}) {
   LS.clear();
-  const { hass, log } = fakeHass({ answers: { capabilities: () => ({ features: feats }), ma: (m) => maAnswer(m.command, m.args) } });
+  const { hass, log } = fakeHass({ answers: { capabilities: () => ({ features: feats }), ma: (m) => maAnswer(m.command, m.args), ...(aq ? { active_queue: aq } : {}) } });
   const k = new B.KioskBackend(() => hass); await k.ready;
   const s = new S.LyricsStore(); s.backend = k;
   s.follow(hass, playing(uri));
   for (let i = 0; i < 100 && ['loading', 'idle'].includes(s.state.status); i++) await tick(10);
-  return { s, cmds: log.filter((m) => m.type === 'jukebox_kiosk/ma').map((m) => m.command), lyr: log.filter((m) => m.command === 'metadata/get_track_lyrics').map((m) => m.args.track),
+  return { s, log, cmds: log.filter((m) => m.type === 'jukebox_kiosk/ma').map((m) => m.command), lyr: log.filter((m) => m.command === 'metadata/get_track_lyrics').map((m) => m.args.track),
     byUri: log.filter((m) => m.command === 'music/item_by_uri').map((m) => m.args) };
 }
 {
@@ -264,6 +276,31 @@ async function lyricsRun(maAnswer, { feats = { lyrics: true, ma_commands: true }
     throw new Error('should not be called: ' + cmd);
   }, { uri: 'library://track/5' });
   check('Y4 no provider copy anywhere → "No lyrics", the library track is never sent', !r.cmds.includes('metadata/get_track_lyrics') && !noMap.cmds.includes('metadata/get_track_lyrics') && noMap.s.state.status === 'none', J({ a: r.cmds, b: noMap.cmds, st: noMap.s.state.status }));
+}
+{
+  // #100: the lyrics read the playing queue through the one active-queue lookup (jukebox_kiosk/active_queue)
+  const r = await lyricsRun((cmd) => {
+    if (cmd === 'music/item_by_uri') return libItem();
+    if (cmd === 'player_queues/get') return { queue_id: QID, current_item: { queue_item_id: 'q', media_item: provItem() } };
+    if (cmd === 'metadata/get_track_lyrics') return ['line', null];
+  }, { uri: 'library://track/11' });
+  const aq = r.log.filter((m) => m.type === 'jukebox_kiosk/active_queue');
+  const qg = r.log.find((m) => m.command === 'player_queues/get');
+  check('Y1b the queue comes from jukebox_kiosk/active_queue for the card\'s entity', aq.length === 1 && aq[0].entity_id === ENT && qg?.args.queue_id === QID, J({ aq, qg }));
+  const none = await lyricsRun((cmd, a) => {
+    if (cmd === 'music/item_by_uri') return a.uri.startsWith('library://') ? libItem() : provItem();
+    if (cmd === 'metadata/get_track_lyrics') return ['mapped line', null];
+    throw new Error('should not be called: ' + cmd);
+  }, { uri: 'library://track/12', aq: () => ({ queue_id: null }) });
+  check('Y1c no active queue (HA\'s active_queue attribute is ignored): no player_queues/get, the provider mapping is used',
+    !none.cmds.includes('player_queues/get') && none.cmds.includes('metadata/get_track_lyrics') && none.s.state.status === 'plain', J(none.cmds));
+  const old = await lyricsRun((cmd, a) => {
+    if (cmd === 'music/item_by_uri') return a.uri.startsWith('library://') ? libItem() : provItem();
+    if (cmd === 'metadata/get_track_lyrics') return ['mapped line', null];
+    throw new Error('should not be called: ' + cmd);
+  }, { uri: 'library://track/13', aq: null });
+  check('Y1d an integration without active_queue: no queue guess, the provider mapping still works',
+    !old.cmds.includes('player_queues/get') && old.s.state.status === 'plain', J(old.cmds));
 }
 {
   const r = await lyricsRun(() => { throw new Error('nope'); }, { feats: { lyrics: false, ma_commands: true }, uri: 'library://track/6' });
