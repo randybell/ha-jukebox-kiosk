@@ -17,7 +17,7 @@ import probatio
 from homeassistant.auth.models import User
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, Unauthorized
 
 from . import format as fmt
@@ -48,6 +48,7 @@ from .const import (
     is_denied,
     todo_verify_commands,
 )
+from .link import MaLink, async_get_link
 from .permissions import Policy, allowed_classes, check_class, check_entity, is_guest
 from .players import PlayerNotFound, active_queue_id, entity_for_player, player_id_for_entity, player_ids, queue_id_for_entity
 
@@ -101,6 +102,75 @@ def _context(hass: HomeAssistant) -> tuple[ConfigEntry, Policy, MusicAssistantCl
     entry = _entry(hass)
     data = entry.runtime_data
     return entry, data.policy, async_get_ma_client(hass, data.ma_entry_id)
+
+
+def _link(hass: HomeAssistant) -> MaLink:
+    """2.4: the Music Assistant connection Home Assistant holds for our MA entry, followed across MA restarts."""
+    return async_get_link(hass, _entry(hass).runtime_data.ma_entry_id)
+
+
+class _Follow:
+    """2.4: a websocket subscription's listener on the MA client, moved to each new client Home Assistant makes.
+
+    When MA drops out, Home Assistant reloads its music_assistant entry and builds a brand-new client (see link.py), so a
+    listener left on the old client would go quiet for good. The listener (`on_event(client, event)`, for `events`, no
+    id filter) is attached to the client held now, if any, and again to every new client; the old client's is removed,
+    and a late call from an old client is dropped. `changed(client | None)` runs right after each switch (None: the
+    client went away), so the subscription can tell the card and send fresh state, with no await between attaching to
+    the new client and reading its lists.
+    """
+
+    def __init__(
+        self,
+        link: MaLink,
+        events: tuple[Any, ...],
+        on_event: Callable[[Any, Any], None],
+        changed: Callable[[Any | None], None],
+    ) -> None:
+        self._events = events
+        self._on_event = on_event
+        self._changed = changed
+        self._detach: CALLBACK_TYPE | None = None
+        self.client: Any | None = link.client
+        self._attach()
+        self._unlink = link.async_listen(self._on_link)
+
+    @callback
+    def _attach(self) -> None:
+        client = self.client
+        if client is None:
+            return
+
+        @callback
+        def _relay(event: Any) -> None:
+            if self.client is client:
+                self._on_event(client, event)
+
+        self._detach = client.subscribe(_relay, self._events, None)
+
+    @callback
+    def _on_link(self, client: Any | None) -> None:
+        self._drop()
+        self.client = client
+        self._attach()
+        self._changed(client)
+
+    @callback
+    def _drop(self) -> None:
+        detach, self._detach = self._detach, None
+        if detach is None:
+            return
+        try:
+            detach()
+        except ValueError:  # the old client already dropped its listener list entry
+            pass
+
+    @callback
+    def close(self) -> None:
+        """Unsubscribe from the link and the current client (the websocket subscription ended)."""
+        self._unlink()
+        self._drop()
+        self.client = None
 
 
 def _player_ids_in(args: dict[str, Any]) -> list[str]:
@@ -280,6 +350,8 @@ async def ws_capabilities(hass: HomeAssistant, connection: websocket_api.ActiveC
                 "live_feed": has(PermClass.READ),
                 # #100: jukebox_kiosk/active_queue, the entity's active queue by Music Assistant's rule (or null)
                 "active_queue": has(PermClass.READ),
+                # 2.4: jukebox_kiosk/subscribe_ma_status, {"connected": bool} now and whenever HA's MA connection changes
+                "ma_status": True,
             },
         },
     )
@@ -715,31 +787,54 @@ async def ws_subscribe_queue(
     (from the MA client's in-memory lists, no MA call). When it moves (the speaker joins or leaves a group, starts or
     stops playing its own queue, or an external source takes over), {"event": "queue_changed", "queue_id": new or null}
     is sent, so the Queue screen follows the music. Item changes are sent only for the queue being followed.
+
+    2.4: the listener follows Home Assistant's Music Assistant connection (_Follow). When the client goes away,
+    {"event": "offline", "queue_id": null} is sent; when HA has a new client, the listener moves to it and
+    {"event": "queue_changed", "queue_id": ...} is always sent, so the card reads the queue fresh. The subscription is
+    accepted while MA is offline (it starts with "offline") and comes alive when MA returns.
     """
-    _e, policy, client = _context(hass)
+    link = _link(hass)
+    policy = _entry(hass).runtime_data.policy
     user = connection.user
     check_class(user, policy, PermClass.READ)
     check_entity(user, msg["entity_id"], control=False)
     player_id = player_id_for_entity(hass, msg["entity_id"])
-    held: dict[str, str | None] = {"queue": active_queue_id(client, player_id)}
+    held: dict[str, str | None] = {"queue": None}
     msg_id = msg["id"]
 
+    def _push(event: str, queue_id: str | None) -> None:
+        connection.send_message(websocket_api.event_message(msg_id, {"event": event, "queue_id": queue_id}))
+
     @callback
-    def _on_event(event: Any) -> None:
+    def _on_event(client: Any, event: Any) -> None:
         name = str(getattr(getattr(event, "event", None), "value", getattr(event, "event", "")))
         # the client updates its own lists before subscribers run (both are its listeners, in order)
         now = active_queue_id(client, player_id)
         if now != held["queue"]:
             held["queue"] = now
-            connection.send_message(websocket_api.event_message(msg_id, {"event": "queue_changed", "queue_id": now}))
+            _push("queue_changed", now)
             return
         if name in QUEUE_EVENTS and now is not None and getattr(event, "object_id", None) == now:
-            connection.send_message(websocket_api.event_message(msg_id, {"event": name, "queue_id": now}))
+            _push(name, now)
+
+    @callback
+    def _changed(client: Any | None) -> None:
+        if client is None:
+            held["queue"] = None
+            _push("offline", None)
+            return
+        held["queue"] = active_queue_id(client, player_id)
+        _push("queue_changed", held["queue"])
 
     from music_assistant_models.enums import EventType  # noqa: PLC0415
 
-    connection.subscriptions[msg_id] = client.subscribe(_on_event, tuple(EventType(e) for e in LIVE_EVENTS), None)
+    follow = _Follow(link, tuple(EventType(e) for e in LIVE_EVENTS), _on_event, _changed)
+    connection.subscriptions[msg_id] = follow.close
+    if follow.client is not None:
+        held["queue"] = active_queue_id(follow.client, player_id)
     connection.send_result(msg_id, {"queue_id": held["queue"]})
+    if follow.client is None:
+        _push("offline", None)
 
 
 def _live_dict(obj: Any) -> dict[str, Any] | None:
@@ -798,10 +893,16 @@ async def ws_subscribe_live(
     {"seq": n, "kind": "event", "event": ..., "object_id": ..., "data": ...}. `seq` counts up by one per message on
     this subscription, so the card can tell a missed or late message and ask for a fresh snapshot.
 
+    2.4: the feed follows Home Assistant's Music Assistant connection (_Follow). When the client goes away,
+    {"seq": n, "kind": "offline"} is sent and nothing more until HA has a new client; then the listener moves to the new
+    client and a fresh full snapshot follows (the same subscription, `seq` keeps counting). The subscription is accepted
+    while MA is offline: it starts with "offline" and the first snapshot comes when MA returns.
+
     Players are sent as players/all sends them (permission class read). Queues reach a non-admin only for players
     whose entity they may read, as player_queues/get. queue_time_updated is not forwarded.
     """
-    _e, policy, client = _context(hass)
+    link = _link(hass)
+    policy = _entry(hass).runtime_data.policy
     user = connection.user
     check_class(user, policy, PermClass.READ)
     msg_id = msg["id"]
@@ -812,7 +913,7 @@ async def ws_subscribe_live(
         connection.send_message(websocket_api.event_message(msg_id, {"seq": state["seq"], **payload}))
 
     @callback
-    def _on_event(event: Any) -> None:
+    def _on_event(_client: Any, event: Any) -> None:
         name = str(getattr(getattr(event, "event", None), "value", getattr(event, "event", "")))
         if name not in LIVE_EVENTS:
             return
@@ -824,17 +925,54 @@ async def ws_subscribe_live(
             data = _live_dict(data)
         _emit({"kind": "event", "event": name, "object_id": object_id, "data": data})
 
+    def _snapshot(client: Any) -> None:
+        players = _live_items(getattr(client, "players", None), "players")
+        queues = [
+            q for q in _live_items(getattr(client, "player_queues", None), "player_queues")
+            if _may_read_queue(hass, user, q.get("queue_id"))
+        ]
+        _emit({"kind": "snapshot", "players": players, "queues": queues})
+
+    @callback
+    def _changed(client: Any | None) -> None:
+        # listening on the new client already, and no await before its lists are read: no change can fall between
+        if client is None:
+            _emit({"kind": "offline"})
+        else:
+            _snapshot(client)
+
     from music_assistant_models.enums import EventType  # noqa: PLC0415
 
     # listen first, then read the lists, with no await in between: no change can fall between the two
-    connection.subscriptions[msg_id] = client.subscribe(_on_event, tuple(EventType(e) for e in LIVE_EVENTS), None)
-    players = _live_items(getattr(client, "players", None), "players")
-    queues = [
-        q for q in _live_items(getattr(client, "player_queues", None), "player_queues")
-        if _may_read_queue(hass, user, q.get("queue_id"))
-    ]
+    follow = _Follow(link, tuple(EventType(e) for e in LIVE_EVENTS), _on_event, _changed)
+    connection.subscriptions[msg_id] = follow.close
     connection.send_result(msg_id)
-    _emit({"kind": "snapshot", "players": players, "queues": queues})
+    _changed(follow.client)
+
+
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/subscribe_ma_status"})
+@websocket_api.async_response
+@_wrap
+async def ws_subscribe_ma_status(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """2.4: {"connected": bool}: whether Home Assistant holds a working Music Assistant connection, now and on change.
+
+    `false` as soon as HA's music_assistant entry stops being loaded (MA dropped out and HA is restarting its connection,
+    or waiting to retry); `true` once HA has a new client with MA's players and queues loaded. The card shows its
+    "Music Assistant is offline" notice from this and reloads fresh on the way back. No MA call and no permission class
+    (the same fact `ma_connected` in capabilities gives every user).
+    """
+    link = _link(hass)
+    msg_id = msg["id"]
+
+    @callback
+    def _send(client: Any | None) -> None:
+        connection.send_message(websocket_api.event_message(msg_id, {"connected": client is not None}))
+
+    connection.subscriptions[msg_id] = link.async_listen(_send)
+    connection.send_result(msg_id)
+    _send(link.client)
 
 
 def _expires_payload(raw: Any) -> dict[str, Any]:
@@ -1077,6 +1215,7 @@ HANDLERS = (
     ws_active_queue,
     ws_subscribe_queue,
     ws_subscribe_live,
+    ws_subscribe_ma_status,
     ws_sleep_timer_get,
     ws_sleep_timer_set,
     ws_sleep_timer_clear,
