@@ -42,6 +42,7 @@ const greyed = (p) => ev(p, `JSON.stringify({
   queue: ${R}.querySelector('.view[data-view=queue]').inert && ${R}.querySelector('.view[data-view=queue]').classList.contains('ma-off'),
   vol: !!${NOW}.querySelector('.vol.ma-off[inert]'),
   upn: !${NOW}.querySelector('.upn') || !!${NOW}.querySelector('.upn.ma-off[inert]'),
+  vmore: !!${NOW}.querySelector('.vmore.ma-off[inert]'),
   now: !${R}.querySelector('.view[data-view=now]').inert,
 })`).then(JSON.parse);
 
@@ -59,7 +60,16 @@ const greyed = (p) => ev(p, `JSON.stringify({
   check('MO2 Music Assistant drops out: one plain notice "Music Assistant is offline" in the header', await wait(p, OFF_SHOWN) && J(await notice(p)) === J(['Music Assistant is offline']), J(await notice(p)));
   const g = await greyed(p);
   check('MO3 speaker and queue controls are greyed out and not tappable (pill, Speakers panel, Now Playing speaker rows and Up next, Queue screen); the rest of Now Playing is not',
-    g.pill && g.panel && g.queue && g.vol && g.upn && g.now, J(g));
+    g.pill && g.panel && g.queue && g.vol && g.upn && g.vmore && g.now, J(g));
+  // Fresh Eyes: "More speakers" sits outside the greyed speaker panel (.volw > .vmore), so it needs its own greyed, inert look
+  const vm = await ev(p, `(() => { const b = ${NOW}.querySelector('.vmore'), cs = getComputedStyle(b), r = b.getBoundingClientRect(), rooms = ${NOW}.querySelector('.rooms');
+    const hit = ${NOW}.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return JSON.stringify({ shown: cs.display !== 'none' && r.width > 0, inert: b.inert, dim: parseFloat(cs.opacity) < 1, grey: cs.filter.includes('grayscale(1)'), filter: cs.filter,
+      pe: cs.pointerEvents, cursor: cs.cursor, hitsIt: hit === b || b.contains(hit), top: rooms ? rooms.scrollTop : null }); })()`).then(JSON.parse);
+  if (vm.shown) { const r = await ev(p, `JSON.stringify(${NOW}.querySelector('.vmore').getBoundingClientRect())`).then(JSON.parse); await p.mouse.click(r.x + r.width / 2, r.y + r.height / 2); await sleep(500); }
+  const top1 = await ev(p, `${NOW}.querySelector('.rooms')?.scrollTop ?? null`);
+  check('MO3b "More speakers" is shown and greyed out like the speaker rows (ma-off, inert, dimmed, grayscale) and a tap on it does nothing (the list does not scroll)',
+    vm.shown && vm.inert && vm.dim && vm.grey && vm.pe === 'none' && vm.cursor === 'default' && !vm.hitsIt && top1 === vm.top, J({ ...vm, top1 }));
   check('MO4 the open Speakers panel closes (its controls are greyed out)', panelOpen && await wait(p, `${R}.querySelector('jb-speakers').open === false`));
   await ev(p, `${R}.querySelector('.pill').click()`);
   await sleep(200);

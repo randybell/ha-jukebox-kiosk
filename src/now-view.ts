@@ -536,7 +536,7 @@ export class JbNow extends LitElement {
             ${this.volRow(this.eid, where, true)}
             ${rooms.length ? html`<div class="rooms">${rooms.map((r) => this.volRow(r.entity, r.name, false, this.spk?.inline(r.entity)))}</div>` : nothing}
           </div>
-          <button class="vmore" tabindex="-1" aria-label="More speakers below" @pointerdown=${noFocus}
+          <button class="vmore ${off ? 'ma-off' : ''}" ?inert=${off} tabindex="-1" aria-label="More speakers below" @pointerdown=${noFocus}
             @click=${() => { const v = this.renderRoot.querySelector('.rooms') as HTMLElement | null; v?.scrollBy({ top: Math.max(40, v.clientHeight * 0.75), behavior: 'smooth' }); }}>${icon('chev', 'i xs')}More speakers</button>
         </div>
       </div>
@@ -664,6 +664,7 @@ export class JbNow extends LitElement {
       background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
       -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
       color: var(--_fg); font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px) var(--_font-body); cursor: pointer; }
+    .vmore.ma-off { cursor: default; }
     .vmore .i { width: calc(var(--_icon) * 12 / 24); height: calc(var(--_icon) * 12 / 24); }
     .volw.more-b .vmore { display: inline-flex; }
     /* #117: the 48px More speakers pill gets its own strip under the speaker list instead of floating over a slider (two targets on one spot) */
