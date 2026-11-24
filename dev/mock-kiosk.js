@@ -15,6 +15,14 @@ import { createV07 } from './mock-v07.js';
 // mock state change (commit), the players and queues that changed as MA pushes them (player_added/updated/removed,
 // queue_updated, queue_items_updated), seq + 1 each. Test hooks in window.__live: subs(), snapshots, sent (all messages),
 // skip() (lose the next message number: a gap), push(id, data) (one player_updated), hold(on) (keep messages back), flush().
+// 2.4 Music Assistant offline, like the server's link.py: window.__maOffline(true) is HA losing its MA connection:
+// /subscribe_ma_status sends {connected: false}, /subscribe_live {kind: 'offline'}, /subscribe_queue {event: 'offline'},
+// and every command that needs MA fails with ma_unavailable (capabilities and player_ids still answer: no MA call).
+// window.__maOffline(false) is HA's new client: {connected: true}, a fresh snapshot on the same live subscription (seq keeps
+// counting) and {event: 'queue_changed'} on each queue subscription. Subscriptions are accepted while offline (they start
+// with the offline message). window.__haReconnect() plays the card's own HA websocket coming back: the connection fires
+// 'ready' and, like home-assistant-js-websocket, every subscription is sent again (a new live subscription: seq 1).
+// window.__maStatusSubs() counts the status subscriptions.
 // The /ma allowlist mirrors const.py MA_COMMANDS; metadata/get_track_lyrics refuses library tracks like the server.
 const ALLOW = /^(players\/all|players\/get|players\/cmd\/(set_members|stop|group_volume)|players\/sleep_timer\/(get|set|clear)|config\/players\/get|player_queues\/(get|items|play_index|move_item|delete_item|play_media|transfer)|music\/(item_by_uri|search|favorites\/(add_item|remove_item)|browse|recommendations|recommendations\/items|recently_played_items|genres\/overview|genres\/tracks|genres\/library_items|(tracks|albums|artists|playlists)\/library_items|in_progress_items)|metadata\/get_track_lyrics)$/;
 // #46: music/<type>/library_items with genre = <genre item id> (MA's genre filter) is answered by mock-v07 too
@@ -31,7 +39,9 @@ const FEATURES = { queue: true, queue_play: true, queue_edit: true, undo: true, 
   // #103: jukebox_kiosk/subscribe_live (snapshot of MA's players and queues, then numbered changes)
   live_feed: true,
   // #100: jukebox_kiosk/active_queue
-  active_queue: true };
+  active_queue: true,
+  // 2.4: jukebox_kiosk/subscribe_ma_status
+  ma_status: true };
 const NO_QUEUE = 'Nothing queued on this speaker';
 const err = (code, message) => Object.assign(new Error(message), { code });
 // Autoplay style (server: autoplay_options / set_autoplay_mode over MA config/player_queues/*). Fake playlist names only.
@@ -44,6 +54,8 @@ const AP_MODES = ['auto', 'similar', 'library', 'playlist'];
 export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, sendCommand, maItem, byUri, tracksFor, commit, sleep, catalog, user }) {
   const v07 = createV07({ params, catalog, sleep });
   const log = (window.__ws = []);
+  /** 2.4: false while HA has no Music Assistant connection (window.__maOffline) */
+  let maOnline = true;
   const subs = new Map(); // id -> {entity, cb}
   const sleepSubs = new Map(); // id -> {entity, cb}
   let sid = 0;
@@ -67,14 +79,17 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
   // #100: the one active-queue rule (server players.active_queue_id). Entities without a mock queue are not MA players here.
   const qEntOf = (qid) => Object.keys(QS).find((k) => playerIdFor(k) === qid);
   const srcOverride = (window.__activeSource = window.__activeSource ?? {});
+  // MA's PlayerQueue.active (an empty queue can be active); qactive=0 makes every queue inactive. One meaning for the
+  // lookup, queue_items and the live feed.
+  const queueActive = (Q) => Q.active !== false && params.get('qactive') !== '0';
   const activeQueueFor = (ent) => {
     const pid = playerIdFor(ent);
     if (!pid || !QS[ent]) throw err('not_found', `${ent} is not a Music Assistant player`);
     const p = livePlayers().find((x) => x.player_id === pid);
     const src = pid in srcOverride ? srcOverride[pid] : p && 'active_source' in p ? p.active_source : pid;
     if (src) return qEntOf(src) ? src : null;
-    const Q = QS[ent];
-    return Q.items.length > 0 && Q.active !== false ? pid : null;
+    // like players.active_queue_id: with no active_source, the player's own queue only when it is active (items or not)
+    return queueActive(QS[ent]) ? pid : null;
   };
   const needQueue = (ent) => { const q = activeQueueFor(ent); if (!q) throw err('no_queue', NO_QUEUE); return q; };
   const apOpts = (ent) => {
@@ -88,7 +103,7 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
   const push = (qid) => { for (const s of subs.values()) if (!qid || s.queue === qid) s.cb({ event: 'queue_updated', queue_id: qid }); };
   window.__kioskPush = (entity = 'media_player.everywhere') => push(aqSafe(entity));
   // like the server's subscribe_queue: the followed queue is worked out again on every change
-  window.__queueTick = () => { for (const s of subs.values()) { const q = aqSafe(s.entity); if (q !== s.queue) { s.queue = q; s.cb({ event: 'queue_changed', queue_id: q }); } } };
+  window.__queueTick = () => { if (!maOnline) return; for (const s of subs.values()) { const q = aqSafe(s.entity); if (q !== s.queue) { s.queue = q; s.cb({ event: 'queue_changed', queue_id: q }); } } };
   window.__setActiveSource = (pid, v) => { if (v === undefined) delete srcOverride[pid]; else srcOverride[pid] = v; commit(); };
   window.__kioskSubs = () => [...subs.values()].map((s) => s.entity);
   const bufOf = (Q) => (typeof Q.buf === 'number' ? Q.buf : Q.index + (params.get('qbuf') === '1' ? 1 : 0));
@@ -159,8 +174,10 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
     log.push({ ...structuredClone(msg), type: t });
     await sleep(20);
     if (kfail === t) throw err('home_assistant_error', `mock: ${t} failed`);
+    // 2.4: like the server, every command that needs the MA client fails while HA has none (the registry ones still answer)
+    if (!maOnline && t !== 'capabilities' && t !== 'player_ids') throw err('ma_unavailable', 'Music Assistant is not loaded');
     switch (t) {
-      case 'capabilities': return { version: '0.6.0', ma_entry_id: '01MUSICASSISTANT0000000000', ma_connected: true, guest: false, classes: ['library', 'playback', 'queue', 'read', 'speakers'], commands: [], todo_verify: [], features };
+      case 'capabilities': return { version: '0.6.0', ma_entry_id: '01MUSICASSISTANT0000000000', ma_connected: maOnline, guest: false, classes: ['library', 'playback', 'queue', 'read', 'speakers'], commands: [], todo_verify: [], features };
       case 'ma': return maCmd(String(msg.command), msg.args ?? {});
       // like websocket_api.search_providers(): available music/plugin providers with the search feature, by name
       case 'search_providers': return { providers: DEMO_PROVIDERS.filter((p) => ['music', 'plugin'].includes(p.type) && p.available && p.supported_features.includes('search') && !(params.get('norbi') === '1' && p.domain === 'radiobrowser'))
@@ -186,7 +203,7 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
         const curType = params.get('qtype') || Q.current_media_type || ( /:\/\/radio\//.test(curUri) ? 'radio' : /:\/\/audio_source\//.test(curUri) ? 'audio_source' : 'track');
         return { queue_id: qid, current_index: Q.index < 0 ? null : Q.index, index_in_buffer: Q.index < 0 ? null : bufOf(Q),
           current_item_id: curIt?.queue_item_id ?? null, total: Q.items.length, offset: off, items: Q.items.slice(off, off + lim).map(qPub),
-          ...(features.autoplay ? { autoplay: !!Q.autoplay, dynamic: !!(Q.dynamic || params.get('qdyn') === '1'), active: Q.active !== false && params.get('qactive') !== '0', current_media_type: curType,
+          ...(features.autoplay ? { autoplay: !!Q.autoplay, dynamic: !!(Q.dynamic || params.get('qdyn') === '1'), active: queueActive(Q), current_media_type: curType,
             repeat_mode: ['off', 'one', 'all'].includes(params.get('qrepeat') || st(ent)?.attributes?.repeat) ? (params.get('qrepeat') || st(ent).attributes.repeat) : 'off' } : {}) };
       }
       case 'set_autoplay': {
@@ -275,7 +292,7 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
       const qid = playerIdFor(ent);
       if (!qid || !Q) continue;
       const cur = Q.items[Q.index];
-      out.push({ queue_id: qid, display_name: st(ent)?.attributes?.friendly_name ?? qid, active: Q.items.length > 0 && Q.active !== false,
+      out.push({ queue_id: qid, display_name: st(ent)?.attributes?.friendly_name ?? qid, active: queueActive(Q),
         state: st(ent)?.state ?? 'idle', items: Q.items.length, current_index: Q.index < 0 ? null : Q.index,
         current_item: cur ? { queue_item_id: cur.queue_item_id } : null, _sig: Q.items.map((i) => i.queue_item_id).join(',') });
     }
@@ -288,17 +305,19 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
     const deliver = () => { if (liveSubs.has(sub.id)) { L.sent.push(m); sub.cb(m); } };
     if (L.holding) L.held.push(deliver); else setTimeout(deliver, 0);
   }
-  function snapshot(sub) {
+  /** keepSeq: 2.4 the server's fresh snapshot after MA comes back is sent on the same subscription, seq keeps counting */
+  function snapshot(sub, keepSeq = false) {
     const players = livePlayers(), queues = liveQueues();
     sub.players = new Map(players.map((p) => [p.player_id, JSON.stringify(p)]));
     sub.queues = new Map(queues.map((q) => [q.queue_id, JSON.stringify(clean(q))]));
     sub.items = new Map(queues.map((q) => [q.queue_id, q._sig]));
-    sub.seq = 0; L.snapshots++;
+    if (!keepSeq) sub.seq = 0;
+    L.snapshots++;
     send(sub, { kind: 'snapshot', players, queues: queues.map(clean) });
   }
   let liveTimer = 0;
   window.__liveTick = () => {
-    if (!liveSubs.size || liveTimer) return;
+    if (!maOnline || !liveSubs.size || liveTimer) return;
     liveTimer = setTimeout(() => {
       liveTimer = 0;
       const players = livePlayers(), queues = liveQueues();
@@ -321,9 +340,41 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
       }
     }, 0);
   };
+  // ---- 2.4 Music Assistant offline / back, and the card's own HA websocket reconnecting ----
+  const statusSubs = new Map(); // id -> cb
+  const connListeners = new Map(); // event -> Set(cb)
+  const resubs = new Map(); // id -> () => void (send the subscription again, as home-assistant-js-websocket does)
+  window.__maStatusSubs = () => statusSubs.size;
+  window.__maOffline = (off) => {
+    const on = !off;
+    if (on === maOnline) return;
+    maOnline = on;
+    for (const cb of statusSubs.values()) setTimeout(() => cb({ connected: on }), 0);
+    for (const sub of liveSubs.values()) { if (on) snapshot(sub, true); else send(sub, { kind: 'offline' }); }
+    for (const s of subs.values()) {
+      if (on) { s.queue = aqSafe(s.entity); const q = s.queue; setTimeout(() => s.cb({ event: 'queue_changed', queue_id: q }), 0); }
+      else { s.queue = null; setTimeout(() => s.cb({ event: 'offline', queue_id: null }), 0); }
+    }
+  };
+  window.__haReconnect = () => {
+    for (const f of connListeners.get('disconnected') ?? []) f();
+    for (const r of resubs.values()) r();
+    for (const f of connListeners.get('ready') ?? []) f();
+  };
   const connection = {
     sendMessagePromise: callWS,
+    addEventListener(ev, cb) { if (!connListeners.has(ev)) connListeners.set(ev, new Set()); connListeners.get(ev).add(cb); },
+    removeEventListener(ev, cb) { connListeners.get(ev)?.delete(cb); },
     async subscribeMessage(cb, msg) {
+      if (msg.type === 'jukebox_kiosk/subscribe_ma_status') {
+        log.push({ ...structuredClone(msg), type: 'subscribe_ma_status' });
+        await sleep(20);
+        if (!features.ma_status) throw err('unknown_command', 'Unknown command jukebox_kiosk/subscribe_ma_status');
+        const id = ++sid; statusSubs.set(id, cb);
+        const again = () => setTimeout(() => statusSubs.has(id) && cb({ connected: maOnline }), 0);
+        resubs.set(id, again); again();
+        return async () => { statusSubs.delete(id); resubs.delete(id); };
+      }
       if (msg.type === 'jukebox_kiosk/subscribe_sleep_timer') {
         log.push({ ...structuredClone(msg), type: 'subscribe_sleep_timer' });
         const id = ++sid; sleepSubs.set(id, { entity: msg.entity_id, cb });
@@ -336,14 +387,18 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
         if (!features.live_feed) throw err('unknown_command', 'Unknown command jukebox_kiosk/subscribe_live');
         const id = ++sid, sub = { id, cb, seq: 0 };
         liveSubs.set(id, sub);
-        snapshot(sub);
-        return async () => { liveSubs.delete(id); };
+        const start = () => { sub.seq = 0; if (maOnline) snapshot(sub); else send(sub, { kind: 'offline' }); };
+        resubs.set(id, start); start();
+        return async () => { liveSubs.delete(id); resubs.delete(id); };
       }
       if (msg.type !== 'jukebox_kiosk/subscribe_queue') throw err('unknown_command', msg.type);
       log.push({ ...structuredClone(msg), type: 'subscribe_queue' });
       if (!features.queue_push) throw err('unauthorized', 'Unauthorized');
-      const id = ++sid; subs.set(id, { entity: msg.entity_id, cb, queue: aqSafe(msg.entity_id) });
-      return async () => { subs.delete(id); };
+      const id = ++sid, s = { entity: msg.entity_id, cb, queue: maOnline ? aqSafe(msg.entity_id) : null };
+      subs.set(id, s);
+      if (!maOnline) setTimeout(() => s.cb({ event: 'offline', queue_id: null }), 0);
+      resubs.set(id, () => { s.queue = maOnline ? aqSafe(s.entity) : null; });
+      return async () => { subs.delete(id); resubs.delete(id); };
     },
   };
   return {
