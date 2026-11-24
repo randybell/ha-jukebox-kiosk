@@ -9,7 +9,7 @@ import type { KeyDetail } from './keyboard';
 import { QueueBusy, type QueueItem, type QueueModel, type QueueSnapshot, type RemovedRow } from './queue-model';
 /** MA refused or ignored a change on a played / buffered track (live 2.10.9: 500 "<n> is already played/buffered", delete ignored) */
 import type { HomeAssistant, JukeboxCardConfig, MaItem } from './types';
-import type { AutoplayMode, AutoplayOptions } from './backend/types';
+import { NO_QUEUE, type AutoplayMode, type AutoplayOptions } from './backend/types';
 
 /** Neutral labels: Autoplay only continues this queue when it runs out. */
 const AP_MODE: Record<AutoplayMode, { label: string; desc: string }> = {
@@ -355,7 +355,7 @@ export class JbQueue extends LitElement {
             : html`<div class="empty"><b>No matching tracks</b><span>Try fewer letters.</span></div>`}
         </div></div>` : html`<div class="scroll panel" @scroll=${() => this.press.scrolled()}>
         ${s?.error ? html`<div class="empty"><b>Queue unavailable</b><span>${s.error}</span></div>`
-          : !items.length ? html`<div class="empty"><b>${s?.loading || !s?.at ? 'Loading queue…' : 'The queue is empty'}</b><span>${combinedOn(this.config) ? `Add music from ${libraryTabLabel(this.config)}.` : `Add music from Search or ${libraryTabLabel(this.config)}.`}</span></div>`
+          : !items.length ? html`<div class="empty" data-empty=${s?.at && s.noQueue ? 'no-queue' : nothing}><b>${!s?.at ? 'Loading queue…' : s.noQueue ? NO_QUEUE : s.loading ? 'Loading queue…' : 'The queue is empty'}</b><span>${combinedOn(this.config) ? `Add music from ${libraryTabLabel(this.config)}.` : `Add music from Search or ${libraryTabLabel(this.config)}.`}</span></div>`
           : libraryViewFor(this.config, 'queue') === 'tiles' ? html`<div class="qg" data-layout="tiles" style=${tilesAcrossStyle(this.config)}>
               ${past.map((it) => this.tile(it, 'past', 0))}
               ${now ? html`<h3 class="eyebrow">Now playing</h3>${this.tile(now, 'now', 0)}` : nothing}

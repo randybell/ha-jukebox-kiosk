@@ -46,7 +46,15 @@ export class NativeBackend implements MaBackend {
   send(command: string) { return unsupported(command); }
   async queueWindow(entity: string): Promise<QueueWindow> {
     const hass = this.hassRef(); if (!hass) throw new BackendError('failed', 'no hass');
-    const q = byEntity(await hass.callService('music_assistant', 'get_queue', {}, { entity_id: entity }, false, true), entity) ?? {};
+    let r: any;
+    try { r = await hass.callService('music_assistant', 'get_queue', {}, { entity_id: entity }, false, true); }
+    catch (e: any) {
+      // #100: HA's get_queue refuses a speaker that plays no queue (media_player.py _async_handle_get_queue). That is a
+      // normal answer, not a failure. (HA only knows the active_source half of Music Assistant's rule.)
+      if (/no active queue/i.test(String(e?.message ?? e))) return { items: [], noQueue: true };
+      throw e;
+    }
+    const q = byEntity(r, entity) ?? {};
     const items = [nativeRow(q.current_item), nativeRow(q.next_item)].filter(Boolean);
     return {
       items, queueId: typeof q.queue_id === 'string' ? q.queue_id : undefined,

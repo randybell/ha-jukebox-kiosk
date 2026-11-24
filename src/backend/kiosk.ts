@@ -6,10 +6,11 @@
  *   jukebox_kiosk/item_tracks           -> server-paged track lists (page is 1-based on the wire)
  *   jukebox_kiosk/favorite_current, jukebox_kiosk/unfavorite_current, jukebox_kiosk/subscribe_queue
  *   jukebox_kiosk/subscribe_live        -> #103 MA's players and queues: snapshot, then numbered changes
+ *   jukebox_kiosk/active_queue          -> #100 the entity's active queue by Music Assistant's rule (or null)
  */
 import type { HomeAssistant } from '../types';
 import type { LiveMsg } from '../speakers/live';
-import { AUTOPLAY_MODES, BackendError, Emitter, lookupMaEntry, NO_EXT, type AutoplayMode, type AutoplayOptions, type Caps, type ExtCaps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
+import { AUTOPLAY_MODES, BackendError, Emitter, lookupMaEntry, NO_EXT, NO_QUEUE, type AutoplayMode, type AutoplayOptions, type Caps, type ExtCaps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
 
 export const KIOSK_DOMAIN = 'jukebox_kiosk';
 export const KIOSK_PAGE_SIZE = 100;
@@ -93,7 +94,8 @@ export class KioskBackend implements MaBackend {
     const r = await this.ws<any>({ type: 'queue_items', entity_id: entity, limit_before: 1, limit_after: limitAfter });
     return {
       items: Array.isArray(r?.items) ? r.items : [],
-      queueId: typeof r?.queue_id === 'string' ? r.queue_id : undefined,
+      queueId: typeof r?.queue_id === 'string' && r.queue_id ? r.queue_id : undefined,
+      noQueue: r?.no_queue === true || undefined,
       currentIndex: typeof r?.current_index === 'number' ? r.current_index : undefined,
       bufferIndex: typeof r?.index_in_buffer === 'number' ? r.index_in_buffer : undefined,
       total: typeof r?.total === 'number' ? r.total : undefined,
@@ -106,8 +108,9 @@ export class KioskBackend implements MaBackend {
     };
   }
   async queueAction(entity: string, action: QueueAction, queueItemId: string, queueId?: string) {
-    const qid = queueId || (this.hass.states[entity]?.attributes?.active_queue as string | undefined);
-    if (!qid) throw new BackendError('failed', 'No queue for this player');
+    // #100: only the queue the last window named (the server's active-queue rule); never HA's active_queue guess
+    const qid = queueId;
+    if (!qid) throw new BackendError('failed', NO_QUEUE);
     switch (action) {
       case 'play': return this.send('player_queues/play_index', { queue_id: qid, index: queueItemId });
       case 'up': return this.send('player_queues/move_item', { queue_id: qid, queue_item_id: queueItemId, pos_shift: -1 });
@@ -149,6 +152,11 @@ export class KioskBackend implements MaBackend {
     const r = await this.ws<any>({ type: 'player_ids' });
     const raw = r?.players && typeof r.players === 'object' ? r.players : {};
     return new Map(Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === 'string' && !!e[1]));
+  }
+  /** #100: jukebox_kiosk/active_queue → the entity's active queue id, or null */
+  async activeQueue(entity: string): Promise<string | null> {
+    const r = await this.ws<any>({ type: 'active_queue', entity_id: entity });
+    return typeof r?.queue_id === 'string' && r.queue_id ? r.queue_id : null;
   }
   /** #103: jukebox_kiosk/subscribe_live (snapshot, then MA's pushed player and queue changes, each with seq) */
   async subscribeLive(cb: (msg: LiveMsg) => void) {

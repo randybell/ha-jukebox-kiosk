@@ -21,8 +21,10 @@ export interface QueueSnapshot {
   total?: number;
   /** MA queue index of the playing item (music_assistant.get_queue `current_index`) */
   currentIndex?: number;
-  /** MA queue id (music_assistant.get_queue `queue_id`, else the entity's `active_queue`) for player_queues/* commands */
+  /** #100: the active MA queue id by Music Assistant's rule (from the backend's queue window) for player_queues/* commands */
   queueId?: string;
+  /** #100: the speaker plays no queue (idle, or an outside source). Shown as "Nothing queued on this speaker", not an error. */
+  noQueue?: boolean;
   /** MA index_in_buffer (player_queues/get through send_command). Live MA 2.10.9: it is set by MA, not current + 1: it can be
    *  current + 1 (next track handed to the player) or equal to current (right after play_index). */
   bufferIndex?: number;
@@ -122,9 +124,10 @@ export class QueueModel {
         if (cid) current = items.findIndex((i) => i.media_content_id === cid);
       }
       if (current < 0 && items.length && w.currentIndex != null) current = Math.min(w.currentIndex === 0 ? 0 : 1, items.length - 1); // offset = idx - limit_before(1), clamped at 0
-      const queueId = w.queueId || (hass.states[entity]?.attributes?.active_queue as string | undefined) || undefined;
+      // #100: the backend's window is the one active-queue lookup; no guess from HA's active_queue attribute
+      const queueId = w.noQueue ? undefined : w.queueId;
       this.set({
-        items, current, loading: false, error: '', at: Date.now(),
+        items, current, loading: false, error: '', at: Date.now(), noQueue: !!w.noQueue,
         total: w.total, currentIndex: w.currentIndex, queueId, bufferIndex: w.bufferIndex,
         autoplay: w.autoplay, dynamic: w.dynamic, active: w.active, currentMediaType: w.currentMediaType, repeat: w.repeat,
       });

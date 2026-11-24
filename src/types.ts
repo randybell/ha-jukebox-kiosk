@@ -65,7 +65,7 @@ export type Enqueue = 'play' | 'next' | 'add' | 'replace' | 'replace_next';
 
 export interface JukeboxCardConfig {
   type: string;
-  /** Player that receives play_media. Required; a new card's stub picks the first Music Assistant player. */
+  /** Music Assistant player that receives play_media. Required; a new card has none until one is picked (no default speaker). */
   entity?: string;
   /** Room players for the per-room volume sliders. `{name, entity}`; a bare entity id string is also accepted. */
   rooms?: Array<RoomConfig | string>;

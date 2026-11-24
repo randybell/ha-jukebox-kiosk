@@ -249,7 +249,10 @@ export class LyricsStore {
   }
   /** Kiosk: the provider copy of a library track (see the header). */
   private async providerTrack(item: any): Promise<any> {
-    const qid = this.hass?.states[this.entity]?.attributes?.active_queue;
+    // #100: the playing queue by the card's one active-queue lookup (Music Assistant's rule, on the server), not HA's
+    // active_queue attribute. No queue, or an older integration without the lookup: straight to the provider mapping.
+    const be = this.backend;
+    const qid = this.entity && be?.activeQueue ? await timeout(be.activeQueue(this.entity), 10_000).catch(() => null) : null;
     if (qid) {
       try {
         const q = await this.send('player_queues/get', { queue_id: qid });

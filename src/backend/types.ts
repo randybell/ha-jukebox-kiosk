@@ -38,6 +38,8 @@ export interface Caps {
   /** #103: jukebox_kiosk/subscribe_live, MA's players and queues pushed live (snapshot + numbered changes) */
   live: boolean;
 }
+/** #100: what the card says when the speaker plays no queue (new wording; Jukebox Themes owns it) */
+export const NO_QUEUE = 'Nothing queued on this speaker';
 export const NO_CAPS: Caps = {
   send: false, queue: false, queuePlay: false, queueEdit: false, undo: false, queueBuffer: false,
   trackLists: false, podcastEpisodes: false, lyrics: false, speakers: false, unfavorite: false, queuePush: false, libraryWrite: false, live: false,
@@ -84,7 +86,10 @@ export interface AutoplayOptions {
 /** A queue window in the card's queue row shape. */
 export interface QueueWindow {
   items: any[];
+  /** #100: the active queue by Music Assistant's rule; undefined when the speaker has none */
   queueId?: string;
+  /** #100: the speaker plays no queue (idle, or an outside source such as Spotify Connect). A normal answer, not a failure. */
+  noQueue?: boolean;
   currentIndex?: number;
   bufferIndex?: number;
   total?: number;
@@ -143,6 +148,8 @@ export interface MaBackend {
   searchProviders?(): Promise<any>;
   /** #99: {HA entity → MA player id} for every Music Assistant media_player, from HA's entity registry (kiosk only). */
   playerIds?(): Promise<Map<string, string>>;
+  /** #100: the entity's active queue id by Music Assistant's rule, null when it has none (kiosk only). */
+  activeQueue?(entity: string): Promise<string | null>;
   /** #103 live feed (kiosk only): a snapshot of MA's players and queues, then each change MA pushes, numbered (seq).
    *  Resolves an unsubscribe function. */
   subscribeLive?(cb: (msg: LiveMsg) => void): Promise<() => void>;
