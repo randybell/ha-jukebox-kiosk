@@ -15,6 +15,8 @@ import { createV07 } from './mock-v07.js';
 // mock state change (commit), the players and queues that changed as MA pushes them (player_added/updated/removed,
 // queue_updated, queue_items_updated), seq + 1 each. Test hooks in window.__live: subs(), snapshots, sent (all messages),
 // skip() (lose the next message number: a gap), push(id, data) (one player_updated), hold(on) (keep messages back), flush().
+// 2.5: like the server, the snapshot carries active_queues ({player_id: queue_id | null}, the one rule) and, after the
+// changes of a commit, {kind: 'active_queue', player_id, queue_id} for each player whose active queue moved.
 // 2.4 Music Assistant offline, like the server's link.py: window.__maOffline(true) is HA losing its MA connection:
 // /subscribe_ma_status sends {connected: false}, /subscribe_live {kind: 'offline'}, /subscribe_queue {event: 'offline'},
 // and every command that needs MA fails with ma_unavailable (capabilities and player_ids still answer: no MA call).
@@ -82,14 +84,19 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
   // MA's PlayerQueue.active (an empty queue can be active); qactive=0 makes every queue inactive. One meaning for the
   // lookup, queue_items and the live feed.
   const queueActive = (Q) => Q.active !== false && params.get('qactive') !== '0';
-  const activeQueueFor = (ent) => {
-    const pid = playerIdFor(ent);
-    if (!pid || !QS[ent]) throw err('not_found', `${ent} is not a Music Assistant player`);
-    const p = livePlayers().find((x) => x.player_id === pid);
+  // the rule by MA player id (players.active_queue_id); the live feed sends its answer for every player (2.5)
+  const aqForPid = (pid, players = livePlayers()) => {
+    const p = players.find((x) => x.player_id === pid);
     const src = pid in srcOverride ? srcOverride[pid] : p && 'active_source' in p ? p.active_source : pid;
     if (src) return qEntOf(src) ? src : null;
     // like players.active_queue_id: with no active_source, the player's own queue only when it is active (items or not)
-    return queueActive(QS[ent]) ? pid : null;
+    const ent = qEntOf(pid);
+    return ent && queueActive(QS[ent]) ? pid : null;
+  };
+  const activeQueueFor = (ent) => {
+    const pid = playerIdFor(ent);
+    if (!pid || !QS[ent]) throw err('not_found', `${ent} is not a Music Assistant player`);
+    return aqForPid(pid);
   };
   const needQueue = (ent) => { const q = activeQueueFor(ent); if (!q) throw err('no_queue', NO_QUEUE); return q; };
   const apOpts = (ent) => {
@@ -101,7 +108,8 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
   };
   const aqSafe = (ent) => { try { return activeQueueFor(ent); } catch { return null; } };
   const push = (qid) => { for (const s of subs.values()) if (!qid || s.queue === qid) s.cb({ event: 'queue_updated', queue_id: qid }); };
-  window.__kioskPush = (entity = 'media_player.everywhere') => push(aqSafe(entity));
+  // MA changed the entity's active queue's songs: the old subscribe_queue event, and (2.5) queue_items_updated on the live feed
+  window.__kioskPush = (entity = 'media_player.everywhere') => { const q = aqSafe(entity); push(q); livePushItems(q); };
   // like the server's subscribe_queue: the followed queue is worked out again on every change
   window.__queueTick = () => { if (!maOnline) return; for (const s of subs.values()) { const q = aqSafe(s.entity); if (q !== s.queue) { s.queue = q; s.cb({ event: 'queue_changed', queue_id: q }); } } };
   window.__setActiveSource = (pid, v) => { if (v === undefined) delete srcOverride[pid]; else srcOverride[pid] = v; commit(); };
@@ -306,14 +314,16 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
     if (L.holding) L.held.push(deliver); else setTimeout(deliver, 0);
   }
   /** keepSeq: 2.4 the server's fresh snapshot after MA comes back is sent on the same subscription, seq keeps counting */
+  const activeQueues = (players) => Object.fromEntries(players.map((p) => [p.player_id, aqForPid(p.player_id, players)]));
   function snapshot(sub, keepSeq = false) {
     const players = livePlayers(), queues = liveQueues();
+    sub.aq = activeQueues(players);
     sub.players = new Map(players.map((p) => [p.player_id, JSON.stringify(p)]));
     sub.queues = new Map(queues.map((q) => [q.queue_id, JSON.stringify(clean(q))]));
     sub.items = new Map(queues.map((q) => [q.queue_id, q._sig]));
     if (!keepSeq) sub.seq = 0;
     L.snapshots++;
-    send(sub, { kind: 'snapshot', players, queues: queues.map(clean) });
+    send(sub, { kind: 'snapshot', players, queues: queues.map(clean), active_queues: { ...sub.aq } });
   }
   let liveTimer = 0;
   window.__liveTick = () => {
@@ -337,8 +347,18 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
           sub.queues.set(q.queue_id, j); sub.items.set(q.queue_id, q._sig);
           send(sub, { kind: 'event', event: old === undefined ? 'queue_added' : itemsChanged ? 'queue_items_updated' : 'queue_updated', object_id: q.queue_id, data: clean(q) });
         }
+        const now = activeQueues(players);
+        for (const [pid, q] of Object.entries(now)) if ((sub.aq?.[pid] ?? null) !== q) send(sub, { kind: 'active_queue', player_id: pid, queue_id: q });
+        sub.aq = now;
       }
     }, 0);
+  };
+  /** MA changed a queue's songs (e.g. an item's image): queue_items_updated for it on every live subscription */
+  const livePushItems = (qid) => {
+    if (!qid || !maOnline) return;
+    const q = liveQueues().find((x) => x.queue_id === qid);
+    if (!q) return;
+    for (const sub of liveSubs.values()) { sub.queues?.set(qid, JSON.stringify(clean(q))); sub.items?.set(qid, q._sig); send(sub, { kind: 'event', event: 'queue_items_updated', object_id: qid, data: clean(q) }); }
   };
   // ---- 2.4 Music Assistant offline / back, and the card's own HA websocket reconnecting ----
   const statusSubs = new Map(); // id -> cb

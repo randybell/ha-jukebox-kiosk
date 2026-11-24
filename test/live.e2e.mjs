@@ -1,6 +1,6 @@
 // #103 live feed: the card follows Music Assistant's pushed player changes (jukebox_kiosk/subscribe_live: a snapshot, then
-// numbered changes) instead of waiting for its next players/all read. Polling is slowed to 10 minutes in most checks, so
-// anything that shows up came through the feed. Every id is a placeholder.
+// numbered changes). 2.5: there is no players/all polling any more, so anything that shows up came through the feed; the
+// feed runs for the whole card in every speaker_mode (2.6: one path). Every id is a placeholder.
 // Usage: (starts its own dev server on a free port; JB_PORT / JB_URL override) node test/live.e2e.mjs
 import puppeteer from 'puppeteer-core';
 import { hermetic } from './intercept.mjs';
@@ -38,12 +38,15 @@ const roomsIn = (p) => ev(p, `[...${SR}.querySelectorAll('[data-room].in')].map(
 const openPanel = async (p) => { await ev(p, `__card.shadowRoot.querySelector('.pill').click()`); return wait(p, `${SR}.querySelectorAll('[data-room][data-ma]:not([data-ma=""])').length === 3`); };
 
 {
-  // fixed mode (the default) makes no Music Assistant player calls today, and the feed doesn't change that
+  // 2.5 / 2.6: fixed mode (the default) follows the same feed as every card (its Queue screen does), and still reads no
+  // Music Assistant player list or group config; its Speakers panel is the same volume mixer as before
   const p = await open('');
   await ev(p, `__card.shadowRoot.querySelector('.pill').click()`);
   await sleep(800);
-  check('LF1 fixed mode: no live subscription (and no players/all), as before', (await subs(p)) === 0 && (await playersAll(p)) === 0,
-    J({ subs: await subs(p), all: await playersAll(p) }));
+  const cfg = await ev(p, `window.__maLog.filter((c) => c.command === 'config/players/get').length`);
+  check('LF1 fixed mode: one live subscription for the card, no players/all and no group configs', (await subs(p)) === 1 && (await playersAll(p)) === 0 && cfg === 0,
+    J({ subs: await subs(p), all: await playersAll(p), cfg }));
+  check('LF1b …and its panel is the volume mixer as before (no grouping buttons)', await ev(p, `${SR}.querySelector('.sheet')?.dataset.mode === 'fixed' && !${SR}.querySelector('.act')`));
   await p.close();
 }
 
@@ -103,46 +106,65 @@ const openPanel = async (p) => { await ev(p, `__card.shadowRoot.querySelector('.
 }
 
 {
-  // the panel closed and not kept on Now Playing: the subscription is closed with the store
+  // 2.5: the feed belongs to the card (its Queue screen follows it too): closing the panel keeps it; the card leaving the
+  // page closes it
   const p = await open('&spk=dyn&admin=1&tab=queue');
   await openPanel(p);
   const on = await ev(p, `window.__live.subs()`);
   await ev(p, `${SR}.querySelector('.sheet .x').click()`);
-  await wait(p, `window.__live.subs() === 0`, 3000);
-  check('LF14 closing the panel (Queue tab) closes the live subscription', on === 1 && (await ev(p, `window.__live.subs()`)) === 0,
-    J({ on, after: await ev(p, 'window.__live.subs()') }));
+  await sleep(600);
+  const closed = await ev(p, `window.__live.subs()`);
+  await ev(p, `(window.__cardParent = __card.parentNode, __card.remove())`);
+  const gone = await wait(p, `window.__live.subs() === 0`, 3000);
+  check('LF14 closing the panel keeps the one subscription; the card leaving the page closes it', on === 1 && closed === 1 && gone && (await subs(p)) === 1,
+    J({ on, closed, after: await ev(p, 'window.__live.subs()'), asked: await subs(p) }));
   await p.close();
 }
 
 {
-  // an integration without the live feed: nothing is asked for, and players/all works as before
+  // 2.5: an integration without the live feed: nothing is asked for and nothing is polled. The panel is Home Assistant's
+  // own mixer (no grouping buttons, as the native backend), so no stale grouping is ever offered
   const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&kcaps=${encodeURIComponent(J({ live_feed: false }))}`, null);
   const ok = await openPanel(p);
-  check('LF15 without live_feed: no subscription, the panel still fills from players/all', ok && (await subs(p)) === 0 && (await playersAll(p)) >= 1,
-    J({ subs: await subs(p), all: await playersAll(p) }));
-  await ev(p, `window.__ma.force('syncgroup_mock_indoor', 'playing', [window.__ma.SP.living, window.__ma.SP.kitchen, window.__ma.SP.garage])`);
-  const moved = await wait(p, `J([...${SR}.querySelectorAll('[data-room].in')].map((r) => r.dataset.room).sort()) === J(['${G}', '${K}', '${L}'])`, 6000);
-  check('LF16 …and still picks up changes by reading again', moved, J(await roomsIn(p)));
+  await sleep(1500);
+  check('LF15 without live_feed: no subscription, no players/all, the panel opens with no grouping buttons', ok && (await subs(p)) === 0 && (await playersAll(p)) === 0
+    && (await ev(p, `${SR}.querySelectorAll('.act').length`)) === 0, J({ subs: await subs(p), all: await playersAll(p), acts: await ev(p, `${SR}.querySelectorAll('.act').length`) }));
+  const q0 = await ev(p, `window.__ws.filter((m) => m.type === 'queue_items').length`);
+  await ev(p, `window.__setAttrs('${IN}', { media_title: 'Another Placeholder Song' })`);
+  const read = await wait(p, `window.__ws.filter((m) => m.type === 'queue_items').length > ${q0}`, 3000);
+  check('LF16 …and its Queue still follows Home Assistant\'s state changes, as the native backend always has', read);
   await p.close();
 }
 
 {
-  // the subscription fails (old server, permissions): the card keeps working on players/all
+  // the subscription fails (permissions, an error in the integration): one plain note in the panel, nothing polled; the
+  // next fresh reload (Home Assistant's connection back) tries the feed again
   const p = await open('&spk=dyn&admin=1&kfail=subscribe_live', null);
-  const ok = await openPanel(p);
-  check('LF17 a failed subscription leaves the panel working on players/all', ok && (await ev(p, '__card.speakers.live.ready')) === false && (await playersAll(p)) >= 1);
+  await ev(p, `__card.shadowRoot.querySelector('.pill').click()`);
+  const banner = await wait(p, `/Music Assistant did not answer \\(mock: subscribe_live failed\\)\\. Volume still works\\./.test(${SR}.querySelector('.banner')?.textContent ?? '')`, 3000);
+  await sleep(1000);
+  const asked = await subs(p);
+  check('LF17 a failed subscription: the existing "did not answer" note, no players/all, not retried on its own', banner && (await ev(p, '__card.speakers.live.ready')) === false
+    && (await playersAll(p)) === 0 && asked === 1, J({ banner: await ev(p, `${SR}.querySelector('.banner')?.textContent`), asked, all: await playersAll(p) }));
+  await ev(p, `window.__haReconnect()`);
+  const again = await wait(p, `window.__ws.filter((m) => m.type === 'subscribe_live').length === 2`, 3000);
+  check('LF17b a fresh reload tries the feed again', again, String(await subs(p)));
   await p.close();
 }
 
 {
-  // the feed goes quiet (its Music Assistant connection is gone until piece 4 re-attaches it): reading players/all again
-  // still keeps the panel right, as before
+  // 2.5: nothing reads Music Assistant behind the feed's back: while its messages are held the panel stays as it was (no
+  // players/all), and it shows the change the moment they arrive
   const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}`, null);
   await openPanel(p);
   await ev(p, `window.__live.hold(true)`);
   await ev(p, `window.__ma.force('syncgroup_mock_indoor', 'playing', [window.__ma.SP.living, window.__ma.SP.kitchen, window.__ma.SP.garage])`);
-  const moved = await wait(p, `J([...${SR}.querySelectorAll('[data-room].in')].map((r) => r.dataset.room).sort()) === J(['${G}', '${K}', '${L}'])`, 6000);
-  check('LF18 with the feed quiet, the next players/all read still shows the change', moved, J(await roomsIn(p)));
+  await sleep(2000);
+  const held = await roomsIn(p);
+  await ev(p, `window.__live.hold(false)`);
+  const moved = await wait(p, `J([...${SR}.querySelectorAll('[data-room].in')].map((r) => r.dataset.room).sort()) === J(['${G}', '${K}', '${L}'])`, 3000);
+  check('LF18 the change shows only through the feed: not while it is held, at once when it arrives; no players/all', J(held) === J([K, L]) && moved && (await playersAll(p)) === 0,
+    J({ held, after: await roomsIn(p), all: await playersAll(p) }));
   await p.close();
 }
 
