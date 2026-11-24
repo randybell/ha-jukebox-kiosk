@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant
 
 from custom_components.jukebox_kiosk.link import DATA_LINKS, async_get_link
 
-from .conftest import ENTITY_A, MA_ENTRY_ID, PLAYER_A, PLAYER_B, SYNCGROUP, FakeMa, seed_playing
+from .conftest import ENTITY_A, MA_ENTRY_ID, PLAYER_A, SYNCGROUP, FakeMa, seed_playing
 
 pytestmark = pytest.mark.usefixtures("kiosk")
 
@@ -220,7 +220,7 @@ async def test_listener_error_does_not_stop_others(
     assert heard == [None]
 
 
-async def test_status_and_queue_for_unconfigured_user_class(
+async def test_non_ma_entity_refused_before_attaching(
     hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
 ) -> None:
     """Non-MA entities are still refused by subscribe_queue, before anything is attached."""
@@ -228,4 +228,3 @@ async def test_status_and_queue_for_unconfigured_user_class(
     res = await _call(ws, type="jukebox_kiosk/subscribe_queue", entity_id="media_player.kitchen_2")
     assert res["error"]["code"] == "not_found"
     assert fake_ma.subs == [] and hass.data[DATA_LINKS][MA_ENTRY_ID]._listeners == []
-    assert PLAYER_B  # (fixture ids imported for symmetry with the other suites)
