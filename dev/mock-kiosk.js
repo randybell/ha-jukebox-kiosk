@@ -55,7 +55,7 @@ export function createKiosk({ DEMO_PROVIDERS = [], params, maApi, QS, st, qPub, 
   const v07 = createV07({ params, catalog, sleep });
   const log = (window.__ws = []);
   /** 2.4: false while HA has no Music Assistant connection (window.__maOffline) */
-  let maOnline = true;
+  let maOnline = params.get('maoff') !== '1'; // maoff=1: the page starts with Music Assistant offline
   const subs = new Map(); // id -> {entity, cb}
   const sleepSubs = new Map(); // id -> {entity, cb}
   let sid = 0;
