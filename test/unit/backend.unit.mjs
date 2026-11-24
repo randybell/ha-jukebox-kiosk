@@ -112,9 +112,11 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
   check('K8 unfavoriteCurrent → unfavorite_current {entity_id}', J(log.at(-1)) === J({ type: 'jukebox_kiosk/unfavorite_current', entity_id: ENT }));
   await k.favoriteCurrent(ENT);
   check('K8b favoriteCurrent → favorite_current {entity_id} (the Now Playing heart needs no button entity)', J(log.at(-1)) === J({ type: 'jukebox_kiosk/favorite_current', entity_id: ENT }));
-  const evs = []; const un = await k.subscribeQueue(ENT, (e) => evs.push(e));
-  subs[0].cb({ event: 'queue_updated', queue_id: QID });
-  check('K9 subscribeQueue → subscribe_queue {entity_id}; events reach the callback', subs[0].msg.type === 'jukebox_kiosk/subscribe_queue' && subs[0].msg.entity_id === ENT && evs.length === 1);
+  // 2.5: the card follows its queue from the live feed; the old entity-pinned subscribe_queue is not used any more
+  check('K9 no subscribeQueue: the card never asks for jukebox_kiosk/subscribe_queue', !('subscribeQueue' in k));
+  const evs = []; const un = await k.subscribeLive((e) => evs.push(e));
+  subs[0].cb({ seq: 2, kind: 'active_queue', player_id: 'p', queue_id: QID });
+  check('K9b subscribeLive → subscribe_live; messages (2.5 active_queue too) reach the callback', subs[0].msg.type === 'jukebox_kiosk/subscribe_live' && evs.length === 1 && evs[0].kind === 'active_queue');
   un(); await tick();
   check('K10 unsubscribe removes the subscription', subs.length === 0);
 }
@@ -143,8 +145,8 @@ function fakeHass({ components = ['music_assistant', 'jukebox_kiosk'], answers =
   const k2 = new B.KioskBackend(() => h2);
   const e = await k2.send('players/all').catch((x) => x);
   check('K15 no websocket at all → BackendError', e instanceof B.BackendError, e?.message);
-  const nsub = await k2.subscribeQueue(ENT, () => {}).catch((x) => x);
-  check('K16 subscribeQueue without a connection → BackendError unsupported', nsub instanceof B.BackendError && nsub.code === 'unsupported');
+  const nsub = await k2.subscribeLive(() => {}).catch((x) => x);
+  check('K16 subscribeLive without a connection → BackendError unsupported', nsub instanceof B.BackendError && nsub.code === 'unsupported');
 }
 {
   // #99: jukebox_kiosk/player_ids → Map(entity → MA player id); junk values dropped; native has no such call

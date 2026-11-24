@@ -62,25 +62,71 @@ const evt = (seq, event, object_id, data) => ({ seq, kind: 'event', event, objec
   check('U22 capsFromServer: live only when the server lists live_feed', K.capsFromServer({ live_feed: true }).live === true && K.capsFromServer({}).live === false && K.capsFromServer(undefined).live === false);
 }
 {
-  // SpeakerStore: a players/all answer that was on its way while a live change landed is older: it must not overwrite it
+  // 2.5: the store reads nothing: its player list is the feed's, and a gap brings a fresh snapshot
   globalThis.window ??= globalThis;
-  let answer;
-  const be = { caps: { send: true, speakers: true, live: true }, send: () => new Promise((r) => { answer = r; }), playerIds: async () => new Map(), onChange: () => () => {} };
+  const sent = []; let subs = 0;
+  const be = { caps: { send: true, speakers: true, live: true }, subscribeLive: async () => { subs++; return () => {}; },
+    send: async (c) => { sent.push(c); return {}; }, playerIds: async () => new Map(), onChange: () => () => {} };
   const store = new MA.SpeakerStore(be);
-  store.hass = { entities: {} };
+  store.hass = { entities: {}, connection: {} };
+  store.start();
+  await new Promise((r) => setTimeout(r, 10));
+  check('U23 no refresh and no polling: the store has no players/all reader', typeof store.refresh !== 'function' && typeof store.stopPolling !== 'function' && subs === 1);
   store.onLive(snap());
-  const p = store.refresh();
   store.onLive(evt(2, 'player_updated', A, { player_id: A, synced_to: B }));
-  await new Promise((r) => setTimeout(r, 0));
-  answer([{ ...pA }, pB, pG]); // the answer predates the change (A not synced yet)
-  await p;
-  check('U23 a players/all answer older than a live change does not overwrite it', store.players.get(A).synced_to === B, J(store.players.get(A)));
-  const p2 = store.refresh();
-  await new Promise((r) => setTimeout(r, 0));
-  answer([{ ...pA, volume_level: 77 }, pB, pG]);
-  await p2;
-  check('U24 a players/all answer with no live change meanwhile is used (keeps the list right if the feed goes quiet)', store.players.get(A).volume_level === 77);
-  check('U25 a gap asks for a fresh snapshot (closes, then re-subscribes only while in use)', (() => { store.onLive(evt(9, 'player_updated', A, { player_id: A })); return store.live.ready === false; })());
+  check('U24 the player list is the feed\'s: snapshot, then each change', store.loaded && store.players.get(A).synced_to === B && store.players.size === 3, J(store.players.get(A)));
+  store.onLive(evt(9, 'player_updated', A, { player_id: A }));
+  await new Promise((r) => setTimeout(r, 10));
+  check('U25 a gap asks for a fresh snapshot (re-subscribes) and keeps the list on screen until it comes', subs === 2 && store.live.ready === false && store.players.size === 3 && store.loaded, J({ subs }));
+  check('U25b nothing was ever read with players/all', !sent.includes('players/all'), J(sent));
+  store.close();
+}
+{
+  // 2.5: waitFor waits for Music Assistant's own change message, with the same time limit; ready() waits for the snapshot
+  globalThis.window ??= globalThis;
+  const be = { caps: { send: true, speakers: true, live: true }, subscribeLive: async () => () => {}, send: async () => ({}), playerIds: async () => new Map(), onChange: () => () => {} };
+  const store = new MA.SpeakerStore(be);
+  store.hass = { entities: {}, connection: {} };
+  store.start();
+  const r0 = store.ready(500);
+  store.onLive(snap());
+  check('W1 ready() resolves once the snapshot is in', (await r0) === true);
+  check('W1b ready() is true at once when it already is', (await store.ready(1)) === true);
+  const inG = (p) => (p.get(GRP)?.group_members ?? []).includes('player_c');
+  let done; const w = store.waitFor(inG, 1000).then((v) => (done = v));
+  await new Promise((r) => setTimeout(r, 20));
+  check('W2 waitFor does not resolve before the change arrives', done === undefined);
+  store.onLive(evt(2, 'player_updated', GRP, { player_id: GRP, group_members: [A, B, 'player_c'] }));
+  await w;
+  check('W3 …and resolves true on the change message that makes it true', done === true);
+  check('W4 already true: resolves true at once', (await store.waitFor(inG, 1)) === true);
+  const t0 = Date.now();
+  const late = await store.waitFor((p) => p.has('nobody'), 120);
+  check('W5 never true: false after its time limit', late === false && Date.now() - t0 >= 110, String(Date.now() - t0));
+  const pend = store.waitFor((p) => p.has('nobody'), 5000);
+  store.close();
+  check('W6 closing the store releases a waiter with false', (await pend) === false && !store.loaded && store.players.size === 0);
+  const off = new MA.SpeakerStore({ caps: { send: true, speakers: true, live: false }, send: async () => ({}), onChange: () => () => {} });
+  off.hass = { entities: {}, connection: {} };
+  off.start();
+  check('W7 without the live feed: not available, ready() is false at once, nothing is read', off.available === false && (await off.ready(5000)) === false && !off.loaded);
+}
+{
+  // 2.5: the integration's active queues in the feed (the one rule is worked out there only)
+  const s = new LiveState();
+  s.apply({ ...snap(), active_queues: { [A]: GRP, [B]: null, [GRP]: GRP } });
+  check('AQ1 the snapshot\'s active_queues are kept; followsQueues', s.followsQueues && s.activeQueue(A) === GRP && s.activeQueue(B) === null && s.activeQueue('nobody') === null);
+  check('AQ2 an active_queue message (next number) moves one', s.apply({ seq: 2, kind: 'active_queue', player_id: A, queue_id: null }) === 'ok' && s.activeQueue(A) === null && s.seq === 2);
+  check('AQ3 an old one is dropped, a skipped number is a gap', s.apply({ seq: 2, kind: 'active_queue', player_id: A, queue_id: GRP }) === 'old' && s.activeQueue(A) === null
+    && s.apply({ seq: 4, kind: 'active_queue', player_id: A, queue_id: GRP }) === 'gap');
+  s.apply({ seq: 3, kind: 'active_queue', player_id: B, queue_id: GRP });
+  s.apply(evt(4, 'player_removed', B, null));
+  check('AQ4 a removed player loses its active queue', s.activeQueue(B) === null && !s.activeQueues.has(B));
+  const old = new LiveState();
+  old.apply(snap());
+  check('AQ5 a snapshot without active_queues (older integration): followsQueues false', old.followsQueues === false && old.activeQueue(A) === null);
+  s.reset();
+  check('AQ6 reset forgets them', !s.followsQueues && s.activeQueues.size === 0);
 }
 {
   // 2.4: Home Assistant lost its Music Assistant connection: 'offline', then the fresh snapshot on the same subscription
@@ -97,11 +143,12 @@ const evt = (seq, event, object_id, data) => ({ seq, kind: 'event', event, objec
   check('LO5 a subscription made while MA is offline starts with offline (seq 1), then the snapshot', t.apply({ seq: 1, kind: 'offline' }) === 'offline' && !t.ready && t.apply(snap(2)) === 'ok' && t.ready && t.seq === 2);
 }
 {
-  // SpeakerStore: offline is not a gap (no resubscribe); reload() reads the registry ids, group configs and players again
+  // SpeakerStore: offline is not a gap (no resubscribe); reload() reads the registry ids and group configs again (the
+  // feed brings its own fresh snapshot): no players/all
   globalThis.window ??= globalThis;
-  let subs = 0, ids = 0, alls = 0;
+  let subs = 0, ids = 0; const sent = [];
   const be = { caps: { send: true, speakers: true, live: true }, subscribeLive: async () => { subs++; return () => {}; },
-    send: async (c) => { if (c === 'players/all') alls++; return c === 'players/all' ? [pA, pB, pG] : {}; }, playerIds: async () => { ids++; return new Map(); }, onChange: () => () => {} };
+    send: async (c) => { sent.push(c); return {}; }, playerIds: async () => { ids++; return new Map(); }, onChange: () => () => {} };
   const store = new MA.SpeakerStore(be);
   const reg = {};
   store.hass = { entities: reg, connection: {} };
@@ -111,19 +158,46 @@ const evt = (seq, event, object_id, data) => ({ seq, kind: 'event', event, objec
   const subs0 = subs;
   store.onLive({ seq: 2, kind: 'offline' });
   check('LO6 offline keeps the live subscription (no resubscribe) and marks the feed not current', subs === subs0 && store.live.ready === false, J({ subs, subs0 }));
-  store.configTried.add(GRP); store.configs.set(GRP, { members: [] });
-  const ids0 = ids, alls0 = alls;
+  store.onLive(snap(3));
+  store.useConfigs();
+  await new Promise((r) => setTimeout(r, 10));
+  const cfg0 = sent.filter((c) => c === 'config/players/get').length;
+  const ids0 = ids;
   store.reload();
   await new Promise((r) => setTimeout(r, 10));
-  check('LO7 reload reads the registry ids (same registry), group configs and players/all again', ids === ids0 + 1 && alls === alls0 + 1 && store.configTried.has(GRP), J({ ids, ids0, alls, alls0 }));
-  store.stopPolling?.();
-  store.stopLive();
+  check('LO7 reload reads the registry ids (same registry) and the group configs again, and no players/all', ids === ids0 + 1
+    && sent.filter((c) => c === 'config/players/get').length === cfg0 + 1 && !sent.includes('players/all'), J({ ids, ids0, sent }));
+  store.close();
   const idle = new MA.SpeakerStore(be);
   idle.hass = { entities: reg, connection: {} };
-  const a1 = alls;
+  const n1 = sent.length, i1 = ids;
   idle.reload();
   await new Promise((r) => setTimeout(r, 10));
-  check('LO8 a store not in use (fixed mode) makes no MA call on reload', alls === a1);
+  check('LO8 a store the card has not started makes no call on reload', sent.length === n1 && ids === i1);
+}
+{
+  // 2.6 groundwork: the store has one path for every card (nothing reads speaker_mode); group configs only on demand
+  globalThis.window ??= globalThis;
+  const sent = [];
+  const be = { caps: { send: true, speakers: true, live: true }, subscribeLive: async () => () => {}, send: async (c) => { sent.push(c); return {}; }, playerIds: async () => new Map(), onChange: () => () => {} };
+  const store = new MA.SpeakerStore(be);
+  store.hass = { entities: {}, connection: {} };
+  store.start();
+  await new Promise((r) => setTimeout(r, 10));
+  store.onLive(snap());
+  await new Promise((r) => setTimeout(r, 10));
+  check('M1 the feed alone reads no group config (nobody asked for presets)', sent.length === 0, J(sent));
+  store.useConfigs();
+  await new Promise((r) => setTimeout(r, 10));
+  check('M2 useConfigs reads each group\'s config once', J(sent) === J(['config/players/get']), J(sent));
+  store.onLive(evt(2, 'player_added', 'grp2', { player_id: 'grp2', name: 'Upstairs', type: 'group', group_members: [] }));
+  await new Promise((r) => setTimeout(r, 10));
+  check('M3 …and a group that appears later', sent.length === 2, J(sent));
+  const src = (await import('node:fs')).readFileSync(new URL('../../src/speakers/ma.ts', import.meta.url), 'utf8')
+    + (await import('node:fs')).readFileSync(new URL('../../src/speakers/live.ts', import.meta.url), 'utf8')
+    + (await import('node:fs')).readFileSync(new URL('../../src/speakers/queue-follow.ts', import.meta.url), 'utf8');
+  check('M4 the store, the feed and the queue follow never read speaker_mode', !/\.speaker_mode|\[['"]speaker_mode['"]\]/.test(src));
+  store.close();
 }
 
 console.log(`\n${total - failures}/${total} live checks passed`);
