@@ -5,6 +5,8 @@
  * Features a backend can't do are reported in `caps`, and the card hides those controls.
  */
 import type { HomeAssistant } from '../types';
+import type { LiveMsg } from '../speakers/live';
+
 export type BackendKind = 'kiosk' | 'native';
 
 export interface Caps {
@@ -33,10 +35,12 @@ export interface Caps {
   queuePush: boolean;
   /** add / remove favorites by uri (music/favorites/*, permission class library): the Search radio heart */
   libraryWrite: boolean;
+  /** #103: jukebox_kiosk/subscribe_live, MA's players and queues pushed live (snapshot + numbered changes) */
+  live: boolean;
 }
 export const NO_CAPS: Caps = {
   send: false, queue: false, queuePlay: false, queueEdit: false, undo: false, queueBuffer: false,
-  trackLists: false, podcastEpisodes: false, lyrics: false, speakers: false, unfavorite: false, queuePush: false, libraryWrite: false,
+  trackLists: false, podcastEpisodes: false, lyrics: false, speakers: false, unfavorite: false, queuePush: false, libraryWrite: false, live: false,
 };
 
 /**
@@ -139,6 +143,9 @@ export interface MaBackend {
   searchProviders?(): Promise<any>;
   /** #99: {HA entity → MA player id} for every Music Assistant media_player, from HA's entity registry (kiosk only). */
   playerIds?(): Promise<Map<string, string>>;
+  /** #103 live feed (kiosk only): a snapshot of MA's players and queues, then each change MA pushes, numbered (seq).
+   *  Resolves an unsubscribe function. */
+  subscribeLive?(cb: (msg: LiveMsg) => void): Promise<() => void>;
   /** Server push for queue changes (kiosk only). Resolves an unsubscribe function. */
   subscribeQueue?(entity: string, cb: (ev: { event: string; queue_id?: string }) => void): Promise<() => void>;
   /** MA sleep timer for the entity, using the entity's MA player id. Kiosk only. */

@@ -240,6 +240,7 @@ export class JukeboxCard extends LitElement {
     this.queue.configForRemove = this._config;
     if (refresh && this.hass) this.queue.refreshSoon(0);
     this.startPush();
+    this.speakers.syncLive(); // #103: the server may only now say it has the live feed
     this.requestUpdate();
   }
   /** kiosk: queue events pushed by the server (jukebox_kiosk/subscribe_queue) refresh the queue at once */
@@ -633,6 +634,7 @@ export class JukeboxCard extends LitElement {
       this.dropLostTarget();
       this.queue.hass = this.hass;
       this.speakers.hass = this.hass;
+      this.speakers.syncLive(); // #103: starts once hass has a connection (only while the speakers store is in use)
       const id = this._config.entity!;
       const a = this.hass.states[id], b = old?.states[id];
       if (!old) this.queue.refreshSoon(0);

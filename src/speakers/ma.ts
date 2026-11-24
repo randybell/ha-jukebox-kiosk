@@ -4,11 +4,16 @@
  * (#99) jukebox_kiosk/player_ids, each HA entity's MA player id from HA's entity registry. HA's media_player.join/unjoin are
  * never used: their ids don't match MA's speaker ids. players/cmd/ungroup is never used either.
  * Calls are serialised (one grouping change at a time) and time out.
+ * #103: while the store is in use it also holds jukebox_kiosk/subscribe_live (see live.ts). Once its snapshot is in, the
+ * live feed is the one source of the player list: a players/all answer never replaces it, so an older answer can't
+ * overwrite a newer change. A missing message number brings a fresh snapshot. Screen updates are batched per frame.
+ * (players/all polling itself is removed in Build 1 piece 5; until then it only matters without the live feed.)
  */
 import type { HomeAssistant } from '../types';
 import type { MaBackend } from '../backend/types';
 import { parsePlayers, parseGroupConfig, type GroupConfig, type PlayerIds, type Players } from './model';
 import { TEST_HOOKS } from '../test-hooks';
+import { LiveState, type LiveMsg, type Queues } from './live';
 
 export class SpeakerError extends Error {
   constructor(public code: 'timeout' | 'failed' | 'config', message: string) { super(message); }
@@ -27,6 +32,14 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 export class SpeakerStore {
   hass?: HomeAssistant;
   players: Players = new Map();
+  /** #103: MA's queues from the live feed (empty without it). Read by the single queue lookup in piece 3. */
+  get queues(): Queues { return this.live.queues; }
+  /** #103: the live feed's state; `live.ready` = its snapshot is in and the player list follows MA's pushed changes */
+  readonly live = new LiveState();
+  /** bumped on every live change applied: a players/all answer that started before it is stale */
+  private rev = 0;
+  private liveSub?: { off?: () => void; closed: boolean };
+  private emitRaf = 0;
   /** #99: HA entity → MA player id (HA's entity registry, through the integration). Read again when the registry changes. */
   ids: PlayerIds = new Map();
   private idsFor: unknown = null;
@@ -40,7 +53,16 @@ export class SpeakerStore {
   private timer?: ReturnType<typeof setInterval>;
   private fastUntil = 0;
   private listeners = new Set<() => void>();
-  constructor(public backend?: MaBackend) {}
+  private _backend?: MaBackend;
+  constructor(backend?: MaBackend) { this._backend = backend; }
+  get backend(): MaBackend | undefined { return this._backend; }
+  /** a new backend: the old one's live subscription goes with it */
+  set backend(b: MaBackend | undefined) {
+    if (b === this._backend) return;
+    this.stopLive();
+    this._backend = b;
+    if (this.timer) this.syncLive();
+  }
   /** true when this backend can read and group MA players */
   get available() { return !!this.backend?.caps.speakers; }
   onChange(fn: () => void) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -63,9 +85,11 @@ export class SpeakerStore {
     this.idsFor = reg;
   }
   async refresh(): Promise<Players> {
+    const rev = this.rev;
     try {
       const [raw] = await Promise.all([this.send('players/all', {}), this.loadIds()]);
-      this.players = parsePlayers(raw);
+      // #103: with the live feed in, MA's pushed changes are the player list (the answer may also predate one of them)
+      if (!this.live.ready && rev === this.rev) this.players = parsePlayers(raw);
       this.loaded = true; this.error = '';
       void this.loadConfigs();
     } catch (e: any) { this.error = String(e?.message ?? e); }
@@ -116,13 +140,54 @@ export class SpeakerStore {
   private slow = false;
   start(slow = false) {
     this.slow = slow;
-    if (this.timer) return;
+    if (this.timer) { this.syncLive(); return; }
     void this.refresh();
     let last = Date.now();
     this.timer = setInterval(() => {
       const t = timeouts(); const now = Date.now();
       if (now - last >= (now < this.fastUntil ? t.fast : this.slow ? t.poll * 4 : t.poll)) { last = now; void this.refresh(); }
     }, 250);
+    this.syncLive();
   }
-  stopPolling() { if (this.timer) clearInterval(this.timer); this.timer = undefined; }
+  stopPolling() { if (this.timer) clearInterval(this.timer); this.timer = undefined; this.stopLive(); }
+
+  /* ---------------- #103 live feed ---------------- */
+  /** start the live feed when the store is in use and the backend offers it (the backend's caps may arrive later) */
+  syncLive() {
+    const be = this._backend;
+    if (!this.timer || this.liveSub || !be?.subscribeLive || !be.caps.live || !this.hass?.connection) return;
+    const sub: { off?: () => void; closed: boolean } = { closed: false };
+    this.liveSub = sub;
+    this.live.reset();
+    be.subscribeLive((m) => { if (!sub.closed) this.onLive(m); })
+      .then((off) => { if (sub.closed) off(); else sub.off = off; })
+      .catch((e) => {
+        console.warn('[jukebox-card] live speaker updates unavailable', e);
+        if (this.liveSub === sub) { sub.closed = true; this.liveSub = undefined; this.live.reset(); }
+      });
+  }
+  stopLive() {
+    const sub = this.liveSub;
+    this.liveSub = undefined;
+    if (sub) { sub.closed = true; sub.off?.(); }
+    this.live.reset();
+    if (this.emitRaf) { (typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : clearTimeout)(this.emitRaf as any); this.emitRaf = 0; }
+  }
+  private onLive(m: LiveMsg) {
+    const r = this.live.apply(m);
+    if (r === 'old') return;
+    if (r === 'gap') { this.stopLive(); this.syncLive(); return; } // a message went missing: start over with a fresh snapshot
+    this.rev++;
+    this.players = this.live.players;
+    this.loaded = true; this.error = '';
+    // a group that appears gets its MA config read once, as after players/all
+    if (m.kind === 'snapshot' || m.event === 'player_added') void this.loadConfigs();
+    this.emitSoon();
+  }
+  /** many changes in one frame redraw once */
+  private emitSoon() {
+    if (this.emitRaf) return;
+    const run = () => { this.emitRaf = 0; this.emit(); };
+    this.emitRaf = (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(run) : setTimeout(run, 16)) as unknown as number;
+  }
 }

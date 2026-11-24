@@ -5,8 +5,10 @@
  *   jukebox_kiosk/queue_items           -> queue window in the QueueItem shape, plus queue id / indexes / total
  *   jukebox_kiosk/item_tracks           -> server-paged track lists (page is 1-based on the wire)
  *   jukebox_kiosk/favorite_current, jukebox_kiosk/unfavorite_current, jukebox_kiosk/subscribe_queue
+ *   jukebox_kiosk/subscribe_live        -> #103 MA's players and queues: snapshot, then numbered changes
  */
 import type { HomeAssistant } from '../types';
+import type { LiveMsg } from '../speakers/live';
 import { AUTOPLAY_MODES, BackendError, Emitter, lookupMaEntry, NO_EXT, type AutoplayMode, type AutoplayOptions, type Caps, type ExtCaps, type MaBackend, type QueueAction, type QueueWindow, type TrackListType, type TrackPage } from './types';
 
 export const KIOSK_DOMAIN = 'jukebox_kiosk';
@@ -17,6 +19,8 @@ const OPTIMISTIC: Caps = {
   trackLists: true, podcastEpisodes: true, lyrics: true, speakers: true, unfavorite: true, queuePush: true,
   // shown only once the server lists it (a guest without the library class never sees a heart flash in)
   libraryWrite: false,
+  // #103: an integration older than the card has no subscribe_live; asked for only once the server lists it
+  live: false,
 };
 export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
   const b = (k: string, d = false) => (f && typeof f[k] === 'boolean' ? (f[k] as boolean) : d);
@@ -24,7 +28,7 @@ export function capsFromServer(f: Record<string, unknown> | undefined): Caps {
     send: b('ma_commands', true), queue: b('queue', true), queuePlay: b('queue_play'), queueEdit: b('queue_edit'),
     undo: b('undo'), queueBuffer: b('queue', true), trackLists: b('track_lists'), podcastEpisodes: b('podcast_episodes'),
     lyrics: b('lyrics'), speakers: b('speakers'), unfavorite: b('unfavorite'), queuePush: b('queue_push'),
-    libraryWrite: b('library_write'),
+    libraryWrite: b('library_write'), live: b('live_feed'),
   };
 }
 /**
@@ -145,6 +149,13 @@ export class KioskBackend implements MaBackend {
     const r = await this.ws<any>({ type: 'player_ids' });
     const raw = r?.players && typeof r.players === 'object' ? r.players : {};
     return new Map(Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === 'string' && !!e[1]));
+  }
+  /** #103: jukebox_kiosk/subscribe_live (snapshot, then MA's pushed player and queue changes, each with seq) */
+  async subscribeLive(cb: (msg: LiveMsg) => void) {
+    const conn = this.hass.connection;
+    if (!conn?.subscribeMessage) throw new BackendError('unsupported', 'no websocket subscriptions');
+    const unsub = await conn.subscribeMessage(cb, { type: `${KIOSK_DOMAIN}/subscribe_live` });
+    return () => { void Promise.resolve(unsub()).catch(() => undefined); };
   }
   async subscribeQueue(entity: string, cb: (ev: { event: string; queue_id?: string }) => void) {
     const conn = this.hass.connection;
