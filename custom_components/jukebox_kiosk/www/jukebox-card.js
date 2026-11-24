@@ -1,4 +1,4 @@
-/*! Jukebox Card v0.9.2 (jukebox_kiosk) | MIT License | Copyright (c) 2026 Randy Bell | Includes Lit (BSD-3-Clause, Copyright Google LLC); see THIRD_PARTY_NOTICES.md */
+/*! Jukebox Card v1.0.0-beta.2 (jukebox_kiosk) | MIT License | Copyright (c) 2026 Randy Bell | Includes Lit (BSD-3-Clause, Copyright Google LLC); see THIRD_PARTY_NOTICES.md */
 /**
  * @license
  * Copyright 2019 Google LLC
