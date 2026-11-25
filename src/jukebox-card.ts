@@ -17,7 +17,7 @@ import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
 import { QueueFollow } from './speakers/queue-follow';
 import type { LiveMsg } from './speakers/live';
-import { canGroup, targetsOf, targetMa, isActive, liveCount, membersOf, pillPrefix } from './speakers/model';
+import { canGroup, targetsOf, targetMa, isActive, liveCount, pillMembers, pillPrefix } from './speakers/model';
 /** the screensaver's reduced-motion class (.rm) follows the browser setting */
 const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
@@ -714,7 +714,7 @@ export class JukeboxCard extends LitElement {
     const players = this.speakers.loaded ? this.speakers.players : undefined;
     const ma = players ? targetMa(c.entity!, this.speakers.ids) : undefined;
     const g = ma ? players!.get(ma) : undefined;
-    const store = g && isActive(g) ? membersOf(g, players!) : undefined;
+    const store = g && isActive(g) ? pillMembers(g, players!) : undefined; // #101: a plain leader counts its synced speakers
     return liveCount(ent, store, roomsOf(c, h).map((r) => h.states[r.entity]));
   }
   private onFocusIn = (e: FocusEvent) => {

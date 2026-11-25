@@ -90,6 +90,13 @@ check('U17 dropBlock: leader (block) / last / allowed',
       && M.liveCount(E('playing', []), undefined, []) === 1 && M.liveCount(E('idle', ['a']), ['x'], []) === 0 && M.liveCount(undefined, undefined, []) === 0);
   check('U17f 0.7.12: MA members win over a shorter HA list (pill matches the Speakers panel: 4, not 1)',
     M.liveCount(E('playing', ['a']), ['a', 'b', 'c', 'd'], []) === 4 && M.liveCount(E('playing', ['a', 'b']), undefined, []) === 2);
+  // #101: a plain speaker leading a sync of two others: the pill counts 3 (membersOf alone gave [leader] → 1)
+  const sync3 = M.parsePlayers([P('lead', { playback_state: 'playing', group_members: ['lead', 'm1', 'm2'] }), P('m1', { synced_to: 'lead' }), P('m2', { synced_to: 'lead' }), P('solo', { playback_state: 'playing' })]);
+  check('U17g #101 pillMembers: a plain leader counts itself plus its synced speakers; a lone speaker 1; groups as membersOf',
+    J(M.pillMembers(sync3.get('lead'), sync3)) === J(['lead', 'm1', 'm2']) && M.liveCount(E('playing', ['lead']), M.pillMembers(sync3.get('lead'), sync3), []) === 3
+      && J(M.pillMembers(sync3.get('solo'), sync3)) === J(['solo']) && J(M.pillMembers(sync3.get('m1'), sync3)) === J(['m1'])
+      && J(M.pillMembers(players.get('syncgroup_indoor'), players)) === J(M.membersOf(players.get('syncgroup_indoor'), players)),
+    J(M.pillMembers(sync3.get('lead'), sync3)));
 }
 const tk = M.takeovers('syncgroup_static', ['spk_kitchen'], players);
 check('U18 takeovers: taking a member of a playing dynamic group', tk.length === 1 && tk[0].kind === 'dynamic' && tk[0].group === 'syncgroup_indoor' && !tk[0].last && !tk[0].leader, J(tk));

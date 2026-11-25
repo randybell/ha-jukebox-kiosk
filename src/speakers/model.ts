@@ -92,6 +92,12 @@ export function membersOf(g: MaPlayer | undefined, players: Players): string[] {
   const live = g.group_members.filter((id) => players.get(id)?.type !== 'group');
   return live.length ? live : kindOf(g) === 'static' ? g.static_group_members : [];
 }
+/** #101: speakers a target plays on, for the pill: a plain speaker that leads a sync (MA: synced_to null, group_members =
+ *  [itself, ...]) counts itself plus the speakers synced to it; anything else as membersOf. */
+export function pillMembers(g: MaPlayer | undefined, players: Players): string[] {
+  if (!g || g.type === 'group' || g.synced_to || g.group_members.length < 2) return membersOf(g, players);
+  return [g.player_id, ...g.group_members.filter((id) => id !== g.player_id && players.get(id)?.type !== 'group')];
+}
 /**
  * Speakers on the pill. HA's media_player for a Music Assistant sync group can report group_members: [] while
  * it plays (live 2026.10, dynamic group): then use MA's own member list, else the biggest room that plays the same
