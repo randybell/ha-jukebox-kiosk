@@ -8,7 +8,7 @@ import './slider';
 import type { HomeAssistant, JukeboxCardConfig, PresetConfig } from './types';
 import { SpeakerError, timeouts, type SpeakerStore } from './speakers/ma';
 import {
-  mapRooms, targetMa, targetsOf, canGroup, canVolume, kindOf, isActive, membersOf, leaderOf, holderOf,
+  mapRooms, targetMa, targetsOf, canGroup, canVolume, kindOf, isActive, isPlaying, membersOf, leaderOf, holderOf,
   takeovers, takeoverText, dropBlock, planMembers, presetSpeakers, maPresets, type MaPlayer, type PlayerIds, type Players, type Room, type Takeover, type Target,
 } from './speakers/model';
 import { defineElement } from './define';
@@ -44,6 +44,11 @@ const chipMs = (kind: ChipKind, undo: boolean) => kind === 'busy' ? BUSY_MS : ki
   : undo ? ms('__jbUndoMs', UNDO_MS) : ms('__jbChipMs', CHIP_MS);
 const HOLD_MS = 4000;
 const REGROUP_MS = 15000;
+/** #1.0.1 leader-drop safety net: how long after the drop MA gets to restart the group itself before the card checks
+ *  (MA 2.10.13, Randy's log: dissolve, re-form after ~9.6 s, the restart fails at ~14.4 s, idle-grace dissolve at ~24.4 s),
+ *  and how much longer a group still re-forming (buffering) gets */
+const RESUME_MS = 18000;
+const RESUME_GRACE_MS = 6000;
 const VOL_THROTTLE_MS = 200;
 
 export class JbSpeakers extends LitElement {
@@ -69,6 +74,8 @@ export class JbSpeakers extends LitElement {
   /** after the leader is dropped MA re-forms the group on the next member after ~5.9 s of silence (live 2.10.9): 'Regrouping…' */
   private _regroup: { group: string; old: string; until: number } | null = null;
   private _regroupTimer?: number;
+  /** the latest leader drop's safety net (a newer drop, or the card moving elsewhere, cancels an older one) */
+  private _resumeN = 0;
   private _unsub?: () => void;
   private _chipTimer?: number;
   private vol = new Map<string, Pending<number>>();
@@ -297,8 +304,10 @@ export class JbSpeakers extends LitElement {
     if (isLeader && this.modal && !(await this.ask({ title: `Drop ${room.name}?`, lines: [`${room.name} leads ${tName} now. Music Assistant hands ${tName} to the other speakers: they go quiet for a few seconds, then the queue plays on.`], ok: 'Drop' }))) return;
     this.setBusy(room.ma, 'out');
     if (isLeader) { this.startRegroup(x.tMa, room.ma); this.status('Regrouping…', { kind: 'busy' }); }
+    const wasPlaying = isLeader && x.tP?.playback_state === 'playing' && this.hass?.states[x.c.entity!]?.state === 'playing';
     try {
       await this.store!.setMembers(x.tMa, [], [room.ma]);
+      if (wasPlaying) void this.resumeAfterDrop(x.tMa, x.c.entity!, room.ma);
       const ok = await this.store!.waitFor((p) => !membersOf(p.get(x.tMa!), p).includes(room.ma!), timeouts().join);
       if (!ok) throw new SpeakerError('timeout', `${room.name} did not leave`);
       const s = room.ma, t = x.tMa;
@@ -307,6 +316,39 @@ export class JbSpeakers extends LitElement {
       if (isLeader) this.endRegroup();
       this.fail(`Couldn't drop ${room.name}: ${errText(e)}`);
     } finally { this.setBusy(room.ma); }
+  }
+  /**
+   * 1.0.1 safety net after dropping the leader of a playing group: Music Assistant 2.10.13 dissolves the group, re-forms it
+   * on the next member and restarts playback, but that restart can fail ("Can not resolve stream URL: Invalid PlayerMedia
+   * data") and the group goes idle. Once MA has had its chance (RESUME_MS, plus RESUME_GRACE_MS while it is still
+   * re-forming), the card sends one play to the group, only when the group is still not playing on its new leader, Up
+   * next still has songs, the card is still on that group, and nobody paused it. MA's own restart arriving first skips it.
+   */
+  private async resumeAfterDrop(group: string, entity: string, old: string) {
+    const n = ++this._resumeN, store = this.store;
+    if (!store) return;
+    const back = (p: Players) => {
+      const g = p.get(group);
+      if (!isPlaying(g)) return false;
+      const mem = membersOf(g, p), lead = leaderOf(g, p);
+      return !mem.includes(old) && (!lead || p.get(lead)?.playback_state === 'playing');
+    };
+    if (await store.waitFor(back, ms('__jbResumeMs', RESUME_MS))) return;
+    if (store.players.get(group)?.playback_state === 'buffering' && await store.waitFor(back, ms('__jbResumeGraceMs', RESUME_GRACE_MS))) return;
+    // the card left the page or moved on, a newer drop took over, or MA's restart came after all
+    if (n !== this._resumeN || !this.isConnected || this.store !== store || !store.loaded || this.config?.entity !== entity || back(store.players)) return;
+    const st = this.hass?.states[entity]?.state;
+    if (st === 'playing' || st === 'paused') return; // playing on, or someone paused it meanwhile
+    if (!this.upNext(group)) return;
+    try { await this.hass!.callService('media_player', 'media_play', {}, { entity_id: entity }); }
+    catch (e) { console.warn('[jukebox-card] resume after the leader drop failed', e); }
+  }
+  /** Up next has songs: the group's queue (the live feed's active queue, else its own) has items after the current one */
+  private upNext(group: string): boolean {
+    const live = this.store?.live;
+    if (!live?.ready) return false;
+    const q = live.queues.get(live.activeQueue(group) ?? group);
+    return !!q && q.items > (q.current_index ?? -1) + 1;
   }
   /** 'Regrouping…' until the group plays again on a new leader (or 15 s) */
   private startRegroup(group: string, old: string) {

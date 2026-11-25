@@ -16,6 +16,7 @@
 // "<n> is already played/buffered"; delete_item there: 200, ignored). HA entities carry mass_player_id null.
 // URL params: ma=split (Indoor plays living+kitchen with its own queue, Garage plays a radio station alone, Everywhere idle),
 // ma=busy (Everywhere plays, Indoor idle: the default), grp=fail|slow|timeout (set_members), xfer=fail|slow|timeout (transfer),
+// reform=fail (MA 2.10.13: the restart after a leader re-form fails and the group goes idle, queue kept),
 // gap=<ms> (leader re-form gap, default 1200), malat=<ms> (players/* latency, default 40), xgap=<ms> (transfer silence,
 // default 0), live=1 (live timings: gap 5900 with the group left 'playing' and the new leader silent, xgap 4700, set_members
 // ~1 s, idle groups report a stale active_queue), qbuf=1 (MA buffered the next track: index_in_buffer = current + 1),
@@ -51,6 +52,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   const isSilent = (g) => (silent[g] ?? 0) > Date.now();
   const MALAT = Number(params.get('malat') ?? 40);
   const GRP = params.get('grp') ?? '', XFER = params.get('xfer') ?? '';
+  const REFORM_FAIL = params.get('reform') === 'fail';
 
   const gState = (g) => st(G[g].entity)?.state ?? 'idle';
   const active = (g) => ['playing', 'paused', 'buffering'].includes(gState(g));
@@ -132,7 +134,13 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
       return;
     }
     setState(ent, 'buffering'); syncHa();
-    setTimeout(() => { if (st(ent).state === 'buffering') { setState(ent, 'playing'); events.push({ ev: 'reformed', group: g }); syncHa(); commit(); } }, GAP);
+    setTimeout(() => {
+      if (st(ent).state !== 'buffering') return;
+      // reform=fail: MA 2.10.13's restart fails ("Can not resolve stream URL: Invalid PlayerMedia data"): the group goes
+      // idle with its queue kept; a play starts it again on the same speakers
+      if (REFORM_FAIL) { G[g].idle = [...G[g].members]; stopGroup(g, 'reform failed'); events.push({ ev: 'reform-failed', group: g }); syncHa(); commit(); return; }
+      setState(ent, 'playing'); events.push({ ev: 'reformed', group: g }); syncHa(); commit();
+    }, GAP);
   }
   /** a group powers on with its preset (dynamic) or fixed list (static): takes the speakers, hijacks a group its leader leads */
   function powerOn(g) {

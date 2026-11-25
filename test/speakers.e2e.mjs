@@ -963,6 +963,50 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
     rg && stDuring === 'playing' && back && (await events(p)).some((e) => e.ev === 'reformed'), J({ rg, stDuring, back }));
   await p.close();
 }
+// ───────────── 1.0.1 leader-drop safety net (MA 2.10.13: the restart after the re-form can fail) ─────────────
+async function dropLeaderOfIndoor(q, upNext = true) {
+  const p = await open(`&spk=dyn&admin=1${q}&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => { window.__jbResumeMs = 1500; window.__jbResumeGraceMs = 500; });
+  // Indoor plays Everywhere's queue (Move = transfer), so it has songs in Up next
+  await openPanel(p); await waitLoaded(p);
+  await tap(p, `${SR}.querySelector('[data-target="${IN}"]')`);
+  await wait(p, ASKQ, 1500) && (await confirm(p));
+  await wait(p, `window.__hass.states['${IN}'].state === 'playing' && ${NOW}.config.entity === '${IN}'`, 5000);
+  if (!upNext) await p.evaluate(() => { const q = window.__queues['media_player.indoor']; q.items = q.items.slice(0, q.index + 1); window.__liveTick?.(); window.__queueTick?.(); });
+  await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state === 'playing'`, 3000);
+  const lead = await p.evaluate(() => window.__ma.G.syncgroup_mock_indoor.members[0]);
+  const leadRoom = lead === 'wiim_mock_kitchen' ? KIT : LIV;
+  await wait(p, `${act(leadRoom)}?.dataset.act === 'drop'`, 4000);
+  const before = await p.evaluate(() => window.__calls.length);
+  await tap(p, act(leadRoom));
+  const plays = () => p.evaluate((b, e) => window.__calls.slice(b).filter((c) => c.domain === 'media_player' && c.service === 'media_play' && [c.data?.entity_id, c.target?.entity_id].flat().includes(e)).length, before, IN);
+  return { p, plays };
+}
+{
+  const { p, plays } = await dropLeaderOfIndoor('&reform=fail&gap=500');
+  const failed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reform-failed')`, 3000);
+  const idleAfter = await st(p, IN);
+  const back = await wait(p, `window.__hass.states['${IN}'].state === 'playing'`, 5000);
+  await sleep(2500);
+  check('SN1 leader dropped, MA\'s restart fails (group idle, songs in Up next) → the card sends one play and the group plays again',
+    failed && idleAfter !== 'playing' && back && (await plays()) === 1, J({ failed, idleAfter, back, plays: await plays() }));
+  await p.close();
+}
+{
+  const { p, plays } = await dropLeaderOfIndoor('&gap=500');
+  const reformed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed')`, 3000);
+  await sleep(3000);
+  check('SN2 leader dropped and MA restarts the group itself → no play from the card', reformed && (await st(p, IN)) === 'playing' && (await plays()) === 0, J({ reformed, plays: await plays() }));
+  await p.close();
+}
+{
+  // nothing left in Up next: the playing song is the queue's last one
+  const { p, plays } = await dropLeaderOfIndoor('&reform=fail&gap=500', false);
+  await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reform-failed')`, 3000);
+  await sleep(3000);
+  check('SN3 restart fails but Up next is empty → no play (the card never starts anything by itself)', (await plays()) === 0 && (await st(p, IN)) !== 'playing', J({ plays: await plays(), st: await st(p, IN) }));
+  await p.close();
+}
 {
   // live transfer: the source stops at once, the target is silent ~4.7 s (1.2 s here) and then plays
   const p = await open(`&spk=dyn&admin=1&ma=split&xgap=1200&target=${IN}`);
