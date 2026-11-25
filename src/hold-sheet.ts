@@ -165,19 +165,20 @@ export class JbHoldSheet extends LitElement {
     const hd = html`<div class="hd">${artTpl(s.item, 'big')}<span><b>${s.item.name}</b>${s.sub ? html`<small>${s.sub}</small>` : nothing}</span></div>`;
     if (this._info && s.info && hasMoreInfo(s.info)) {
       // 0.7.12: the info panel (styled like the station sheet's details), only lines with data; Back returns to the choices.
-      // Favorite lives here (queue songs, Library Tracks, search songs): shown grayed when it can't be used (no uri, or the backend can't write it).
+      // Favorite is a round heart in the header (same as the detail action-row heart), right of the title/artist, so the info list is unchanged. Grayed when it can't be used (no uri, or the backend can't write it).
       const it = s.item as MaItem;
       const can = this.canFav(it);
       const on = this.hearts.isFav(it);
       const favLabel = on ? 'In favorites' : 'Add to favorites';
       const favAria = !can ? `Can't add ${it.name} to favorites` : on ? `Remove ${it.name} from favorites` : `Add ${it.name} to favorites`;
-      return html`<div class="bk" data-action="backdrop" @click=${() => this.close()}></div>
-        <div class="sh info" role="dialog" aria-modal="true" aria-label="${s.item.name} details">${hd}
-          <dl class="meta">${s.info.map((l) => html`<div class="f" data-field=${l.k}><dt>${l.label}</dt><dd>${l.v}</dd></div>`)}</dl>
-          <button class="it fav ${on ? 'on' : ''} ${can ? '' : 'off'}" data-action="fav" tabindex="-1"
+      const infoHd = html`<div class="hd">${artTpl(s.item, 'big')}<span><b>${s.item.name}</b>${s.sub ? html`<small>${s.sub}</small>` : nothing}</span>
+          <button class="sbtn hfav ${on ? 'on' : ''} ${can ? '' : 'off'}" data-action="fav" tabindex="-1"
             aria-pressed=${on ? 'true' : 'false'} aria-disabled=${can ? 'false' : 'true'}
             aria-label=${favAria} title=${favLabel}
-            @pointerdown=${noFocus} @click=${() => { if (can) this.toggleFav(); }}>${icon(on ? 'heart' : 'heartline')}<span>${favLabel}</span></button>
+            @pointerdown=${noFocus} @click=${() => { if (can) this.toggleFav(); }}>${icon(on ? 'heart' : 'heartline')}</button></div>`;
+      return html`<div class="bk" data-action="backdrop" @click=${() => this.close()}></div>
+        <div class="sh info" role="dialog" aria-modal="true" aria-label="${s.item.name} details">${infoHd}
+          <dl class="meta">${s.info.map((l) => html`<div class="f" data-field=${l.k}><dt>${l.label}</dt><dd>${l.v}</dd></div>`)}</dl>
           <button class="it cancel" data-action="back" tabindex="-1" @pointerdown=${noFocus} @click=${() => { this._info = false; }}>${icon('back')}<span>Back</span></button>
         </div><div class="pmh" aria-hidden="true"></div>`;
     }
@@ -203,7 +204,7 @@ export class JbHoldSheet extends LitElement {
     .hd { display: flex; align-items: center; gap: calc(var(--ha-space-4, 16px) * var(--_hs-s, 1)); padding: 0 calc(var(--ha-space-1, 4px) * var(--_hs-s, 1)) calc(var(--ha-space-3, 12px) * var(--_hs-s, 1)); border-bottom: var(--ha-border-width-sm, 1px) solid var(--_divider); margin-bottom: calc(var(--ha-space-2, 8px) * var(--_hs-s, 1)); min-width: 0; flex: none; }
     .hd .ar.big { width: calc(72px * var(--_hs-s, 1)); height: calc(72px * var(--_hs-s, 1)); flex: none; border-radius: calc(var(--ha-border-radius-lg, 12px) * var(--_hs-s, 1)); overflow: hidden; display: grid; place-items: center; }
     .hd .ar.big img { width: 100%; height: 100%; object-fit: cover; }
-    .hd span { display: flex; flex-direction: column; gap: calc(var(--ha-space-1, 4px) * var(--_hs-s, 1)); min-width: 0; }
+    .hd span { display: flex; flex-direction: column; gap: calc(var(--ha-space-1, 4px) * var(--_hs-s, 1)); min-width: 0; flex: 1; }
     .hd b { font-size: calc(var(--ha-font-size-2xl, 24px) * var(--_hs-s, 1)); font-weight: var(--ha-font-weight-bold, 700); line-height: var(--ha-line-height-condensed, 1.2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .hd small { font-size: calc(var(--ha-font-size-l, 16px) * var(--_hs-s, 1)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .its { display: flex; flex-direction: column; gap: calc(var(--ha-space-2, 8px) * var(--_hs-s, 1)); flex: none; }
@@ -213,8 +214,13 @@ export class JbHoldSheet extends LitElement {
     .it .i { width: max(var(--_icon), calc(var(--_icon) * 30 / 24 * var(--_hs-s, 1))); height: max(var(--_icon), calc(var(--_icon) * 30 / 24 * var(--_hs-s, 1))); flex: none; }
     .it.off { color: var(--_disabled); cursor: default; }
     .it.off:active { background: var(--_chip-bg); }
-    .it.fav.on { color: var(--_active); }
-    .it.fav .i { color: inherit; }
+    /* Same round heart as the detail action-row .sbtn.hfav; lives in the More Info header, not in the info list. */
+    .hd .sbtn.hfav { flex: none; align-self: center; display: inline-flex; align-items: center; justify-content: center; padding: 0; aspect-ratio: 1;
+      min-height: var(--_touch-min); min-width: var(--_touch-min); box-sizing: border-box; border-radius: var(--ha-border-radius-pill, 9999px);
+      border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_inactive); }
+    .hd .sbtn.hfav.on { color: var(--_active); border-color: currentColor; }
+    .hd .sbtn.hfav.off { color: var(--_disabled); cursor: default; }
+    .hd .sbtn.hfav .i { width: calc(var(--_icon) * 22 / 24); height: calc(var(--_icon) * 22 / 24); flex: none; }
     .meta { margin: calc(var(--ha-space-1, 4px) * var(--_hs-s, 1)) calc(var(--ha-space-1, 4px) * var(--_hs-s, 1)) 0; display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--ha-space-4, 16px) * var(--_hs-s, 1)) calc(var(--ha-space-6, 24px) * var(--_hs-s, 1)); flex: none; }
     .f { display: flex; flex-direction: column; gap: calc(2px * var(--_hs-s, 1)); min-width: 0; }
     .f dt { font-size: calc(var(--ha-font-size-m, 14px) * var(--_hs-s, 1)); color: var(--_inactive); }
