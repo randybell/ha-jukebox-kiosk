@@ -329,7 +329,20 @@ export function inlineButton(r: InlineRoomState, name: string): { add: boolean; 
   const label = add ? (a.kind === 'take' ? `Add ${name} (${a.label.toLowerCase()})` : `Add ${name}`) : `Drop ${name}`;
   return { add, label, dis: a.dis };
 }
-/** the header pill reads as a control: "Playing on: Everywhere · 3 speakers" */
+/** Playback state for a player or group: Music Assistant's live feed when that feed is in, otherwise Home Assistant's. */
+export function playStateOf(
+  store: { loaded: boolean; live: { ready: boolean }; ids: PlayerIds; players: Players } | undefined,
+  entity: string | undefined,
+  haState: string | undefined,
+): string | undefined {
+  if (store?.loaded && store.live.ready && entity) {
+    const pid = store.ids.get(entity);
+    const st = pid ? store.players.get(pid)?.playback_state : undefined;
+    if (st != null && st !== '') return st;
+  }
+  return haState;
+}
+/** the header pill reads as a control: "Playing on:" the selected group, then the speaker count */
 export function pillPrefix(state: string | undefined): string {
   return state === 'playing' || state === 'buffering' ? 'Playing on:' : state === 'paused' ? 'Paused on:' : 'Speakers:';
 }

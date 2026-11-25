@@ -351,6 +351,18 @@ check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.is
     && M.inlineLine(R({ busy: 'out' })) === 'Leaving…' && M.inlineLine(R({ inT: false, where: 'Playing alone · Blue Hour' })) === 'Playing alone · Blue Hour');
   check('U52 pillPrefix: playing/buffering → "Playing on:", paused → "Paused on:", else "Speakers:"',
     M.pillPrefix('playing') === 'Playing on:' && M.pillPrefix('buffering') === 'Playing on:' && M.pillPrefix('paused') === 'Paused on:' && M.pillPrefix('idle') === 'Speakers:' && M.pillPrefix(undefined) === 'Speakers:');
+  const feed = (ready, state) => ({
+    loaded: ready, live: { ready },
+    ids: new Map([['media_player.group', 'gid']]),
+    players: new Map(state == null ? [] : [['gid', { playback_state: state }]]),
+  });
+  check('U54 playStateOf: the live feed wins when it is in, otherwise Home Assistant, and nothing if both are missing',
+    M.playStateOf(feed(true, 'playing'), 'media_player.group', 'paused') === 'playing'
+    && M.playStateOf(feed(true, 'paused'), 'media_player.group', 'playing') === 'paused'
+    && M.playStateOf(feed(false, 'playing'), 'media_player.group', 'paused') === 'paused'
+    && M.playStateOf(undefined, 'media_player.group', 'playing') === 'playing'
+    && M.playStateOf(feed(true, 'playing'), 'media_player.other', 'idle') === 'idle'
+    && M.playStateOf(undefined, 'media_player.group', undefined) === undefined);
   const H = (gm, rt = 'So What', rid = 'lib://track/so-what', raq) => ({ states: {
     'media_player.everywhere': { state: 'playing', attributes: { group_members: gm, media_title: 'So What', media_content_id: 'lib://track/so-what', active_queue: 'q_every' } },
     'media_player.garage': { state: 'playing', attributes: { media_title: rt, media_content_id: rid, ...(raq ? { active_queue: raq } : {}) } } } });

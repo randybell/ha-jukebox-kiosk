@@ -23,6 +23,8 @@
 // admin=1 (the user is an admin), user=<name>, uid=<user id>. nolib=1: get_library is refused (a guest without library reads).
 // jjgrey=1: the v0.7 search-filters artist (JJ Grey, library + Apple Music, one duplicate track) and look-alikes. jjmany=N: N more library albums and tracks by JJ Grey (needs jjgrey=1).
 // HA media_player.join / unjoin throw (their ids don't match MA's speakers; the card must use MA set_members).
+// window.__desyncHa(entity, haState, maState): the Home Assistant entity stays at haState while Music Assistant's
+// player for that group keeps maState (Home Assistant falling behind after the lead speaker is dropped and re-added).
 
 import { createMa } from './mock-ma.js';
 import { createKiosk } from './mock-kiosk.js';
@@ -375,6 +377,7 @@ for (const id of NON_MA) setState(id, 'playing', { friendly_name: 'Kitchen Speak
   media_title: 'Not a Music Assistant song', active_queue: 'syncgroup_everywhere', mass_player_type: 'group' });
 const ma = createMa({ params, st, setState, commit: () => commit(), sleep, QS, syncNowPlaying, EVERY, libTracks, qItem });
 afterGroupState = (id) => ma.groupStateChanged(id);
+window.__desyncHa = (entity, haState, maState) => ma.desyncHa(entity, haState, maState);
 
 const listeners = new Set();
 export const onHass = (fn) => listeners.add(fn);
@@ -474,9 +477,9 @@ async function callService(domain, service, data = {}, target, notifyOnError, re
       switch (service) {
         case 'volume_set': setState(id, null, { volume_level: Math.max(0, Math.min(1, +data.volume_level)) }); break;
         case 'volume_mute': setState(id, null, { is_volume_muted: !!data.is_volume_muted }); break;
-        case 'media_play': if (ma.willPlay(id)) ma.afterHa(); setState(id, 'playing', { media_position: posNow(a, e.state), media_position_updated_at: new Date().toISOString() }); break;
-        case 'media_pause': setState(id, 'paused', { media_position: posNow(a, e.state), media_position_updated_at: new Date().toISOString() }); break;
-        case 'media_play_pause': setState(id, e.state === 'playing' ? 'paused' : 'playing'); break;
+        case 'media_play': ma.clearPlayOverride?.(id); if (ma.willPlay(id)) ma.afterHa(); setState(id, 'playing', { media_position: posNow(a, e.state), media_position_updated_at: new Date().toISOString() }); break;
+        case 'media_pause': ma.clearPlayOverride?.(id); setState(id, 'paused', { media_position: posNow(a, e.state), media_position_updated_at: new Date().toISOString() }); break;
+        case 'media_play_pause': ma.clearPlayOverride?.(id); setState(id, e.state === 'playing' ? 'paused' : 'playing'); break;
         case 'media_next_track': { const Q = qOf(id); if (Q && Q.index < Q.items.length - 1) { Q.index++; syncNowPlaying(true, id); } break; }
         case 'media_previous_track': { const Q = qOf(id); if (Q) { if (posNow(a, e.state) < 3 && Q.index > 0) Q.index--; syncNowPlaying(true, id); } break; }
         case 'media_seek': setState(id, null, { media_position: +data.seek_position, media_position_updated_at: new Date().toISOString() }); break;

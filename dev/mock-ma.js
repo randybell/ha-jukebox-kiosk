@@ -56,7 +56,8 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   const GRP = params.get('grp') ?? '', XFER = params.get('xfer') ?? '';
   const REFORM_FAIL = params.get('reform') === 'fail';
 
-  const gState = (g) => st(G[g].entity)?.state ?? 'idle';
+  const playOverride = {}; // player_id -> playback_state, when Home Assistant's entity has fallen behind
+  const gState = (g) => playOverride[g] ?? st(G[g].entity)?.state ?? 'idle';
   const active = (g) => ['playing', 'paused', 'buffering'].includes(gState(g));
   const membersNow = (g) => (G[g].kind === 'static' ? (active(g) ? G[g].members : []) : active(g) ? G[g].members : []);
   const holder = (s, except) => Object.keys(G).find((g) => g !== except && active(g) && membersNow(g).includes(s));
@@ -392,6 +393,22 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   if (EVDYN) syncHa();
   /** test hook: force a group's state (and dynamic members), e.g. an overlap MA can reach but the mock flows don't */
   function force(g, state, members) { if (members && G[g].kind === 'dynamic') G[g].members = [...members]; setState(G[g].entity, state); syncHa(); commit(); }
-  window.__ma = { G, SP, solo, players, events, force, silent };
-  return { command, willPlay, afterHa, groupStateChanged, isGroup: (e) => !!gidOf(e), INDOOR, OUTDOOR };
+  /** test hook: Home Assistant's group entity stays at haState while this group's Music Assistant player keeps maState */
+  function desyncHa(entity, haState, maState) {
+    const g = gidOf(entity);
+    if (!g) return false;
+    if (maState == null) delete playOverride[g];
+    else playOverride[g] = maState;
+    if (haState != null) setState(entity, haState);
+    syncHa(); commit();
+    return true;
+  }
+  function clearPlayOverride(entity) {
+    const g = gidOf(entity);
+    if (!g || playOverride[g] == null) return false;
+    delete playOverride[g];
+    return true;
+  }
+  window.__ma = { G, SP, solo, players, events, force, silent, desyncHa, clearPlayOverride, playOverride };
+  return { command, willPlay, afterHa, groupStateChanged, isGroup: (e) => !!gidOf(e), desyncHa, clearPlayOverride, INDOOR, OUTDOOR };
 }

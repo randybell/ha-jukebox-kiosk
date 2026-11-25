@@ -12,7 +12,8 @@ import './lyrics/lyrics-view';
 import type { LyricsStore } from './lyrics/store';
 import type { QueueModel, QueueSnapshot } from './queue-model';
 import type { HassEntity, HomeAssistant, JukeboxCardConfig } from './types';
-import { canVolume, roomElsewhere, inlineButton, inlineLine } from './speakers/model';
+import { canVolume, roomElsewhere, inlineButton, inlineLine, playStateOf } from './speakers/model';
+import type { SpeakerStore } from './speakers/ma';
 export { roomElsewhere };
 import type { InlineRoom } from './speakers-view';
 
@@ -39,6 +40,7 @@ interface Pending<T> { v: T; t: number }
 export class JbNow extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, queue: { attribute: false }, active: { type: Boolean }, lyrics: { attribute: false }, spk: { attribute: false },
+    store: { attribute: false },
     maOffline: { attribute: false },
     _overlay: { state: true }, _tick: { state: true }, _snap: { state: true }, _toast: { state: true },
     // #156 sleep timer off (Randy: kept for a standalone player):
@@ -51,9 +53,12 @@ export class JbNow extends LitElement {
   lyrics?: LyricsStore;
   /** 0.6.3: set by the card when this user may change speakers in dynamic mode; undefined = volume only */
   spk?: InlineSpeakers;
+  /** the card's Music Assistant live-feed store (players and ids). Play/pause follows it when the snapshot is in. */
+  store?: SpeakerStore;
   /** 2.4: set by the card while Music Assistant is offline: the speaker rows and Up next are greyed out and not tappable */
   maOffline = false;
   private _spkUnsub?: () => void;
+  private _storeUnsub?: () => void;
   /** last inline state key: re-render only when the room buttons would change */
   private _spkKey = '';
   /** lyrics over the art, remembered per device */
@@ -88,7 +93,7 @@ export class JbNow extends LitElement {
     this._timer = window.setInterval(() => {
       if (!this.active) return;
       // #156 sleep timer off (Randy: kept for a standalone player): was `if (this.ent?.state === 'playing' || this._sleepExpires) this._tick++;`
-      if (this.ent?.state === 'playing') this._tick++;
+      if (this.isPlaying()) this._tick++;
       // if (this._sleepExpires && remainFromExpires(this._sleepExpires) <= 0) this.onSleepExpired();
     }, 1000);
     // #156 sleep timer off (Randy: kept for a standalone player):
@@ -156,13 +161,17 @@ export class JbNow extends LitElement {
     window.clearInterval(this._timer);
     // #156 sleep timer off (Randy: kept for a standalone player):
     // this.unwatchSleep();
-    this._unsub?.(); this._unsub = undefined; this._spkUnsub?.(); this._spkUnsub = undefined;
+    this._unsub?.(); this._unsub = undefined; this._spkUnsub?.(); this._spkUnsub = undefined; this._storeUnsub?.(); this._storeUnsub = undefined;
   }
   protected willUpdate(ch: PropertyValues) {
     if (ch.has('queue')) { this._unsub?.(); this._unsub = this.queue?.subscribe((s) => (this._snap = s)) as any; }
     if (ch.has('spk')) {
       this._spkUnsub?.();
       this._spkUnsub = this.spk?.onState(() => { const k = this.spkKey(); if (k !== this._spkKey) { this._spkKey = k; this.requestUpdate(); } }) as any;
+    }
+    if (ch.has('store')) {
+      this._storeUnsub?.();
+      this._storeUnsub = this.store?.onChange(() => this.requestUpdate()) as any;
     }
     // #156 sleep timer off (Randy: kept for a standalone player):
     // if (ch.has('config') || ch.has('hass')) this.watchSleep();
@@ -218,7 +227,9 @@ export class JbNow extends LitElement {
   private toast(t: string) { this._toast = t; window.clearTimeout(this._toastTimer); this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400); }
 
   // ---------- transport ----------
-  private isPlaying() { return this.flag('state', this.ent?.state) === 'playing'; }
+  /** Play/pause: the shared Music Assistant/Home Assistant helper, then the tap hold. */
+  private playState() { return this.flag('state', playStateOf(this.store, this.eid, this.ent?.state)); }
+  private isPlaying() { return this.playState() === 'playing'; }
   playPause() {
     const playing = this.isPlaying();
     // dynamic speakers: starting an idle group may take speakers from other groups; the card asks first (fixed mode: no guard)
@@ -393,10 +404,10 @@ export class JbNow extends LitElement {
     const dur = Number(a.media_duration) || 0;
     let pos = Number(a.media_position) || 0;
     const upd = a.media_position_updated_at as string | undefined;
-    if (this.ent?.state === 'playing' && upd) pos += (Date.now() - Date.parse(upd)) / 1000;
+    if (this.isPlaying() && upd) pos += (Date.now() - Date.parse(upd)) / 1000;
     if (this.seek) {
       if (upd !== this.seek.upd || Date.now() - this.seek.t > HOLD_MS) this.seek = undefined;
-      else pos = this.seek.v + (this.ent?.state === 'playing' ? (Date.now() - this.seek.t) / 1000 : 0);
+      else pos = this.seek.v + (this.isPlaying() ? (Date.now() - this.seek.t) / 1000 : 0);
     }
     return { pos: dur ? Math.max(0, Math.min(dur, pos)) : pos, dur };
   }
@@ -494,7 +505,8 @@ export class JbNow extends LitElement {
     const repeat: RepeatMode = this.flag('repeat', shownRepeat(a.repeat));
     const { pos, dur } = this.position();
     const where = (a.friendly_name as string) ?? (this.eid ? this.eid.replace(/^media_player\./, '').replace(/_/g, ' ') : '');
-    const stateWord = playing ? 'Playing on' : e?.state === 'paused' || this.flag('state', e?.state) === 'paused' ? 'Paused on' : 'Ready on';
+    const state = this.playState();
+    const stateWord = state === 'playing' ? 'Playing on' : state === 'paused' ? 'Paused on' : 'Ready on';
     const rooms = roomsOf(this.config, this.hass);
     const up = this.queue?.upNext ?? [];
     const nextIt = up[0];

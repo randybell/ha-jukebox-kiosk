@@ -17,7 +17,7 @@ import type { JbSpeakers } from './speakers-view';
 import { SpeakerStore } from './speakers/ma';
 import { QueueFollow } from './speakers/queue-follow';
 import type { LiveMsg } from './speakers/live';
-import { canGroup, targetsOf, targetMa, isActive, liveCount, pillMembers, pillPrefix } from './speakers/model';
+import { canGroup, targetsOf, targetMa, isActive, liveCount, pillMembers, pillPrefix, playStateOf } from './speakers/model';
 /** the screensaver's reduced-motion class (.rm) follows the browser setting */
 const prefersReducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 import type { HomeAssistant, JukeboxCardConfig, MaItem, TabId } from './types';
@@ -157,6 +157,8 @@ export class JukeboxCard extends LitElement {
   }
   private _sunsub?: () => void;
   private _pn = -1;
+  /** last Music Assistant/Home Assistant play state shown on the pill and screensaver */
+  private _pstate = '';
   /** 2.4: Home Assistant's Music Assistant connection (kiosk integration); the notice and the fresh reload follow it */
   readonly ma = new MaStatus();
   /** 2.4: Music Assistant is offline: one notice in the header, speaker and queue controls greyed out */
@@ -384,7 +386,7 @@ export class JukeboxCard extends LitElement {
     // Belt and braces: if anything editable ever takes focus inside the card, drop it so no OS keyboard opens.
     this.renderRoot?.addEventListener?.('focusin', this.onFocusIn as EventListener);
     this._lunsub ??= this.lyrics.subscribe((st) => { if (st.status !== this._lstatus) { this._lstatus = st.status; this.requestUpdate(); } });
-    this._sunsub ??= this.speakers.onChange(() => { const n = this.pillCount(); if (n !== this._pn) { this._pn = n; this.requestUpdate(); } }) as any;
+    this._sunsub ??= this.speakers.onChange(() => { const n = this.pillCount(); const e = this._config?.entity; const st = playStateOf(this.speakers, e, this.hass?.states[e ?? '']?.state) ?? ''; if (n !== this._pn || st !== this._pstate) { this._pn = n; this._pstate = st; this.requestUpdate(); } }) as any;
     this._funsub ??= this.speakers.onMessage(this.onFeed) as any;
     this.speakers.start(); // the live feed itself starts once hass has a connection and the server lists it
     this._qunsub = this.queue.subscribe(() => { this._qcount = this.queue.remaining; this._qart = this.art(); }) as any;
@@ -755,7 +757,8 @@ export class JukeboxCard extends LitElement {
   private renderAmbient(use: 'saver' | 'stage') {
     const c = this._config, ent = this.hass?.states[c.entity!];
     const at = ent?.attributes ?? {};
-    const playing = ent?.state === 'playing' || ent?.state === 'paused';
+    const play = playStateOf(this.speakers, c.entity, ent?.state);
+    const playing = play === 'playing' || play === 'paused';
     const pic = playing ? this.art() : undefined;
     // #147: the background has no error event: the art is loaded once per song first (until then the plain background
     // shows, as while any picture loads); a failure re-renders with the next source, or the no-art look when none is left.
@@ -778,7 +781,7 @@ export class JukeboxCard extends LitElement {
       <div class="sv-drift ${lyr ? 'has-ly' : ''}">
         <div class="sv-clock">${this.timeStr()}</div>
         <div class="sv-date">${date}</div>
-        ${title ? html`<div class="sv-np"><span><b>${title}</b><small>${[at.media_artist, ent?.state === 'paused' ? 'Paused' : ''].filter(Boolean).join(' · ')}</small></span></div>` : nothing}
+        ${title ? html`<div class="sv-np"><span><b>${title}</b><small>${[at.media_artist, play === 'paused' ? 'Paused' : ''].filter(Boolean).join(' · ')}</small></span></div>` : nothing}
         ${lyr ? html`<jb-lyrics class="sv-ly" mode="saver" .hass=${this.hass} .config=${c} .store=${this.lyrics} ?active=${state === 'on'}></jb-lyrics>` : nothing}
         ${status ? html`<div class="sv-lys" role="status" data-status=${ls}>${status}</div>` : nothing}
       </div>
@@ -816,8 +819,9 @@ export class JukeboxCard extends LitElement {
     const live = dyn ? this.pillCount() : 0;
     this._pn = live;
     const rooms = roomsOf(this._config, this.hass).length;
-    // 0.6.3: the pill reads as a control: "Playing on: Everywhere · 3 speakers"
-    const pre = pillPrefix(ent?.state);
+    // 0.6.3: the pill reads as a control: "Playing on:" the selected group, then the speaker count
+    const play = playStateOf(this.speakers, eid, ent?.state);
+    const pre = pillPrefix(play);
     const inlineSpk = dyn && canGroup(this._config, this.hass?.user);
     // 2.4: while Music Assistant is offline its speaker and queue controls can't work: greyed out and not tappable (inert)
     const off = this._maOff;
@@ -830,7 +834,7 @@ export class JukeboxCard extends LitElement {
           <button class="pill ${off ? 'ma-off' : ''}" ?disabled=${off} title=${c.entity!} tabindex="-1" aria-label="${pre} ${name}, change speakers" aria-haspopup="dialog" aria-expanded=${this._spk ? 'true' : 'false'}
             @pointerdown=${(e: PointerEvent) => e.preventDefault()}
             @click=${() => { this.closeSheet(); this._spk = !this._spk; }}>${icon('group', 'i xs')}<span class="pt"><span class="pnm"><span class="pl">${pre}</span> <span class="pn">${name}</span></span> ${dyn
-              ? html`<b>· ${!ent && this.hass ? 'not found' : ent?.state === 'buffering' ? 'regrouping…' : live ? `${live} speaker${live === 1 ? '' : 's'}` : 'idle'}</b>`
+              ? html`<b>· ${!ent && this.hass ? 'not found' : play === 'buffering' ? 'regrouping…' : live ? `${live} speaker${live === 1 ? '' : 's'}` : 'idle'}</b>`
               : rooms ? html`<b>· ${rooms} room${rooms === 1 ? '' : 's'} synced</b>` : nothing}</span>${icon('chev', 'i xs pc')}</button>
           ${volDown() ? html`<span class="lost" role="status" data-status="reconnecting">Reconnecting to Home Assistant…</span>`
             : off ? html`<span class="lost" role="status" data-status="ma-offline">${MA_OFFLINE}</span>`
@@ -839,7 +843,7 @@ export class JukeboxCard extends LitElement {
           <div class="clock">${this.timeStr()}</div>
         </header>
         <main class="np">
-          ${view('now', html`<jb-now .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} .maOffline=${off} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
+          ${view('now', html`<jb-now .hass=${h} .config=${c} .queue=${q} .lyrics=${this.lyrics} .spk=${inlineSpk ? this._spkEl : undefined} .store=${this.speakers} .maOffline=${off} ?active=${this._tab === 'now' && !this._saver && !this._stage}></jb-now>`)}
           ${combinedOn(c)
             ? view('browse', html`<jb-search combined .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-search>`)
             : html`${view('browse', html`<jb-browse .hass=${h} .config=${c} .queue=${q} ?active=${this._tab === 'browse'}></jb-browse>`)}
@@ -889,7 +893,7 @@ export class JukeboxCard extends LitElement {
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); }
     .pill .pt, .pill .pnm { display: flex; flex-wrap: wrap; align-items: center; column-gap: .3em; min-width: 0; height: 1lh; overflow: hidden; }
     .pill .pt { flex: 0 1 auto; }
-    /* the words keep their reading order ("Playing on: Everywhere"); the name is laid out first (order) and the row is reversed,
+    /* the words keep their reading order ("Playing on:" then the group name); the name is laid out first (order) and the row is reversed,
        so "Playing on:" is the part that wraps away when there is no room, while it still reads before the name */
     .pill .pnm { flex-direction: row-reverse; justify-content: flex-end; flex: 0 1 auto; }
     .pill .pn { order: -1; }
