@@ -86,6 +86,7 @@ class FakeMa:
         self.active = True
         self.repeat_mode = "off"
         self.autoplay_error: str | None = None  # raised by player_queues/autoplay when set
+        self.playlist_size = 250  # tracks returned by music/playlists/playlist_tracks (#152: set larger for long playlists)
         # per-queue Autoplay style config (MA 2.10.9 config/player_queues/*); None = MA without the setting
         self.ap_mode: str | None = "global"
         self.ap_playlist: str | None = None
@@ -140,7 +141,7 @@ class FakeMa:
             o, lim = kwargs["offset"], kwargs["limit"]
             return self.queue[o : o + lim]
         if command == "music/playlists/playlist_tracks":
-            return [{"uri": f"spotify://track/{n}", "name": f"T{n}", "duration": 100, "favorite": False} for n in range(250)]
+            return [{"uri": f"spotify://track/{n}", "name": f"T{n}", "duration": 100, "favorite": False} for n in range(self.playlist_size)]
         if command == "config/players/get":
             return {"player_id": kwargs["player_id"], "values": {"group_members": {"value": [PLAYER_A]},
                     "dynamic_members": {"value": True}, "secret_thing": {"value": "x"}}}

@@ -270,6 +270,24 @@ async def test_item_tracks_paged(hass: HomeAssistant, hass_ws_client: Any, user_
     assert bad["error"]["code"] == "unsupported"
 
 
+@pytest.mark.parametrize("size", [200, 800])
+async def test_item_tracks_long_playlist(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa, size: int) -> None:
+    """#152: a long playlist pages out every track once, in order, with the right total (Randy: 200, then 800)."""
+    fake_ma.playlist_size = size
+    ws = await _ws(hass_ws_client, user_token[1])
+    uris: list[str] = []
+    page, more = 1, True
+    while more:
+        r = (await _call(ws, type="jukebox_kiosk/item_tracks", uri="library://playlist/162", page=page, page_size=100))["result"]
+        assert r["total"] == size and r["page"] == page
+        assert [t["position"] for t in r["tracks"]] == list(range(len(uris) + 1, len(uris) + len(r["tracks"]) + 1))
+        uris += [t["media_content_id"] for t in r["tracks"]]
+        more = r["more"]
+        page += 1
+    assert page - 1 == -(-size // 100)
+    assert uris == [f"spotify://track/{n}" for n in range(size)]
+
+
 async def test_unfavorite_current_admin(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa) -> None:
     ws = await _ws(hass_ws_client, admin_token[1])
     res = await _call(ws, type="jukebox_kiosk/unfavorite_current", entity_id=ENTITY_A)

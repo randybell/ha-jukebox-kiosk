@@ -65,6 +65,16 @@ const nid = () => String(seqId++);
 // provider scheme per item: 'library' | 'apple_music'. Nested artists of apple_music items use the instance id (as in the real sample).
 const nestedScheme = (p) => (p === 'apple_music' ? 'apple_music--XXXXXXXX' : p);
 const short = (media_type, uri, name, image = null) => ({ media_type, uri, name, version: '', image });
+// bigpl=<n> (#152): a very long playlist, "Very Long Playlist", with n unique tracks (built only when asked for)
+const BIGPL = Math.max(0, Math.floor(Number(params.get('bigpl') ?? 0)) || 0);
+const BIGPL_URI = 'library://playlist/990001';
+const longTracks = (n, base) => Array.from({ length: n }, (_, i) => {
+  const by = ['Eagles', 'Fleetwood Mac', 'Daft Punk', 'Air'][i % 4], alb = `Very Long Sessions ${1 + Math.floor(i / 500)}`;
+  return { media_type: 'track', uri: `library://track/${base + i}`, name: `Long Track ${String(i + 1).padStart(5, '0')}`, version: '', image: null, favorite: false, explicit: null,
+    artists: [short('artist', `library://artist/${h(by) % 9000}`, by)], album: short('album', `library://album/${h(alb) % 90000}`, alb), _duration: 150 + ((i * 37) % 200), _added: 0, _played: 0 };
+});
+let BIG;
+const bigTracks = () => (BIG ??= longTracks(BIGPL, 9000000));
 
 // ---- catalog (internal fields start with _ and are stripped from responses) ----
 const A = {}; // artist name -> item
@@ -158,6 +168,8 @@ const CATALOG = {
     playlist('Mock Rock Essentials', 'library', true), playlist('Mockingbird Jazz Club', 'apple_music'), playlist('Monday Morning Mix'),
     playlist('Motown Classics', 'apple_music'), playlist('Eagles'), playlist('Long Drive'), playlist('Mellow Moods', 'library', true), playlist('Dinner Party'), playlist('Garage Workout', 'apple_music'),
     playlist('Chicago Blues Classics', 'apple_music'),
+    // bigpl=<n> (#152): one more library playlist with n tracks; fixed ids, so no other mock id moves
+    ...(BIGPL ? [{ media_type: 'playlist', uri: BIGPL_URI, name: 'Very Long Playlist', version: '', image: null, favorite: false, explicit: null, _added: 999 }] : []),
   ],
   radio: RADIO ? [...STATIONS(), ...(params.get('stations') === 'fake' ? [] : [radio('\tWXRT Chicago 93.1 FM', undefined, 3)])] : [],
   podcasts: PODS ? [{ media_type: 'podcast', uri: 'library://podcast/31', name: 'The Mockcast', version: '', image: art('The Mockcast'), favorite: false, explicit: null, _added: 5 },
@@ -383,6 +395,7 @@ const tracksFor = (it) => {
   if (it.media_type === 'album') return libTracks.filter((t) => t.album?.name === it.name);
   if (it.media_type === 'artist') return libTracks.filter((t) => t.artists.some((a) => a.name === it.name));
   if (it.media_type === 'playlist' && (it._orig ?? it.name) === 'Long Drive') return LONG_DRIVE;
+  if (it.media_type === 'playlist' && it.uri === BIGPL_URI) return bigTracks();
   if (it.media_type === 'playlist') return libTracks.filter((_, i) => (h(it.name) + i) % 4 === 0).slice(0, 12);
   if (it.media_type === 'radio') return [it];
   return [];
