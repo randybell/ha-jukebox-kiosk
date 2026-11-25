@@ -77,7 +77,8 @@ class FakeMa:
         self.server_info = SimpleNamespace(schema_version=44)
         self.queue = [_qi(n) for n in range(10)]
         self.subs: list[tuple[Any, Any, Any]] = []
-        self.sleep_timers: dict[str, float | None] = {}
+        # #156 sleep timer off (Randy: kept for a standalone player):
+        # self.sleep_timers: dict[str, float | None] = {}
         self.players: FakePlayers = FakePlayers()
         self.player_queues: FakeQueues = FakeQueues()
         self.get_hook: Any = None  # optional awaitable run before players/get
@@ -149,15 +150,16 @@ class FakeMa:
             if self.get_hook is not None:
                 await self.get_hook()
             return self.players.get(kwargs["player_id"])
-        if command == "players/sleep_timer/get":
-            return self.sleep_timers.get(kwargs["player_id"])
-        if command == "players/sleep_timer/set":
-            exp = 1_700_000_000 + int(kwargs["seconds"])
-            self.sleep_timers[kwargs["player_id"]] = exp
-            return exp
-        if command == "players/sleep_timer/clear":
-            self.sleep_timers[kwargs["player_id"]] = None
-            return None
+        # #156 sleep timer off (Randy: kept for a standalone player):
+        # if command == "players/sleep_timer/get":
+            # return self.sleep_timers.get(kwargs["player_id"])
+        # if command == "players/sleep_timer/set":
+            # exp = 1_700_000_000 + int(kwargs["seconds"])
+            # self.sleep_timers[kwargs["player_id"]] = exp
+            # return exp
+        # if command == "players/sleep_timer/clear":
+            # self.sleep_timers[kwargs["player_id"]] = None
+            # return None
         return {"ok": command}
 
     def subscribe(self, cb: Any, event_filter: Any = None, id_filter: Any = None) -> Any:

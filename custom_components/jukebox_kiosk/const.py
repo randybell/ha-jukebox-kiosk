@@ -188,9 +188,10 @@ MA_COMMANDS: Final[dict[str, MaCommand]] = {
     "music/genres/get": MaCommand(R, "checked"),
     "music/genres/tracks": MaCommand(R, "checked", note="item_id, limit, offset, order_by"),
     "music/genres/albums": MaCommand(R, "checked"),
-    "players/sleep_timer/get": MaCommand(R, "checked"),
-    "players/sleep_timer/set": MaCommand(P, "checked", note="player_id, seconds; write not exercised"),
-    "players/sleep_timer/clear": MaCommand(P, "checked", note="player_id; write not exercised"),
+    # #156 sleep timer off (Randy: kept for a standalone player):
+    # "players/sleep_timer/get": MaCommand(R, "checked"),
+    # "players/sleep_timer/set": MaCommand(P, "checked", note="player_id, seconds; write not exercised"),
+    # "players/sleep_timer/clear": MaCommand(P, "checked", note="player_id; write not exercised"),
     "player_queues/set_playback_speed": MaCommand(P, "checked", note="queue_id, speed 0.5-3.0, queue_item_id; write not exercised"),
     "player_queues/save_as_playlist": MaCommand(L, "checked", note="queue_id, name; write not exercised"),
     # --- confirmed by the read-only follow-up check (2026-11-01) ---
@@ -237,7 +238,8 @@ PLAYER_ARG_KEYS: Final = (
 PLAYER_LIST_ARG_KEYS: Final = ("player_ids_to_add", "player_ids_to_remove")
 
 QUEUE_EVENTS: Final = ("queue_updated", "queue_items_updated")
-SLEEP_TIMER_EVENT: Final = "player_sleep_timer_updated"
+# #156 sleep timer off (Randy: kept for a standalone player):
+# SLEEP_TIMER_EVENT: Final = "player_sleep_timer_updated"
 # #103 live feed (jukebox_kiosk/subscribe_live): the MA events Music Assistant's own app keeps its players and queues
 # from (frontend 2.17.297 api/index.ts handleEventMessage). queue_time_updated (once a second while playing) is left
 # out on purpose: the card's progress bar keeps using Home Assistant's position.

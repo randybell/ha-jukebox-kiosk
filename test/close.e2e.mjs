@@ -104,21 +104,22 @@ const isPill = (x, h = 48) => !!x && x.text === 'Close' && x.svg === 0 && x.h >=
 // ---- sleep timer choices: a tap anywhere else closes them (and does nothing else); Esc closes them ----
 {
   const p = await open('&tab=now');
-  await tap(p, `${NOW}.querySelector('.ab.slp')`); await sleep(200);
-  check('X15 sleep choices open from the moon', await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`));
-  const n = await ev(p, `__calls.length`);
-  await tap(p, `${NOW}.querySelector('.tb.pp')`); await sleep(500);
-  check('X16 a tap anywhere else (here: on Play/Pause) closes the sleep choices and does not play/pause', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)) && (await media(p, n)).length === 0, J(await media(p, n)));
-  await tap(p, `${NOW}.querySelector('.ab.slp')`); await sleep(200);
-  const n2 = await ev(p, `__calls.length`);
-  const a = await ev(p, `(() => { const r = ${NOW}.querySelector('.art').getBoundingClientRect(); return { x: r.left + 30, y: r.bottom - 30 }; })()`);
-  await p.mouse.click(a.x, a.y); await sleep(400);
-  check('X17 a tap on the album art also closes them', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)) && (await media(p, n2)).length === 0);
-  await tap(p, `${NOW}.querySelector('.ab.slp')`); await sleep(200);
-  await tap(p, `${NOW}.querySelector('.sleep-strip .sp')`); await sleep(300);
-  check('X18 picking a choice still works (15 minutes) and closes them', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)));
-  await tap(p, `${NOW}.querySelector('.ab.slp')`); await sleep(200); await esc(p);
-  check('X19 Esc closes the sleep choices', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)));
+  // #156 sleep timer off (Randy: kept for a standalone player):
+  // await tap(p, `${NOW}.querySelector('.ab.slp')`); await sleep(200);
+  // check('X15 sleep choices open from the moon', await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`));
+  // const n = await ev(p, `__calls.length`);
+  // await tap(p, `${NOW}.querySelector('.tb.pp')`); await sleep(500);
+  // check('X16 a tap anywhere else (here: on Play/Pause) closes the sleep choices and does not play/pause', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)) && (await media(p, n)).length === 0, J(await media(p, n)));
+  // await tap(p, `${NOW}.querySelector('.ab.slp')`); await sleep(200);
+  // const n2 = await ev(p, `__calls.length`);
+  // const a = await ev(p, `(() => { const r = ${NOW}.querySelector('.art').getBoundingClientRect(); return { x: r.left + 30, y: r.bottom - 30 }; })()`);
+  // await p.mouse.click(a.x, a.y); await sleep(400);
+  // check('X17 a tap on the album art also closes them', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)) && (await media(p, n2)).length === 0);
+  // await tap(p, `${NOW}.querySelector('.ab.slp')`); await sleep(200);
+  // await tap(p, `${NOW}.querySelector('.sleep-strip .sp')`); await sleep(300);
+  // check('X18 picking a choice still works (15 minutes) and closes them', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)));
+  // await tap(p, `${NOW}.querySelector('.ab.slp')`); await sleep(200); await esc(p);
+  // check('X19 Esc closes the sleep choices', !(await ev(p, `!!${NOW}.querySelector('.sleep-strip:not(.cd-only)')`)));
   // lyrics on the art: tap anywhere (unchanged) and now Esc
   await tap(p, `${NOW}.querySelector('.ab.lyr')`); await wait(p, `!!${NOW}.querySelector('jb-lyrics.ovl')`); await esc(p);
   check('X20 Esc closes the lyrics on the album art', !(await ev(p, `!!${NOW}.querySelector('jb-lyrics.ovl')`)));

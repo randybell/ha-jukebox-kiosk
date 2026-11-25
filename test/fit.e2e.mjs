@@ -73,9 +73,10 @@ function verify(label, g, { fill = true, tab } = {}) {
     const minTap = Math.min(g.vw, g.vh) >= 520 ? 56 : 40;
     check(`${label}: #43 Next/Previous bigger than Shuffle/Repeat, smaller than Play/Pause (tap ≥ ${minTap}px), visible arrows 85–100% of the Play/Pause glyph`,
       ok && [k.pr, k.nx].every((x) => x.w > k.sh.w && x.w < k.pp.w && x.w >= minTap && x.gh <= k.pp.gh + 0.5 && x.gh >= 0.85 * k.pp.gh), JSON.stringify(g.tpb.map((x) => `${x.k}:${Math.round(x.w)}/g${x.gh.toFixed(1)}`)));
-    const m = g.moon, pp = k.pp;
-    check(`${label}: #42 sleep moon in the artwork top-right corner, ≥ 48px, not in the transport row, clear of Play/Pause`,
-      !!m && m.inArt && !m.inRow && m.w >= 47.5 && m.t - m.art.t < 30 && m.art.r - m.r < 30 && (m.r <= pp.l || m.l >= pp.r || m.b <= pp.t || m.t >= pp.b), JSON.stringify(m));
+    // #156 sleep timer off (Randy: kept for a standalone player):
+    // const m = g.moon, pp = k.pp;
+    // check(`${label}: #42 sleep moon in the artwork top-right corner, ≥ 48px, not in the transport row, clear of Play/Pause`,
+      // !!m && m.inArt && !m.inRow && m.w >= 47.5 && m.t - m.art.t < 30 && m.art.r - m.r < 30 && (m.r <= pp.l || m.l >= pp.r || m.b <= pp.t || m.t >= pp.b), JSON.stringify(m));
     check(`${label}: transport buttons don't overlap each other`, g.tpb.every((x, i) => i === 0 || x.l >= g.tpb[i - 1].r - 0.5), JSON.stringify(g.tpb.map((x) => [x.k, Math.round(x.l), Math.round(x.r)])));
   }
 }
@@ -248,10 +249,11 @@ for (const heart of [false, true]) {
   check(`${tag}: transport row fits, nothing clipped or overlapping, taps ≥ 44px`, row.bs.every((x, i) => x.l >= -0.5 && x.r <= row.vw + 0.5 && x.l >= row.tpL - 0.5 && x.r <= row.tpR + 0.5 && x.w >= 39.5 && (i === 0 || x.l >= row.bs[i - 1].r - 0.5)),
     JSON.stringify(row));
   verify(`${tag} now`, await geom(pg), { tab: 'now' });
-  await tap6(pg, `${NPf}.querySelector('.ab.slp')`, true);
-  const ch = await ev6(pg, `(() => { const sp = [...${NPf}.querySelectorAll('.sleep-strip .sp')].map((e) => e.getBoundingClientRect()); const pp = ${NPf}.querySelector('.tb.pp').getBoundingClientRect();
-    return { n: sp.length, tops: [...new Set(sp.map((b) => Math.round(b.top)))], minH: Math.min(...sp.map((b) => b.height)), clearPlay: sp.every((b) => b.bottom <= pp.top || b.top >= pp.bottom || b.right <= pp.left || b.left >= pp.right), inView: sp.every((b) => b.left >= 0 && b.right <= innerWidth) }; })()`);
-  check(`${tag}: sleep chooser MA's five choices, ≥ 40px tall, clear of Play/Pause`, ch.n === 5 && ch.minH >= 39.5 && ch.clearPlay, JSON.stringify(ch));
+  // #156 sleep timer off (Randy: kept for a standalone player):
+  // await tap6(pg, `${NPf}.querySelector('.ab.slp')`, true);
+  // const ch = await ev6(pg, `(() => { const sp = [...${NPf}.querySelectorAll('.sleep-strip .sp')].map((e) => e.getBoundingClientRect()); const pp = ${NPf}.querySelector('.tb.pp').getBoundingClientRect();
+    // return { n: sp.length, tops: [...new Set(sp.map((b) => Math.round(b.top)))], minH: Math.min(...sp.map((b) => b.height)), clearPlay: sp.every((b) => b.bottom <= pp.top || b.top >= pp.bottom || b.right <= pp.left || b.left >= pp.right), inView: sp.every((b) => b.left >= 0 && b.right <= innerWidth) }; })()`);
+  // check(`${tag}: sleep chooser MA's five choices, ≥ 40px tall, clear of Play/Pause`, ch.n === 5 && ch.minH >= 39.5 && ch.clearPlay, JSON.stringify(ch));
   await pg.close();
 }
 const S6 = [[1024, 666, 0, 'short'], [1024, 600, 0, 'tiny'], [1280, 720, 0, 'short'], [1280, 800, 0, '']];

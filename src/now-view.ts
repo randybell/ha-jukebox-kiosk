@@ -27,7 +27,8 @@ import { defineElement } from './define';
 import { FavController } from './heart';
 import { favoriteButtonFor } from './favorites';
 import { shownRepeat, nextRepeat, REPEAT_LABEL, type RepeatMode } from './repeat';
-import { SLEEP_MINUTES, SLEEP_LABEL, sleepLabel, fmtSleepRemain, remainFromExpires, canMaSleep, parseExpires, parseSleepMode, sleepIsActive, sleepModeLabel, isEndOfContentMode, type SleepMinutes, type SleepTimerMode } from './sleep';
+// #156 sleep timer off (Randy: kept for a standalone player):
+// import { SLEEP_MINUTES, SLEEP_LABEL, sleepLabel, fmtSleepRemain, remainFromExpires, canMaSleep, parseExpires, parseSleepMode, sleepIsActive, sleepModeLabel, isEndOfContentMode, type SleepMinutes, type SleepTimerMode } from './sleep';
 import { autoplayControlMode } from './autoplay';
 
 const VOL_THROTTLE_MS = 200;
@@ -40,7 +41,8 @@ export class JbNow extends LitElement {
     hass: { attribute: false }, config: { attribute: false }, queue: { attribute: false }, active: { type: Boolean }, lyrics: { attribute: false }, spk: { attribute: false },
     maOffline: { attribute: false },
     _overlay: { state: true }, _tick: { state: true }, _snap: { state: true }, _toast: { state: true },
-    _sleepOpen: { state: true }, _sleepExpires: { state: true }, _sleepMins: { state: true }, _sleepMode: { state: true },
+    // #156 sleep timer off (Randy: kept for a standalone player):
+    // _sleepOpen: { state: true }, _sleepExpires: { state: true }, _sleepMins: { state: true }, _sleepMode: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
@@ -61,14 +63,15 @@ export class JbNow extends LitElement {
   private _toast = '';
   private _toastTimer?: number;
   private _timer?: number;
-  /** inline Off/15/30/60 chooser under the transport row */
-  private _sleepOpen = false;
-  /** unix (UTC) expiry from MA sleep_timer or the card-side fallback; null = off */
-  private _sleepExpires: number | null = null;
-  /** last chosen duration (0 = Off); drives the chooser highlight */
-  private _sleepMins: SleepMinutes = 0;
-  private _sleepMode: SleepTimerMode | undefined;
-  private _sleepSyncing = false;
+  // #156 sleep timer off (Randy: kept for a standalone player):
+  // /** inline Off/15/30/60 chooser under the transport row */
+  // private _sleepOpen = false;
+  // /** unix (UTC) expiry from MA sleep_timer or the card-side fallback; null = off */
+  // private _sleepExpires: number | null = null;
+  // /** last chosen duration (0 = Off); drives the chooser highlight */
+  // private _sleepMins: SleepMinutes = 0;
+  // private _sleepMode: SleepTimerMode | undefined;
+  // private _sleepSyncing = false;
   private _unsub?: () => void;
   private vol = new Map<string, Pending<number>>();
   private mute = new Map<string, Pending<boolean>>();
@@ -84,10 +87,12 @@ export class JbNow extends LitElement {
     super.connectedCallback();
     this._timer = window.setInterval(() => {
       if (!this.active) return;
-      if (this.ent?.state === 'playing' || this._sleepExpires) this._tick++;
-      if (this._sleepExpires && remainFromExpires(this._sleepExpires) <= 0) this.onSleepExpired();
+      // #156 sleep timer off (Randy: kept for a standalone player): was `if (this.ent?.state === 'playing' || this._sleepExpires) this._tick++;`
+      if (this.ent?.state === 'playing') this._tick++;
+      // if (this._sleepExpires && remainFromExpires(this._sleepExpires) <= 0) this.onSleepExpired();
     }, 1000);
-    this.watchSleep();
+    // #156 sleep timer off (Randy: kept for a standalone player):
+    // this.watchSleep();
     // Re-attach (HA view / edit mode): updated() does not run again, so bind and
     // measure here. --_art-side was cleared on disconnect so a stale px is not kept.
     if (this.hasUpdated) this.bindArtSide();
@@ -149,7 +154,8 @@ export class JbNow extends LitElement {
     this.style.removeProperty('--_art-side');
     this._volRo?.disconnect(); this._volRo = undefined; this._volEl = undefined;
     window.clearInterval(this._timer);
-    this.unwatchSleep();
+    // #156 sleep timer off (Randy: kept for a standalone player):
+    // this.unwatchSleep();
     this._unsub?.(); this._unsub = undefined; this._spkUnsub?.(); this._spkUnsub = undefined;
   }
   protected willUpdate(ch: PropertyValues) {
@@ -158,7 +164,8 @@ export class JbNow extends LitElement {
       this._spkUnsub?.();
       this._spkUnsub = this.spk?.onState(() => { const k = this.spkKey(); if (k !== this._spkKey) { this._spkKey = k; this.requestUpdate(); } }) as any;
     }
-    if (ch.has('config') || ch.has('hass')) this.watchSleep();
+    // #156 sleep timer off (Randy: kept for a standalone player):
+    // if (ch.has('config') || ch.has('hass')) this.watchSleep();
   }
   /** Re-render only when an entity we draw changed. */
   protected shouldUpdate(ch: PropertyValues) {
@@ -171,16 +178,17 @@ export class JbNow extends LitElement {
     return true;
   }
 
-  private sleepAway = (e: PointerEvent) => {
-    e.preventDefault(); e.stopPropagation(); this._sleepOpen = false;
-    const swallow = (ev: Event) => { ev.stopPropagation(); ev.preventDefault(); };
-    this.renderRoot.addEventListener('click', swallow, { capture: true });
-    window.setTimeout(() => this.renderRoot.removeEventListener('click', swallow, { capture: true }), 400);
-  };
-  /** #51 Esc (from the card): close the sleep choices, then the lyrics on the art */
+  // #156 sleep timer off (Randy: kept for a standalone player):
+  // private sleepAway = (e: PointerEvent) => {
+    // e.preventDefault(); e.stopPropagation(); this._sleepOpen = false;
+    // const swallow = (ev: Event) => { ev.stopPropagation(); ev.preventDefault(); };
+    // this.renderRoot.addEventListener('click', swallow, { capture: true });
+    // window.setTimeout(() => this.renderRoot.removeEventListener('click', swallow, { capture: true }), 400);
+  // };
+  /** #51 Esc (from the card): close the lyrics on the art (#156: the sleep choices are commented out) */
   escape() {
-    if (this._sleepOpen) this._sleepOpen = false;
-    else if (this._overlay && this.renderRoot.querySelector('jb-lyrics.ovl')) { this._overlay = false; writeOverlay(false); }
+    // #156 sleep timer off (Randy: kept for a standalone player): if (this._sleepOpen) this._sleepOpen = false;
+    if (this._overlay && this.renderRoot.querySelector('jb-lyrics.ovl')) { this._overlay = false; writeOverlay(false); }
     else return false;
     return true;
   }
@@ -281,102 +289,103 @@ export class JbNow extends LitElement {
     });
   }
 
-  // ---------- sleep timer (kiosk jukebox_kiosk/sleep_timer_* → MA players/sleep_timer/*) ----------
-  private _sleepUnsub?: () => void;
-  private _sleepWatchEnt?: string;
-  private sleepRemain() { return remainFromExpires(this._sleepExpires); }
-  private applySleepExpires(exp: number | null, mode?: SleepTimerMode) {
-    const modeIn = mode !== undefined ? mode : this._sleepMode;
-    if (exp === this._sleepExpires && modeIn === this._sleepMode) return;
-    this._sleepExpires = exp;
-    this._sleepMode = modeIn;
-    if (isEndOfContentMode(modeIn)) this._sleepMins = 0;
-    else if (!exp) this._sleepMins = 0;
-    else if (!this._sleepMins) {
-      const rem = remainFromExpires(exp);
-      this._sleepMins = (SLEEP_MINUTES as readonly number[]).find((m) => Math.abs(rem - m * 60) < 90) as SleepMinutes
-        ?? (SLEEP_MINUTES as readonly number[]).reduce((best, m) => Math.abs(rem - m * 60) < Math.abs(rem - best * 60) ? m : best, 15) as SleepMinutes;
-    }
-    this.requestUpdate();
-  }
-  private applySleepPayload(raw: unknown) {
-    this.applySleepExpires(parseExpires(raw), parseSleepMode(raw));
-  }
-  private unwatchSleep() {
-    this._sleepUnsub?.(); this._sleepUnsub = undefined; this._sleepWatchEnt = undefined;
-  }
-  private watchSleep() {
-    const be = this.config?._backend;
-    const ent = this.eid;
-    if (!this.isConnected || !canMaSleep(be) || !ent) { this.unwatchSleep(); return; }
-    if (this._sleepWatchEnt === ent) return;
-    this.unwatchSleep();
-    this._sleepWatchEnt = ent;
-    void this.syncSleepFromMa();
-    const start = this._sleepWatchEnt;
-    be!.subscribeSleepTimer?.(ent, (ev) => { this.applySleepPayload(ev); }).then((off) => {
-      if (this._sleepWatchEnt === start && this.isConnected) this._sleepUnsub = off;
-      else off();
-    }).catch((e) => {
-      console.warn('[jukebox-card] subscribe_sleep_timer failed', e);
-      if (this._sleepWatchEnt === start) this._sleepWatchEnt = undefined;
-    });
-  }
-  private toggleSleepOpen() {
-    this._sleepOpen = !this._sleepOpen;
-    if (this._sleepOpen) void this.syncSleepFromMa();
-  }
-  private async syncSleepFromMa() {
-    const be = this.config?._backend;
-    if (!canMaSleep(be) || this._sleepSyncing || !this.eid) return;
-    this._sleepSyncing = true;
-    try {
-      const raw = await be!.sleepTimerGet!(this.eid);
-      this.applySleepPayload(raw);
-    } catch (e) {
-      console.warn('[jukebox-card] sleep_timer_get failed', e);
-    } finally { this._sleepSyncing = false; }
-  }
-  private onSleepExpired() {
-    this._sleepExpires = null; this._sleepMins = 0; this._sleepMode = undefined; this._sleepOpen = false;
-    this.requestUpdate();
-  }
-  /** Top-right status for sleep set/cancel. Skipped on a narrow card (the CSS narrow layout, which sets --_narrow): the Sleep M:SS
-   *  chip already shows it, and the brief chip covers the art fullscreen / lyrics buttons. #117: the width lives in the CSS only. */
-  private sleepStatus(msg: string) {
-    const nw = this.renderRoot.querySelector('.nw');
-    if (nw && getComputedStyle(nw).getPropertyValue('--_narrow').trim() === '1') return;
-    status(this, msg);
-  }
-  /** minutes 0 = Off. Uses MA sleep_timer (kiosk commands resolve the player id). */
-  async setSleep(minutes: SleepMinutes) {
-    const be = this.config?._backend;
-    if (!canMaSleep(be) || !this.eid) {
-      this._sleepOpen = false;
-      this.requestUpdate();
-      return;
-    }
-    try {
-      if (minutes === 0) {
-        await be!.sleepTimerClear!(this.eid);
-        this._sleepExpires = null; this._sleepMins = 0; this._sleepMode = undefined;
-        this.sleepStatus('Sleep timer off');
-      } else {
-        const raw = await be!.sleepTimerSet!(this.eid, minutes * 60);
-        this._sleepExpires = parseExpires(raw) ?? (Date.now() / 1000 + minutes * 60);
-        this._sleepMode = parseSleepMode(raw) ?? 'duration';
-        this._sleepMins = minutes;
-        this.sleepStatus(`Stops in ${fmtSleepRemain(this.sleepRemain())}`); // MA's "Stops in {0}"
-      }
-      this._sleepOpen = false;
-      this.requestUpdate();
-    } catch (e) {
-      console.warn('[jukebox-card] sleep_timer failed', e);
-      this.toast('That did not work. Check the player.');
-      this._sleepOpen = false;
-      this.requestUpdate();
-    }
-  }
+  // #156 sleep timer off (Randy: kept for a standalone player):
+  // // ---------- sleep timer (kiosk jukebox_kiosk/sleep_timer_* → MA players/sleep_timer/*) ----------
+  // private _sleepUnsub?: () => void;
+  // private _sleepWatchEnt?: string;
+  // private sleepRemain() { return remainFromExpires(this._sleepExpires); }
+  // private applySleepExpires(exp: number | null, mode?: SleepTimerMode) {
+    // const modeIn = mode !== undefined ? mode : this._sleepMode;
+    // if (exp === this._sleepExpires && modeIn === this._sleepMode) return;
+    // this._sleepExpires = exp;
+    // this._sleepMode = modeIn;
+    // if (isEndOfContentMode(modeIn)) this._sleepMins = 0;
+    // else if (!exp) this._sleepMins = 0;
+    // else if (!this._sleepMins) {
+      // const rem = remainFromExpires(exp);
+      // this._sleepMins = (SLEEP_MINUTES as readonly number[]).find((m) => Math.abs(rem - m * 60) < 90) as SleepMinutes
+        // ?? (SLEEP_MINUTES as readonly number[]).reduce((best, m) => Math.abs(rem - m * 60) < Math.abs(rem - best * 60) ? m : best, 15) as SleepMinutes;
+    // }
+    // this.requestUpdate();
+  // }
+  // private applySleepPayload(raw: unknown) {
+    // this.applySleepExpires(parseExpires(raw), parseSleepMode(raw));
+  // }
+  // private unwatchSleep() {
+    // this._sleepUnsub?.(); this._sleepUnsub = undefined; this._sleepWatchEnt = undefined;
+  // }
+  // private watchSleep() {
+    // const be = this.config?._backend;
+    // const ent = this.eid;
+    // if (!this.isConnected || !canMaSleep(be) || !ent) { this.unwatchSleep(); return; }
+    // if (this._sleepWatchEnt === ent) return;
+    // this.unwatchSleep();
+    // this._sleepWatchEnt = ent;
+    // void this.syncSleepFromMa();
+    // const start = this._sleepWatchEnt;
+    // be!.subscribeSleepTimer?.(ent, (ev) => { this.applySleepPayload(ev); }).then((off) => {
+      // if (this._sleepWatchEnt === start && this.isConnected) this._sleepUnsub = off;
+      // else off();
+    // }).catch((e) => {
+      // console.warn('[jukebox-card] subscribe_sleep_timer failed', e);
+      // if (this._sleepWatchEnt === start) this._sleepWatchEnt = undefined;
+    // });
+  // }
+  // private toggleSleepOpen() {
+    // this._sleepOpen = !this._sleepOpen;
+    // if (this._sleepOpen) void this.syncSleepFromMa();
+  // }
+  // private async syncSleepFromMa() {
+    // const be = this.config?._backend;
+    // if (!canMaSleep(be) || this._sleepSyncing || !this.eid) return;
+    // this._sleepSyncing = true;
+    // try {
+      // const raw = await be!.sleepTimerGet!(this.eid);
+      // this.applySleepPayload(raw);
+    // } catch (e) {
+      // console.warn('[jukebox-card] sleep_timer_get failed', e);
+    // } finally { this._sleepSyncing = false; }
+  // }
+  // private onSleepExpired() {
+    // this._sleepExpires = null; this._sleepMins = 0; this._sleepMode = undefined; this._sleepOpen = false;
+    // this.requestUpdate();
+  // }
+  // /** Top-right status for sleep set/cancel. Skipped on a narrow card (the CSS narrow layout, which sets --_narrow): the Sleep M:SS
+   // *  chip already shows it, and the brief chip covers the art fullscreen / lyrics buttons. #117: the width lives in the CSS only. */
+  // private sleepStatus(msg: string) {
+    // const nw = this.renderRoot.querySelector('.nw');
+    // if (nw && getComputedStyle(nw).getPropertyValue('--_narrow').trim() === '1') return;
+    // status(this, msg);
+  // }
+  // /** minutes 0 = Off. Uses MA sleep_timer (kiosk commands resolve the player id). */
+  // async setSleep(minutes: SleepMinutes) {
+    // const be = this.config?._backend;
+    // if (!canMaSleep(be) || !this.eid) {
+      // this._sleepOpen = false;
+      // this.requestUpdate();
+      // return;
+    // }
+    // try {
+      // if (minutes === 0) {
+        // await be!.sleepTimerClear!(this.eid);
+        // this._sleepExpires = null; this._sleepMins = 0; this._sleepMode = undefined;
+        // this.sleepStatus('Sleep timer off');
+      // } else {
+        // const raw = await be!.sleepTimerSet!(this.eid, minutes * 60);
+        // this._sleepExpires = parseExpires(raw) ?? (Date.now() / 1000 + minutes * 60);
+        // this._sleepMode = parseSleepMode(raw) ?? 'duration';
+        // this._sleepMins = minutes;
+        // this.sleepStatus(`Stops in ${fmtSleepRemain(this.sleepRemain())}`); // MA's "Stops in {0}"
+      // }
+      // this._sleepOpen = false;
+      // this.requestUpdate();
+    // } catch (e) {
+      // console.warn('[jukebox-card] sleep_timer failed', e);
+      // this.toast('That did not work. Check the player.');
+      // this._sleepOpen = false;
+      // this.requestUpdate();
+    // }
+  // }
 
   // ---------- progress ----------
   private position(): { pos: number; dur: number } {
@@ -500,26 +509,28 @@ export class JbNow extends LitElement {
           title=${apMode === 'locked' ? 'This queue already keeps playing' : apOn ? 'Autoplay is on: more music is added when the queue runs out. Change it on the Queue screen.' : 'Autoplay is off. Change it on the Queue screen.'}>${icon('autoplay', 'i xs')}Radio - Autoplay</span>`;
     const favOn = this.isFav();
     const showFav = this.canFav();
-    const sleepRem = this.sleepRemain();
-    const canSleep = canMaSleep(this.config?._backend);
-    const sleepOn = sleepIsActive(this._sleepExpires, this._sleepMode);
-    const sleepModeText = !sleepRem ? sleepModeLabel(this._sleepMode, this._snap?.currentMediaType) : undefined;
-    const sleepChip = sleepModeText ?? sleepLabel(sleepRem);
+    // #156 sleep timer off (Randy: kept for a standalone player):
+    // const sleepRem = this.sleepRemain();
+    // const canSleep = canMaSleep(this.config?._backend);
+    // const sleepOn = sleepIsActive(this._sleepExpires, this._sleepMode);
+    // const sleepModeText = !sleepRem ? sleepModeLabel(this._sleepMode, this._snap?.currentMediaType) : undefined;
+    // const sleepChip = sleepModeText ?? sleepLabel(sleepRem);
     const tb = (cls: string, ic: string, label: string, fn: () => void, on?: boolean, dot = false, dis = false) =>
       html`<button class="tb ${cls} ${on ? 'on' : ''}" tabindex="-1" aria-label=${label} title=${label} aria-pressed=${on === undefined ? nothing : on ? 'true' : 'false'}
         ?disabled=${dis} @pointerdown=${noFocus} @click=${fn}>${icon(ic)}${dot ? html`<i class="dot"></i>` : nothing}</button>`;
     const showLyr = !idle && this.config.show_lyrics !== false && !!this.lyrics;
     const off = this.maOffline;
     // #51: while the sleep choices are open, a tap anywhere else closes them (the tap does nothing else)
-    const slx = this._sleepOpen ? html`<div class="slx" data-action="sleep-close" @pointerdown=${this.sleepAway}></div>` : nothing;
-    return html`<div class="nw ${idle ? 'idle' : ''} ${this._sleepOpen ? 'sl-open' : ''}" data-state=${e?.state ?? 'unknown'}>${slx}
+    // #156 sleep timer off (Randy: kept for a standalone player):
+    // const slx = this._sleepOpen ? html`<div class="slx" data-action="sleep-close" @pointerdown=${this.sleepAway}></div>` : nothing;
+    return html`<div class="nw ${idle ? 'idle' : ''} ${'' /* #156: this._sleepOpen ? 'sl-open' : '' */}" data-state=${e?.state ?? 'unknown'}>${nothing /* #156: slx */}
       <div class="art ${showLyr && this._overlay ? 'lyr-on' : ''}">
         ${pic ? keyed(pic, html`<img src=${pic} alt="" draggable="false" @load=${() => artLoaded(pid, song, pic)}
             @error=${() => { artFailed(pid, song, pic); this.requestUpdate(); }} />`)
           : html`<span class="ph">${icon('disc')}</span>`}
         ${showLyr && this._overlay ? html`<jb-lyrics class="ovl" mode="overlay" @jukebox-lyrics-tap=${() => { this._overlay = false; writeOverlay(false); }} .hass=${this.hass} .config=${this.config} .store=${this.lyrics}
           ?active=${this.active}></jb-lyrics>` : nothing}
-        ${slx}
+        ${nothing /* #156: slx */}
         <div class="art-btns">
           ${idle ? nothing : html`${showLyr ? html`<button class="ab lyr ${this._overlay ? 'on' : ''}" tabindex="-1" aria-label="Lyrics" aria-pressed=${this._overlay ? 'true' : 'false'}
             @pointerdown=${noFocus} @click=${this.toggleOverlay}>${icon('lyrics')}</button>` : nothing}
@@ -527,11 +538,13 @@ export class JbNow extends LitElement {
             @click=${() => fire(this, 'jukebox-stage', { open: true })}>${icon('fullscreen')}</button>`}
           <!-- #42: the sleep timer lives in the artwork corner (also when idle), away from Play/Pause.
                Hidden when the backend cannot send MA players/sleep_timer/* (plain MA / native). -->
-          ${canSleep ? html`<button class="ab slp ${sleepOn || this._sleepOpen ? 'on' : ''}" tabindex="-1" aria-label=${sleepOn ? (sleepModeText ?? `Sleep timer ${fmtSleepRemain(sleepRem)}`) : 'Sleep timer'}
+          ${nothing /* #156 sleep timer off (Randy: kept for a standalone player):
+          canSleep ? html`<button class="ab slp ${sleepOn || this._sleepOpen ? 'on' : ''}" tabindex="-1" aria-label=${sleepOn ? (sleepModeText ?? `Sleep timer ${fmtSleepRemain(sleepRem)}`) : 'Sleep timer'}
             title=${sleepOn ? (sleepModeText ?? `Sleep timer ${fmtSleepRemain(sleepRem)}`) : 'Sleep timer'} aria-pressed=${sleepOn || this._sleepOpen ? 'true' : 'false'}
-            @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon')}</button>` : nothing}
+            @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon')}</button>` : nothing */}
         </div>
-        ${canSleep && this._sleepOpen ? html`<div class="sleep-strip ma" role="group" aria-label="Sleep timer">
+        ${nothing /* #156 sleep timer off (Randy: kept for a standalone player):
+        canSleep && this._sleepOpen ? html`<div class="sleep-strip ma" role="group" aria-label="Sleep timer">
           <!-- 0.9.1 (#44): Music Assistant's own choices and words; while a timer runs, "Stops in" and a red Cancel (as MA's menu) -->
           ${sleepOn ? html`<div class="sl-row"><span class="sl-st" aria-live="polite">${sleepModeText ?? `Stops in ${fmtSleepRemain(sleepRem)}`}</span></div>` : nothing}
           ${SLEEP_MINUTES.map((m) => html`<button class="sp ${sleepOn && this._sleepMins === m ? 'on' : ''}" tabindex="-1" data-min=${m}
@@ -541,7 +554,7 @@ export class JbNow extends LitElement {
         </div>` : canSleep && sleepOn ? html`<div class="sleep-strip cd-only" aria-live="polite">
           <button class="sp on sleep-cd" tabindex="-1" title="Sleep timer" aria-label=${sleepModeText ?? `Sleep timer ${sleepChip}`}
             @pointerdown=${noFocus} @click=${() => this.toggleSleepOpen()}>${icon('moon', 'i xs')}${sleepChip}</button>
-        </div>` : nothing}
+        </div>` : nothing */}
       </div>
       <div class="info">
         <div class="badges">${prov ? html`<span class="pv big">${prov}</span>` : nothing}
@@ -595,8 +608,9 @@ export class JbNow extends LitElement {
     .art { position: relative; width: min(calc(100cqw - 2 * var(--_pad)), max(clamp(30cqh, 100cqw - 300px, 44cqh), calc(4 * var(--_touch-min) + 6 * var(--ha-space-1, 4px))), 580px); aspect-ratio: 1; border-radius: var(--ha-border-radius-xl, 16px); overflow: hidden; background: var(--primary-color, #03a9f4);
       box-shadow: 0 0 0 var(--ha-border-width-sm, 1px) var(--_hairline); }
     .art .ovl { position: absolute; inset: 0; z-index: 1; }
-    .slx { position: absolute; inset: 0; z-index: 4; } .art .slx { z-index: 1; }
-    .nw.sl-open .art { z-index: 5; }
+    /* #156 sleep timer off (Randy: kept for a standalone player): these rules are commented out, not deleted */
+    /* .slx { position: absolute; inset: 0; z-index: 4; } .art .slx { z-index: 1; } */
+    /* .nw.sl-open .art { z-index: 5; } */
     .art-btns { position: absolute; top: var(--_ab-inset); right: var(--_ab-inset); z-index: 2; display: flex; gap: var(--ha-space-2, 8px); }
     /* #42: the touch minimum at 1x; on zoomed big screens (--_z > 1) never below --_ab-floor before the zoom (54px on screen at 1920x1080) */
     :host { --_ab-inset: var(--_space-2-5); --_ab-floor: 40px; --_ab: max(var(--_ab-floor), calc(var(--_touch-min) / var(--_z, 1))); }
@@ -606,16 +620,17 @@ export class JbNow extends LitElement {
       color: var(--_fg);
       border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); transition: background var(--_t-fast), color var(--_t-fast); }
     .ab .i { width: var(--_icon); height: var(--_icon); }
+    /* #156 sleep timer off (Randy: kept for a standalone player): these rules are commented out, not deleted */
     /* #117: the four sleep choices (48 px each) stay on one row over the cover: the artwork is never narrower than four of them plus
        small gaps (unless the card itself is), and on a small cover the strip's side insets and gaps shrink before anything wraps */
-    .art .sleep-strip { position: absolute; z-index: 2; top: calc(var(--_ab-inset) + var(--_ab) + var(--ha-space-2, 8px)); margin: 0; justify-content: flex-end;
-      --_sp-in: clamp(var(--ha-space-1, 4px), (100% - 4 * var(--_touch-min) - 3 * var(--ha-space-2, 8px)) / 2, var(--_ab-inset)); right: var(--_sp-in); left: var(--_sp-in);
-      gap: clamp(2px, (100% - 4 * var(--_touch-min)) / 3, var(--ha-space-2, 8px)); }
-    .art .sleep-strip .sp { padding: 0 clamp(var(--ha-space-1, 4px), 2cqi, var(--ha-space-4, 16px)); }
-    .art .sleep-strip .sp { background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
-      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
-      border-color: var(--_surface-border); }
-    .art .sleep-strip .sp.on { background: var(--ha-card-background, var(--card-background-color, var(--_bg))); }
+    /* .art .sleep-strip { position: absolute; z-index: 2; top: calc(var(--_ab-inset) + var(--_ab) + var(--ha-space-2, 8px)); margin: 0; justify-content: flex-end; */
+      /* --_sp-in: clamp(var(--ha-space-1, 4px), (100% - 4 * var(--_touch-min) - 3 * var(--ha-space-2, 8px)) / 2, var(--_ab-inset)); right: var(--_sp-in); left: var(--_sp-in); */
+      /* gap: clamp(2px, (100% - 4 * var(--_touch-min)) / 3, var(--ha-space-2, 8px)); } */
+    /* .art .sleep-strip .sp { padding: 0 clamp(var(--ha-space-1, 4px), 2cqi, var(--ha-space-4, 16px)); } */
+    /* .art .sleep-strip .sp { background: var(--ha-card-background, var(--card-background-color, var(--_bg))); */
+      /* -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none); */
+      /* border-color: var(--_surface-border); } */
+    /* .art .sleep-strip .sp.on { background: var(--ha-card-background, var(--card-background-color, var(--_bg))); } */
     /* on = HA's icon-button 'selected' colour (--primary-color), as the media browser's favourite button */
     .ab.on { color: var(--_active); border-color: var(--_active); }
     .ab:active { transform: scale(.94); }
@@ -624,17 +639,18 @@ export class JbNow extends LitElement {
     .art .ph { position: absolute; inset: 0; display: grid; place-items: center; background: var(--_chip-sel); }
     .art .ph .i { width: 30%; height: 30%; color: var(--_inactive); }
     /* Cover overlay buttons sit on the picture: an HA icon button (no shadow, theme icon colour) on the ha-card surface, so the icon stays readable on any cover */
-    .art .sleep-strip .sp { color: var(--_fg); }
-    .art .sleep-strip .sp.on { color: var(--_active); border-color: var(--_active); }
+    /* #156 sleep timer off (Randy: kept for a standalone player): these rules are commented out, not deleted */
+    /* .art .sleep-strip .sp { color: var(--_fg); } */
+    /* .art .sleep-strip .sp.on { color: var(--_active); border-color: var(--_active); } */
     /* 0.9.1 (#44): MA's worded choices in a tidy three-across grid over the top of the cover, one label per button on one line;
        Cancel (theme error colour) and the "Stops in" line each take a whole row, on the card surface */
-    .art .sleep-strip.ma { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ha-space-2, 8px); --_sp-in: var(--_ab-inset); }
-    .art .sleep-strip.ma .sp { width: 100%; padding: 0 var(--ha-space-2, 8px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .art .sleep-strip.ma .sp.cx { grid-column: 1 / -1; color: var(--error-color); border-color: var(--error-color); }
-    .art .sleep-strip.ma .sl-row { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
-    .art .sleep-strip.ma .sl-st { display: inline-flex; align-items: center; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px);
-      background: var(--ha-card-background, var(--card-background-color, var(--_bg))); color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border);
-      font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); font-variant-numeric: tabular-nums; }
+    /* .art .sleep-strip.ma { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ha-space-2, 8px); --_sp-in: var(--_ab-inset); } */
+    /* .art .sleep-strip.ma .sp { width: 100%; padding: 0 var(--ha-space-2, 8px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } */
+    /* .art .sleep-strip.ma .sp.cx { grid-column: 1 / -1; color: var(--error-color); border-color: var(--error-color); } */
+    /* .art .sleep-strip.ma .sl-row { grid-column: 1 / -1; display: flex; justify-content: flex-end; } */
+    /* .art .sleep-strip.ma .sl-st { display: inline-flex; align-items: center; min-height: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); */
+      /* background: var(--ha-card-background, var(--card-background-color, var(--_bg))); color: var(--_fg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); */
+      /* font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); font-variant-numeric: tabular-nums; } */
     .info { width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); color: var(--_fg); }
     .badges { display: flex; align-items: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; }
     /* Autoplay status at spot A: a read-only pill with the same size and lettering as the Playing on pill beside it (changed on the Queue screen);
@@ -665,14 +681,15 @@ export class JbNow extends LitElement {
     .tb.sh, .tb.rp, .tb.sl { color: var(--_inactive); } .tb.sh .i, .tb.rp .i, .tb.sl .i { width: var(--_icon); height: var(--_icon); }
     .tb.sh.on, .tb.rp.on, .tb.fv.on, .tb.sl.on { color: var(--_active); }
     .tb.fv { color: var(--_inactive); } .tb.fv .i { width: calc(var(--_icon) * 26 / 24); height: calc(var(--_icon) * 26 / 24); }
-    .sleep-strip { display: flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; margin: -2px 0 2px; }
-    .sleep-strip .sp { min-height: var(--_touch-min); min-width: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700);
-      background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); }
-    .sleep-strip .sp.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; }
-    .sleep-strip .sp:active { transform: scale(.96); }
-    .sleep-cd { letter-spacing: .04em; font-variant-numeric: tabular-nums; }
-    .sleep-strip .sp.sleep-cd { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-3, 12px); }
-    .sleep-strip .sp.sleep-cd .i { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); }
+    /* #156 sleep timer off (Randy: kept for a standalone player): these rules are commented out, not deleted */
+    /* .sleep-strip { display: flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); flex-wrap: wrap; margin: -2px 0 2px; } */
+    /* .sleep-strip .sp { min-height: var(--_touch-min); min-width: var(--_touch-min); padding: 0 var(--ha-space-4, 16px); border-radius: var(--ha-border-radius-pill, 9999px); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); */
+      /* background: var(--_chip-bg); border: var(--ha-border-width-sm, 1px) solid var(--_surface-border); color: var(--_fg); } */
+    /* .sleep-strip .sp.on { background: var(--_chip-sel); color: var(--_fg); border-color: transparent; } */
+    /* .sleep-strip .sp:active { transform: scale(.96); } */
+    /* .sleep-cd { letter-spacing: .04em; font-variant-numeric: tabular-nums; } */
+    /* .sleep-strip .sp.sleep-cd { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-3, 12px); } */
+    /* .sleep-strip .sp.sleep-cd .i { width: calc(var(--_icon) * 14 / 24); height: calc(var(--_icon) * 14 / 24); } */
     .tb .dot { position: absolute; left: 50%; bottom: var(--_space-1-5); width: 5px; height: 5px; margin-left: -2.5px; border-radius: var(--ha-border-radius-circle, 50%); background: currentColor; }
     .tb.pp { width: clamp(56px, 16cqw, 80px); height: clamp(56px, 16cqw, 80px); background: var(--_active); color: var(--_on-accent); }
     .tb.pp .i { width: calc(var(--_icon) * 44 / 24); height: calc(var(--_icon) * 44 / 24); }
@@ -741,7 +758,7 @@ export class JbNow extends LitElement {
     .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: var(--_dim); }
     .vr.pending .ra { animation: jb-pulse 1s ease-in-out infinite; }
     @keyframes jb-pulse { 50% { opacity: .35; } }
-    @media (prefers-reduced-motion: reduce) { .vr.pending .ra { animation: none; } .tb:active, .sleep-strip .sp:active { transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .vr.pending .ra { animation: none; } .tb:active { transform: none; } /* #156: , .sleep-strip .sp:active */ }
     .vn .else { display: block; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vr.muted .vs { opacity: var(--_dim); }
     @container vol (min-width: 600px) {
@@ -779,7 +796,7 @@ export class JbNow extends LitElement {
     /* #117: a behaviour flag, not a layout: sleepStatus() reads it to skip the brief top-right status chip when the card is too narrow
        for it to clear the cover's Fullscreen/Lyrics buttons (the Sleep M:SS chip already shows the same thing). Kept as a container query on the card's own width.
        Structural, as before #117: on a card this narrow the Up next strip is left out whole (the Queue tab shows it), so the speaker rows stay in view. */
-    @container np (max-width: 520px) { .nw { --_narrow: 1; } .upn { display: none; } }
+    @container np (max-width: 520px) { /* #156: .nw { --_narrow: 1; } (only the commented-out sleepStatus() read it) */ .upn { display: none; } }
     /* #117 structural, kept as a container query on the speaker panel's own width: below ~460px a one-line main row would squeeze the
        group slider to almost nothing, so the name + Speakers button go on top and the slider gets the full row underneath */
     @container vol (max-width: 460px) {

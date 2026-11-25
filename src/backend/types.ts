@@ -159,11 +159,12 @@ export interface MaBackend {
   /** 2.4 (kiosk only): {connected} now and whenever Home Assistant's Music Assistant connection goes away or comes back.
    *  Resolves an unsubscribe function. */
   subscribeMaStatus?(cb: (ev: { connected: boolean }) => void): Promise<() => void>;
-  /** MA sleep timer for the entity, using the entity's MA player id. Kiosk only. */
-  sleepTimerGet?(entity: string): Promise<unknown>;
-  sleepTimerSet?(entity: string, seconds: number): Promise<unknown>;
-  sleepTimerClear?(entity: string): Promise<unknown>;
-  subscribeSleepTimer?(entity: string, cb: (ev: { expires_at?: number | null; player_id?: string }) => void): Promise<() => void>;
+  // #156 sleep timer off (Randy: kept for a standalone player):
+  // /** MA sleep timer for the entity, using the entity's MA player id. Kiosk only. */
+  // sleepTimerGet?(entity: string): Promise<unknown>;
+  // sleepTimerSet?(entity: string, seconds: number): Promise<unknown>;
+  // sleepTimerClear?(entity: string): Promise<unknown>;
+  // subscribeSleepTimer?(entity: string, cb: (ev: { expires_at?: number | null; player_id?: string }) => void): Promise<() => void>;
 }
 
 /** {context, response: {response: X}} / {response: X} / X  ->  X */
