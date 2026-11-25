@@ -340,20 +340,26 @@ export class JbSpeakers extends LitElement {
     const fromName = this.nameOf(y.tMa, y.players, y.rooms);
     if (!(await this.confirmTakeovers(`Move to ${to.name}?`, st.list, y.players, y.rooms, 'Move'))) return false;
     this.setBusy(to.entity, 'move');
-    fire(this, 'jukebox-target', { entity: to.entity }); // optimistic
+    // #104: the card stays on the source until the destination's queue is active, and the transfer names queues: the
+    // queue the live feed says the source plays (Stage 1 rule; its player id only without the feed) → the destination
+    // group's own queue (MA keys a player's queue by its player id)
+    const live = this.store!.live;
+    const queueOf = (pid: string) => (live.ready && live.followsQueues ? live.activeQueue(pid) : null) ?? pid;
+    const started = (p: Players) => isActive(p.get(dMa)) && (!live.ready || !live.followsQueues || live.activeQueue(dMa) !== null);
     try {
-      await this.store!.transfer(y.tMa, dMa, true);
-      const ok = await this.store!.waitFor((p) => isActive(p.get(dMa)), timeouts().move);
+      await this.store!.transfer(queueOf(y.tMa), dMa, true);
+      const ok = await this.store!.waitFor(started, timeouts().move);
       if (!ok) throw new SpeakerError('timeout', `${to.name} did not start`);
+      fire(this, 'jukebox-target', { entity: to.entity });
       const src = y.tMa;
       const lossy = st.list.some((t) => t.kind === 'static' || t.kind === 'hijack');
       const undo = opts.undoable !== false && !lossy ? { label: `Moved to ${to.name}`, run: async () => {
-        await this.store!.transfer(dMa, src, true); fire(this, 'jukebox-target', { entity: from });
+        await this.store!.transfer(queueOf(dMa), src, true); fire(this, 'jukebox-target', { entity: from });
       } } : undefined;
       if (!opts.quiet) this.status(`Moved to ${to.name}`, { undo });
       return true;
     } catch (e) {
-      fire(this, 'jukebox-target', { entity: from }); // revert
+      fire(this, 'jukebox-target', { entity: from }); // revert (the card is still on the source; kept for a late switch)
       this.fail(`Couldn't move to ${to.name}: ${errText(e)}. Still on ${fromName}.`);
       return false;
     } finally { this.setBusy(to.entity); }

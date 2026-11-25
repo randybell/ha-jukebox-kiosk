@@ -282,9 +282,18 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await tap(p, `${SR}.querySelector('[data-target="${IN}"]')`);
   const l2 = await askLines(p);
   check('M4 move to Indoor warns that the fixed group Everywhere stops', l2.some((l) => /Everywhere stops: it is a fixed group/.test(l)), J(l2));
+  // #104: record (card target, Indoor state) pairs in the page from the confirm on
+  await p.evaluate((nowSel, inEnt) => {
+    const seen = window.__m5 = []; let last = '';
+    const rec = () => { const k = `${eval(nowSel)?.config?.entity}|${window.__hass.states[inEnt]?.state}`; if (k !== last) { last = k; seen.push(k); } };
+    rec(); window.__m5t = setInterval(rec, 5);
+  }, NOW, IN);
   await confirm(p);
-  check('M5 optimistic: the chip / card target switch at once', (await target(p)) === IN);
   await wait(p, `window.__hass.states['${IN}'].state === 'playing'`);
+  await wait(p, `${NOW}.config.entity === '${IN}'`, 3000);
+  const m5 = await p.evaluate(() => { clearInterval(window.__m5t); return window.__m5; });
+  check('M5 #104: the card switches to Indoor only once Indoor is active (never on an idle Indoor), then stays there',
+    (await target(p)) === IN && !m5.some((k) => k.startsWith(`${IN}|`) && !/\|(playing|buffering|paused)$/.test(k)), J(m5));
   const tr = await ma(p, 'player_queues/transfer');
   check('M6 transfer = jukebox_kiosk/ma player_queues/transfer Everywhere → Indoor (auto_play)',
     tr.length === 1 && tr[0].data.source_queue_id === 'syncgroup_everywhere' && tr[0].data.target_queue_id === 'syncgroup_mock_indoor', J(tr));
@@ -505,9 +514,9 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await openPanel(p3); await waitLoaded(p3);
   await tap(p3, `${SR}.querySelector('[data-target="${OUT}"]')`);
   if (await wait(p3, ASKQ, 800)) await confirm(p3);
-  const opt = (await target(p3)) === OUT;
+  const stay = (await target(p3)) === IN;
   await wait(p3, `/Couldn't move to Outdoor/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
-  check('F3 transfer times out → optimistic switch reverts to Indoor with "Couldn\'t move to Outdoor … Still on Indoor."', opt && (await target(p3)) === IN && /Still on Indoor/.test(await toast(p3)), await toast(p3));
+  check('F3 #104 transfer times out → the card never left Indoor; "Couldn\'t move to Outdoor … Still on Indoor."', stay && (await target(p3)) === IN && /Still on Indoor/.test(await toast(p3)), await toast(p3));
   await p3.close();
   const p4 = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&xfer=fail`);
   await openPanel(p4); await waitLoaded(p4);

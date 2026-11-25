@@ -222,7 +222,7 @@ export class SpeakerStore {
       if (this.configsWanted && (m.kind === 'snapshot' || m.event === 'player_added')) void this.loadConfigs();
       this.checkWaiters();
       this.emitSoon();
-    }
+    } else this.checkWaiters(); // #104: a Move waits for the destination's queue to become active
     for (const f of this.msgFns) f(m);
   }
   /** many changes in one frame redraw once */
