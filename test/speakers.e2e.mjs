@@ -525,6 +525,36 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await wait(p4, `/Couldn't move/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
   check('F4 transfer fails → revert + toast', (await target(p4)) === IN && /Couldn't move to Outdoor/.test(await toast(p4)), await toast(p4));
   await p4.close();
+  // 1.0.1: MA 2.10.13 answers a leader drop only after the old leader stopped and the group dissolved (> 8 s on a slow speaker)
+  const leadOf = async (pg) => ((await pg.evaluate(() => window.__ma.G.syncgroup_mock_indoor.members[0])) === 'wiim_mock_kitchen' ? KIT : LIV);
+  const errs = (pg) => pg.evaluate(() => window.__errChips ?? []);
+  const watchErr = (pg) => pg.evaluate((sr) => { window.__errChips = []; setInterval(() => { const c = eval(sr).querySelector('.st'); if (c?.getAttribute('role') === 'alert') window.__errChips.push(c.textContent.trim()); }, 100); }, SR);
+  const p5 = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&grp=slowlead&leaddelay=9000&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`, undefined, { ...FAST, call: 8000, join: 8000 });
+  await openPanel(p5); await waitLoaded(p5);
+  const lead5 = await leadOf(p5), ma5 = await p5.evaluate(() => window.__ma.G.syncgroup_mock_indoor.members[0]);
+  await wait(p5, `${act(lead5)}?.dataset.act === 'drop'`);
+  await watchErr(p5);
+  await tap(p5, act(lead5));
+  await sleep(8600); // past the 8 s call limit, before MA's answer at 9 s
+  const c5 = await chip(p5), gone5 = await p5.evaluate((s) => !window.__ma.G.syncgroup_mock_indoor.members.includes(s), ma5);
+  const left5 = await wait(p5, `/left/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 5000);
+  await wait(p5, `${row(lead5)}.classList.contains('out')`, 3000);
+  check('F5 leader drop, MA answers after 9 s (call limit 8 s) but removes the leader → "Regrouping…" past the limit, no error, the speaker ends up out',
+    c5?.text === 'Regrouping…' && c5?.kind === 'busy' && !gone5 && left5 && (await errs(p5)).length === 0 && (await ev(p5, `${row(lead5)}.classList.contains('out')`)),
+    J({ c5, gone5, left5, errs: await errs(p5), toast: await toast(p5) }));
+  await p5.close();
+  const p6 = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&grp=timeout&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`, undefined, { ...FAST, call: 900, join: 900 });
+  await p6.evaluate(() => { window.__jbLeaderDropMs = 3000; });
+  await openPanel(p6); await waitLoaded(p6);
+  const lead6 = await leadOf(p6);
+  await wait(p6, `${act(lead6)}?.dataset.act === 'drop'`);
+  await tap(p6, act(lead6));
+  await sleep(1500);
+  const c6 = await chip(p6);
+  const failed6 = await wait(p6, `/Couldn't drop/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
+  check('F6 leader drop, MA never answers and nothing changes → "Regrouping…" past the call limit, then "Couldn\'t drop … no answer in time" and the row reverts',
+    c6?.text === 'Regrouping…' && failed6 && /no answer in time/.test(await toast(p6)) && !(await ev(p6, `${row(lead6)}.classList.contains('out')`)), J({ c6, toast: await toast(p6) }));
+  await p6.close();
 }
 
 // ───────────── 0.8.3 #97: "Large buttons" is gone; a saved large_buttons is ignored; phone, short card ─────────────

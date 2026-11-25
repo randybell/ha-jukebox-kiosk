@@ -16,6 +16,8 @@
 // "<n> is already played/buffered"; delete_item there: 200, ignored). HA entities carry mass_player_id null.
 // URL params: ma=split (Indoor plays living+kitchen with its own queue, Garage plays a radio station alone, Everywhere idle),
 // ma=busy (Everywhere plays, Indoor idle: the default), grp=fail|slow|timeout (set_members), xfer=fail|slow|timeout (transfer),
+// grp=slowlead (MA 2.10.13: removing a group's leader answers only after the old leader stopped and the group dissolved:
+// the change lands, then the answer, after leaddelay=<ms>, default 9000; other set_members answer at once),
 // reform=fail (MA 2.10.13: the restart after a leader re-form fails and the group goes idle, queue kept),
 // gap=<ms> (leader re-form gap, default 1200), malat=<ms> (players/* latency, default 40), xgap=<ms> (transfer silence,
 // default 0), live=1 (live timings: gap 5900 with the group left 'playing' and the new leader silent, xgap 4700, set_members
@@ -229,6 +231,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
         for (const s of add) if (G[s]) throw new Error('Nesting groups is not allowed');
         for (const s of [...add, ...rem]) if (!NAME[s]) throw new Error(`Unknown player ${s}`);
         if (JOIN) await sleep(JOIN);
+        if (GRP === 'slowlead' && active(g) && rem.includes(leader(g))) await sleep(Number(params.get('leaddelay') ?? 9000));
         if (!active(g)) {
           // live: 200, the group stays idle with the new member list (it takes the speakers when it starts)
           const cur = [...(G[g].idle ?? G[g].preset)];

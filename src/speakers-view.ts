@@ -44,6 +44,9 @@ const chipMs = (kind: ChipKind, undo: boolean) => kind === 'busy' ? BUSY_MS : ki
   : undo ? ms('__jbUndoMs', UNDO_MS) : ms('__jbChipMs', CHIP_MS);
 const HOLD_MS = 4000;
 const REGROUP_MS = 15000;
+/** 1.0.1: Music Assistant 2.10.13 answers a leader drop only after it stopped the old leader (up to 5 s) and dissolved the
+ *  group, which can pass the 8 s call limit on a slow speaker; the card keeps watching the live feed this long after the tap */
+const LEADER_DROP_MS = 30000;
 /** #1.0.1 leader-drop safety net: how long after the drop MA gets to restart the group itself before the card checks
  *  (MA 2.10.13, Randy's log: dissolve, re-form after ~9.6 s, the restart fails at ~14.4 s, idle-grace dissolve at ~24.4 s),
  *  and how much longer a group still re-forming (buffering) gets */
@@ -305,11 +308,27 @@ export class JbSpeakers extends LitElement {
     this.setBusy(room.ma, 'out');
     if (isLeader) { this.startRegroup(x.tMa, room.ma); this.status('Regrouping…', { kind: 'busy' }); }
     const wasPlaying = isLeader && x.tP?.playback_state === 'playing' && this.hass?.states[x.c.entity!]?.state === 'playing';
+    const t0 = Date.now();
     try {
-      await this.store!.setMembers(x.tMa, [], [room.ma]);
-      if (wasPlaying) void this.resumeAfterDrop(x.tMa, x.c.entity!, room.ma);
-      const ok = await this.store!.waitFor((p) => !membersOf(p.get(x.tMa!), p).includes(room.ma!), timeouts().join);
+      let slow = 0;
+      try {
+        await this.store!.setMembers(x.tMa, [], [room.ma]);
+      } catch (e) {
+        // a leader drop that MA has not answered in time is still working (it stops the old leader, then dissolves and
+        // re-forms the group): keep "Regrouping…" and follow the live feed; a real error from MA still fails
+        if (!isLeader || !(e instanceof SpeakerError) || e.code !== 'timeout') throw e;
+        slow = Math.max(1, ms('__jbLeaderDropMs', LEADER_DROP_MS) - (Date.now() - t0));
+        if (this._regroup?.group === x.tMa) this.startRegroup(x.tMa, room.ma, slow);
+        this.status('Regrouping…', { kind: 'busy', ms: slow });
+      }
+      if (wasPlaying && !slow) void this.resumeAfterDrop(x.tMa, x.c.entity!, room.ma);
+      const ok = await this.store!.waitFor((p) => !membersOf(p.get(x.tMa!), p).includes(room.ma!), slow || timeouts().join);
       if (!ok) throw new SpeakerError('timeout', `${room.name} did not leave`);
+      if (slow) {
+        // MA's re-form (and its restart) only begins now: the usual window and safety net from here; nothing to re-form when idle
+        if (wasPlaying) { if (this._regroup) this.startRegroup(x.tMa, room.ma); void this.resumeAfterDrop(x.tMa, x.c.entity!, room.ma); }
+        else this.endRegroup();
+      }
       const s = room.ma, t = x.tMa;
       this.status(isLeader && this._regroup ? `${room.name} left · regrouping…` : `${room.name} left`, { undo: { label: `${room.name} left`, run: async () => { await this.store!.setMembers(t, [s], []); } } });
     } catch (e) {
@@ -351,10 +370,10 @@ export class JbSpeakers extends LitElement {
     return !!q && q.items > (q.current_index ?? -1) + 1;
   }
   /** 'Regrouping…' until the group plays again on a new leader (or 15 s) */
-  private startRegroup(group: string, old: string) {
+  private startRegroup(group: string, old: string, ms = REGROUP_MS) {
     window.clearTimeout(this._regroupTimer);
-    this._regroup = { group, old, until: Date.now() + REGROUP_MS };
-    this._regroupTimer = window.setTimeout(() => this.endRegroup(), REGROUP_MS);
+    this._regroup = { group, old, until: Date.now() + ms };
+    this._regroupTimer = window.setTimeout(() => this.endRegroup(), ms);
   }
   private endRegroup() { window.clearTimeout(this._regroupTimer); this._regroup = null; }
   /** true while the target is re-forming: our own leader drop not yet answered by a playing new leader, or MA says buffering */
