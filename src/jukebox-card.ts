@@ -417,6 +417,11 @@ export class JukeboxCard extends LitElement {
     window.visualViewport?.addEventListener('resize', this.scheduleFit);
     document.addEventListener('fullscreenchange', this.scheduleFit);
     if ('ResizeObserver' in window) {
+      // #160: the large-screen zoom follows the card's size. Made here, not once in firstUpdated, because Home Assistant takes the
+      // card off the page and puts it back (view switch, edit mode); the observer's first report refits the zoom on the way back.
+      this._ro?.disconnect();
+      this._ro = new ResizeObserver(() => { this.updateScale(); });
+      this._ro.observe(this);
       // page layout changes that move the card without resizing it (HA toolbar shown/hidden, sidebar, cards above it)
       this._fitRo = new ResizeObserver(this.scheduleFit);
       this._fitRo.observe(document.documentElement);
@@ -513,10 +518,6 @@ export class JukeboxCard extends LitElement {
   protected firstUpdated() {
     this.renderRoot.addEventListener('focusin', this.onFocusIn as EventListener);
     const np = this.renderRoot.querySelector('main.np');
-    if ('ResizeObserver' in window) {
-      this._ro = new ResizeObserver(() => { this.updateScale(); });
-      this._ro.observe(this);
-    }
     this.updateScale();
   }
   protected updated() {
