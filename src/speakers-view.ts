@@ -45,7 +45,7 @@ const chipMs = (kind: ChipKind, undo: boolean) => kind === 'busy' ? BUSY_MS : ki
 const HOLD_MS = 4000;
 const REGROUP_MS = 15000;
 /** 1.0.1: Music Assistant 2.10.13 answers a leader drop only after it stopped the old leader (up to 5 s) and dissolved the
- *  group, which can pass the 8 s call limit on a slow speaker; the card keeps watching the live feed this long after the tap */
+ *  group, which can pass the 8 s call limit on a slow speaker; the card confirms it on the live feed this long after the tap */
 const LEADER_DROP_MS = 30000;
 /** #1.0.1 leader-drop safety net: how long after the drop MA gets to restart the group itself before the card checks
  *  (MA 2.10.13, Randy's log: dissolve, re-form after ~9.6 s, the restart fails at ~14.4 s, idle-grace dissolve at ~24.4 s),
@@ -57,7 +57,7 @@ const VOL_THROTTLE_MS = 200;
 export class JbSpeakers extends LitElement {
   static properties = {
     hass: { attribute: false }, config: { attribute: false }, store: { attribute: false }, open: { type: Boolean, reflect: true }, keep: { type: Boolean },
-    _ask: { state: true }, _chip: { state: true }, _busy: { state: true }, _tick: { state: true }, _regroup: { state: true },
+    _ask: { state: true }, _chip: { state: true }, _busy: { state: true }, _optOut: { state: true }, _tick: { state: true }, _regroup: { state: true },
   };
   hass?: HomeAssistant;
   config!: JukeboxCardConfig;
@@ -73,12 +73,19 @@ export class JbSpeakers extends LitElement {
   private _hold = new AskHold<{ text: string; o: StatusOpts }>();
   /** optimistic grouping: speaker (MA id) → 'in' | 'out', target entity → 'move' */
   private _busy = new Map<string, string>();
+  /** 1.0.1: leader drops waiting for MA's confirmation: speaker (MA id) → its group and the drop's number */
+  private _optOut = new Map<string, { group: string; n: number }>();
+  private _optN = 0;
   private _tick = 0;
   /** after the leader is dropped MA re-forms the group on the next member after ~5.9 s of silence (live 2.10.9): 'Regrouping…' */
   private _regroup: { group: string; old: string; until: number } | null = null;
   private _regroupTimer?: number;
   /** the latest leader drop's safety net (a newer drop, or the card moving elsewhere, cancels an older one) */
   private _resumeN = 0;
+  /** the speaker the latest safety net is for */
+  private _resumeFor = '';
+  /** 1.0.1: the background leader-drop work (confirmation wait, safety net) stops when the panel leaves the page */
+  private _bg = new AbortController();
   private _unsub?: () => void;
   private _chipTimer?: number;
   private vol = new Map<string, Pending<number>>();
@@ -125,7 +132,7 @@ export class JbSpeakers extends LitElement {
   }
   /** 0.6.3: 'Regrouping…' for Now Playing */
   inlineRegrouping() { return this.dynamic && !!this.store?.loaded && this.regrouping(this.ctx()); }
-  disconnectedCallback() { super.disconnectedCallback(); window.clearTimeout(this._regroupTimer); window.clearTimeout(this._chipTimer); this._unsub?.(); this._unsub = undefined; }
+  disconnectedCallback() { super.disconnectedCallback(); this._bg.abort(); this._bg = new AbortController(); this._resumeN++; this._optOut = new Map(); window.clearTimeout(this._regroupTimer); window.clearTimeout(this._chipTimer); this._unsub?.(); this._unsub = undefined; }
   connectedCallback() { super.connectedCallback(); if (this.hasUpdated) this.requestUpdate('keep'); }
 
   /* ---------------- public: start confirmation (used by the card's start guard, panel open or not) ---------------- */
@@ -244,8 +251,11 @@ export class JbSpeakers extends LitElement {
     const tMa = this.dynamic ? targetMa(c.entity!, this.ids) : undefined;
     const tP = tMa ? players.get(tMa) : undefined;
     const active = isActive(tP);
-    const members = active ? membersOf(tP, players) : [];
-    return { c, hass, players, rooms, tMa, tP, kind: kindOf(tP, tMa ? this.store?.configs.get(tMa) : undefined), active, members, leader: active ? leaderOf(tP, players) : undefined };
+    // 1.0.1: a leader drop waiting for MA's confirmation has already left the card's list
+    const members = (active ? membersOf(tP, players) : []).filter((id) => this._optOut.get(id)?.group !== tMa);
+    let leader = active ? leaderOf(tP, players) : undefined;
+    if (leader && !members.includes(leader)) leader = members[0];
+    return { c, hass, players, rooms, tMa, tP, kind: kindOf(tP, tMa ? this.store?.configs.get(tMa) : undefined), active, members, leader };
   }
   private async confirmTakeovers(title: string, list: Takeover[], players: Players, rooms: Room[], ok: string) {
     if (!list.length) return true;
@@ -266,6 +276,7 @@ export class JbSpeakers extends LitElement {
       list, x.players, x.rooms, holder ? 'Take' : 'Add'))) return;
     const staticStop = !!holder && kindOf(holder) === 'static';
     const back = holder && kindOf(holder) === 'dynamic' && !list[0]?.last ? holder.player_id : undefined;
+    this.cancelLeaderDrop(room.ma); // a pending leader drop of this speaker is over: this join is the newer action
     this.setBusy(room.ma, 'in');
     try {
       // a speaker that leads a playing static group is refused by set_members: stop that group first (it stops anyway)
@@ -283,7 +294,7 @@ export class JbSpeakers extends LitElement {
     const x = this.ctx();
     if (!room.ma || !x.tMa || x.kind !== 'dynamic' || !x.active) return;
     const allow = x.c.leader_drop !== 'block';
-    const why = dropBlock(x.tP, room.ma, x.players, allow);
+    const why = x.members.length <= 1 ? 'last' : dropBlock(x.tP, room.ma, x.players, allow);
     const tName = this.nameOf(x.tMa, x.players, x.rooms);
     if (why === 'last') {
       // MA would stop and dissolve the group: offer Pause instead (the queue and the speaker stay on the group)
@@ -305,37 +316,61 @@ export class JbSpeakers extends LitElement {
     if (why === 'leader') { this.toast(`${room.name} leads ${tName}. Use Move to hand off, or drop the other speakers.`); return; }
     const isLeader = x.leader === room.ma;
     if (isLeader && this.modal && !(await this.ask({ title: `Drop ${room.name}?`, lines: [`${room.name} leads ${tName} now. Music Assistant hands ${tName} to the other speakers: they go quiet for a few seconds, then the queue plays on.`], ok: 'Drop' }))) return;
+    if (isLeader) { this.dropLeader(room, x); return; }
     this.setBusy(room.ma, 'out');
-    if (isLeader) { this.startRegroup(x.tMa, room.ma); this.status('Regrouping…', { kind: 'busy' }); }
-    const wasPlaying = isLeader && x.tP?.playback_state === 'playing' && this.hass?.states[x.c.entity!]?.state === 'playing';
-    const t0 = Date.now();
     try {
-      let slow = 0;
-      try {
-        await this.store!.setMembers(x.tMa, [], [room.ma]);
-      } catch (e) {
-        // a leader drop that MA has not answered in time is still working (it stops the old leader, then dissolves and
-        // re-forms the group): keep "Regrouping…" and follow the live feed; a real error from MA still fails
-        if (!isLeader || !(e instanceof SpeakerError) || e.code !== 'timeout') throw e;
-        slow = Math.max(1, ms('__jbLeaderDropMs', LEADER_DROP_MS) - (Date.now() - t0));
-        if (this._regroup?.group === x.tMa) this.startRegroup(x.tMa, room.ma, slow);
-        this.status('Regrouping…', { kind: 'busy', ms: slow });
-      }
-      if (wasPlaying && !slow) void this.resumeAfterDrop(x.tMa, x.c.entity!, room.ma);
-      const ok = await this.store!.waitFor((p) => !membersOf(p.get(x.tMa!), p).includes(room.ma!), slow || timeouts().join);
+      await this.store!.setMembers(x.tMa, [], [room.ma]);
+      const ok = await this.store!.waitFor((p) => !membersOf(p.get(x.tMa!), p).includes(room.ma!), timeouts().join);
       if (!ok) throw new SpeakerError('timeout', `${room.name} did not leave`);
-      if (slow) {
-        // MA's re-form (and its restart) only begins now: the usual window and safety net from here; nothing to re-form when idle
-        if (wasPlaying) { if (this._regroup) this.startRegroup(x.tMa, room.ma); void this.resumeAfterDrop(x.tMa, x.c.entity!, room.ma); }
-        else this.endRegroup();
-      }
       const s = room.ma, t = x.tMa;
-      this.status(isLeader && this._regroup ? `${room.name} left · regrouping…` : `${room.name} left`, { undo: { label: `${room.name} left`, run: async () => { await this.store!.setMembers(t, [s], []); } } });
+      this.status(`${room.name} left`, { undo: { label: `${room.name} left`, run: async () => { await this.store!.setMembers(t, [s], []); } } });
     } catch (e) {
-      if (isLeader) this.endRegroup();
       this.fail(`Couldn't drop ${room.name}: ${errText(e)}`);
     } finally { this.setBusy(room.ma); }
   }
+  /**
+   * 1.0.1 leader drop: the speaker leaves the card's list at once and the card stays usable. Music Assistant 2.10.13 answers
+   * only after it stopped the old leader and dissolved the group (past the 8 s call limit on a slow speaker), so a timeout
+   * is not a failure: the live feed confirms it (LEADER_DROP_MS after the tap), silently. A real MA error, or no change by
+   * then, puts the speaker back with the failure message, unless a newer action took that speaker over meanwhile.
+   */
+  private dropLeader(room: Room, x: ReturnType<JbSpeakers['ctx']>) {
+    const s = room.ma!, group = x.tMa!, entity = x.c.entity!, store = this.store!;
+    const wasPlaying = x.tP?.playback_state === 'playing' && this.hass?.states[entity]?.state === 'playing';
+    const n = ++this._optN;
+    this.setOptOut(s, { group, n });
+    if (wasPlaying) this.startRegroup(group, s); // MA re-forms a playing group on the next member: the status line follows it
+    const mine = () => this._optOut.get(s)?.n === n;
+    const out = (p: Players) => !membersOf(p.get(group), p).includes(s);
+    const t0 = Date.now(), limit = ms('__jbLeaderDropMs', LEADER_DROP_MS), sig = this._bg.signal;
+    void (async () => {
+      try {
+        try { await store.setMembers(group, [], [s]); } catch (e) {
+          if (!(e instanceof SpeakerError) || e.code !== 'timeout') throw e;
+        }
+        const ok = await store.waitFor(out, Math.max(1, limit - (Date.now() - t0)), sig);
+        if (sig.aborted) return; // the panel left the page: disconnectedCallback dropped the pending state
+        if (!ok && (!store.loaded || this.store !== store)) { if (mine()) this.setOptOut(s); return; } // the card left: nothing to revert
+        if (!ok) throw new SpeakerError('timeout', `${room.name} did not leave`);
+        if (!mine()) return; // a join-back took the speaker over: no safety net (and its Regrouping… ended with it)
+        this.setOptOut(s);
+        if (wasPlaying && out(store.players)) void this.resumeAfterDrop(group, entity, s);
+      } catch (e) {
+        if (sig.aborted || !mine()) return; // a newer action owns this speaker now, or the panel left the page
+        this.setOptOut(s);
+        if (this._regroup?.old === s) this.endRegroup();
+        this.fail(`Couldn't drop ${room.name}: ${errText(e)}`);
+      }
+    })();
+  }
+  /** 1.0.1: a join-back of a speaker whose leader drop is pending or just confirmed: the drop's pending state, its
+   *  "Regrouping…" and its safety net all end; the join owns the speaker now */
+  private cancelLeaderDrop(s: string) {
+    this.setOptOut(s);
+    if (this._regroup?.old === s) this.endRegroup();
+    if (this._resumeFor === s) this._resumeN++;
+  }
+  private setOptOut(k: string, v?: { group: string; n: number }) { const m = new Map(this._optOut); if (v) m.set(k, v); else m.delete(k); this._optOut = m; }
   /**
    * 1.0.1 safety net after dropping the leader of a playing group: Music Assistant 2.10.13 dissolves the group, re-forms it
    * on the next member and restarts playback, but that restart can fail ("Can not resolve stream URL: Invalid PlayerMedia
@@ -345,6 +380,7 @@ export class JbSpeakers extends LitElement {
    */
   private async resumeAfterDrop(group: string, entity: string, old: string) {
     const n = ++this._resumeN, store = this.store;
+    this._resumeFor = old;
     if (!store) return;
     const back = (p: Players) => {
       const g = p.get(group);
@@ -352,10 +388,12 @@ export class JbSpeakers extends LitElement {
       const mem = membersOf(g, p), lead = leaderOf(g, p);
       return !mem.includes(old) && (!lead || p.get(lead)?.playback_state === 'playing');
     };
-    if (await store.waitFor(back, ms('__jbResumeMs', RESUME_MS))) return;
-    if (store.players.get(group)?.playback_state === 'buffering' && await store.waitFor(back, ms('__jbResumeGraceMs', RESUME_GRACE_MS))) return;
+    const sig = this._bg.signal;
+    if (await store.waitFor(back, ms('__jbResumeMs', RESUME_MS), sig)) return;
+    if (store.players.get(group)?.playback_state === 'buffering' && await store.waitFor(back, ms('__jbResumeGraceMs', RESUME_GRACE_MS), sig)) return;
     // the card left the page or moved on, a newer drop took over, or MA's restart came after all
-    if (n !== this._resumeN || !this.isConnected || this.store !== store || !store.loaded || this.config?.entity !== entity || back(store.players)) return;
+    if (sig.aborted || n !== this._resumeN || !this.isConnected || this.store !== store || !store.loaded || this.config?.entity !== entity || back(store.players)) return;
+    if (membersOf(store.players.get(group), store.players).includes(old)) return; // the dropped speaker is back in the group
     const st = this.hass?.states[entity]?.state;
     if (st === 'playing' || st === 'paused') return; // playing on, or someone paused it meanwhile
     if (!this.upNext(group)) return;
@@ -370,10 +408,10 @@ export class JbSpeakers extends LitElement {
     return !!q && q.items > (q.current_index ?? -1) + 1;
   }
   /** 'Regrouping…' until the group plays again on a new leader (or 15 s) */
-  private startRegroup(group: string, old: string, ms = REGROUP_MS) {
+  private startRegroup(group: string, old: string) {
     window.clearTimeout(this._regroupTimer);
-    this._regroup = { group, old, until: Date.now() + ms };
-    this._regroupTimer = window.setTimeout(() => this.endRegroup(), ms);
+    this._regroup = { group, old, until: Date.now() + REGROUP_MS };
+    this._regroupTimer = window.setTimeout(() => this.endRegroup(), REGROUP_MS);
   }
   private endRegroup() { window.clearTimeout(this._regroupTimer); this._regroup = null; }
   /** true while the target is re-forming: our own leader drop not yet answered by a playing new leader, or MA says buffering */
@@ -538,11 +576,12 @@ export class JbSpeakers extends LitElement {
         : p?.current_media?.title ?? undefined;
       if (inT) where = x.leader === r.ma && x.members.length > 1 ? 'Leads the group' : 'In this group';
       else if (h) where = `In ${this.nameOf(h.player_id, x.players, x.rooms)}${kindOf(h) === 'static' ? ' (fixed)' : ''}${title ? ` · ${title}` : ''}`;
+      else if (this._optOut.get(r.ma)?.group === x.tMa) where = 'Not playing'; // MA is stopping it (1.0.1 leader drop)
       else if (p && ['playing', 'paused'].includes(p.playback_state)) where = `${p.playback_state === 'paused' ? 'Paused' : 'Playing alone'}${title ? ` · ${title}` : ''}`;
       else where = 'Not playing';
       if (grouping) {
         if (inT) {
-          const why = dropBlock(x.tP, r.ma, x.players, x.c.leader_drop !== 'block');
+          const why = x.members.length <= 1 ? 'last' : dropBlock(x.tP, r.ma, x.players, x.c.leader_drop !== 'block');
           act = { label: why === 'leader' ? 'Leader' : why === 'last' ? 'Last' : 'Drop', kind: why ? 'blocked' : 'drop', fn: () => this.drop(r) };
         } else if (h) act = { label: `Take from ${this.nameOf(h.player_id, x.players, x.rooms)}`, kind: 'take', fn: () => this.join(r) };
         else if (x.kind === 'dynamic' && !x.active) act = { label: 'Join', kind: 'idle', dis: true, fn: () => this.toast(`Start playback on ${this.nameOf(x.tMa!, x.players, x.rooms)} first, then join speakers.`) };

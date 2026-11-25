@@ -322,8 +322,8 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   const c14 = await chip(p);
   await wait(p, `${row(LIV)}.classList.contains('out') && !window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_living')`);
   const smL = (await ma(p, 'players/cmd/set_members')).at(-1);
-  check('M14 Drop leader → no dialog (0.6.4), the top-right chip says so at once → set_members(Indoor, remove Living), no stop',
-    !modal14 && /Regrouping…|Living Room left/.test(c14?.text ?? '') && smL?.data.target_player === 'syncgroup_mock_indoor' && J(smL?.data.player_ids_to_remove) === J(['wiim_mock_living'])
+  check('M14 Drop leader → no dialog (0.6.4), no chip (1.0.1) → set_members(Indoor, remove Living), no stop',
+    !modal14 && !/Regrouping…|Living Room left/.test(c14?.text ?? '') && smL?.data.target_player === 'syncgroup_mock_indoor' && J(smL?.data.player_ids_to_remove) === J(['wiim_mock_living'])
     && !(await maCmds(p)).includes('players/cmd/stop'), J({ modal14, c14, smL }));
   await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state === 'playing' && ${act(LIV)}?.dataset.act === 'join'`);
   await tap(p, act(LIV));
@@ -371,7 +371,8 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await tap(p, act(leadRoom));
   const modalL = await ev(p, MODALQ), cL = await chip(p);
   await ev(p, `window.__live.hold(false)`);
-  check('L2 dropping the leader: no dialog; the chip says "Regrouping…" (0.6.4)', !modalL && cL?.text === 'Regrouping…' && cL?.kind === 'busy', J({ modalL, cL }));
+  const outL = await ev(p, `${row(leadRoom)}.classList.contains('out') && !${row(leadRoom)}.classList.contains('pending')`);
+  check('L2 dropping the leader: no dialog, no chip; the speaker leaves the list at once (1.0.1)', !modalL && !cL && outL, J({ modalL, cL, outL }));
   const sawBuf = await wait(p, `window.__hass.states['${IN}'].state === 'buffering'`, 2000);
   const rg = await wait(p, `${SR}.querySelector('.stl')?.textContent.includes('Regrouping…')`, 1500);
   await wait(p, `window.__hass.states['${IN}'].state === 'playing' && !window.__ma.G.syncgroup_mock_indoor.members.includes('${lead}')`, 4000);
@@ -379,8 +380,8 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   check('L3 MA re-forms the group after a gap (buffering → playing, reform event)', sawBuf && evs.some((e) => /reform/.test(J(e))), J(evs));
   const rg2 = await wait(p, `!${SR}.querySelector('.stl')?.textContent.includes('Regrouping…')`, 2000);
   check('L3b the status says "Regrouping…" during the re-form and stops once the new leader plays', rg && rg2, J({ rg, rg2, now: await ev(p, `${SR}.querySelector('.stl')?.textContent`) }));
-  await wait(p, `!!${SR}.querySelector('.st [data-action="undo"]')`, 3000);
-  check('L4 toast + Undo after dropping the leader', !!(await ev(p, `${SR}.querySelector('.st [data-action="undo"]')`)), await toast(p));
+  await sleep(500);
+  check('L4 MA confirms the leader drop silently (1.0.1: no toast, no Undo) and the speaker stays out', !(await chip(p)) && (await ev(p, `${row(leadRoom)}.classList.contains('out')`)), J(await chip(p)));
   await p.close();
 }
 
@@ -535,13 +536,15 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   await wait(p5, `${act(lead5)}?.dataset.act === 'drop'`);
   await watchErr(p5);
   await tap(p5, act(lead5));
-  await sleep(8600); // past the 8 s call limit, before MA's answer at 9 s
-  const c5 = await chip(p5), gone5 = await p5.evaluate((s) => !window.__ma.G.syncgroup_mock_indoor.members.includes(s), ma5);
-  const left5 = await wait(p5, `/left/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 5000);
-  await wait(p5, `${row(lead5)}.classList.contains('out')`, 3000);
-  check('F5 leader drop, MA answers after 9 s (call limit 8 s) but removes the leader → "Regrouping…" past the limit, no error, the speaker ends up out',
-    c5?.text === 'Regrouping…' && c5?.kind === 'busy' && !gone5 && left5 && (await errs(p5)).length === 0 && (await ev(p5, `${row(lead5)}.classList.contains('out')`)),
-    J({ c5, gone5, left5, errs: await errs(p5), toast: await toast(p5) }));
+  await sleep(300);
+  const now5 = await ev(p5, `(() => { const r = ${row(lead5)}; return { out: r.classList.contains('out'), pending: r.classList.contains('pending') }; })()`), c5 = await chip(p5);
+  await sleep(8300); // past the 8 s call limit, before MA's answer at 9 s
+  const mid5 = { out: await ev(p5, `${row(lead5)}.classList.contains('out')`), chip: await chip(p5), inMa: await p5.evaluate((s) => window.__ma.G.syncgroup_mock_indoor.members.includes(s), ma5) };
+  const gone5 = await wait(p5, `!window.__ma.G.syncgroup_mock_indoor.members.includes('${ma5}')`, 3000);
+  await sleep(800);
+  check('F5 leader drop, MA answers after 9 s (call limit 8 s) but removes the leader → the speaker leaves the list at once, no chip or "Regrouping…" wait, no error, it stays out',
+    now5.out && !now5.pending && !c5 && mid5.out && !mid5.chip && mid5.inMa && gone5 && (await errs(p5)).length === 0 && !(await chip(p5)) && (await ev(p5, `${row(lead5)}.classList.contains('out')`)),
+    J({ now5, c5, mid5, gone5, errs: await errs(p5), chip: await chip(p5) }));
   await p5.close();
   const p6 = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&grp=timeout&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`, undefined, { ...FAST, call: 900, join: 900 });
   await p6.evaluate(() => { window.__jbLeaderDropMs = 3000; });
@@ -549,12 +552,31 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
   const lead6 = await leadOf(p6);
   await wait(p6, `${act(lead6)}?.dataset.act === 'drop'`);
   await tap(p6, act(lead6));
-  await sleep(1500);
-  const c6 = await chip(p6);
+  await sleep(1500); // past the call limit
+  const mid6 = { out: await ev(p6, `${row(lead6)}.classList.contains('out')`), chip: await chip(p6) };
   const failed6 = await wait(p6, `/Couldn't drop/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
-  check('F6 leader drop, MA never answers and nothing changes → "Regrouping…" past the call limit, then "Couldn\'t drop … no answer in time" and the row reverts',
-    c6?.text === 'Regrouping…' && failed6 && /no answer in time/.test(await toast(p6)) && !(await ev(p6, `${row(lead6)}.classList.contains('out')`)), J({ c6, toast: await toast(p6) }));
+  check('F6 leader drop, MA never answers and nothing changes → out of the list, no chip until the limit, then the speaker is back with "Couldn\'t drop … no answer in time"',
+    mid6.out && !mid6.chip && failed6 && /no answer in time/.test(await toast(p6)) && !(await ev(p6, `${row(lead6)}.classList.contains('out')`)), J({ mid6, toast: await toast(p6) }));
   await p6.close();
+  // a second action while MA has not confirmed yet: the newer one owns the speaker, no stale revert lands over it
+  const p7 = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&grp=slowlead&leaddelay=2500&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`, undefined, { ...FAST, call: 3000, join: 3000 });
+  await p7.evaluate(() => { window.__jbLeaderDropMs = 6000; });
+  await openPanel(p7); await waitLoaded(p7);
+  const lead7 = await leadOf(p7), other7 = lead7 === KIT ? LIV : KIT;
+  await wait(p7, `${act(lead7)}?.dataset.act === 'drop'`);
+  await watchErr(p7);
+  await tap(p7, act(lead7));
+  await sleep(300);
+  const last7 = await ev(p7, `${act(other7)}?.dataset.act`); // the card's list has one speaker left: Drop on it is "Last"
+  await wait(p7, `${act(lead7)}?.dataset.act === 'join'`, 2000);
+  await tap(p7, act(lead7)); // join it back before MA confirmed the drop
+  await wait(p7, ASKQ, 800) && (await confirm(p7));
+  const back7 = await wait(p7, `!(${SPK}._optOut?.size) && window.__ma.G.syncgroup_mock_indoor.members.includes('${await p7.evaluate((e) => window.__uniqueIds[e], lead7)}')`, 9000);
+  await sleep(6500); // past the drop's limit
+  check('F7 drop the leader, then join it back before MA confirms → the join wins: no "Couldn\'t drop" revert or error later, the speaker ends in the group, the other speaker showed "Last"',
+    last7 === 'blocked' && back7 && !(await errs(p7)).some((t) => /Couldn't drop/.test(t)) && !(await ev(p7, `${row(lead7)}.classList.contains('out')`)),
+    J({ last7, back7, errs: await errs(p7), chip: await chip(p7) }));
+  await p7.close();
 }
 
 // ───────────── 0.8.3 #97: "Large buttons" is gone; a saved large_buttons is ignored; phone, short card ─────────────
@@ -1010,7 +1032,7 @@ async function dropLeaderOfIndoor(q, upNext = true) {
   const before = await p.evaluate(() => window.__calls.length);
   await tap(p, act(leadRoom));
   const plays = () => p.evaluate((b, e) => window.__calls.slice(b).filter((c) => c.domain === 'media_player' && c.service === 'media_play' && [c.data?.entity_id, c.target?.entity_id].flat().includes(e)).length, before, IN);
-  return { p, plays };
+  return { p, plays, leadRoom };
 }
 {
   const { p, plays } = await dropLeaderOfIndoor('&reform=fail&gap=500');
@@ -1035,6 +1057,42 @@ async function dropLeaderOfIndoor(q, upNext = true) {
   await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reform-failed')`, 3000);
   await sleep(3000);
   check('SN3 restart fails but Up next is empty → no play (the card never starts anything by itself)', (await plays()) === 0 && (await st(p, IN)) !== 'playing', J({ plays: await plays(), st: await st(p, IN) }));
+  await p.close();
+}
+{
+  // Fresh Eyes (d2b31dc): join the dropped leader back while MA is still regrouping; MA then removes it, adds it back and
+  // its restart fails (group idle, songs in Up next). The join owns the speaker: no safety-net play, no leftover "Regrouping…"
+  const { p, plays, leadRoom } = await dropLeaderOfIndoor('&reform=fail&gap=500&grp=slowlead&leaddelay=1500');
+  await wait(p, `${act(leadRoom)}?.dataset.act === 'join'`, 1500);
+  await tap(p, act(leadRoom));
+  await wait(p, ASKQ, 800) && (await confirm(p));
+  const joined = await wait(p, `/joined Indoor/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 6000);
+  const failed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reform-failed')`, 4000);
+  await sleep(1500 + 500 + 2500); // past the safety net's window (__jbResumeMs 1500 + __jbResumeGraceMs 500, the 18 s + 6 s in use)
+  const stl = await ev(p, `${SR}.querySelector('.stl')?.textContent ?? ''`);
+  check('F8 drop the leader, join it back while MA regroups (MA confirms the drop, then the join; the restart fails) → past the resume window: no media_play, no "Regrouping…" left',
+    joined && failed && (await plays()) === 0 && !stl.includes('Regrouping…'), J({ joined, failed, plays: await plays(), stl, chip: await chip(p) }));
+  await p.close();
+}
+{
+  // Randy, live dev card: drop the leader of a playing Everywhere, then add it back: Now Playing must follow the re-formed
+  // group back to "Playing on" (MA dissolves, re-forms on the next member and resumes; the join re-forms it again)
+  const p = await open(`&spk=dyn&admin=1&every=dyn&gap=600&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  const word = () => ev(p, `${NOW}.shadowRoot.querySelector('.where')?.textContent.trim() ?? ''`);
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${act(GAR)}?.dataset.act === 'drop' && window.__hass.states['${EVERY}'].state === 'playing'`, 5000);
+  const w0 = await word();
+  await tap(p, act(GAR));
+  const sawReform = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reform')`, 3000);
+  const resumed1 = await wait(p, `window.__hass.states['${EVERY}'].state === 'playing' && !window.__ma.G.syncgroup_everywhere.members.includes('wiim_mock_garage')`, 5000);
+  await wait(p, `${act(GAR)}?.dataset.act === 'join'`, 3000);
+  await tap(p, act(GAR));
+  await wait(p, ASKQ, 800) && (await confirm(p));
+  const back = await wait(p, `window.__ma.G.syncgroup_everywhere.members.includes('wiim_mock_garage') && window.__hass.states['${EVERY}'].state === 'playing'`, 5000);
+  const shows = await wait(p, `/^Playing on/.test(${NOW}.shadowRoot.querySelector('.where')?.textContent.trim() ?? '')`, 3000);
+  const feed = await ev(p, `${SPK}.store.players.get('syncgroup_everywhere')?.playback_state`);
+  check('LR1 drop the leader of a playing group, MA re-forms and resumes, then add it back → Now Playing shows "Playing on" again (HA and the MA feed say playing)',
+    /^Playing on/.test(w0) && sawReform && resumed1 && back && shows && feed === 'playing', J({ w0, sawReform, resumed1, back, now: await word(), feed, ha: await st(p, EVERY) }));
   await p.close();
 }
 {
@@ -1168,7 +1226,7 @@ async function dropLeaderOfIndoor(q, upNext = true) {
   check('N3 Drop Garage from Now Playing → no dialog → one set_members(remove Garage); Garage greyed with "Add Garage", panel stays closed',
     !modalN3 && sm.length === 1 && sm[0].data.target_player === GSM && J(sm[0].data.player_ids_to_remove) === J([GW]) && lbl === 'Add Garage' && !(await ev(p, `${SPK}.open`)), J({ sm, lbl }));
   const undo = await ev(p, `!!${SR}.querySelector('.st [data-action="undo"]')`);
-  check('N4 the chip offers Undo with the panel closed', undo);
+  check('N4 a leader drop (Garage leads) is silent with the panel closed: no chip, no Undo (1.0.1)', !undo && !(await chip(p)), J(await chip(p)));
   const nA = (await ma(p, 'players/cmd/set_members')).length;
   const t5 = await tapRegistered(p, ra(GAR), `${ASKQ} || window.__maLog.filter((x) => x.command === 'players/cmd/set_members').length > ${nA} || ${nrow(GAR)}?.classList.contains('pending')`);
   must('N5', t5.ok, `Add Garage tap never registered after ${t5.taps} tap(s)`);
@@ -1233,22 +1291,28 @@ for (const [name, q] of [['guest (not admin)', '&spk=dyn&every=dyn'], ['grouping
     await armTimers(p);
     await wait(p, `${ra(GAR)}?.dataset.act === 'drop'`, 8000);
     const n0 = (await ma(p, 'players/cmd/set_members')).length;
-    // grp=slow keeps "Regrouping…" up; confirm the tap landed (one retry) before reading the chip
-    const dropped = await tapRegistered(p, ra(GAR), `${SR}.querySelector('.st .ct')?.textContent.trim() === 'Regrouping…'`, 4000);
-    const pop = await popups(p), c1 = await chip(p), g = await geo(p);
-    check(`C1 ${tag} drop the leader (Garage) from Now Playing: no dialog, no toast or Undo bar; one chip says "Regrouping…"`, dropped.ok && !pop && c1?.text === 'Regrouping…' && (await nChips(p)) === 1, J({ pop, c1, taps: dropped.taps }));
-    check(`C2 ${tag} the chip sits top-right, under the header clock (does not cover it), right edge lined up with the card`,
-      !!c1 && c1.t >= g.cb - 0.5 && c1.t - g.cb < 40 && c1.r <= g.kr + 0.5 && g.kr - c1.r <= 64 && c1.l > g.kr - Math.max(g.kw * 0.75, 300) && c1.h <= 64, J({ c1, g }));
-    const pe = await ev(p, `(() => { const el = ${SR}.querySelector('.st'); if (!el) return null; return [getComputedStyle(${SPK}).pointerEvents, getComputedStyle(el).pointerEvents]; })()`);
-    check(`C3 ${tag} only the chip takes taps (the panel layer stays pointer-events: none)`, !!pe && pe[0] === 'none' && pe[1] === 'auto', J(pe));
-    await wait(p, `/Garage left/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
+    // 1.0.1: a leader drop is silent: the row leaves the group at once (no chip); confirm the tap landed (one retry)
+    const dropped = await tapRegistered(p, ra(GAR), `${nrow(GAR)}?.classList.contains('out')`, 4000);
+    const pop = await popups(p), c0 = await chip(p);
+    check(`C1 ${tag} drop the leader (Garage) from Now Playing: no dialog, no toast, no chip; Garage leaves the group at once`, dropped.ok && !pop && !c0 && (await nChips(p)) === 0, J({ pop, c0, taps: dropped.taps }));
+    // the chip itself: a plain drop (Kitchen; Living Room leads now) once MA has confirmed Garage
+    await wait(p, `!window.__ma.G.${GSM}.members.includes('${GW}') && ${ra(KIT)}?.dataset.act === 'drop' && !${SR}.querySelector('.st')`, 6000);
+    const KW = 'wiim_mock_kitchen';
+    const dropK = await tapRegistered(p, ra(KIT), `/Kitchen left/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 5000);
     const c2 = await chip(p);
-    check(`C4 ${tag} after MA confirms: "Garage left · …" with Undo, replacing "Regrouping…" (still one chip)`, /^Garage left/.test(c2?.text ?? '') && c2?.act === 'Undo' && (await nChips(p)) === 1 && !(await popups(p)), J(c2));
+    check(`C4 ${tag} after MA confirms a plain drop: "Kitchen left" with Undo (one chip, no popups)`, dropK.ok && /^Kitchen left/.test(c2?.text ?? '') && c2?.act === 'Undo' && (await nChips(p)) === 1 && !(await popups(p)), J(c2));
     const undoBtn = `${SR}.querySelector('.st [data-action="undo"]')`;
-    const undone = await tapRegistered(p, undoBtn, `window.__ma.G.${GSM}.members.includes('${GW}') || ${SR}.querySelector('.st .ct')?.textContent === 'Undone'`, 5000);
+    const undone = await tapRegistered(p, undoBtn, `window.__ma.G.${GSM}.members.includes('${KW}') || ${SR}.querySelector('.st .ct')?.textContent === 'Undone'`, 5000);
     const u = (await ma(p, 'players/cmd/set_members')).slice(n0).at(-1);
     await wait(p, `${SR}.querySelector('.st .ct')?.textContent === 'Undone'`, 3000);
-    check(`C5 ${tag} Undo in the chip → set_members(add Garage); chip says "Undone"`, undone.ok && J(u?.data.player_ids_to_add) === J([GW]) && (await toast(p)) === 'Undone', J({ u, t: await toast(p), taps: undone.taps }));
+    check(`C5 ${tag} Undo in the chip → set_members(add Kitchen); chip says "Undone"`, undone.ok && J(u?.data.player_ids_to_add) === J([KW]) && (await toast(p)) === 'Undone', J({ u, t: await toast(p), taps: undone.taps }));
+    await sleep(400); // the chip has finished sliding in
+    const c1 = await chip(p), g = await geo(p);
+    check(`C2 ${tag} the chip ("Undone") sits top-right, under the header clock (does not cover it), right edge lined up with the card`,
+      // 1.0.1: measured on the plain "Undone" chip (a leader drop no longer shows the busy "Regrouping…" chip this used)
+      !!c1 && c1.t >= g.cb - 0.5 && c1.t - g.cb < 48 && c1.r <= g.kr + 0.5 && g.kr - c1.r <= 64 && c1.l > g.kr - Math.max(g.kw * 0.75, 300) && c1.h <= 64, J({ c1, g }));
+    const pe = await ev(p, `(() => { const el = ${SR}.querySelector('.st'); if (!el) return null; return [getComputedStyle(${SPK}).pointerEvents, getComputedStyle(el).pointerEvents]; })()`);
+    check(`C3 ${tag} only the chip takes taps (the panel layer stays pointer-events: none)`, !!pe && pe[0] === 'none' && pe[1] === 'auto', J(pe));
     // "Undone" is a plain chip: default 4 s (__jbChipMs), not the long test Undo override
     const life6 = await hideByTimer(p, `${SR}.querySelector('.st')`, 4000);
     check(`C6 ${tag} the chip hides by itself after the 4 s window`, life6.ms === 4000 && heldFor(life6), J(life6));

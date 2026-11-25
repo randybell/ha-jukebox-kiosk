@@ -167,11 +167,14 @@ export class SpeakerStore {
    * 2.5: true once pred() holds for the player list, false when ms passes first. Nothing is read: the list follows Music
    * Assistant's own change messages (the live feed), so this waits for the one that makes pred() true.
    */
-  waitFor(pred: (p: Players) => boolean, ms: number): Promise<boolean> {
+  waitFor(pred: (p: Players) => boolean, ms: number, signal?: AbortSignal): Promise<boolean> {
+    if (signal?.aborted) return Promise.resolve(false);
     if (pred(this.players)) return Promise.resolve(true);
     return new Promise<boolean>((done) => {
       const w: Waiter = { pred, done, t: setTimeout(() => this.settle(w, pred(this.players)), ms) };
       this.waiters.add(w);
+      // 1.0.1: the caller gave up (the panel left the page): false at once, the timer is cleared
+      signal?.addEventListener('abort', () => this.settle(w, false), { once: true });
     });
   }
   private settle(w: Waiter, ok: boolean) {
