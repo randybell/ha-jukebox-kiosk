@@ -207,10 +207,10 @@ function undoHass({ addFail = false, itemsFail = false } = {}) {
   calls.length = 0;
   const where = await qm.undoRemove(r);
   const cmds = calls.filter((x) => x.s === 'send_command' && x.data.command !== 'player_queues/get').map((x) => ({ c: x.data.command, d: x.data.data }));
-  check('U31 undoRemove: play_media {media: uri, option: add} → items {limit, offset: current_index - 1} → move_item {new id, pos_shift -2}',
+  check('U31 undoRemove: play_media {media: uri, option: add} → items {limit 500 (paged, #105), offset: current_index - 1} → move_item {new id, pos_shift -2}',
     where === 'ok' && J(cmds) === J([
       { c: 'player_queues/play_media', d: { queue_id: 'syncgroup_placeholder_q', media: 'apple_music://track/3', option: 'add' } },
-      { c: 'player_queues/items', d: { queue_id: 'syncgroup_placeholder_q', limit: 1000, offset: 6 } },
+      { c: 'player_queues/items', d: { queue_id: 'syncgroup_placeholder_q', limit: 500, offset: 6 } },
       { c: 'player_queues/move_item', d: { queue_id: 'syncgroup_placeholder_q', queue_item_id: 'qnew', pos_shift: -2 } }]), J(cmds));
 }
 {

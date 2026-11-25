@@ -253,6 +253,8 @@ export class JukeboxCard extends LitElement {
     if (this._tab === 'search' && combinedOn(this._config)) this._tab = 'browse';
     if (this._tab !== 'now' && !this.tabs().some((t) => t.id === this._tab)) this._tab = 'now';
     this.queue.configForRemove = this._config;
+    // #105: row actions go to the speaker's queue as the live feed has it now
+    this.queue.liveQueueId = () => (this.feedDrivesQueue() ? this.speakers.live.activeQueue(this.playerId()) : undefined);
     if (refresh && this.hass) this.queue.refreshSoon(0);
     this.speakers.syncLive(); // #103: the server may only now say it has the live feed
     this.syncMa(); // 2.4: likewise the Music Assistant status

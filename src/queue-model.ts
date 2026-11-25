@@ -1,7 +1,7 @@
 import type { HomeAssistant } from './types';
 import { cleanName, safeImage } from './shared';
-import { BackendError, type AutoplayMode, type AutoplayOptions, type MaBackend, type QueueAction } from './backend/types';
-import { removeQueuedItem } from './queue-actions';
+import { BackendError, NO_QUEUE, type AutoplayMode, type AutoplayOptions, type MaBackend, type QueueAction } from './backend/types';
+import { queueRows, queueRowUri, removeQueuedItem } from './queue-actions';
 
 /** One queue row (the backend's queue window shape). */
 export interface QueueItem {
@@ -86,6 +86,23 @@ export class QueueModel {
   private timer?: number;
   /** 2.4: Music Assistant is offline (set by the card) */
   private offline = false;
+  /** #105 (set by the card): the active queue of the card's speaker from the live feed (null: none), undefined when the
+   *  feed doesn't drive the queue */
+  liveQueueId?: () => string | null | undefined;
+  /**
+   * #105: the queue a row action goes to, worked out when the action runs (not the one the last read named): the live
+   * feed's active queue, else the backend's active-queue lookup, else the last read's. undefined = no queue now.
+   */
+  async freshQueueId(): Promise<string | undefined> {
+    const live = this.liveQueueId?.();
+    if (live !== undefined) return live ?? undefined;
+    const be = this.backend;
+    if (be?.activeQueue && this.entity) {
+      try { return (await be.activeQueue(this.entity)) ?? undefined; }
+      catch (e) { console.warn('[jukebox-card] active queue lookup failed; using the last read', e); }
+    }
+    return this.snap.queueId;
+  }
 
   subscribe(fn: (s: QueueSnapshot) => void) { this.subs.add(fn); fn(this.snap); return () => this.subs.delete(fn); }
   private set(p: Partial<QueueSnapshot>) { this.snap = { ...this.snap, ...p }; this.subs.forEach((f) => f(this.snap)); }
@@ -190,7 +207,7 @@ export class QueueModel {
     }
     try {
       if (send) await send();
-      else if (this.backend) await this.backend.queueAction(this.entity, service as QueueAction, id, this.snap.queueId);
+      else if (this.backend) await this.backend.queueAction(this.entity, service as QueueAction, id, await this.freshQueueId());
       else throw new BackendError('config', 'no backend');
     }
     catch (err) {
@@ -217,9 +234,13 @@ export class QueueModel {
   isLocked(id: string) { const i = this.snap.items.findIndex((x) => x.queue_item_id === id); return i >= 0 && i <= this.locked; }
   /** player_queues/* through the backend's raw MA commands, or undefined when the backend has none */
   private ma(command: string, data: Record<string, unknown>) {
-    const be = this.backend, qid = this.snap.queueId;
-    if (!this.hass || !be?.caps.send || !qid) return undefined;
-    return () => be.send(command, { queue_id: qid, ...data });
+    const be = this.backend;
+    if (!this.hass || !be?.caps.send || !this.snap.queueId) return undefined;
+    return async () => {
+      const qid = await this.freshQueueId(); // #105: the queue now, not the last read's
+      if (!qid) throw new BackendError('failed', NO_QUEUE);
+      return be.send(command, { queue_id: qid, ...data });
+    };
   }
   /** Row Play now: jump playback to this item (MA play_index takes an index or a queue_item_id; the id is window-proof). */
   playNow(id: string) {
@@ -280,8 +301,10 @@ export class QueueModel {
    * it was re-added but could not be put back in place; throws when it could not be re-added at all.
    */
   async undoRemove(r: RemovedRow): Promise<'ok' | 'end'> {
-    const be = this.backend, qid = this.snap.queueId;
-    if (!this.hass || !be?.caps.undo || !qid) throw new Error('Undo needs the Jukebox Kiosk integration');
+    const be = this.backend;
+    if (!this.hass || !be?.caps.undo || !this.snap.queueId) throw new Error('Undo needs the Jukebox Kiosk integration');
+    const qid = await this.freshQueueId(); // #105: the queue now, not the last read's
+    if (!qid) throw new BackendError('failed', NO_QUEUE);
     if (!r.uri) throw new Error('No URI for this track');
     const send = (command: string, data: Record<string, unknown>) => be.send(command, { queue_id: qid, ...data });
     const known = new Set(this.snap.items.map((x) => x.queue_item_id));
@@ -290,9 +313,9 @@ export class QueueModel {
       if (r.before) return 'end'; // it had been played already: MA won't move items into the played part
       try {
         const offset = Math.max(0, (this.snap.currentIndex ?? 0) - 1);
-        const list = await send('player_queues/items', { limit: 1000, offset });
-        const rows: any[] = Array.isArray(list) ? list : [];
-        const uriOf = (x: any) => x?.media_item?.uri ?? x?.uri ?? x?.media_content_id;
+        // #105: the whole rest of the queue, paged (MA appends the re-added song at the end, past any fixed window)
+        const rows = await queueRows((c, d) => be.send(c, d), qid, offset);
+        const uriOf = queueRowUri;
         const fresh = rows.map((x, k) => ({ x, k })).filter(({ x }) => uriOf(x) === r.uri && !known.has(String(x?.queue_item_id)));
         const hit = fresh[fresh.length - 1];
         const prev = r.prevId ? rows.findIndex((x) => String(x?.queue_item_id) === r.prevId) : -1;
