@@ -2,12 +2,13 @@ import { LitElement, html, css, nothing } from 'lit';
 import { tokens, base } from './styles';
 import { mediaStyles, artTpl, noFocus, type MenuAction } from './shared';
 import { icon } from './icons';
-import type { MaItem } from './types';
+import type { JukeboxCardConfig, MaItem } from './types';
 import { defineElement } from './define';
 import { hasMoreInfo, type InfoLine } from './song-info';
+import { FavController, heartType } from './heart';
 
 /** What a view asks the card to show (event `jukebox-sheet`). `close` lets the view clear its own state (row highlight). */
-/** `info` (0.7.12, songs only): adds More Info just before Cancel; grayed when the list is empty. More Info shows the song info panel in this sheet. */
+/** `info` (0.7.12, songs only): adds More Info just before Cancel; grayed when the list is empty. More Info shows the song info panel in this sheet, with a Favorite control. */
 export interface HoldSheet { item: { name: string } & Partial<MaItem>; sub: string; actions: MenuAction[]; close: () => void; info?: InfoLine[] }
 
 /**
@@ -20,10 +21,13 @@ export interface HoldSheet { item: { name: string } & Partial<MaItem>; sub: stri
  * bottom tab bar (measured from the card layout). Cancel follows the last choice; buttons are not stretched.
  */
 export class JbHoldSheet extends LitElement {
-  static properties = { state: { attribute: false }, open: { type: Boolean, reflect: true }, _info: { state: true } };
+  static properties = { state: { attribute: false }, config: { attribute: false }, open: { type: Boolean, reflect: true }, _info: { state: true }, _busy: { state: true } };
   state: HoldSheet | null = null;
+  config?: JukeboxCardConfig;
   open = false;
   private _info = false;
+  private _busy = false;
+  private hearts = new FavController(this);
   private _ro?: ResizeObserver;
   private _fitRaf = 0;
   /** Queue hold lists 6 actions before Cancel (7 buttons total). Shared scale always uses this count. */
@@ -138,15 +142,42 @@ export class JbHoldSheet extends LitElement {
   }
   close() { const s = this.state; if (!s) return; this.state = null; s.close(); }
   private pick(a: MenuAction) { if (a.disabled) return; if (a.id === 'more' && this.state?.info) { this._info = true; return; } this.close(); a.run(); }
+  /** Type MA can favourite, or '' when this item can't be favourited (no write, hearts off, or not a favourite type). */
+  private favKind(it: Partial<MaItem>): ReturnType<typeof heartType> {
+    const fromItem = heartType(this.config, it.media_type, it);
+    if (fromItem) return fromItem;
+    const m = /^[a-z0-9_+-]+:\/\/([a-z_]+)\//i.exec(String(it.uri ?? ''));
+    return m ? heartType(this.config, m[1], it) : '';
+  }
+  private canFav(it: Partial<MaItem>) { return !!it.uri && !!this.favKind(it) && !this._busy; }
+  private async toggleFav() {
+    const it = this.state?.item as MaItem | undefined;
+    if (!it || !this.canFav(it)) return;
+    const t = this.favKind(it);
+    if (!t) return;
+    this._busy = true;
+    try { await this.hearts.toggle(it, t); }
+    finally { this._busy = false; }
+  }
   render() {
     const s = this.state;
     if (!s) return nothing;
     const hd = html`<div class="hd">${artTpl(s.item, 'big')}<span><b>${s.item.name}</b>${s.sub ? html`<small>${s.sub}</small>` : nothing}</span></div>`;
     if (this._info && s.info && hasMoreInfo(s.info)) {
-      // 0.7.12: the info panel (styled like the station sheet's details), only lines with data; Back returns to the choices
+      // 0.7.12: the info panel (styled like the station sheet's details), only lines with data; Back returns to the choices.
+      // Favorite lives here (queue songs, Library Tracks, search songs): shown grayed when it can't be used (no uri, or the backend can't write it).
+      const it = s.item as MaItem;
+      const can = this.canFav(it);
+      const on = this.hearts.isFav(it);
+      const favLabel = on ? 'In favorites' : 'Add to favorites';
+      const favAria = !can ? `Can't add ${it.name} to favorites` : on ? `Remove ${it.name} from favorites` : `Add ${it.name} to favorites`;
       return html`<div class="bk" data-action="backdrop" @click=${() => this.close()}></div>
         <div class="sh info" role="dialog" aria-modal="true" aria-label="${s.item.name} details">${hd}
           <dl class="meta">${s.info.map((l) => html`<div class="f" data-field=${l.k}><dt>${l.label}</dt><dd>${l.v}</dd></div>`)}</dl>
+          <button class="it fav ${on ? 'on' : ''} ${can ? '' : 'off'}" data-action="fav" tabindex="-1"
+            aria-pressed=${on ? 'true' : 'false'} aria-disabled=${can ? 'false' : 'true'}
+            aria-label=${favAria} title=${favLabel}
+            @pointerdown=${noFocus} @click=${() => { if (can) this.toggleFav(); }}>${icon(on ? 'heart' : 'heartline')}<span>${favLabel}</span></button>
           <button class="it cancel" data-action="back" tabindex="-1" @pointerdown=${noFocus} @click=${() => { this._info = false; }}>${icon('back')}<span>Back</span></button>
         </div><div class="pmh" aria-hidden="true"></div>`;
     }
@@ -182,6 +213,8 @@ export class JbHoldSheet extends LitElement {
     .it .i { width: max(var(--_icon), calc(var(--_icon) * 30 / 24 * var(--_hs-s, 1))); height: max(var(--_icon), calc(var(--_icon) * 30 / 24 * var(--_hs-s, 1))); flex: none; }
     .it.off { color: var(--_disabled); cursor: default; }
     .it.off:active { background: var(--_chip-bg); }
+    .it.fav.on { color: var(--_active); }
+    .it.fav .i { color: inherit; }
     .meta { margin: calc(var(--ha-space-1, 4px) * var(--_hs-s, 1)) calc(var(--ha-space-1, 4px) * var(--_hs-s, 1)) 0; display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--ha-space-4, 16px) * var(--_hs-s, 1)) calc(var(--ha-space-6, 24px) * var(--_hs-s, 1)); flex: none; }
     .f { display: flex; flex-direction: column; gap: calc(2px * var(--_hs-s, 1)); min-width: 0; }
     .f dt { font-size: calc(var(--ha-font-size-m, 14px) * var(--_hs-s, 1)); color: var(--_inactive); }

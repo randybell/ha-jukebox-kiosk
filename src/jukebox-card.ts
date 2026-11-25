@@ -845,7 +845,7 @@ export class JukeboxCard extends LitElement {
             .cancel=${() => this.stAnswer(false)}></jb-station-confirm>
           <jb-station .hass=${h} .config=${c} .item=${this._station && this._station.tab === this._tab && !this._saver ? this._station.item : null}></jb-station>
           <jb-speakers class=${off ? 'ma-off' : ''} ?inert=${off} .hass=${h} .config=${c} .store=${this.speakers} ?open=${this._spk} ?lift=${!!(this._station && this._station.tab === this._tab && !this._saver)} ?keep=${inlineSpk && this._tab === 'now' && !this._saver}></jb-speakers>
-          <jb-hold-sheet .state=${this._sheet}></jb-hold-sheet>
+          <jb-hold-sheet .state=${this._sheet} .config=${c}></jb-hold-sheet>
         </main>
         <nav class="tabs" role="tablist" style=${`--tabs:${tabs.length}`} @keydown=${this.onTabKey}>
           ${tabs.map((t) => html`<button class="tab ${this._tab === t.id ? 'active' : ''}" role="tab" tabindex=${this._tab === t.id ? '0' : '-1'} data-tab=${t.id}

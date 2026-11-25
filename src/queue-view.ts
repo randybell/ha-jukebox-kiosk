@@ -25,6 +25,20 @@ import { TEST_HOOKS } from './test-hooks';
 import { autoplayControlMode } from './autoplay';
 
 const asArt = (q: QueueItem) => ({ name: q.media_title || '?', image: q.media_image });
+/** Queue row as a MaItem for the hold sheet (More Info favorite needs the uri and type). */
+function asSheetItem(q: QueueItem): MaItem {
+  const uri = q.media_content_id ?? '';
+  const m = /^[a-z0-9_+-]+:\/\/([a-z_]+)\//i.exec(uri);
+  return {
+    name: q.media_title || '?',
+    image: q.media_image,
+    uri,
+    favorite: q.favorite,
+    media_type: m?.[1] || 'track',
+    ...(q.media_album_name ? { album: { name: q.media_album_name } } : {}),
+    ...(q.media_artist ? { artists: [{ name: q.media_artist }] } : {}),
+  };
+}
 
 export class JbQueue extends LitElement {
   static properties = {
@@ -256,7 +270,7 @@ export class JbQueue extends LitElement {
     });
     // 0.7.12: More Info (song info) before Cancel, grayed when MA sent nothing beyond the title; not for radio stations in the queue
     const info = isRadioUri(it.media_content_id) ? undefined : songInfo(it, this.hass);
-    fire(this, 'jukebox-sheet', { item: asArt(it), sub: it.media_artist ?? '', actions, info, close: () => this.press.release() });
+    fire(this, 'jukebox-sheet', { item: asSheetItem(it), sub: it.media_artist ?? '', actions, info, close: () => this.press.release() });
   }
   /** backend feature flags (undefined = 0.5.x behaviour: everything on) */
   private get caps() { return this.config?._backend?.caps; }
