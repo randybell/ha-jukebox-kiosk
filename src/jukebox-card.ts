@@ -222,6 +222,8 @@ export class JukeboxCard extends LitElement {
     this.queue.entity = this.player();
     this.queue.limitAfter = this._config.queue_limit ?? 200;
     this.armIdle();
+    // #161: a live change to `scale` (card editor) applies now, not at the next resize
+    this.updateScale();
   }
   /**
    * Pick and (re)create the backend when its kind changes: `backend` in the YAML, or auto (kiosk when the
