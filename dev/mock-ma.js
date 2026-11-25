@@ -98,9 +98,10 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
       active_queue: STALEAQ && !active(g) ? 'syncgroup_everywhere' : g });
     for (const s of Object.values(SP)) {
       const h = holder(s), room = ROOM_OF[s];
-      if (h) setState(room, gState(h), { media_title: st(G[h].entity).attributes.media_title, media_artist: st(G[h].entity).attributes.media_artist, group_members: membersNow(h).map((x) => ROOM_OF[x]) });
-      else if (solo[s]?.state === 'playing') setState(room, 'playing', { media_title: solo[s].title, media_artist: solo[s].artist ?? '', group_members: [] });
-      else setState(room, 'idle', { media_title: undefined, media_artist: undefined, group_members: [] });
+      // live HA: a speaker in a group reports the group's item (media_content_id) and the group's queue as active_queue
+      if (h) setState(room, gState(h), { media_title: st(G[h].entity).attributes.media_title, media_artist: st(G[h].entity).attributes.media_artist, media_content_id: st(G[h].entity).attributes.media_content_id, active_queue: h, group_members: membersNow(h).map((x) => ROOM_OF[x]) });
+      else if (solo[s]?.state === 'playing') setState(room, 'playing', { media_title: solo[s].title, media_artist: solo[s].artist ?? '', media_content_id: solo[s].uri ?? `library://track/solo-${s}`, active_queue: s, group_members: [] });
+      else setState(room, 'idle', { media_title: undefined, media_artist: undefined, media_content_id: undefined, active_queue: undefined, group_members: [] });
     }
   }
   function stopGroup(g, why) {

@@ -98,10 +98,19 @@ export function pillMembers(g: MaPlayer | undefined, players: Players): string[]
   if (!g || g.type === 'group' || g.synced_to || g.group_members.length < 2) return membersOf(g, players);
   return [g.player_id, ...g.group_members.filter((id) => id !== g.player_id && players.get(id)?.type !== 'group')];
 }
+/** #105: two Home Assistant media players play the same item: the same media_content_id (Music Assistant's item uri)
+ *  and, when both name one, the same active_queue (an MA group and its speakers report the group's queue). */
+export function sameItem(a: { attributes?: Record<string, any> } | undefined, b: { attributes?: Record<string, any> } | undefined): boolean {
+  const x = a?.attributes, y = b?.attributes;
+  const id = x?.media_content_id;
+  if (typeof id !== 'string' || !id || y?.media_content_id !== id) return false;
+  const qa = x?.active_queue, qb = y?.active_queue;
+  return !(typeof qa === 'string' && qa && typeof qb === 'string' && qb && qa !== qb);
+}
 /**
  * Speakers on the pill. HA's media_player for a Music Assistant sync group can report group_members: [] while
  * it plays (live 2026.10, dynamic group): then use MA's own member list, else the biggest room that plays the same
- * title, else 1. 0 = not playing.
+ * item (sameItem), else 1. 0 = not playing.
  */
 export function liveCount(ent: { state?: string; attributes?: Record<string, any> } | undefined, store: string[] | undefined,
   rooms: Array<{ state?: string; attributes?: Record<string, any> } | undefined>): number {
@@ -111,10 +120,11 @@ export function liveCount(ent: { state?: string; attributes?: Record<string, any
   if (store?.length) return store.length;
   const gm = ent.attributes?.group_members;
   if (Array.isArray(gm) && gm.length) return gm.length;
-  const t = ent.attributes?.media_title;
+  // #105: the same item by id, never by title (two different songs called "Intro" are not the same)
+  const t = ent.attributes?.media_content_id;
   let n = 0;
   for (const r of rooms) {
-    if (!r || !['playing', 'paused', 'buffering'].includes(r.state ?? '') || (t && r.attributes?.media_title !== t)) continue;
+    if (!r || !['playing', 'paused', 'buffering'].includes(r.state ?? '') || (t && !sameItem(ent, r))) continue;
     const g = r.attributes?.group_members;
     n = Math.max(n, Array.isArray(g) && g.length ? g.length : 1);
   }
@@ -296,8 +306,9 @@ export function roomElsewhere(hass: HomeAssistant | undefined, target: string, r
   if (!r || !['playing', 'paused'].includes(r.state) || !r.attributes?.media_title) return '';
   const on = ['playing', 'paused', 'buffering'].includes(t?.state ?? '');
   const gm = t?.attributes?.group_members;
-  // HA 2026.10 leaves group_members [] on an MA sync group: a room playing the group's title is in it, not "elsewhere"
-  const inT = on && Array.isArray(gm) && (gm.includes(room) || (!gm.length && r.attributes.media_title === t!.attributes?.media_title));
+  // HA 2026.10 leaves group_members [] on an MA sync group: a room playing the group's item (#105: by id, not title) is
+  // in it, not "elsewhere"
+  const inT = on && Array.isArray(gm) && (gm.includes(room) || (!gm.length && sameItem(t, r)));
   return inT ? '' : `${r.state === 'paused' ? 'Paused: ' : ''}${r.attributes.media_title}`;
 }
 

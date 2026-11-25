@@ -83,13 +83,17 @@ check('U17 dropBlock: leader (block) / last / allowed',
   check('U17c planMembers (allow) removes the leader', J(pm.remove) === J(['spk_garage']) && pm.add.length === 0, J(pm));
   const solo = M.parsePlayers([P('spk_garage', { playback_state: 'playing' }), P('syncgroup_all', { type: 'group', playback_state: 'playing', group_members: ['spk_garage'], supported_features: ['set_members'] })]);
   check('U17d the last speaker stays blocked even with allow', M.dropBlock(solo.get('syncgroup_all'), 'spk_garage', solo, true) === 'last');
-  const E = (state, gm, title = 'Song') => ({ state, attributes: { group_members: gm, media_title: title } });
+  const E = (state, gm, title = 'Song', id = `lib://track/${title}`, aq) => ({ state, attributes: { group_members: gm, media_title: title, media_content_id: id, ...(aq ? { active_queue: aq } : {}) } });
   check('U17e liveCount (0.7.12: MA members first, see U17f): HA list; [] while playing → MA members, else biggest room on the same title, else 1; idle = 0',
     M.liveCount(E('playing', ['a', 'b']), undefined, []) === 2 && M.liveCount(E('playing', []), ['x', 'y', 'z'], []) === 3
       && M.liveCount(E('playing', []), undefined, [E('playing', ['a', 'b', 'c']), E('playing', []), E('playing', ['q', 'r', 's', 't'], 'Other')]) === 3
       && M.liveCount(E('playing', []), undefined, []) === 1 && M.liveCount(E('idle', ['a']), ['x'], []) === 0 && M.liveCount(undefined, undefined, []) === 0);
   check('U17f 0.7.12: MA members win over a shorter HA list (pill matches the Speakers panel: 4, not 1)',
     M.liveCount(E('playing', ['a']), ['a', 'b', 'c', 'd'], []) === 4 && M.liveCount(E('playing', ['a', 'b']), undefined, []) === 2);
+  check('U17h #105 liveCount fallback matches rooms by item id, not title: a different "Intro" (other id or other queue) is not counted',
+    M.liveCount(E('playing', [], 'Intro', 'lib://track/1'), undefined, [E('playing', ['a', 'b', 'c', 'd'], 'Intro', 'lib://track/2')]) === 1
+      && M.liveCount(E('playing', [], 'Intro', 'lib://track/1', 'q_g'), undefined, [E('playing', ['a', 'b', 'c'], 'Intro', 'lib://track/1', 'q_other')]) === 1
+      && M.liveCount(E('playing', [], 'Intro', 'lib://track/1', 'q_g'), undefined, [E('playing', ['a', 'b', 'c'], 'Other name', 'lib://track/1', 'q_g')]) === 3);
   // #101: a plain speaker leading a sync of two others: the pill counts 3 (membersOf alone gave [leader] → 1)
   const sync3 = M.parsePlayers([P('lead', { playback_state: 'playing', group_members: ['lead', 'm1', 'm2'] }), P('m1', { synced_to: 'lead' }), P('m2', { synced_to: 'lead' }), P('solo', { playback_state: 'playing' })]);
   check('U17g #101 pillMembers: a plain leader counts itself plus its synced speakers; a lone speaker 1; groups as membersOf',
@@ -347,13 +351,17 @@ check('U37 isBufferedError matches MA\'s "<n> is already played/buffered"', Q.is
     && M.inlineLine(R({ busy: 'out' })) === 'Leaving…' && M.inlineLine(R({ inT: false, where: 'Playing alone · Blue Hour' })) === 'Playing alone · Blue Hour');
   check('U52 pillPrefix: playing/buffering → "Playing on:", paused → "Paused on:", else "Speakers:"',
     M.pillPrefix('playing') === 'Playing on:' && M.pillPrefix('buffering') === 'Playing on:' && M.pillPrefix('paused') === 'Paused on:' && M.pillPrefix('idle') === 'Speakers:' && M.pillPrefix(undefined) === 'Speakers:');
-  const H = (gm, rt = 'So What') => ({ states: {
-    'media_player.everywhere': { state: 'playing', attributes: { group_members: gm, media_title: 'So What' } },
-    'media_player.garage': { state: 'playing', attributes: { media_title: rt } } } });
-  check('U53 roomElsewhere: HA group_members [] on a playing sync group + same title → in the group (""), different title → that title; listed → ""',
-    M.roomElsewhere(H([]), 'media_player.everywhere', 'media_player.garage') === '' && M.roomElsewhere(H([], 'Blue Hour'), 'media_player.everywhere', 'media_player.garage') === 'Blue Hour'
-    && M.roomElsewhere(H(['media_player.garage'], 'Blue Hour'), 'media_player.everywhere', 'media_player.garage') === ''
-    && M.roomElsewhere(H(['media_player.kitchen'], 'Blue Hour'), 'media_player.everywhere', 'media_player.garage') === 'Blue Hour');
+  const H = (gm, rt = 'So What', rid = 'lib://track/so-what', raq) => ({ states: {
+    'media_player.everywhere': { state: 'playing', attributes: { group_members: gm, media_title: 'So What', media_content_id: 'lib://track/so-what', active_queue: 'q_every' } },
+    'media_player.garage': { state: 'playing', attributes: { media_title: rt, media_content_id: rid, ...(raq ? { active_queue: raq } : {}) } } } });
+  check('U53 roomElsewhere: HA group_members [] on a playing sync group + same item → in the group (""), different item → that title; listed → ""',
+    M.roomElsewhere(H([]), 'media_player.everywhere', 'media_player.garage') === '' && M.roomElsewhere(H([], 'Blue Hour', 'lib://track/blue'), 'media_player.everywhere', 'media_player.garage') === 'Blue Hour'
+    && M.roomElsewhere(H(['media_player.garage'], 'Blue Hour', 'lib://track/blue'), 'media_player.everywhere', 'media_player.garage') === ''
+    && M.roomElsewhere(H(['media_player.kitchen'], 'Blue Hour', 'lib://track/blue'), 'media_player.everywhere', 'media_player.garage') === 'Blue Hour');
+  check('U53b #105 roomElsewhere compares ids, not titles: same title with another id or another queue is elsewhere; same id and queue is in',
+    M.roomElsewhere(H([], 'So What', 'lib://track/other-so-what'), 'media_player.everywhere', 'media_player.garage') === 'So What'
+    && M.roomElsewhere(H([], 'So What', 'lib://track/so-what', 'q_garage'), 'media_player.everywhere', 'media_player.garage') === 'So What'
+    && M.roomElsewhere(H([], 'So What', 'lib://track/so-what', 'q_every'), 'media_player.everywhere', 'media_player.garage') === '');
 }
 await tick(700); // let refreshSoon timers drain
 console.warn = origWarn;
