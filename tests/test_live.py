@@ -9,7 +9,7 @@ import pytest
 
 from homeassistant.core import HomeAssistant
 
-from .conftest import PLAYER_A, PLAYER_B, SYNCGROUP, FakeMa, seed_playing
+from .conftest import ENTITY_A, ENTITY_G, PLAYER_A, PLAYER_B, SYNCGROUP, FakeMa, seed_playing
 
 pytestmark = pytest.mark.usefixtures("kiosk")
 
@@ -106,7 +106,7 @@ async def test_each_subscription_counts_from_one(
 async def test_queues_only_for_readable_players(
     hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
 ) -> None:
-    """A non-admin gets every player (as players/all) but only queues of players whose entity they may read."""
+    """A non-admin gets only queues of players whose entity they may read."""
     _seed(fake_ma)
     ws = await hass_ws_client(access_token=user_token[1])
     res = await _call(ws, type="jukebox_kiosk/subscribe_live")
@@ -120,6 +120,40 @@ async def test_queues_only_for_readable_players(
     ev = (await ws.receive_json())["event"]
     assert ev["seq"] == 2 and ev["object_id"] == PLAYER_A
     await _call(ws, type="unsubscribe_events", subscription=res["id"])
+
+
+async def test_players_only_for_readable_entities(
+    hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
+) -> None:
+    """#105: a non-admin gets only players whose entity they may read (none without an entity); admins get all."""
+    _seed(fake_ma)
+    fake_ma.players[UNMAPPED] = {"player_id": UNMAPPED, "name": "Hidden", "type": "player"}
+    user_token[0].mock_policy({"entities": {"entity_ids": {ENTITY_A: True, ENTITY_G: True}}})
+    ws = await hass_ws_client(access_token=user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/subscribe_live")
+    assert res["success"]
+    snap = (await ws.receive_json())["event"]
+    assert {p["player_id"] for p in snap["players"]} == {PLAYER_A, SYNCGROUP}
+    assert {q["queue_id"] for q in snap["queues"]} == {PLAYER_A, SYNCGROUP}
+    assert set(snap["active_queues"]) == {PLAYER_A, SYNCGROUP}
+    cb = fake_ma.subs[0][0]
+    cb(_ev("player_updated", PLAYER_B, {"player_id": PLAYER_B, "volume_level": 5}))  # unreadable entity: dropped
+    cb(_ev("player_added", UNMAPPED, {"player_id": UNMAPPED}))  # no entity: dropped
+    cb(_ev("player_updated", PLAYER_A, {"player_id": PLAYER_A, "volume_level": 7}))
+    ev = (await ws.receive_json())["event"]
+    assert ev["seq"] == 2 and ev["object_id"] == PLAYER_A
+    await _call(ws, type="unsubscribe_events", subscription=res["id"])
+
+
+async def test_admin_gets_every_player(
+    hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, fake_ma: FakeMa
+) -> None:
+    _seed(fake_ma)
+    fake_ma.players[UNMAPPED] = {"player_id": UNMAPPED, "name": "Hidden", "type": "player"}
+    ws = await hass_ws_client(access_token=admin_token[1])
+    await _call(ws, type="jukebox_kiosk/subscribe_live")
+    snap = (await ws.receive_json())["event"]
+    assert {p["player_id"] for p in snap["players"]} == {PLAYER_A, PLAYER_B, SYNCGROUP, UNMAPPED}
 
 
 @pytest.mark.parametrize("options", [{"guest_users": [], "non_admins_are_guests": True, "guest_classes": []}])

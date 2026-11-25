@@ -111,10 +111,10 @@ async def test_a_change_that_moves_a_queue_is_followed_by_active_queue(
     await _call(ws, type="unsubscribe_events", subscription=res["id"])
 
 
-async def test_unreadable_queue_change_still_moves_the_followed_queue(
+async def test_unreadable_player_active_queue_is_not_sent(
     hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa
 ) -> None:
-    """A non-admin doesn't get a queue it may not read, but the active queue it moves is still told (no queue data)."""
+    """#105: a non-admin gets neither the queue nor the player nor the active queue of a player it may not read."""
     unmapped = "player_without_entity_placeholder"
     fake_ma.players[PLAYER_A] = {"player_id": PLAYER_A, "active_source": None}
     fake_ma.player_queues[PLAYER_A] = {"queue_id": PLAYER_A, "active": True}
@@ -123,12 +123,16 @@ async def test_unreadable_queue_change_still_moves_the_followed_queue(
     ws = await hass_ws_client(access_token=user_token[1])
     res, snap = await _subscribe(ws)
     assert {q["queue_id"] for q in snap["queues"]} == {PLAYER_A}
-    assert snap["active_queues"] == {PLAYER_A: PLAYER_A, unmapped: None}
+    assert {p["player_id"] for p in snap["players"]} == {PLAYER_A}
+    assert snap["active_queues"] == {PLAYER_A: PLAYER_A}
     cb = fake_ma.subs[0][0]
     fake_ma.player_queues[unmapped]["active"] = True
-    cb(_ev("queue_updated", unmapped, {"queue_id": unmapped, "active": True}))  # the queue itself is not forwarded
-    ev = (await ws.receive_json())["event"]
-    assert ev == {"seq": 2, "kind": "active_queue", "player_id": unmapped, "queue_id": unmapped}
+    cb(_ev("queue_updated", unmapped, {"queue_id": unmapped, "active": True}))  # nothing at all, no number used up
+    fake_ma.player_queues[PLAYER_A]["active"] = False
+    cb(_ev("queue_updated", PLAYER_A, {"queue_id": PLAYER_A, "active": False}))
+    got = [(await ws.receive_json())["event"] for _ in range(2)]
+    assert got[0]["seq"] == 2 and got[0]["kind"] == "event" and got[0]["object_id"] == PLAYER_A
+    assert got[1] == {"seq": 3, "kind": "active_queue", "player_id": PLAYER_A, "queue_id": None}
     await _call(ws, type="unsubscribe_events", subscription=res["id"])
 
 

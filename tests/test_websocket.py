@@ -1039,6 +1039,14 @@ async def test_player_ids_from_registry_only(hass: HomeAssistant, hass_ws_client
     assert fake_ma.calls == []
 
 
+async def test_player_ids_only_readable_entities(hass: HomeAssistant, hass_ws_client: Any, user_token: Any, fake_ma: FakeMa) -> None:
+    """#105: a non-admin gets only the MA entities they may read."""
+    user_token[0].mock_policy({"entities": {"entity_ids": {ENTITY_A: True}}})
+    ws = await _ws(hass_ws_client, user_token[1])
+    res = await _call(ws, type="jukebox_kiosk/player_ids")
+    assert res["success"] and res["result"] == {"players": {ENTITY_A: PLAYER_A}}
+
+
 async def test_player_ids_without_music_assistant(hass: HomeAssistant, hass_ws_client: Any, admin_token: Any, ma_entry: Any) -> None:
     """Registry only: answers while Music Assistant is not loaded."""
     await hass.config_entries.async_unload(ma_entry.entry_id)

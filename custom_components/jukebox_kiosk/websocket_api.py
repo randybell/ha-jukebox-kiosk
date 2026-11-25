@@ -382,8 +382,10 @@ async def ws_player_ids(hass: HomeAssistant, connection: websocket_api.ActiveCon
     The same lookup the commands that take an entity use (players.player_id_for_entity). Entities from other
     integrations are not listed. Needs only the registry, so it answers while Music Assistant is offline.
     """
-    check_class(connection.user, _entry(hass).runtime_data.policy, PermClass.READ)
-    connection.send_result(msg["id"], {"players": player_ids(hass)})
+    user = connection.user
+    check_class(user, _entry(hass).runtime_data.policy, PermClass.READ)
+    # #105: a non-admin gets only the entities they may read
+    connection.send_result(msg["id"], {"players": {e: p for e, p in player_ids(hass).items() if _may_read_entity(user, e)}})
 
 
 def _field(obj: Any, key: str) -> Any:
@@ -870,13 +872,22 @@ def _live_items(container: Any, attr: str) -> list[dict[str, Any]]:
 
 def _may_read_queue(hass: HomeAssistant, user: User | None, queue_id: Any) -> bool:
     """Queues reach a non-admin only for players whose Home Assistant entity they may read (as player_queues/get)."""
+    return _may_read_player(hass, user, queue_id)
+
+
+def _may_read_player(hass: HomeAssistant, user: User | None, player_id: Any) -> bool:
+    """#105: an MA player (or its queue, which has the player's id) reaches a non-admin only when the user may read the
+    player's Home Assistant entity. A player with no HA entity never does."""
     if user is not None and user.is_admin:
         return True
-    if not isinstance(queue_id, str) or not queue_id:
+    if not isinstance(player_id, str) or not player_id:
         return False
-    entity_id = entity_for_player(hass, queue_id)
-    if entity_id is None:
-        return False
+    entity_id = entity_for_player(hass, player_id)
+    return entity_id is not None and _may_read_entity(user, entity_id)
+
+
+def _may_read_entity(user: User | None, entity_id: str) -> bool:
+    """HA lets this user read the entity (admins: always)."""
     try:
         check_entity(user, entity_id, control=False)
     except Unauthorized:
@@ -902,8 +913,8 @@ async def ws_subscribe_live(
     client and a fresh full snapshot follows (the same subscription, `seq` keeps counting). The subscription is accepted
     while MA is offline: it starts with "offline" and the first snapshot comes when MA returns.
 
-    Players are sent as players/all sends them (permission class read). Queues reach a non-admin only for players
-    whose entity they may read, as player_queues/get. queue_time_updated is not forwarded.
+    Players and queues reach a non-admin only for players whose entity they may read (#105; queues as
+    player_queues/get), and so do their active-queue entries and changes. queue_time_updated is not forwarded.
 
     2.5: the feed also says which queue each player is playing, by the one active-queue rule (players.active_queue_id,
     Music Assistant's app rule), so the card follows its speaker's queue from the feed and never needs its own copy of
@@ -927,7 +938,7 @@ async def ws_subscribe_live(
         # the client updates its own lists before subscribers run (both are its listeners, in order)
         now = active_queues(client)
         for player_id, queue_id in now.items():
-            if held.get(player_id) != queue_id:
+            if held.get(player_id) != queue_id and _may_read_player(hass, user, player_id):
                 _emit({"kind": "active_queue", "player_id": player_id, "queue_id": queue_id})
         held.clear()
         held.update(now)
@@ -938,7 +949,8 @@ async def ws_subscribe_live(
         if name not in LIVE_EVENTS:
             return
         object_id = getattr(event, "object_id", None)
-        if name not in LIVE_QUEUE_EVENTS or _may_read_queue(hass, user, object_id):
+        # #105: queue changes as player_queues/get, player changes only for players whose entity the user may read
+        if _may_read_queue(hass, user, object_id) if name in LIVE_QUEUE_EVENTS else _may_read_player(hass, user, object_id):
             data = getattr(event, "data", None)
             if data is not None and not isinstance(data, (dict, list, str, int, float, bool)):
                 data = _live_dict(data)
@@ -946,14 +958,19 @@ async def ws_subscribe_live(
         _follow_queues(client)
 
     def _snapshot(client: Any) -> None:
-        players = _live_items(getattr(client, "players", None), "players")
+        # #105: players, like queues, only for players whose entity the user may read (admins: all)
+        players = [
+            p for p in _live_items(getattr(client, "players", None), "players")
+            if _may_read_player(hass, user, p.get("player_id"))
+        ]
         queues = [
             q for q in _live_items(getattr(client, "player_queues", None), "player_queues")
             if _may_read_queue(hass, user, q.get("queue_id"))
         ]
         held.clear()
         held.update(active_queues(client))
-        _emit({"kind": "snapshot", "players": players, "queues": queues, "active_queues": dict(held)})
+        shown = {pid: qid for pid, qid in held.items() if _may_read_player(hass, user, pid)}
+        _emit({"kind": "snapshot", "players": players, "queues": queues, "active_queues": shown})
 
     @callback
     def _changed(client: Any | None) -> None:
