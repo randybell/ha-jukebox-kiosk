@@ -170,11 +170,11 @@ for (const cat of ['podcast', 'audiobook']) for (const kind of ['touch', 'mouse'
   check(`${NAMES[cat]}, ${kind === 'touch' ? 'tap' : 'click'}: rows and tiles do the same thing`, got.rows === got.tiles, J(got));
 }
 
-// ============ 5. track tile: no action buttons, ever; heart/badge only ============
+// ============ 5. track tile: no action buttons or hearts, ever ============
 for (const [tag, cfg] of [['default', {}], ['old show_action_icons: true', { show_action_icons: true }]]) {
   const s = await open({ library_view: 'tiles', ...cfg }); await section(s, 'track');
-  const b = await ev(s.p, `(() => { const r = ${s.BR}; return { tiles: r.querySelectorAll('.tile[data-type="track"]').length, buttons: r.querySelectorAll('.tile .ra, .tile .ra-b, .tile button:not(.tfav):not(.open)').length }; })()`);
-  check(`track tiles (${tag}): no action buttons on any tile`, b.tiles > 0 && b.buttons === 0, J(b));
+  const b = await ev(s.p, `(() => { const r = ${s.BR}; return { tiles: r.querySelectorAll('.tile[data-type="track"]').length, buttons: r.querySelectorAll('.tile button').length, hearts: r.querySelectorAll('.tile [data-act=fav], .tile .tfav').length }; })()`);
+  check(`track tiles (${tag}): no action buttons or hearts on any tile`, b.tiles > 0 && b.buttons === 0 && b.hearts === 0, J(b));
   await s.p.close();
 }
 

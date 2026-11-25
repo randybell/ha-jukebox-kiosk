@@ -7,8 +7,9 @@ import type { JukeboxCardConfig, MaItem } from './types';
 type Host = ReactiveControllerHost & HTMLElement & { config?: JukeboxCardConfig };
 
 /**
- * v0.7 hearts on rows, tiles and detail pages. Shown only through the kiosk integration with the `library` class
- * (caps.libraryWrite) and `hearts` not false. Search radio rows keep their 0.6.2 heart even with `hearts: false`.
+ * Hearts on item detail pages (header and track rows), the station sheet, and Now Playing. Shown only through the kiosk
+ * integration with the `library` class (caps.libraryWrite) and `hearts` not false. Radio still keeps its heart when
+ * `hearts` is false (the station sheet). Browse tiles and search / Library list rows do not show a heart.
  */
 export function heartType(config: JukeboxCardConfig | undefined, type: string | undefined, it?: Partial<MaItem>): FavType | '' {
   if (!config?._favs || !config._backend?.caps.libraryWrite) return '';
@@ -46,7 +47,7 @@ export class FavController implements ReactiveController {
   }
 }
 
-/** The heart button (row icon `ra-b fav`, or a tile corner `tfav`). Taps never reach the row / tile underneath. */
+/** The heart button (detail-page row icon `ra-b fav`, or the header `sbtn hfav`). Taps never reach the row underneath. */
 export function heartTpl(it: MaItem, on: boolean, tap: () => void, cls = 'ra-b fav') {
   if (!it?.uri) return nothing;
   return html`<button class="${cls} ${on ? 'on' : ''}" data-act="fav" tabindex="-1" aria-pressed=${on ? 'true' : 'false'}

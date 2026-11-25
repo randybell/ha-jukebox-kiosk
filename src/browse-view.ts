@@ -23,7 +23,6 @@ import {
 } from './discover';
 import { libraryHomeOn, configuredTiles, visibleTiles, tileDef, libraryCategories, libraryViewFor, tilesAcrossStyle, type TileId } from './library-home';
 import { loadDetail } from './detail-view';
-import { FavController, heartTpl, heartType } from './heart';
 import { PoolCache, libraryFiltered, normText, type ScopePool } from './search-scope';
 import type { KeyDetail } from './keyboard';
 import './keyboard';
@@ -145,7 +144,6 @@ export class JbBrowse extends LitElement {
   private lpools = new PoolCache(undefined, undefined, undefined, { albums: LART_MAX_PAGES * LART_PAGE, tracks: LART_MAX_PAGES * LART_PAGE });
   private _lqTimer?: number;
   /** Tap never plays: artists / albums / playlists (and podcasts with the Jukebox Kiosk integration) open their detail, everything else a sheet. */
-  private hearts = new FavController(this);
   private press = new PressController<{ it: MaItem; type: string }>(this, (p, el) => this.tap(p.it, p.type, el), (p, el) => this.openMenu(p.it, p.type, el));
 
   private _told = '';
@@ -208,7 +206,7 @@ export class JbBrowse extends LitElement {
   rmodes(): RadioBrowseMode[] { return this.be?.ext?.radioBrowse ? radioModes(this.config ?? {}) : []; }
   private discKey() { return this.discRows().join(','); }
 
-  /** A favourite changed elsewhere in the card (Search radio heart, 0.6.2): drop the cached pages of that type so the
+  /** A favourite changed elsewhere in the card (item detail or the station sheet): drop the cached pages of that type so the
    *  grid (Radio: My stations) is fresh when shown; the current category reloads at once (one get_library call). */
   favoritesChanged(type = 'radio') {
     const pages = Object.fromEntries(Object.entries(this._pages).filter(([k]) => !k.startsWith(`${type}|`)));
@@ -755,10 +753,10 @@ export class JbBrowse extends LitElement {
       : type === 'genre' ? this.genreRow(it) : this.itemRow(it, type)))}</div>`;
   }
   /** 0.7.20: a Library row for playlists, artists, albums, stations, podcasts and audiobooks: the same small cover as the track rows (no circle),
-   *  title, sub line, source badge and heart, and an arrow when a tap opens a page. No action buttons (the tiles had none). Tap and hold are the tile's. */
+   *  title, sub line, source badge, and an arrow when a tap opens a page. No action buttons (the tiles had none). Tap and hold are the tile's.
+   *  The favourite heart lives on the item detail screen (or the station sheet), not on these top-level rows. */
   private itemRow(it: MaItem, type: string, resume = false) {
     const p = this.press.handlers(it.uri, { it, type });
-    const fav = !!heartType(this.config, type, it);
     const sub = this.sub(it, type);
     const rf = resume ? resumeFraction(it) : 0;
     return html`<div class="row ir ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type=${type}
@@ -767,7 +765,6 @@ export class JbBrowse extends LitElement {
       ${rf ? html`<div class="tw">${artTpl(it, 'th')}<span class="rp" role="progressbar" aria-label="Listened" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(rf * 100)}><i style="width:${(rf * 100).toFixed(1)}%"></i></span></div>` : artTpl(it, 'th')}
       <div class="rt"><b>${it.name}</b>${sub ? html`<small>${sub}</small>` : nothing}</div>
       ${provTpl(it.uri, it.provider, it.media_type ?? type)}
-      ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type), 'mo fav') : nothing}
       ${drillable(type, this.config) ? html`<span class="mo go" aria-hidden="true">${icon('open')}</span>` : nothing}
     </div>`;
   }
@@ -792,31 +789,20 @@ export class JbBrowse extends LitElement {
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       <div class="tw">${artTpl(it, circ ? 'big circ' : 'big')}${provTpl(it.uri, it.provider, it.media_type ?? type)}
-        ${this.tileHeart(it, type)}
         ${rf ? html`<span class="rp" role="progressbar" aria-label="Listened" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(rf * 100)}><i style="width:${(rf * 100).toFixed(1)}%"></i></span>` : nothing}</div>
       <b>${it.name}</b>${this.sub(it, type) ? html`<small>${this.sub(it, type)}</small>` : nothing}
     </div>`;
   }
-  // ---------- hearts (v0.7) ----------
-  private async toggleFav(it: MaItem, type: string) {
-    const t = heartType(this.config, type, it);
-    if (!t) return;
-    await this.hearts.toggle(it, t); // the outcome shows in the card's top-right status chip
-  }
-  /** tile corner heart (top left; the provider badge is bottom left) */
-  private tileHeart(it: MaItem, type: string) {
-    return heartType(this.config, type, it) ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, type), 'tfav') : nothing;
-  }
+  /** A Library track row (the top-level Tracks list, or tracks shown under an artist filter). The favourite heart lives on
+   *  the item detail screen, not on these top-level rows. */
   private row(it: MaItem, n?: number) {
     const p = this.press.handlers(it.uri, { it, type: 'track' });
-    const fav = !!heartType(this.config, 'track', it);
-    return html`<div class="row ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type="track"
+    return html`<div class="row ${this.press.held === it.uri ? 'held' : ''}" data-uri=${it.uri} data-type="track"
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
       ${n !== undefined ? html`<span class="n">${n}</span>` : artTpl(it, 'th')}
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b><small>${this.sub(it, 'track')}</small></div>
       ${provTpl(it.uri, it.provider)}<span class="du">${fmtDur(it.duration)}</span>
-      ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, 'track'), 'mo fav') : nothing}
     </div>`;
   }
 
@@ -1021,7 +1007,7 @@ export class JbBrowse extends LitElement {
     .lts { font-size: var(--ha-font-size-m, 14px); color: var(--_inactive); }
     .lhead { align-items: center; gap: var(--ha-space-4, 16px); overflow: hidden; }
     .lt-title { font-size: clamp(var(--ha-font-size-l, 16px), 3.5cqi, var(--ha-font-size-xl, 20px)); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    /* #117: tiles never get narrower than two touch targets plus a gap (--_tile-min), so the two cover buttons (heart, open) fit side by side on the picture.
+    /* #117: tiles never get narrower than two touch targets plus a gap (--_tile-min).
        #146: the largest auto tile is three touch targets plus a small gap (was a fixed 150px) */
     .grid { --_tmin: var(--_tile-min); display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(var(--_tmin), 28cqi, calc(3 * var(--_touch-min) + var(--_space-1-5))), 1fr)); gap: clamp(var(--ha-space-3, 12px), 2.5cqi, var(--ha-space-4, 16px)) clamp(var(--ha-space-2, 8px), 2.5cqi, var(--ha-space-4, 16px)); }
     .tile { display: flex; flex-direction: column; gap: var(--ha-space-1, 4px); min-width: 0; border-radius: var(--ha-border-radius-lg, 12px); padding: var(--ha-space-1, 4px); cursor: pointer; }
@@ -1034,14 +1020,6 @@ export class JbBrowse extends LitElement {
     /* Playlist artwork (including lettering near its lower edge) must not sit behind a provider badge. */
     .tile[data-type="playlist"] .tw .pv { position: static; display: block; margin-top: var(--ha-space-2, 8px); max-width: 100%; }
     .tile[data-type="playlist"] b { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
-    .tw .tfav { position: absolute; left: var(--ha-space-1, 4px); top: var(--ha-space-1, 4px); width: var(--_touch-min); height: var(--_touch-min); border-radius: var(--ha-border-radius-circle, 50%); display: grid; place-items: center;
-      background: var(--ha-card-background, var(--card-background-color, var(--_bg)));
-      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none); backdrop-filter: var(--ha-card-backdrop-filter, none);
-      color: var(--_muted); }
-    .tw .tfav.on { color: var(--_active); }
-    .tw .tfav .i { width: calc(var(--_icon) * 20 / 24); height: calc(var(--_icon) * 20 / 24); }
-    .mo.fav.on { color: var(--_active); }
-    .row.hasfav { grid-template-columns: 44px minmax(0, 1fr) auto auto auto auto; }
     .tile b { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-bold, 700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--ha-space-1, 4px); }
     .tile.artist b { text-align: center; }
     /* #146: Tiles across is exact (1-8). No auto-fill shrink. */
@@ -1092,7 +1070,7 @@ export class JbBrowse extends LitElement {
     /* #117 kept as a container query on the card's own width (a content choice): a narrow row drops its provider badge and
        uses 40px art so the title keeps its room; every size above it is fluid */
     @container np (max-width: 520px) {
-      .row { grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: var(--ha-space-2, 8px); } .row.hasfav { grid-template-columns: 40px minmax(0, 1fr) auto auto auto; } .row .pv { display: none; } .row .du { font-size: var(--ha-font-size-s, 12px); } .th { width: 40px; height: 40px; }
+      .row { grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: var(--ha-space-2, 8px); } .row .pv { display: none; } .row .du { font-size: var(--ha-font-size-s, 12px); } .th { width: 40px; height: 40px; }
     }
   `];
 }

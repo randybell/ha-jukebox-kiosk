@@ -1,7 +1,7 @@
 /**
  * Station sheet (0.6.3): tapping a radio station (Browse > Radio, its Favorites, Search radio rows) opens this instead of
  * playing. Logo, name, and when Music Assistant has them a description, provider, genre and stream quality (empty fields are
- * hidden), a heart (library permission class only; same logic as the Search heart, radio-fav.ts) and a big Play that replaces
+ * hidden), a heart (library permission class only; same logic as radio-fav.ts) and a big Play that replaces
  * the queue like the old tap. Details come from music/item_by_uri (read class; the integration forces allow_update_metadata off).
  */
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
@@ -50,7 +50,7 @@ export class JbStation extends LitElement {
     } catch (e) { console.debug('[jukebox-card] station details unavailable', e); }
   }
   private canFav() { return !!this.config?._backend?.caps.libraryWrite; }
-  /** shared hearts store (v0.7): a heart here shows on the Search row, Library tile and Now Playing at once */
+  /** shared hearts store (v0.7): a heart here shows on Now Playing and item detail at once */
   private isFav() {
     const it = this.item;
     const own = !!(this._detail?.favorite ?? it?.favorite);

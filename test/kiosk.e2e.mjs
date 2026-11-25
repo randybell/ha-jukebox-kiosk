@@ -209,17 +209,25 @@ async function qsheet(p, id, action) {
   check('X2 leftover backend / config_entry_id / favorite_entity / presets values, even invalid ones, load without an error', err === '', err);
   await p.close();
 }
-// ---------------- 7. 0.6.2 Search radio heart (library class): favourite a station from Search ----------------
+// ---------------- 7. Favouriting a station from Search (library class): heart is on the station sheet, not the row ----------------
 {
   const SV = `__card.shadowRoot.querySelector('jb-search')`;
+  const ST = `__card.shadowRoot.querySelector('jb-station').shadowRoot`;
   const rows = (p) => ev(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].map((r) => ({ g: r.dataset.group, uri: r.dataset.uri,
     fav: r.querySelector('[data-act=fav]')?.getAttribute('aria-pressed') ?? null }))`);
   const query = async (p, q) => { await ev(p, `${SV}.setQuery(${J(q)})`); await wait(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].some((r) => r.dataset.group === 'radio')`); await sleep(150); };
   const toast = (p) => ev(p, `__card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st .ct')?.textContent?.trim() ?? ''`); // v0.7: hearts report in the top-right status chip
-  const heart = (uri) => `${SV}.shadowRoot.querySelector('.row[data-uri="${uri}"] [data-act=fav]')`;
-  const tapHeart = async (p, uri) => { await ev(p, `${heart(uri)}.scrollIntoView({ block: 'center' })`); await sleep(80); await tap(p, heart(uri)); };
+  const sheetHeart = `${ST}.querySelector('[data-action=fav]')`;
+  const closeSheet = async (p) => { await ev(p, `__card.shadowRoot.querySelector('jb-station').dispatchEvent(new CustomEvent('jukebox-station-close', { bubbles: true, composed: true }))`); await sleep(150); };
+  const openStation = async (p, uri) => {
+    const row = `${SV}.shadowRoot.querySelector('.row[data-uri="${uri}"]')`;
+    await ev(p, `${row}.scrollIntoView({ block: 'center' })`); await sleep(80);
+    await tap(p, `${row}.querySelector('.rt') ?? ${row}`); await sleep(300);
+    await wait(p, sheetHeart);
+  };
+  const pressed = (p) => ev(p, `${sheetHeart}?.getAttribute('aria-pressed') ?? null`);
 
-  // default kiosk mock: library_write off (a guest without the library class) → no hearts at all
+  // default kiosk mock: library_write off → no hearts on search rows (hearts live on the station sheet / item detail)
   let p = await open('&tab=search&radio=1&stations=fake');
   await query(p, 'radio');
   let r = await rows(p);
@@ -230,45 +238,47 @@ async function qsheet(p, id, action) {
   await query(p, 'mock');
   r = await rows(p);
   const radio = r.filter((x) => x.g === 'radio'), other = r.filter((x) => x.g !== 'radio');
-  // v0.7 hearts (default on): every result row but genres has a heart; `hearts: false` keeps the 0.6.2 radio-only heart (R2b)
-  check('R2 library_write → a heart on every radio row (off) and on the other groups but genres (v0.7 hearts)', radio.length > 0 && radio.every((x) => x.fav === 'false')
-    && other.filter((x) => x.g !== 'genres').length > 0 && other.every((x) => (x.g === 'genres' ? x.fav === null : x.fav !== null)), J({ radio, other: other.map((x) => x.g + ':' + x.fav) }));
+  check('R2 library_write → no heart on any Search result row (hearts live on the station sheet / item detail)', radio.length > 0 && r.every((x) => x.fav === null)
+    && other.filter((x) => x.g !== 'genres').length > 0, J({ radio, other: other.map((x) => x.g + ':' + x.fav) }));
   {
     const p2 = await open(`&tab=search&radio=1&stations=fake&kcaps=${encodeURIComponent(J({ library_write: true }))}&cfg=${encodeURIComponent(J({ hearts: false }))}`);
     await query(p2, 'mock');
     const r2 = await rows(p2);
-    check('R2b hearts: false → 0.6.2: hearts on radio rows only', r2.some((x) => x.g === 'radio' && x.fav === 'false') && r2.filter((x) => x.g !== 'radio').length > 0
-      && r2.filter((x) => x.g !== 'radio').every((x) => x.fav === null), J(r2.map((x) => x.g + ':' + x.fav)));
+    check('R2b hearts: false → still no hearts on Search rows', r2.length > 0 && r2.every((x) => x.fav === null), J(r2.map((x) => x.g + ':' + x.fav)));
     await p2.close();
   }
   const st = radio[0].uri;
+  await openStation(p, st);
   let n = await nws(p);
-  await tapHeart(p, st); await sleep(150);
+  await tap(p, sheetHeart); await sleep(150);
   let m = maOf(await ws(p, n));
-  check('R3 heart → jukebox_kiosk/ma music/favorites/add_item {item: the station uri}; heart on; toast', m.length === 1 && m[0].command === 'music/favorites/add_item' && J(m[0].args) === J({ item: st })
-    && (await ev(p, `${heart(st)}.getAttribute('aria-pressed')`)) === 'true' && /^Added .+ to favorites$/.test(await toast(p)), J({ m, t: await toast(p) }));
-  // 0.6.3 (ported from the design branch): the row still shows the provider copy; the heart looks up the library id first, then removes
+  check('R3 station-sheet heart → jukebox_kiosk/ma music/favorites/add_item {item: the station uri}; heart on; toast', m.length === 1 && m[0].command === 'music/favorites/add_item' && J(m[0].args) === J({ item: st })
+    && (await pressed(p)) === 'true' && /^Added .+ to favorites$/.test(await toast(p)), J({ m, t: await toast(p) }));
+  // the row still shows the provider copy; un-heart looks up the library id first, then removes
   n = await nws(p);
-  await tapHeart(p, st); await sleep(200);
+  await tap(p, sheetHeart); await sleep(200);
   m = maOf(await ws(p, n));
   check('R4 provider result already in favorites → music/item_by_uri {uri}, then remove_item {radio, library id}; heart off',
     m.length === 2 && m[0].command === 'music/item_by_uri' && J(m[0].args) === J({ uri: st })
     && m[1].command === 'music/favorites/remove_item' && m[1].args.media_type === 'radio' && /^\d+$/.test(String(m[1].args.library_item_id))
-    && (await ev(p, `${heart(st)}.getAttribute('aria-pressed')`)) === 'false' && /^Removed .+ from favorites$/.test(await toast(p)), J({ m, t: await toast(p) }));
-  await tapHeart(p, st); await sleep(200); // favourite again for R5–R7
-  // MA now returns the station's library copy: the heart is on and removes it
+    && (await pressed(p)) === 'false' && /^Removed .+ from favorites$/.test(await toast(p)), J({ m, t: await toast(p) }));
+  await tap(p, sheetHeart); await sleep(200); // favourite again for R5–R7
+  await closeSheet(p);
+  // MA now returns the station's library copy
   await query(p, 'mockingbird');
   r = (await rows(p)).filter((x) => x.g === 'radio');
   const lib = r.find((x) => x.uri.startsWith('library://radio/'));
-  check('R5 next search returns the library copy, heart on', !!lib && lib.fav === 'true', J(r));
+  check('R5 next search returns the library copy (no row heart)', !!lib && lib.fav === null, J(r));
+  await openStation(p, lib.uri);
   n = await nws(p);
-  await tapHeart(p, lib.uri); await sleep(150);
+  await tap(p, sheetHeart); await sleep(150);
   m = maOf(await ws(p, n));
-  check('R6 heart on a library station → music/favorites/remove_item {media_type radio, library_item_id}; heart off',
+  check('R6 station-sheet heart on a library station → music/favorites/remove_item {media_type radio, library_item_id}; heart off',
     m.length === 1 && m[0].command === 'music/favorites/remove_item' && m[0].args.media_type === 'radio' && `library://radio/${m[0].args.library_item_id}` === lib.uri
-    && (await ev(p, `${heart(lib.uri)}.getAttribute('aria-pressed')`)) === 'false' && /^Removed .+ from favorites$/.test(await toast(p)), J({ m, t: await toast(p) }));
+    && (await pressed(p)) === 'false' && /^Removed .+ from favorites$/.test(await toast(p)), J({ m, t: await toast(p) }));
   // favourite it again, then Browse > Radio (empty library before) lists it under Favorites
-  await tapHeart(p, lib.uri); await sleep(200);
+  await tap(p, sheetHeart); await sleep(200);
+  await closeSheet(p);
   await ev(p, `__card._tab = 'browse'`); await sleep(200);
   // 0.7.2: no tile home by default (separate layout here) → the Radio chip
   await wait(p, `${BR}.shadowRoot.querySelector('.cats .fc[data-cat=radio]')`);
@@ -277,7 +287,7 @@ async function qsheet(p, id, action) {
   check('R7 Browse › Radio → My stations shows the new favourite under Favorites', ok, J(await ev(p, `({ cats: [...${BR}.shadowRoot.querySelectorAll('[data-cat]')].map((b) => b.dataset.cat + (b.classList.contains('on') ? '*' : '')), cat: ${BR}._cat, secs: [...${BR}.shadowRoot.querySelectorAll('[data-src]')].map((g) => g.dataset.src + ':' + g.children.length), empty: ${BR}.shadowRoot.querySelector('[data-empty]')?.dataset.empty })`)));
   await p.close();
 
-  // Browse › Radio already open (empty: "No stations yet"), then a heart in Search → Radio reloads with the favourite
+  // Browse › Radio already open (empty: "No stations yet"), then a heart on the station sheet in Search → Radio reloads with the favourite
   p = await open(`&tab=browse&lhome=0&radio=1&stations=fake&kcaps=${encodeURIComponent(J({ library_write: true }))}`);
   await wait(p, `${BR}.shadowRoot.querySelector('[data-cat=radio]')`); await sleep(200);
   await ev(p, `${BR}.shadowRoot.querySelector('[data-cat=radio]').click()`);
@@ -285,10 +295,12 @@ async function qsheet(p, id, action) {
   await ev(p, `__card._tab = 'search'`); await sleep(200);
   await query(p, 'mock');
   const st3 = (await rows(p)).find((x) => x.g === 'radio').uri;
-  await tapHeart(p, st3); await sleep(200);
+  await openStation(p, st3);
+  await tap(p, sheetHeart); await sleep(200);
+  await closeSheet(p);
   await ev(p, `__card._tab = 'browse'`);
   const fresh = await wait(p, `${BR}.shadowRoot.querySelector('[data-src=favorites]')?.children.length === 1 && !${BR}.shadowRoot.querySelector('[data-empty=stations]')`);
-  check('R9 Browse › Radio cached empty → after a Search heart it reloads (Favorites: 1, no empty hint)', empty && fresh);
+  check('R9 Browse › Radio cached empty → after a station-sheet heart it reloads (Favorites: 1, no empty hint)', empty && fresh);
   await p.close();
 
   // failure: the server refuses → heart goes back off, toast says so
@@ -296,20 +308,28 @@ async function qsheet(p, id, action) {
   await query(p, 'mock');
   const st2 = (await rows(p)).find((x) => x.g === 'radio').uri;
   await ev(p, `(${SV}.config._backend.send = () => Promise.reject(new Error('unauthorized')))`);
-  await tapHeart(p, st2); await sleep(200);
-  check('R8 refused → heart back off, "Couldn\'t add … to favorites"', (await ev(p, `${heart(st2)}.getAttribute('aria-pressed')`)) === 'false' && /^Couldn.t add .+ to favorites$/.test(await toast(p)), await toast(p));
+  await openStation(p, st2);
+  await tap(p, sheetHeart); await sleep(200);
+  check('R8 refused → heart back off, "Couldn\'t add … to favorites"', (await pressed(p)) === 'false' && /^Couldn.t add .+ to favorites$/.test(await toast(p)), await toast(p));
   await p.close();
 }
-// ---------------- 8. heart lookup (0.6.3, ported from the design branch): un-heart a non-library (provider) search result ----------------
+// ---------------- 8. heart lookup (0.6.3): un-heart a non-library (provider) result from the station sheet ----------------
 {
   const SV = `__card.shadowRoot.querySelector('jb-search')`;
+  const ST = `__card.shadowRoot.querySelector('jb-station').shadowRoot`;
   const rows = (p) => ev(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].filter((r) => r.dataset.group === 'radio').map((r) => ({ uri: r.dataset.uri,
     name: r.querySelector('.t, .name, .title')?.textContent?.trim() ?? r.textContent.trim().slice(0, 40), fav: r.querySelector('[data-act=fav]')?.getAttribute('aria-pressed') ?? null }))`);
   const query = async (p, q) => { await ev(p, `${SV}.setQuery(${J(q)})`); await wait(p, `[...${SV}.shadowRoot.querySelectorAll('.row')].some((r) => r.dataset.group === 'radio')`); await sleep(150); };
   const toast = (p) => ev(p, `__card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st .ct')?.textContent?.trim() ?? ''`); // v0.7: hearts report in the top-right status chip
-  const heart = (uri) => `${SV}.shadowRoot.querySelector('.row[data-uri="${uri}"] [data-act=fav]')`;
-  const tapHeart = async (p, uri) => { await ev(p, `${heart(uri)}.scrollIntoView({ block: 'center' })`); await sleep(80); await tap(p, heart(uri)); };
-  const pressed = (p, uri) => ev(p, `${heart(uri)}.getAttribute('aria-pressed')`);
+  const sheetHeart = `${ST}.querySelector('[data-action=fav]')`;
+  const closeSheet = async (p) => { await ev(p, `__card.shadowRoot.querySelector('jb-station').dispatchEvent(new CustomEvent('jukebox-station-close', { bubbles: true, composed: true }))`); await sleep(150); };
+  const openStation = async (p, uri) => {
+    const row = `${SV}.shadowRoot.querySelector('.row[data-uri="${uri}"]')`;
+    await ev(p, `${row}.scrollIntoView({ block: 'center' })`); await sleep(80);
+    await tap(p, `${row}.querySelector('.rt') ?? ${row}`); await sleep(300);
+    await wait(p, sheetHeart);
+  };
+  const pressed = (p) => ev(p, `${sheetHeart}?.getAttribute('aria-pressed') ?? null`);
   // station 1 (Mockingbird FM): favourite AND in the library; station 2: favourite on the provider only (not in the library).
   // radiohit=provider: MA's search returns the radiobrowser:// copies, not the library copy.
   const KQ = `&tab=search&radio=1&stations=fake&radiofav=2&radioinlib=1&radiohit=provider&kcaps=${encodeURIComponent(J({ library_write: true }))}`;
@@ -317,42 +337,51 @@ async function qsheet(p, id, action) {
   await query(p, 'mockingbird');
   let r = await rows(p);
   const a = r.find((x) => x.uri.startsWith('radiobrowser://'));
-  check('H1 search returns the provider copy of a library favourite: heart on', !!a && a.fav === 'true' && r.every((x) => !x.uri.startsWith('library://')), J(r));
+  check('H1 search returns the provider copy of a library favourite (no row heart)', !!a && a.fav === null && r.every((x) => !x.uri.startsWith('library://')), J(r));
+  await openStation(p, a.uri);
+  check('H1b station sheet shows the heart on', (await pressed(p)) === 'true');
   let n = await nws(p);
-  await tapHeart(p, a.uri); await sleep(250);
+  await tap(p, sheetHeart); await sleep(250);
   let m = maOf(await ws(p, n));
-  const libId = m[1]?.args?.library_item_id;
-  check('H2 un-heart → item_by_uri {uri: provider uri} (no allow_update_metadata; the server forces False) → remove_item {media_type radio, library_item_id from the lookup}; heart off; "Removed …"',
-    m.length === 2 && m[0].command === 'music/item_by_uri' && J(m[0].args) === J({ uri: a.uri }) && m[1].command === 'music/favorites/remove_item'
-    && m[1].args.media_type === 'radio' && /^\d+$/.test(String(libId)) && (await pressed(p, a.uri)) === 'false' && /^Removed .+ from favorites$/.test(await toast(p)),
+  // The sheet already loaded details (item_by_uri) before the tap, so un-heart can remove with the library id it already has.
+  const rm = m.find((x) => x.command === 'music/favorites/remove_item') ?? m[m.length - 1];
+  const libId = rm?.args?.library_item_id;
+  check('H2 un-heart from the station sheet → remove_item {media_type radio, library_item_id}; heart off; "Removed …"',
+    rm?.command === 'music/favorites/remove_item' && rm.args.media_type === 'radio' && /^\d+$/.test(String(libId))
+    && (await pressed(p)) === 'false' && /^Removed .+ from favorites$/.test(await toast(p)),
     J({ m, t: await toast(p) }));
+  await closeSheet(p);
   await query(p, 'lakeside'); await query(p, 'mockingbird');
-  check('H3 the favourite is gone in MA: a fresh search shows the heart off', (await rows(p)).find((x) => x.uri === a.uri)?.fav === 'false', J(await rows(p)));
+  await openStation(p, a.uri);
+  check('H3 the favourite is gone in MA: a fresh search opens the sheet with the heart off', (await pressed(p)) === 'false', J(await rows(p)));
   n = await nws(p);
-  await tapHeart(p, a.uri); await sleep(200);
-  await tapHeart(p, a.uri); await sleep(200);
+  await tap(p, sheetHeart); await sleep(200);
+  await tap(p, sheetHeart); await sleep(200);
   m = maOf(await ws(p, n));
   check('H4 heart again (add_item) then un-heart: the library id is remembered, no second lookup',
-    m.map((x) => x.command).join() === 'music/favorites/add_item,music/favorites/remove_item' && String(m[1].args.library_item_id) === String(libId) && (await pressed(p, a.uri)) === 'false', J(m));
+    m.map((x) => x.command).join() === 'music/favorites/add_item,music/favorites/remove_item' && String(m[1].args.library_item_id) === String(libId) && (await pressed(p)) === 'false', J(m));
+  await closeSheet(p);
 
   // a provider favourite that is not in the library: nothing to remove in MA → heart stays on, says so, no remove sent
   await query(p, 'lakeside');
-  const b = (await rows(p)).find((x) => x.fav === 'true');
+  const b = (await rows(p))[0];
+  await openStation(p, b?.uri);
   n = await nws(p);
-  await tapHeart(p, b?.uri); await sleep(250);
+  await tap(p, sheetHeart); await sleep(250);
   m = maOf(await ws(p, n));
   check('H5 not in the library → only item_by_uri, no remove_item; heart stays on; "… isn\'t in your library"',
-    !!b && m.length === 1 && m[0].command === 'music/item_by_uri' && (await pressed(p, b.uri)) === 'true' && /isn.t in your library$/.test(await toast(p)), J({ b, m, t: await toast(p) }));
+    !!b && m.length === 1 && m[0].command === 'music/item_by_uri' && (await pressed(p)) === 'true' && /isn.t in your library$/.test(await toast(p)), J({ b, m, t: await toast(p) }));
 
-  // lookup refused (e.g. the server is down): heart back on, "Couldn't remove", no remove sent
+  // lookup refused (e.g. the server is down): stub item_by_uri before the sheet loads, so it has no library id and un-heart can't look it up
   await p.close();
   p = await open(KQ); // fresh mock: station 1 is a library favourite again
   await query(p, 'mockingbird');
   await ev(p, `(() => { const be = ${SV}.config._backend, s0 = be.send.bind(be); be.send = (c, d) => (c === 'music/item_by_uri' ? Promise.reject(new Error('unavailable')) : s0(c, d)); })()`);
+  await openStation(p, a.uri);
   n = await nws(p);
-  await tapHeart(p, a.uri); await sleep(250);
+  await tap(p, sheetHeart); await sleep(250);
   check('H6 lookup fails → heart back on, "Couldn\'t remove … from favorites", nothing written',
-    (await pressed(p, a.uri)) === 'true' && /^Couldn.t remove .+ from favorites$/.test(await toast(p)) && maOf(await ws(p, n), 'music/favorites/remove_item').length === 0, await toast(p));
+    (await pressed(p)) === 'true' && /^Couldn.t remove .+ from favorites$/.test(await toast(p)) && maOf(await ws(p, n), 'music/favorites/remove_item').length === 0, await toast(p));
   await p.close();
 }
 // ---------------- 9. 0.6.3 station sheet: a station tap never plays; details, heart and Play live in the sheet ----------------
@@ -441,7 +470,7 @@ async function qsheet(p, id, action) {
   check('S9 Search radio row tap → station sheet, nothing played', s?.name === 'Mockingbird FM' && (await plays(p)).length === 0 && s.fav === 'false', J(s));
   // heart in the sheet on a provider result: add, then remove looks the library id up (item_by_uri) like the Search heart
   await tap(p, `${ST}.querySelector('[data-action=fav]')`); await sleep(250);
-  check('S10 sheet heart on → the Search row heart follows', (await ev(p, `${row}.querySelector('[data-act=fav]').getAttribute('aria-pressed')`)) === 'true');
+  check('S10 sheet heart on → the shared store follows (no Search row heart)', (await ev(p, `__card.favs.isFav({ uri: ${J(st)}, favorite: false })`)) === true && !(await ev(p, `${row}.querySelector('[data-act=fav]')`)));
   n = await nws(p);
   await tap(p, `${ST}.querySelector('[data-action=fav]')`); await sleep(300);
   m = maOf(await ws(p, n));
@@ -462,39 +491,42 @@ async function qsheet(p, id, action) {
   const favCmds = (msgs) => maOf(msgs).filter((m) => /^music\/(favorites|item_by_uri)/.test(m.command)).map((m) => [m.command.replace('music/', ''), m.args]);
   const tapEl = async (p, expr) => { await ev(p, `(${expr}).scrollIntoView({ block: 'center' })`); await sleep(80); await tap(p, expr); };
 
-  // Library home: Playlists tiles carry a corner heart
+  // Library home: Playlists tiles have no corner heart (the heart lives on the item detail page)
   let p = await open(`&tab=browse&lhome=0${KC}`);
-  await wait(p, `${BRs}.querySelectorAll('.tile .tfav').length > 3`);
-  const tiles = await ev(p, `[...${BRs}.querySelectorAll('.tile')].map((t) => ({ uri: t.dataset.uri, type: t.dataset.type, fav: t.querySelector('.tfav')?.getAttribute('aria-pressed') ?? null }))`);
-  check('K1 Library › Playlists: a corner heart on every tile, pressed = MA favourite', tiles.length > 3 && tiles.every((t) => t.fav !== null) && tiles.some((t) => t.fav === 'false'), J(tiles.slice(0, 4)));
-  const pl = tiles.find((t) => t.fav === 'false');
-  const tfav = `${BRs}.querySelector('.tile[data-uri="${pl.uri}"] .tfav')`;
+  await wait(p, `${BRs}.querySelectorAll('.tile').length > 3`);
+  const tiles = await ev(p, `[...${BRs}.querySelectorAll('.tile')].map((t) => ({ uri: t.dataset.uri, type: t.dataset.type, heart: !!t.querySelector('[data-act=fav], .tfav') }))`);
+  check('K1 Library › Playlists: no heart on any tile', tiles.length > 3 && tiles.every((t) => !t.heart), J(tiles.slice(0, 4)));
+  const pl = tiles[0];
+  await tapEl(p, `${BRs}.querySelector('.tile[data-uri="${pl.uri}"]')`);
+  const BDs = `${BRs}.querySelector('jb-detail').shadowRoot`;
+  await wait(p, `${BDs}?.querySelector('.detail:not([data-loading]) .da [data-act=fav]')`); await sleep(150);
+  const pfav = `${BDs}.querySelector('.da [data-act=fav]')`;
+  const was = await pressedOf(p, pfav);
   let n = await nws(p);
-  await tapEl(p, tfav); await sleep(250);
+  await tap(p, pfav); await sleep(250);
   let c = favCmds(await ws(p, n));
-  check('K2 playlist tile heart → favorites/add_item {item: playlist uri}; heart on; no playback, no detail opened',
-    J(c) === J([['favorites/add_item', { item: pl.uri }]]) && (await pressedOf(p, tfav)) === 'true' && !(await ev(p, `${BRs}.querySelector('jb-detail')`))
-    && (await ev(p, `window.__calls.filter((x) => x.service === 'play_media').length`)) === 0, J(c));
+  check('K2 playlist detail header heart → favorites add/remove for the playlist; pressed flips; no playback',
+    c.length >= 1 && (was === 'false' ? J(c[0]) === J(['favorites/add_item', { item: pl.uri }]) : c[c.length - 1][1].media_type === 'playlist')
+    && (await pressedOf(p, pfav)) === (was === 'false' ? 'true' : 'false')
+    && (await ev(p, `window.__calls.filter((x) => x.service === 'play_media').length`)) === 0, J({ c, was }));
   n = await nws(p);
-  await tapEl(p, tfav); await sleep(300);
+  await tap(p, pfav); await sleep(300);
   c = favCmds(await ws(p, n));
-  check('K3 tap again → remove_item {playlist, library id} straight away (no confirmation); heart off; "Removed …"',
-    c.length >= 1 && c[c.length - 1][0] === 'favorites/remove_item' && c[c.length - 1][1].media_type === 'playlist' && `library://playlist/${c[c.length - 1][1].library_item_id}` === pl.uri
-    && (await pressedOf(p, tfav)) === 'false' && !(await ev(p, `${BRs}.querySelector('.confirm')`)) && /^Removed .+ from favorites$/.test(await ev(p, `__card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st .ct')?.textContent?.trim() ?? ''`)), J(c));
-  // Library › Tracks: a row heart; the same track then shows hearted in Search (shared store)
+  check('K3 tap again → the opposite add/remove (no confirmation); pressed flips back',
+    c.length >= 1 && (await pressedOf(p, pfav)) === was && !(await ev(p, `${BDs}.querySelector('.confirm')`))
+    && /(Added|Removed) .+ (to|from) favorites$/.test(await ev(p, `__card.shadowRoot.querySelector('jb-speakers').shadowRoot.querySelector('.st .ct')?.textContent?.trim() ?? ''`)), J(c));
+  // Library › Tracks: no heart on top-level track rows (judgment call: Tracks tab is a top-level list)
+  await ev(p, `${BDs}?.querySelector('[data-action=back]')?.click()`); await sleep(200);
   await ev(p, `__card.setConfig({ ...__card._config, library_view: 'rows' })`); await sleep(300); // 0.7.20: Tracks as rows (the harness's legacy default is tiles)
   await ev(p, `${BRs}.querySelector('[data-cat=track]').click()`);
-  await wait(p, `${BRs}.querySelectorAll('.row [data-act=fav]').length > 3`);
-  const tr = await ev(p, `[...${BRs}.querySelectorAll('.row')].map((r) => ({ uri: r.dataset.uri, name: r.querySelector('.rt b')?.textContent, fav: r.querySelector('[data-act=fav]')?.getAttribute('aria-pressed') ?? null })).find((x) => x.fav === 'false')`);
-  const rfav = `${BRs}.querySelector('.row[data-uri="${tr.uri}"] [data-act=fav]')`;
-  n = await nws(p);
-  await tapEl(p, rfav); await sleep(250);
-  c = favCmds(await ws(p, n));
-  check('K4 Library track row heart → add_item {item: track uri}; heart on', J(c) === J([['favorites/add_item', { item: tr.uri }]]) && (await pressedOf(p, rfav)) === 'true', J({ c, tr }));
+  await wait(p, `${BRs}.querySelectorAll('.row[data-type=track]').length > 3`);
+  const trHearts = await ev(p, `${BRs}.querySelectorAll('.row[data-type=track] [data-act=fav]').length`);
+  check('K4 Library › Tracks (rows): no heart on any top-level track row', trHearts === 0, J(trHearts));
   await ev(p, `__card._tab = 'search'`); await sleep(200);
-  await ev(p, `${SV}.setQuery(${J(tr.name)})`);
-  await wait(p, `${SV}.shadowRoot.querySelector('.row[data-uri="${tr.uri}"]')`); await sleep(150);
-  check('K5 Search shows the same track hearted (one store for the whole card)', (await pressedOf(p, `${SV}.shadowRoot.querySelector('.row[data-uri="${tr.uri}"] [data-act=fav]')`)) === 'true');
+  await ev(p, `${SV}.setQuery('mock')`);
+  await wait(p, `${SV}.shadowRoot.querySelector('.row[data-group=tracks], .row[data-group=playlists], .row[data-group=albums]')`); await sleep(150);
+  const searchHearts = await ev(p, `${SV}.shadowRoot.querySelectorAll('.row [data-act=fav]').length`);
+  check('K5 Search result rows have no heart (hearts live on the item detail page)', searchHearts === 0, J(searchHearts));
   // album page from Search: header heart next to Play / Shuffle, and a heart on each track row
   await ev(p, `${SV}.setQuery('mock')`);
   await wait(p, `${SV}.shadowRoot.querySelector('.row[data-group=albums]')`); await sleep(150);
@@ -546,22 +578,23 @@ async function qsheet(p, id, action) {
   const viewToasts = (p) => ev(p, `['jb-search', 'jb-browse', 'jb-now', 'jb-station'].map((t) => __card.shadowRoot.querySelector(t)?.shadowRoot?.querySelector('.toast')?.textContent ?? '').filter(Boolean)`);
   p = await open(`&tab=search${KC}`);
   await ev(p, `${SV}.setQuery('mock')`);
-  await wait(p, `${SV}.shadowRoot.querySelector('.row[data-group=playlists] [data-act=fav]')`); await sleep(150);
-  const plr = await ev(p, `(() => { const r = ${SV}.shadowRoot.querySelector('.row[data-group=playlists]'); return { uri: r.dataset.uri, fav: r.querySelector('[data-act=fav]').getAttribute('aria-pressed') }; })()`);
-  const plh = `${SV}.shadowRoot.querySelector('.row[data-uri="${plr.uri}"] [data-act=fav]')`;
-  n = await nws(p);
-  await tapEl(p, plh); await sleep(300);
-  c = favCmds(await ws(p, n));
-  const ch1 = await chip(p), vt1 = await viewToasts(p);
-  check('K10 Search playlist row heart → favorites add/remove for the playlist; pressed flips',
-    c.length >= 1 && (plr.fav === 'false' ? J(c[0]) === J(['favorites/add_item', { item: plr.uri }]) : c[c.length - 1][1].media_type === 'playlist') && (await pressedOf(p, plh)) === (plr.fav === 'false' ? 'true' : 'false'), J({ plr, c }));
-  check('K11 heart outcome shows in the top-right status chip (info), not a centre / bottom toast',
-    !!ch1 && ch1.kind === 'info' && /(Added|Removed) .+ (to|from) favorites$/.test(ch1.text) && ch1.top < 140 && ch1.right < 80 && ch1.left > ch1.w / 3 && vt1.length === 0, J({ ch1, vt1 }));
-  // playlist page: header heart, follows the row heart (shared store)
+  await wait(p, `${SV}.shadowRoot.querySelector('.row[data-group=playlists]')`); await sleep(150);
+  const plr = await ev(p, `(() => { const r = ${SV}.shadowRoot.querySelector('.row[data-group=playlists]'); return { uri: r.dataset.uri, rowHeart: !!r.querySelector('[data-act=fav]') }; })()`);
+  check('K10a Search playlist row has no heart', !plr.rowHeart, J(plr));
   await tapEl(p, `${SV}.shadowRoot.querySelector('.row[data-uri="${plr.uri}"] .rt')`);
   await wait(p, `${SDs}?.querySelector('.detail:not([data-loading]) .da [data-act=fav]')`); await sleep(150);
-  const ph = await pressedOf(p, `${SDs}.querySelector('.da [data-act=fav]')`);
-  check('K12 playlist page: header heart shows the same state as the row heart', ph === (plr.fav === 'false' ? 'true' : 'false'), J({ ph, plr }));
+  const plh = `${SDs}.querySelector('.da [data-act=fav]')`;
+  const plFav = await pressedOf(p, plh);
+  n = await nws(p);
+  await tap(p, plh); await sleep(300);
+  c = favCmds(await ws(p, n));
+  const ch1 = await chip(p), vt1 = await viewToasts(p);
+  check('K10 playlist detail header heart → favorites add/remove for the playlist; pressed flips',
+    c.length >= 1 && (plFav === 'false' ? J(c[0]) === J(['favorites/add_item', { item: plr.uri }]) : c[c.length - 1][1].media_type === 'playlist') && (await pressedOf(p, plh)) === (plFav === 'false' ? 'true' : 'false'), J({ plr, plFav, c }));
+  check('K11 heart outcome shows in the top-right status chip (info), not a centre / bottom toast',
+    !!ch1 && ch1.kind === 'info' && /(Added|Removed) .+ (to|from) favorites$/.test(ch1.text) && ch1.top < 140 && ch1.right < 80 && ch1.left > ch1.w / 3 && vt1.length === 0, J({ ch1, vt1 }));
+  const ph = await pressedOf(p, plh);
+  check('K12 playlist page: header heart stays at the state just set', ph === (plFav === 'false' ? 'true' : 'false'), J({ ph, plFav }));
   // a refused heart: back where it was, error chip with a Dismiss
   await ev(p, `(${SV}.config._backend.send = () => Promise.reject(new Error('unauthorized')))`);
   const hb = await pressedOf(p, `${SDs}.querySelector('.da [data-act=fav]')`);

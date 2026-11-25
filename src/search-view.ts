@@ -18,7 +18,6 @@ import type { Enqueue, GroupKey, HomeAssistant, JukeboxCardConfig, MaItem, Searc
 import { defineElement } from './define';
 import { removeFromQueue } from './queue-row-remove';
 import { categoriesOn, resolveCategories, serviceTypes, defaultCategory } from './search-categories';
-import { FavController, heartTpl, heartType } from './heart';
 import { SOURCE_ALL, SOURCE_LIBRARY, sourcesOn, parseSearchProviders, pickerSources, toggleSource, sourcesLabel, splitSources, fromSources, type SearchSource } from './search-sources';
 import { libraryCategories, libraryCatLabel, libraryViewFor, tilesAcrossStyle } from './library-home';
 import './browse-view';
@@ -124,7 +123,6 @@ export class JbSearch extends LitElement {
   private _resScroll = 0;
   private _kbBefore = false;
   /** A row tap never plays: artists / albums / playlists (podcasts with the Jukebox Kiosk integration) open a detail, anything else is highlighted. */
-  private hearts = new FavController(this);
   private press = new PressController<{ it: MaItem; g: GroupKey }>(this, (p, el) => this.tap(p.it, p.g, el), (p, el) => this.rowMenu(p.it, p.g, el));
   private _seqShown = 0;
   /** v0.7: configured search categories (null = 0.6 behaviour) */
@@ -599,17 +597,6 @@ export class JbSearch extends LitElement {
     this._toastTimer = window.setTimeout(() => (this._toast = ''), 2400);
   }
 
-  // ---------- hearts (0.6.2 radio rows; v0.7 every result row but genres) ----------
-  /** Only through the kiosk integration with the library permission class; `hearts: false` keeps the 0.6.2 radio-only heart. */
-  private canFav(it: MaItem, g: GroupKey) { return heartType(this.config, this.mediaType(it, g), it); }
-  /** MA stores favourites on library items: a provider result is added to the library and marked favourite in one call.
-   *  Removing needs the library id: a provider result has it looked up first with music/item_by_uri (read class), so
-   *  un-hearting works for it too. The store is shared with Library, detail pages, the station sheet and Now Playing. */
-  private async toggleFav(it: MaItem, g: GroupKey) {
-    const t = this.canFav(it, g);
-    if (!t) return;
-    await this.hearts.toggle(it, t); // the outcome shows in the card's top-right status chip
-  }
   /** A heart elsewhere changed an item's favourite: the shared store already shows it; drop cached results. */
   favoriteChanged(uri: string, favorite: boolean) {
     this.config._favs?.set(uri, favorite);
@@ -624,7 +611,7 @@ export class JbSearch extends LitElement {
     if (g === 'genres' || type === 'genre') { this.applyGenre(it); return; }
     if (drillable(type, this.config)) { this.openDetail(it, type); return; }
     // a station opens the station sheet (details, heart, Play); a tap never plays (0.6.3)
-    if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.hearts.isFav(it) } }); return; }
+    if (type === 'radio') { this._sel = it.uri; this.press.release(); fire(this, 'jukebox-station', { item: { ...it, favorite: this.config._favs?.isFav(it) ?? !!it.favorite } }); return; }
     // 0.7.13 (issue #78): a tap on a song row opens the same pop-up as a hold on it (swallowNextClick: it opens under the finger)
     if (type === 'track' && el && !isRadio(it)) { swallowNextClick(); this.rowMenu(it, g, el); return; }
     this._sel = this._sel === it.uri ? '' : it.uri;
@@ -730,8 +717,7 @@ export class JbSearch extends LitElement {
     </div>`;
     const drill = drillable(type, this.config);
     const p = this.press.handlers(it.uri, { it, g });
-    const fav = this.canFav(it, g);
-    return html`<div class="row ${drill ? 'drill' : ''} ${fav ? 'hasfav' : ''} ${this.press.held === it.uri ? 'held' : ''} ${this.press.pressing === it.uri && g !== 'genres' ? 'hp' : ''} ${this._sel === it.uri ? 'sel' : ''}"
+    return html`<div class="row ${drill ? 'drill' : ''} ${this.press.held === it.uri ? 'held' : ''} ${this.press.pressing === it.uri && g !== 'genres' ? 'hp' : ''} ${this._sel === it.uri ? 'sel' : ''}"
         data-uri=${it.uri} data-group=${g} data-type=${type} aria-label=${g === 'genres' ? `Filter by genre ${it.name}` : drill ? `Open ${it.name}` : it.name}
         @pointerdown=${p.down} @pointermove=${p.move} @pointerup=${p.up} @pointercancel=${p.cancel} @pointerleave=${p.cancel}
         @contextmenu=${(e: Event) => e.preventDefault()}>
@@ -739,7 +725,6 @@ export class JbSearch extends LitElement {
       <div class="rt"><b>${it.name}${it.version ? html` <i class="ver">${it.version}</i>` : nothing}</b>
         <small>${provTpl(it.uri, it.provider, it.media_type)}${it.duration ? html`<span class="du2">${fmtDur(it.duration)}</span>` : nothing}<span class="st">${this.sub(it, g)}</span></small></div>
       <span class="du">${fmtDur(it.duration)}</span>
-      ${fav ? heartTpl(it, this.hearts.isFav(it), () => this.toggleFav(it, g)) : nothing}
       ${g === 'genres' ? html`<span class="gf" aria-hidden="true">Filter</span>` : nothing}
     </div>`;
   }
