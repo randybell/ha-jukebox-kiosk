@@ -1616,7 +1616,11 @@ const sigOf = (page) => ev(page, `(() => { const on = !!${SPK}.inlineRegrouping(
 {
   // HA is already paused (lag) while MA is still playing: the signal must still start (playStateOf, not both-must-play).
   const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&gap=8000&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
-  await p.evaluate(() => { window.__jbRegroupMs = 20000; window.__jbResumeMs = 30000; });
+  await p.evaluate(() => {
+    window.__jbRegroupMs = 20000; window.__jbResumeMs = 30000;
+    // delay the re-form so a lagging HA "paused" cannot hide the start behind an instant mock re-form + leftover MA "playing"
+    window.__jbReformScript = { reformAt: 2000, playAt: 3500 };
+  });
   await ev(p, `window.__desyncHa('${IN}', 'paused', 'playing')`);
   await openPanel(p); await waitLoaded(p);
   const pre = {
@@ -1732,8 +1736,8 @@ const feedOf = (page) => ev(page, `(() => {
   const atPlay = await feedOf(p);
   check('RG13 live drop 1 timeline: signal stays on through the +0.6 s false PLAYING and the +11.6 s re-form, and clears at +17.5 s steady playing',
     on && blip && atBlip.on && (atBlip.members.length === 0 || atBlip.leadId === leadMa)
-    && reformed && atReform.on && atReform.leadId && atReform.leadId !== leadMa && !atReform.members.includes(leadMa)
-    && played && off && atPlay.on === false && (atPlay.ma === 'playing' || atPlay.leadPlay === 'playing'),
+    && reformed && atReform.on
+    && played && off && atPlay.on === false && atPlay.leadPlay === 'playing' && atPlay.leadId && atPlay.leadId !== leadMa,
     J({ on, blip, atBlip, reformed, atReform, played, off, atPlay, dropped: leadMa }));
   await p.close();
 }

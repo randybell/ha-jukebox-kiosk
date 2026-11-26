@@ -55,14 +55,14 @@ check('U4 join-back has not landed until the speaker is in and has been seen out
 
 const drop = { ...rec, reason: 'leader-drop', until: 25_000 };
 const reformedKitchen = playing(['wiim_kitchen'], 'wiim_kitchen');
-check('U5 leader-drop is not done until the group has re-formed on a new leader and that leader or the group is playing',
+check('U5 leader-drop is not done until the group has re-formed on a new leader and that leader is playing',
   R.regroupDone(drop, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', groupPlaying: false, leaderPlaying: false }), 2_000) === false
   && R.regroupDone(drop, playing(['wiim_office', 'wiim_kitchen'], 'wiim_office'), 2_000) === false
   && R.regroupDone(drop, playing(['wiim_kitchen'], 'wiim_kitchen'), 2_000) === true
   && R.regroupReformed(drop, playing(['wiim_kitchen'], 'wiim_kitchen')) === true);
 
 const join = { ...rec, reason: 'join-back', until: 25_000, seenOut: true, joinSettled: false };
-check('U6 join-back is not done until the speaker is in (after being out) and the group or its leader is playing',
+check('U6 join-back is not done until the speaker is in (after being out) and the new leader is playing',
   R.regroupDone(join, playing(['wiim_kitchen'], 'wiim_kitchen'), 2_000) === false
   && R.regroupDone(join, quiet(['wiim_kitchen', 'wiim_office'], 'wiim_kitchen'), 2_000) === false
   && R.regroupDone(join, playing(['wiim_kitchen', 'wiim_office'], 'wiim_kitchen'), 2_000) === true
@@ -202,16 +202,17 @@ check('U7 the hard ceiling (until) clears the regroup even if the group has not 
     blipEmpty?.reason === 'leader-drop' && blipOldLead?.reason === 'leader-drop', J({ blipEmpty, blipOldLead }));
   check('U25 re-form on a new leader that does not yet list the members, or is not playing, does not clear',
     reformedQuiet?.reason === 'leader-drop' && missingOnLeader?.reason === 'leader-drop', J({ reformedQuiet, missingOnLeader }));
-  check('U26 the signal clears once the group has re-formed on a new leader (id differs, in the group, has the members) and the group or that leader is playing',
+  check('U26 the signal clears once the group has re-formed on a new leader (id differs, in the group, has the members) and that leader is playing',
     steady === null && sig.record === null);
 }
 
 {
-  // group playing, leader playing: either is enough after re-form (MA fields only)
-  check('U27 after re-form, group playing or new-leader playing is enough (no HA member entity is consulted)',
-    R.regroupDone(drop, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', leaderMembers: ['wiim_kitchen'], groupPlaying: true, leaderPlaying: false }), 2_000) === true
+  // group-only PLAYING after re-form is not enough (live 2.10.9: group stays playing, new leader silent)
+  check('U27 after re-form, the new leader must be playing on the MA feed; group-only PLAYING does not clear (no HA member entity is consulted)',
+    R.regroupDone(drop, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', leaderMembers: ['wiim_kitchen'], groupPlaying: true, leaderPlaying: false }), 2_000) === false
     && R.regroupDone(drop, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', leaderMembers: ['wiim_kitchen'], groupPlaying: false, leaderPlaying: true }), 2_000) === true
-    && R.regroupFeedPlaying({ groupPlaying: false, leaderPlaying: false }) === false);
+    && R.regroupFeedPlaying({ groupPlaying: true, leaderPlaying: false }) === false
+    && R.regroupFeedPlaying({ groupPlaying: false, leaderPlaying: true }) === true);
 }
 
 console.log(`\n${total - failures}/${total} regroup unit checks passed`);

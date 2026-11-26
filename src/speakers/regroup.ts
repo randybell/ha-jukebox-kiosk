@@ -4,7 +4,7 @@
  * "Regrouping…" for that). Play state in the snapshot is from the live feed, not Home Assistant.
  *
  * Clear (leader-drop) only after Music Assistant's live feed shows the group re-formed on a
- * leader that is not the dropped speaker, and that new leader or the group is playing.
+ * leader that is not the dropped speaker, and that new leader is playing on the live feed.
  * A 'playing' sample before the re-form (Randy's live drop: 11 s of false PLAYING 0.6 s after
  * the drop, before set_members on the new leader) is ignored. Never use HA member entities.
  */
@@ -93,12 +93,15 @@ export function regroupReformed(r: Pick<RegroupRecord, 'reason' | 'speakerId' | 
   return true;
 }
 
-/** The group Now Playing is showing, or that group's current leader, is 'playing' on the MA live feed. */
+/** After a re-form, the new leader is 'playing' on the MA live feed.
+ *  The group's own playback_state is not enough: it can be PLAYING for 11 s before
+ *  set_members on the new leader (Randy 2.10.13), and it can stay PLAYING while the
+ *  new leader is still silent (live 2.10.9). Never use HA member entities. */
 export function regroupFeedPlaying(feed: Pick<RegroupFeed, 'groupPlaying' | 'leaderPlaying'>): boolean {
-  return !!feed.groupPlaying || !!feed.leaderPlaying;
+  return !!feed.leaderPlaying;
 }
 
-/** Hard ceiling has passed, or the group has re-formed and the new leader or the group is playing.
+/** Hard ceiling has passed, or the group has re-formed on a new leader that is playing.
  *  Still-quiet at 24 s is not enough to clear; a 'playing' sample before the re-form is ignored.
  *  `until` is the 90 s ceiling (or a test override). */
 export function regroupDone(r: RegroupRecord, feed: RegroupFeed, now = Date.now()): boolean {
