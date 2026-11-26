@@ -36,7 +36,7 @@ const playing = (members, lead) => feed({ members, leaderId: lead ?? members[0],
 check('U1 REGROUP_MS is 24 s (the expected window: safety net 18 s plus its 6 s grace; not a cutoff)', R.REGROUP_MS === 24_000, String(R.REGROUP_MS));
 check('U1b REGROUP_CEILING_MS is 90 s (hard ceiling; __jbRegroupMs still overrides it)', R.REGROUP_CEILING_MS === 90_000, String(R.REGROUP_CEILING_MS));
 
-const rec = { group: 'syncgroup_everywhere', speakerId: 'wiim_office', reason: 'leader-drop', startedAt: 1_000, until: 25_000, seenOut: false, joinSettled: false };
+const rec = { group: 'syncgroup_everywhere', speakerId: 'wiim_office', reason: 'leader-drop', startedAt: 1_000, until: 25_000, seenOut: false, joinSettled: false, seenQuietAfterReform: false };
 check('U2 snapshot shape: active, reason, groupId, entityId, speakerId, startedAt, until, maPlaybackState',
   J(R.regroupSnapshot(rec, 'media_player.everywhere', 'paused')) === J({
     active: true, reason: 'leader-drop', groupId: 'syncgroup_everywhere', entityId: 'media_player.everywhere',
@@ -55,11 +55,19 @@ check('U4 join-back has not landed until the speaker is in and has been seen out
 
 const drop = { ...rec, reason: 'leader-drop', until: 25_000 };
 const reformedKitchen = playing(['wiim_kitchen'], 'wiim_kitchen');
-check('U5 leader-drop is not done until the group has re-formed on a new leader and that leader is playing',
+check('U5 leader-drop is not done until the group has re-formed on a new leader, that re-form was seen not playing, and the new leader is playing',
   R.regroupDone(drop, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', groupPlaying: false, leaderPlaying: false }), 2_000) === false
   && R.regroupDone(drop, playing(['wiim_office', 'wiim_kitchen'], 'wiim_office'), 2_000) === false
-  && R.regroupDone(drop, playing(['wiim_kitchen'], 'wiim_kitchen'), 2_000) === true
+  && R.regroupDone(drop, playing(['wiim_kitchen'], 'wiim_kitchen'), 2_000) === false
   && R.regroupReformed(drop, playing(['wiim_kitchen'], 'wiim_kitchen')) === true);
+{
+  const r = { ...drop, seenQuietAfterReform: false };
+  R.regroupObserve(r, quiet(['wiim_kitchen'], 'wiim_kitchen'));
+  check('U5b after a post-re-form idle, the signal is still on, then clears when the new leader plays',
+    r.seenQuietAfterReform === true
+    && R.regroupDone(r, quiet(['wiim_kitchen'], 'wiim_kitchen'), 2_000) === false
+    && (R.regroupObserve(r, playing(['wiim_kitchen'], 'wiim_kitchen')), R.regroupDone(r, playing(['wiim_kitchen'], 'wiim_kitchen'), 2_000) === true));
+}
 
 const join = { ...rec, reason: 'join-back', until: 25_000, seenOut: true, joinSettled: false };
 check('U6 join-back is not done until the speaker is in (after being out) and the new leader is playing',
@@ -202,17 +210,41 @@ check('U7 the hard ceiling (until) clears the regroup even if the group has not 
     blipEmpty?.reason === 'leader-drop' && blipOldLead?.reason === 'leader-drop', J({ blipEmpty, blipOldLead }));
   check('U25 re-form on a new leader that does not yet list the members, or is not playing, does not clear',
     reformedQuiet?.reason === 'leader-drop' && missingOnLeader?.reason === 'leader-drop', J({ reformedQuiet, missingOnLeader }));
-  check('U26 the signal clears once the group has re-formed on a new leader (id differs, in the group, has the members) and that leader is playing',
+  check('U26 the signal clears once the group has re-formed on a new leader (id differs, in the group, has the members), that re-form was seen idle, and the new leader is playing',
     steady === null && sig.record === null);
 }
 
 {
   // group-only PLAYING after re-form is not enough (live 2.10.9: group stays playing, new leader silent)
+  const r = { ...drop, seenQuietAfterReform: true };
   check('U27 after re-form, the new leader must be playing on the MA feed; group-only PLAYING does not clear (no HA member entity is consulted)',
-    R.regroupDone(drop, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', leaderMembers: ['wiim_kitchen'], groupPlaying: true, leaderPlaying: false }), 2_000) === false
-    && R.regroupDone(drop, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', leaderMembers: ['wiim_kitchen'], groupPlaying: false, leaderPlaying: true }), 2_000) === true
+    R.regroupDone(r, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', leaderMembers: ['wiim_kitchen'], groupPlaying: true, leaderPlaying: false }), 2_000) === false
+    && R.regroupDone(r, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', leaderMembers: ['wiim_kitchen'], groupPlaying: false, leaderPlaying: true }), 2_000) === true
     && R.regroupFeedPlaying({ groupPlaying: true, leaderPlaying: false }) === false
     && R.regroupFeedPlaying({ groupPlaying: false, leaderPlaying: true }) === true);
+}
+
+{
+  // Live drop 1: group went idle at set_members (01:59:28.213 CT) and only played later (01:59:34.100).
+  // A leftover / at-reform 'playing' on the new leader must not clear the signal.
+  const sig = new R.RegroupSignal(() => 90_000);
+  sig.start('syncgroup_everywhere', 'wiim_office', 'leader-drop');
+  const already = sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_kitchen', 'wiim_garage'], 'wiim_garage'));
+  check('U28 a new leader already marked playing at the re-form (no post-re-form idle yet) does not clear the signal',
+    already?.reason === 'leader-drop' && sig.record != null, J(already));
+  const quieted = sig.snapshot('media_player.everywhere', 'idle', quiet(['wiim_kitchen', 'wiim_garage'], 'wiim_garage'));
+  const thenPlay = sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_kitchen', 'wiim_garage'], 'wiim_garage'));
+  await micro();
+  check('U28b after that re-form is seen idle, the next new-leader playing sample clears the signal',
+    quieted?.reason === 'leader-drop' && thenPlay === null && sig.record === null, J({ quieted, thenPlay }));
+  // a failed re-form that dissolves forgets the quiet latch; a later already-playing re-form must not clear
+  const sig2 = new R.RegroupSignal(() => 90_000);
+  sig2.start('syncgroup_everywhere', 'wiim_office', 'leader-drop');
+  sig2.snapshot('media_player.everywhere', 'idle', quiet(['wiim_kitchen'], 'wiim_kitchen'));
+  sig2.snapshot('media_player.everywhere', 'idle', feed({ members: [], leaderId: undefined, leaderMembers: [], groupPlaying: false, leaderPlaying: false }));
+  const secondAlready = sig2.snapshot('media_player.everywhere', 'playing', playing(['wiim_kitchen'], 'wiim_kitchen'));
+  check('U28c dissolving a quiet re-form forgets the latch; a later already-playing re-form stays on',
+    secondAlready?.reason === 'leader-drop' && sig2.record != null, J(secondAlready));
 }
 
 console.log(`\n${total - failures}/${total} regroup unit checks passed`);

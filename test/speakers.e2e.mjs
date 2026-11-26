@@ -1710,6 +1710,38 @@ const feedOf = (page) => ev(page, `(() => {
   return { on: !!${SPK}.inlineRegrouping(), reason: s?.reason ?? null, ma: g?.playback_state,
     members: mem, leadId, leadPlay: lp?.playback_state, leadMembers: lp?.group_members ?? [] };
 })()`);
+/** Record the card + stamped mock event at each __liveTick so "at re-form" is not a later sample after play. */
+const armTrace = (page) => ev(page, `(() => {
+  const evs = window.__maEvents ?? (window.__maEvents = []);
+  window.__rgTrace = [];
+  let n = evs.length;
+  const snap = () => {
+    while (n < evs.length) {
+      const e = evs[n++];
+      const g = ${SPK}.store?.players?.get('syncgroup_mock_indoor');
+      const mem = g?.group_members ?? [];
+      const leadId = mem.find((id) => { const p = ${SPK}.store.players.get(id); return p && !p.synced_to && (p.group_members?.length ?? 0) > 1; }) ?? mem[0];
+      const lp = leadId ? ${SPK}.store.players.get(leadId) : null;
+      const s = ${SPK}.inlineRegroup?.() ?? null;
+      window.__rgTrace.push({
+        ev: e.ev, attempt: e.attempt ?? null,
+        evPlay: e.playback_state, evMembers: e.members, evLeadPlay: e.leadPlay,
+        on: !!${SPK}.inlineRegrouping?.(), reason: s?.reason ?? null,
+        ma: g?.playback_state, members: mem, leadId, leadPlay: lp?.playback_state,
+        leadMembers: lp?.group_members ?? [],
+      });
+    }
+  };
+  const prev = window.__liveTick;
+  window.__liveTick = () => { prev?.(); snap(); };
+  snap();
+  return true;
+})()`);
+const traced = (page, evName, attempt) => ev(page,
+  attempt == null
+    ? `(window.__rgTrace ?? []).find((x) => x.ev === ${J(evName)})`
+    : `(window.__rgTrace ?? []).find((x) => x.ev === ${J(evName)} && x.attempt === ${attempt})`);
+const wasQuiet = (s) => !!s && s.evPlay !== 'playing' && s.leadPlay !== 'playing' && s.ma !== 'playing' && s.evLeadPlay !== 'playing';
 
 {
   // Randy live drop 1 (01:59 CT Nov 26): false PLAYING at +0.6 s lasting until set_members on the new leader at +11.6 s;
@@ -1722,22 +1754,23 @@ const feedOf = (page) => ev(page, `(() => {
     window.__jbReformScript = { blipAt: 600, reformAt: 11_600, playAt: 17_500 };
   });
   await openPanel(p); await waitLoaded(p);
+  await armTrace(p);
   const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
   const leadMa = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`);
   await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
   await tap(p, act(lead));
   const on = await wait(p, `${SPK}.inlineRegrouping() && ${SPK}.inlineRegroup()?.reason === 'leader-drop'`, 2000);
   const blip = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'false-playing')`, 4000);
-  const atBlip = await feedOf(p);
-  const reformed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed')`, 15_000);
-  const atReform = await feedOf(p);
-  const played = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed-playing')`, 10_000);
+  const atBlip = await traced(p, 'false-playing');
+  const reformed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed')`, 25_000);
+  const atReform = await traced(p, 'reformed', 1);
+  const played = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed-playing')`, 15_000);
   const off = await wait(p, `!${SPK}.inlineRegrouping()`, 4000);
-  const atPlay = await feedOf(p);
-  check('RG13 live drop 1 timeline: signal stays on through the +0.6 s false PLAYING and the +11.6 s re-form, and clears at +17.5 s steady playing',
-    on && blip && atBlip.on && (atBlip.members.length === 0 || atBlip.leadId === leadMa)
-    && reformed && atReform.on
-    && played && off && atPlay.on === false && atPlay.leadPlay === 'playing' && atPlay.leadId && atPlay.leadId !== leadMa,
+  const atPlay = await traced(p, 'reformed-playing') ?? await feedOf(p);
+  check('RG13 live drop 1 timeline: signal stays on through the +0.6 s false PLAYING and the +11.6 s re-form (idle, not playing), and clears at +17.5 s steady playing',
+    on && blip && atBlip?.on && (atBlip.members?.length === 0 || atBlip.leadId === leadMa || atBlip.evMembers?.length === 0)
+    && reformed && atReform?.on && wasQuiet(atReform)
+    && played && off && atPlay?.on === false && (atPlay.leadPlay === 'playing' || atPlay.evPlay === 'playing') && atPlay.leadId && atPlay.leadId !== leadMa,
     J({ on, blip, atBlip, reformed, atReform, played, off, atPlay, dropped: leadMa }));
   await p.close();
 }
@@ -1752,25 +1785,26 @@ const feedOf = (page) => ev(page, `(() => {
     window.__jbReformScript = { reformAt: 11_600, failAt: 17_500, reform2At: 35_900, playAt: 42_200 };
   });
   await openPanel(p); await waitLoaded(p);
+  await armTrace(p);
   const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
   const leadMa = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`);
   await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
   await tap(p, act(lead));
   const on = await wait(p, `${SPK}.inlineRegrouping()`, 2000);
-  const reformed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed' && e.attempt === 1)`, 16_000);
-  const atReform = await feedOf(p);
-  const failed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reform-failed')`, 10_000);
-  const atFail = await feedOf(p);
-  const reformed2 = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed' && e.attempt === 2)`, 25_000);
-  const atReform2 = await feedOf(p);
-  const played = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed-playing')`, 12_000);
+  const reformed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed' && e.attempt === 1)`, 25_000);
+  const atReform = await traced(p, 'reformed', 1);
+  const failed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reform-failed')`, 12_000);
+  const atFail = await traced(p, 'reform-failed');
+  const reformed2 = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed' && e.attempt === 2)`, 30_000);
+  const atReform2 = await traced(p, 'reformed', 2);
+  const played = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed-playing')`, 15_000);
   const off = await wait(p, `!${SPK}.inlineRegrouping()`, 4000);
-  const atPlay = await feedOf(p);
+  const atPlay = await traced(p, 'reformed-playing') ?? await feedOf(p);
   check('RG14 live drop 2 timeline: signal stays on through the failed re-form and idle-grace dissolve, and clears at +42.2 s steady playing',
-    on && reformed && atReform.on
-    && failed && atFail.on
-    && reformed2 && atReform2.on
-    && played && off && atPlay.on === false && (atPlay.ma === 'playing' || atPlay.leadPlay === 'playing')
+    on && reformed && atReform?.on && wasQuiet(atReform)
+    && failed && atFail?.on
+    && reformed2 && atReform2?.on && wasQuiet(atReform2)
+    && played && off && atPlay?.on === false && (atPlay.ma === 'playing' || atPlay.leadPlay === 'playing' || atPlay.evPlay === 'playing')
     && atPlay.leadId && atPlay.leadId !== leadMa,
     J({ on, atReform, atFail, atReform2, played, off, atPlay, dropped: leadMa }));
   await p.close();

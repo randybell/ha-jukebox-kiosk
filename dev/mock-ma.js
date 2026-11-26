@@ -136,37 +136,45 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
     events.push({ ev: 'reform', group: g, leader: newLead, parked });
     syncHa(); commit();
     const at = (ms, fn) => { if (ms == null) return; setTimeout(fn, Math.max(0, ms)); };
+    const stamp = (ev, extra = {}) => {
+      const lead = G[g].members[0];
+      events.push({
+        ev, group: g, leader: newLead, playback_state: gState(g),
+        members: [...G[g].members], leadPlay: lead ? gState(g) : undefined,
+        ...extra,
+      });
+    };
     at(script.blipAt, () => {
       if (G[g].members.length) return;
       setState(ent, 'playing');
-      events.push({ ev: 'false-playing', group: g });
+      stamp('false-playing');
       syncHa(); commit();
     });
     at(script.reformAt, () => {
       G[g].members = [...parked];
       delete G[g].idle;
       setState(ent, 'idle');
-      events.push({ ev: 'reformed', group: g, leader: newLead, attempt: 1 });
+      stamp('reformed', { attempt: 1 });
       syncHa(); commit();
     });
     at(script.failAt, () => {
       G[g].idle = [...(G[g].members.length ? G[g].members : parked)];
       stopGroup(g, 'reform failed');
-      events.push({ ev: 'reform-failed', group: g, error: 'Can not resolve stream URL: Invalid PlayerMedia data' });
+      stamp('reform-failed', { error: 'Can not resolve stream URL: Invalid PlayerMedia data' });
       syncHa(); commit();
     });
     at(script.reform2At, () => {
       delete G[g].idle;
       G[g].members = [...parked];
       setState(ent, 'buffering');
-      events.push({ ev: 'reformed', group: g, leader: newLead, attempt: 2 });
+      stamp('reformed', { attempt: 2 });
       syncHa(); commit();
     });
     at(script.playAt, () => {
       G[g].members = [...parked];
       delete G[g].idle;
       setState(ent, 'playing');
-      events.push({ ev: 'reformed-playing', group: g, leader: newLead });
+      stamp('reformed-playing');
       syncHa(); commit();
     });
   }

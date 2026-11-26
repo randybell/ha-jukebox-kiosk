@@ -4,9 +4,11 @@
  * "Regrouping…" for that). Play state in the snapshot is from the live feed, not Home Assistant.
  *
  * Clear (leader-drop) only after Music Assistant's live feed shows the group re-formed on a
- * leader that is not the dropped speaker, and that new leader is playing on the live feed.
- * A 'playing' sample before the re-form (Randy's live drop: 11 s of false PLAYING 0.6 s after
- * the drop, before set_members on the new leader) is ignored. Never use HA member entities.
+ * leader that is not the dropped speaker, that re-form has been observed not playing (the
+ * live post-set_members idle), and then that new leader goes playing. A 'playing' sample
+ * at or before the re-form (Randy's live drop: 11 s of false PLAYING 0.6 s after the drop,
+ * and the group went idle at set_members until steady play ~6 s later) does not clear.
+ * Never use HA member entities.
  */
 
 export type RegroupReason = 'leader-drop' | 'join-back';
@@ -38,6 +40,9 @@ export interface RegroupRecord {
   seenOut: boolean;
   /** The join call has finished: set_members add returned and the speaker is confirmed in. */
   joinSettled: boolean;
+  /** Leader-drop: the live feed has shown the re-formed group/leader not playing. A failed
+   *  re-form that later dissolves clears this so the next re-form must go quiet again. */
+  seenQuietAfterReform: boolean;
 }
 
 /** A slice of Music Assistant's live player feed used to decide if a regroup has settled.
@@ -101,11 +106,31 @@ export function regroupFeedPlaying(feed: Pick<RegroupFeed, 'groupPlaying' | 'lea
   return !!feed.leaderPlaying;
 }
 
-/** Hard ceiling has passed, or the group has re-formed on a new leader that is playing.
- *  Still-quiet at 24 s is not enough to clear; a 'playing' sample before the re-form is ignored.
- *  `until` is the 90 s ceiling (or a test override). */
+/** Latch post-re-form quiet. Forget it only when the re-form is clearly lost (dissolved, or
+ *  the dropped speaker is leading again). An incomplete leader member list is not a loss.
+ *  Join-back does not use this. */
+export function regroupObserve(r: RegroupRecord, feed: RegroupFeed): void {
+  if (r.reason === 'join-back') return;
+  if (regroupReformed(r, feed)) {
+    if (!regroupFeedPlaying(feed)) r.seenQuietAfterReform = true;
+    return;
+  }
+  const lost = !feed.members.length
+    || !feed.leaderId
+    || feed.leaderId === r.speakerId
+    || !feed.members.includes(feed.leaderId);
+  if (lost) r.seenQuietAfterReform = false;
+}
+
+/** Hard ceiling has passed, or (leader-drop) the group has re-formed on a new leader, that
+ *  re-form was seen not playing, and the new leader is now playing. Join-back: landed and the
+ *  leader is playing. Still-quiet at 24 s is not enough to clear; a 'playing' sample at or
+ *  before the re-form is ignored. `until` is the 90 s ceiling (or a test override). */
 export function regroupDone(r: RegroupRecord, feed: RegroupFeed, now = Date.now()): boolean {
-  return now > r.until || (regroupReformed(r, feed) && regroupFeedPlaying(feed));
+  if (now > r.until) return true;
+  if (!regroupReformed(r, feed) || !regroupFeedPlaying(feed)) return false;
+  if (r.reason === 'join-back') return true;
+  return !!r.seenQuietAfterReform;
 }
 
 export function regroupSnapshot(r: RegroupRecord, entityId: string, maPlaybackState: string | undefined): RegroupState {
@@ -133,7 +158,7 @@ export class RegroupSignal {
     this.clearTimer();
     const windowMs = this.durationMs();
     const startedAt = Date.now();
-    this.r = { group, speakerId, reason, startedAt, until: startedAt + windowMs, seenOut: !!keep?.seenOut, joinSettled: false };
+    this.r = { group, speakerId, reason, startedAt, until: startedAt + windowMs, seenOut: !!keep?.seenOut, joinSettled: false, seenQuietAfterReform: false };
     this.timer = setTimeout(() => this.end(), windowMs);
     this.changed();
   }
@@ -175,6 +200,7 @@ export class RegroupSignal {
     const r = this.r;
     if (!r) return null;
     if (!feed.members.includes(r.speakerId)) r.seenOut = true;
+    regroupObserve(r, feed);
     if (regroupDone(r, feed, now)) {
       queueMicrotask(() => this.end());
       return null;
