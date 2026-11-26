@@ -1018,7 +1018,7 @@ const heldFor = (life) => !!(life && life.found && life.fired && life.presentAtF
 // ───────────── 1.0.1 leader-drop safety net (MA 2.10.13: the restart after the re-form can fail) ─────────────
 async function dropLeaderOfIndoor(q, upNext = true) {
   const p = await open(`&spk=dyn&admin=1${q}&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
-  await p.evaluate(() => { window.__jbResumeMs = 1500; window.__jbResumeGraceMs = 500; });
+  await p.evaluate(() => { window.__jbResumeMs = 1500; window.__jbResumeGraceMs = 500; window.__jbRegroupMs = 2000; });
   // Indoor plays Everywhere's queue (Move = transfer), so it has songs in Up next
   await openPanel(p); await waitLoaded(p);
   await tap(p, `${SR}.querySelector('[data-target="${IN}"]')`);
@@ -1068,7 +1068,7 @@ async function dropLeaderOfIndoor(q, upNext = true) {
   await wait(p, ASKQ, 800) && (await confirm(p));
   const joined = await wait(p, `/joined Indoor/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 6000);
   const failed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reform-failed')`, 4000);
-  await sleep(1500 + 500 + 2500); // past the safety net's window (__jbResumeMs 1500 + __jbResumeGraceMs 500, the 18 s + 6 s in use)
+  await sleep(1500 + 500 + 2500); // past the safety net's window and the refreshed regroup cap (__jbResumeMs 1500 + __jbResumeGraceMs 500, __jbRegroupMs 2000)
   const stl = await ev(p, `${SR}.querySelector('.stl')?.textContent ?? ''`);
   check('F8 drop the leader, join it back while MA regroups (MA confirms the drop, then the join; the restart fails) → past the resume window: no media_play, no "Regrouping…" left',
     joined && failed && (await plays()) === 0 && !stl.includes('Regrouping…'), J({ joined, failed, plays: await plays(), stl, chip: await chip(p) }));
@@ -1487,6 +1487,129 @@ for (const vp of [{ width: 1024, height: 600 }, { width: 820, height: 1180, isMo
   check(`CL1 ${tag}: Close button visible, labeled, ≥ 44px tall, inside the panel header, nothing overflows`, g.text === 'Close' && g.h >= 44 && g.w >= 44 && g.inSheet && g.inView && g.hdFits && g.onTop, J(g));
   await tap(p, `${SR}.querySelector('.sheet .x')`); await sleep(350);
   check(`CL2 ${tag}: Close closes the Speakers panel`, !(await ev(p, `${SPK}.open`)) && !(await ev(p, `!!${SR}.querySelector('section.sheet')`)));
+  await p.close();
+}
+
+// ---- regroup signal for Now Playing (Audio Dev; the Themes UI is not in this bundle) ----
+const sigOf = (page) => ev(page, `(() => { const on = !!${SPK}.inlineRegrouping(); const s = ${SPK}.inlineRegroup?.() ?? null; return { on, s }; })()`);
+
+{
+  // Indoor is playing; drop its lead speaker. The signal turns on (leader-drop) and clears when the
+  // live feed says the new leader is playing, even if Home Assistant is still paused.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&gap=800&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => { window.__jbRegroupMs = 8000; });
+  await openPanel(p); await waitLoaded(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  const leadMa = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`);
+  const off0 = await sigOf(p);
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const on = await wait(p, `${SPK}.inlineRegrouping() && ${SPK}.inlineRegroup()?.reason === 'leader-drop'`, 2000);
+  const mid = await sigOf(p);
+  const landed = await wait(p, `!window.__ma.G.syncgroup_mock_indoor.members.includes('${leadMa}')`, 4000);
+  await ev(p, `window.__desyncHa('${IN}', 'paused', 'playing')`);
+  const off = await wait(p, `!${SPK}.inlineRegrouping() && ${SPK}.inlineRegroup() == null`, 5000);
+  const end = await sigOf(p);
+  const feed = await ev(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state`);
+  const ha = await st(p, IN);
+  check('RG1 leader drop of a playing group turns the signal on with reason leader-drop (and the group and speaker ids)',
+    off0.on === false && on && mid.on && mid.s?.reason === 'leader-drop' && mid.s.groupId === 'syncgroup_mock_indoor'
+    && mid.s.speakerId === leadMa && mid.s.entityId === IN && mid.s.active === true && mid.s.until > mid.s.startedAt,
+    J({ off0, mid }));
+  check('RG2 the signal clears when the live feed says the new leader is playing, even if Home Assistant is still paused',
+    landed && off && end.on === false && end.s === null && feed === 'playing' && ha === 'paused',
+    J({ landed, end, feed, ha }));
+  await p.close();
+}
+{
+  // MA never comes back: the signal clears at __jbRegroupMs, not after a longer hang.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&reform=fail&gap=5000&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => { window.__jbRegroupMs = 800; window.__jbResumeMs = 50; window.__jbResumeGraceMs = 50; });
+  await openPanel(p); await waitLoaded(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const on = await wait(p, `${SPK}.inlineRegrouping()`, 2000);
+  const off = await wait(p, `!${SPK}.inlineRegrouping()`, 2500);
+  check('RG3 if Music Assistant never comes back, the signal clears at the __jbRegroupMs timeout',
+    on && off && (await sigOf(p)).on === false, J({ on, off, sig: await sigOf(p) }));
+  await p.close();
+}
+{
+  // Drop the leader, then join it back while the regroup is still on: stays on, reason flips, deadline refreshes.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&grp=slowlead&leaddelay=2500&gap=4000&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`, undefined, { ...FAST, call: 3000, join: 3000 });
+  await p.evaluate(() => { window.__jbRegroupMs = 4000; window.__jbLeaderDropMs = 8000; });
+  await openPanel(p); await waitLoaded(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const onDrop = await wait(p, `${SPK}.inlineRegroup()?.reason === 'leader-drop'`, 2000);
+  const before = await sigOf(p);
+  await wait(p, `${act(lead)}?.dataset.act === 'join'`, 2000);
+  await tap(p, act(lead));
+  await wait(p, ASKQ, 800) && (await confirm(p));
+  const flipped = await wait(p, `${SPK}.inlineRegroup()?.reason === 'join-back'`, 2000);
+  const after = await sigOf(p);
+  check('RG4 drop the leader, then join it back while the regroup is on → the signal stays on, the reason flips to join-back, and the deadline is refreshed',
+    onDrop && before.on && before.s?.reason === 'leader-drop' && flipped && after.on && after.s?.reason === 'join-back'
+    && after.s.until > before.s.until, J({ before, after }));
+  await p.close();
+}
+{
+  // Failed drop (no answer, nothing changes): the signal clears when the error lands.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&grp=timeout&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`, undefined, { ...FAST, call: 900, join: 900 });
+  await p.evaluate(() => { window.__jbLeaderDropMs = 2000; window.__jbRegroupMs = 8000; });
+  await openPanel(p); await waitLoaded(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const on = await wait(p, `${SPK}.inlineRegrouping()`, 2000);
+  const failed = await wait(p, `/Couldn't drop/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
+  const off = (await sigOf(p)).on === false;
+  check('RG5 a failed leader drop clears the signal when the error chip appears',
+    on && failed && off, J({ on, failed, off, toast: await toast(p), sig: await sigOf(p) }));
+  await p.close();
+}
+{
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&gap=4000&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => { window.__jbRegroupMs = 8000; });
+  await openPanel(p); await waitLoaded(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const on = await wait(p, `${SPK}.inlineRegrouping()`, 2000);
+  await ev(p, `${SPK}.disconnectedCallback()`);
+  const after = await sigOf(p);
+  check('RG6 disconnectedCallback ends the signal at once',
+    on && after.on === false && after.s === null, J({ on, after }));
+  await p.close();
+}
+{
+  // A non-leader drop, a last-speaker Pause, and ordinary buffering must not turn this signal on.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`, undefined, FAST, 400);
+  await openPanel(p); await waitLoaded(p);
+  const leadMa = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`);
+  const nonLead = leadMa === 'wiim_mock_kitchen' ? LIV : KIT;
+  await wait(p, `${act(nonLead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(nonLead));
+  await wait(p, `/left/.test(${SR}.querySelector('.st .ct')?.textContent ?? '')`, 4000);
+  const afterNon = await sigOf(p);
+  await waitQuiet(p, 'true', 4000);
+  // one speaker left: Drop is Last and offers Pause
+  const lastEnt = leadMa === 'wiim_mock_kitchen' ? KIT : LIV;
+  await wait(p, `${act(lastEnt)}?.dataset.act === 'blocked'`, 4000);
+  const asked = await tapLastRoom(p, 'RG7 last', act(lastEnt), 'true');
+  const afterLast = await sigOf(p);
+  // dismiss the Pause question if it is up, then force ordinary buffering with no drop in flight
+  if (await hasAsk(p)) await ev(p, `${SR}.querySelector('.st [data-action="cancel"], .st .x, .sp-ask [data-action="cancel"]')?.click()`);
+  await waitQuiet(p, 'true', 8000);
+  const forced = await ev(p, `window.__desyncHa('${IN}', 'playing', 'buffering')`);
+  await sleep(200);
+  const afterBuf = await sigOf(p);
+  const stl = await ev(p, `${SR}.querySelector('.stl')?.textContent ?? ''`);
+  check('RG7 a non-leader drop, a last-speaker Pause, and ordinary buffering do not turn the regroup signal on',
+    afterNon.on === false && asked && afterLast.on === false && forced && afterBuf.on === false,
+    J({ afterNon, asked, afterLast, forced, afterBuf, stl }));
   await p.close();
 }
 

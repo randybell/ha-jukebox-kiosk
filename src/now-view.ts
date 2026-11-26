@@ -15,13 +15,14 @@ import type { HassEntity, HomeAssistant, JukeboxCardConfig } from './types';
 import { canVolume, roomElsewhere, inlineButton, inlineLine, playStateOf } from './speakers/model';
 import type { SpeakerStore } from './speakers/ma';
 export { roomElsewhere };
-import type { InlineRoom } from './speakers-view';
+import type { InlineRoom, RegroupState } from './speakers-view';
 
 /** the speakers panel (jb-speakers) as Now Playing uses it: per-room state and actions, same logic as the panel */
 export interface InlineSpeakers extends HTMLElement {
   inline(entity: string): InlineRoom | undefined;
   inlineAct(entity: string): void;
   inlineRegrouping(): boolean;
+  inlineRegroup(): RegroupState | null;
   onState(fn: () => void): () => void;
 }
 import { defineElement } from './define';
@@ -443,7 +444,7 @@ export class JbNow extends LitElement {
   private spkKey() {
     const s = this.spk;
     if (!s) return '';
-    return JSON.stringify([s.inlineRegrouping(), roomsOf(this.config, this.hass).map((r) => s.inline(r.entity) ?? null)]);
+    return JSON.stringify([s.inlineRegrouping(), s.inlineRegroup?.() ?? null, roomsOf(this.config, this.hass).map((r) => s.inline(r.entity) ?? null)]);
   }
   private onVolChange(id: string, e: CustomEvent) {
     const v = e.detail.value;
