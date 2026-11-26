@@ -1813,6 +1813,39 @@ const wasQuiet = (s) => !!s && s.evPlay !== 'playing' && s.evLeadPlay !== 'playi
     J({ on, atReform, atFail, atReform2, played, atPlayEv, off, atPlay, dropped: leadMa }));
   await p.close();
 }
+{
+  // Fast re-form with no idle sample: set_members lands already playing. Stay on at the re-form
+  // and clear about 4 s later (REGROUP_PLAYING_HOLD_MS), not at the 90 s ceiling.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => {
+    window.__jbRegroupMs = 90_000;
+    window.__jbResumeMs = 120_000;
+    window.__jbResumeGraceMs = 1000;
+    window.__jbReformScript = { playAt: 1_000 };
+  });
+  await openPanel(p); await waitLoaded(p);
+  await armTrace(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  const leadMa = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`);
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const on = await wait(p, `${SPK}.inlineRegrouping() && ${SPK}.inlineRegroup()?.reason === 'leader-drop'`, 2000);
+  const played = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed-playing')`, 8_000);
+  const atPlayEv = await traced(p, 'reformed-playing');
+  const tPlay = Date.now();
+  await sleep(2_500);
+  const at2s = await feedOf(p);
+  const off = await wait(p, `!${SPK}.inlineRegrouping()`, 4_000);
+  const elapsed = Date.now() - tPlay;
+  const atOff = await feedOf(p);
+  check('RG15 a fast re-form with no idle sample stays on at the re-form and clears about 4 s later, not at the 90 s ceiling',
+    on && played && atPlayEv?.on && atPlayEv.evPlay === 'playing'
+    && at2s.on && at2s.leadPlay === 'playing' && at2s.leadId && at2s.leadId !== leadMa
+    && off && elapsed >= 3_500 && elapsed < 8_000
+    && atOff.on === false && atOff.leadPlay === 'playing' && atOff.leadId && atOff.leadId !== leadMa,
+    J({ on, played, atPlayEv, at2s, off, elapsed, atOff, dropped: leadMa }));
+  await p.close();
+}
 
 check('X1 Home Assistant media_player.join / unjoin never called (MA set_members only)', allJoins.length === 0, J(allJoins));
 

@@ -35,6 +35,7 @@ const playing = (members, lead) => feed({ members, leaderId: lead ?? members[0],
 
 check('U1 REGROUP_MS is 24 s (the expected window: safety net 18 s plus its 6 s grace; not a cutoff)', R.REGROUP_MS === 24_000, String(R.REGROUP_MS));
 check('U1b REGROUP_CEILING_MS is 90 s (hard ceiling; __jbRegroupMs still overrides it)', R.REGROUP_CEILING_MS === 90_000, String(R.REGROUP_CEILING_MS));
+check('U1c REGROUP_PLAYING_HOLD_MS is 4 s (fallback if a re-form is never seen idle)', R.REGROUP_PLAYING_HOLD_MS === 4_000, String(R.REGROUP_PLAYING_HOLD_MS));
 
 const rec = { group: 'syncgroup_everywhere', speakerId: 'wiim_office', reason: 'leader-drop', startedAt: 1_000, until: 25_000, seenOut: false, joinSettled: false, seenQuietAfterReform: false };
 check('U2 snapshot shape: active, reason, groupId, entityId, speakerId, startedAt, until, maPlaybackState',
@@ -245,6 +246,54 @@ check('U7 the hard ceiling (until) clears the regroup even if the group has not 
   const secondAlready = sig2.snapshot('media_player.everywhere', 'playing', playing(['wiim_kitchen'], 'wiim_kitchen'));
   check('U28c dissolving a quiet re-form forgets the latch; a later already-playing re-form stays on',
     secondAlready?.reason === 'leader-drop' && sig2.record != null, J(secondAlready));
+}
+
+{
+  // Fast re-form with no idle sample: first observation is already playing. Do not clear at once;
+  // clear after 4 s of continuous new-leader playing, not at the 90 s ceiling.
+  const r = { ...drop, until: 1_000 + R.REGROUP_CEILING_MS, seenQuietAfterReform: false };
+  const formedPlay = playing(['wiim_kitchen', 'wiim_garage'], 'wiim_garage');
+  R.regroupObserve(r, formedPlay, 11_600);
+  check('U29 a fast re-form already playing does not clear at the first observation (the 4 s hold has not elapsed)',
+    r.seenQuietAfterReform === false && r.reformSeenAt === 11_600 && r.postReformPlayingSince === 11_600
+    && R.regroupDone(r, formedPlay, 11_600) === false
+    && R.regroupDone(r, formedPlay, 11_600 + 3_999) === false);
+  check('U29b that fast re-form clears 4 s after the re-form was first observed, not at 90 s',
+    R.regroupDone(r, formedPlay, 11_600 + 4_000) === true
+    && R.regroupDone(r, formedPlay, 11_600 + 4_000) === true
+    && (11_600 + R.REGROUP_PLAYING_HOLD_MS) === 15_600
+    && (11_600 + 4_000) < (1_000 + R.REGROUP_CEILING_MS));
+}
+
+{
+  // 11 s of false PLAYING before the re-form must not start the 4 s clock.
+  const r = { ...drop, until: 1_000 + R.REGROUP_CEILING_MS, seenQuietAfterReform: false };
+  R.regroupObserve(r, feed({
+    members: [], leaderId: undefined, leaderMembers: [], groupPlaying: true, leaderPlaying: false,
+  }), 600);
+  R.regroupObserve(r, playing(['wiim_office'], 'wiim_office'), 2_000);
+  const formedPlay = playing(['wiim_kitchen', 'wiim_garage'], 'wiim_garage');
+  R.regroupObserve(r, formedPlay, 11_600);
+  check('U29c an 11 s pre-re-form PLAYING blip does not start the 4 s hold; the clock starts when the re-form is first seen',
+    r.reformSeenAt === 11_600 && r.postReformPlayingSince === 11_600
+    && R.regroupDone(r, formedPlay, 11_600) === false
+    && R.regroupDone(r, formedPlay, 4_000) === false
+    && R.regroupDone(r, formedPlay, 11_600 + 3_999) === false
+    && R.regroupDone(r, formedPlay, 11_600 + 4_000) === true);
+}
+
+{
+  const sig = new R.RegroupSignal(() => 90_000);
+  sig.start('syncgroup_everywhere', 'wiim_office', 'leader-drop');
+  const first = sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_kitchen', 'wiim_garage'], 'wiim_garage'));
+  await tick(2_000);
+  const mid = sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_kitchen', 'wiim_garage'], 'wiim_garage'));
+  await tick(2_200);
+  const late = sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_kitchen', 'wiim_garage'], 'wiim_garage'));
+  await micro();
+  check('U29d the signal itself stays on ~2 s after a playing re-form and has cleared ~4 s later (hold timer / snapshot)',
+    first?.reason === 'leader-drop' && mid?.reason === 'leader-drop' && late === null && sig.record === null,
+    J({ first: first?.reason, mid: mid?.reason, late }));
 }
 
 console.log(`\n${total - failures}/${total} regroup unit checks passed`);
