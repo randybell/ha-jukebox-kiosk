@@ -231,7 +231,10 @@ export class JbNow extends LitElement {
   /** Play/pause: the shared Music Assistant/Home Assistant helper, then the tap hold. */
   private playState() { return this.flag('state', playStateOf(this.store, this.eid, this.ent?.state)); }
   private isPlaying() { return this.playState() === 'playing'; }
+  private isRegrouping() { return !!this.spk?.inlineRegrouping?.(); }
   playPause() {
+    // mid-regroup: a tap would fight the speaker change already in flight
+    if (this.isRegrouping()) return;
     const playing = this.isPlaying();
     // dynamic speakers: starting an idle group may take speakers from other groups; the card asks first (fixed mode: no guard)
     const guard = this.config._guard;
@@ -528,9 +531,10 @@ export class JbNow extends LitElement {
     // const sleepOn = sleepIsActive(this._sleepExpires, this._sleepMode);
     // const sleepModeText = !sleepRem ? sleepModeLabel(this._sleepMode, this._snap?.currentMediaType) : undefined;
     // const sleepChip = sleepModeText ?? sleepLabel(sleepRem);
-    const tb = (cls: string, ic: string, label: string, fn: () => void, on?: boolean, dot = false, dis = false) =>
+    const regrouping = this.isRegrouping();
+    const tb = (cls: string, ic: string, label: string, fn: () => void, on?: boolean, dot = false, dis = false, ariaDis = false) =>
       html`<button class="tb ${cls} ${on ? 'on' : ''}" tabindex="-1" aria-label=${label} title=${label} aria-pressed=${on === undefined ? nothing : on ? 'true' : 'false'}
-        ?disabled=${dis} @pointerdown=${noFocus} @click=${fn}>${icon(ic)}${dot ? html`<i class="dot"></i>` : nothing}</button>`;
+        aria-disabled=${ariaDis ? 'true' : nothing} ?disabled=${dis} @pointerdown=${noFocus} @click=${fn}>${icon(ic)}${dot ? html`<i class="dot"></i>` : nothing}</button>`;
     const showLyr = !idle && this.config.show_lyrics !== false && !!this.lyrics;
     const off = this.maOffline;
     // #51: while the sleep choices are open, a tap anywhere else closes them (the tap does nothing else)
@@ -571,7 +575,9 @@ export class JbNow extends LitElement {
       </div>
       <div class="info">
         <div class="badges">${prov ? html`<span class="pv big">${prov}</span>` : nothing}
-          <span class="where">${icon('eq', 'i xs')}${stateWord} ${where}</span>${apTpl}</div>
+          <span class="where" role=${regrouping ? 'status' : nothing} aria-live=${regrouping ? 'polite' : nothing}>${regrouping
+            ? html`<span class="rc-spin" aria-hidden="true"></span>Reconfiguring speakers…`
+            : html`${icon('eq', 'i xs')}${stateWord} ${where}`}</span>${apTpl}</div>
         <h1 class="ti">${idle ? 'Nothing playing' : title}</h1>
         <div class="sub">${idle ? combinedOn(this.config) ? `Pick something in ${libraryTabLabel(this.config)}.` : `Pick something in Search or ${libraryTabLabel(this.config)}.` : [a.media_artist, a.media_album_name].filter(Boolean).join(' · ')}</div>
         <div class="prog ${dur ? '' : 'nodur'}">
@@ -583,7 +589,7 @@ export class JbNow extends LitElement {
         <div class="tp">
           ${tb('sh', 'shuffle', 'Shuffle queue', () => this.toggleShuffle(), shuffle, shuffle)}
           ${tb('pr', 'prev', 'Previous', () => this.prev())}
-          ${tb('pp', playing ? 'pause' : 'play', playing ? 'Pause' : 'Play', () => this.playPause())}
+          ${tb('pp', playing ? 'pause' : 'play', playing ? 'Pause' : 'Play', () => this.playPause(), undefined, false, false, regrouping)}
           ${tb('nx', 'next', 'Next', () => this.next())}
           ${tb('rp', repeat === 'one' ? 'repeatone' : 'repeat', REPEAT_LABEL[repeat], () => this.cycleRepeat(), repeat !== 'off', repeat !== 'off')}
           ${showFav ? tb('fv', favOn ? 'heart' : 'heartline', favOn ? 'Remove from favorites' : 'Add to favorites', () => this.toggleFavorite(), favOn, false, idle) : nothing}
@@ -675,6 +681,10 @@ export class JbNow extends LitElement {
     .pv.big { font-size: var(--ha-font-size-s, 12px); padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); }
     .where { display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); letter-spacing: .06em; text-transform: uppercase;
       padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); border-radius: var(--ha-border-radius-pill, 9999px); background: var(--_chip-sel); border: var(--ha-border-width-sm, 1px) solid var(--_hairline); color: var(--_muted); }
+    /* regroup indicator: sized to this label's type, colours from the theme (currentColor = --_muted) */
+    .rc-spin { width: 1em; height: 1em; flex: none; box-sizing: border-box; border-radius: var(--ha-border-radius-circle, 50%);
+      border: var(--ha-border-width-md, 2px) solid currentColor; border-block-start-color: transparent; animation: jb-rc-spin 0.7s linear infinite; }
+    @keyframes jb-rc-spin { to { transform: rotate(360deg); } }
     .ti { font-family: var(--_font-display); font-weight: var(--ha-font-weight-bold, 700); font-size: clamp(var(--ha-font-size-2xl, 24px), 4.6cqw, var(--ha-font-size-5xl, 40px)); line-height: var(--ha-line-height-condensed, 1.2); letter-spacing: -.01em;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .sub { font-size: clamp(var(--ha-font-size-m, 14px), 1.8cqw, var(--ha-font-size-xl, 20px)); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: calc(-1 * var(--ha-space-1, 4px)); }
@@ -771,7 +781,7 @@ export class JbNow extends LitElement {
     .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: var(--_dim); }
     .vr.pending .ra { animation: jb-pulse 1s ease-in-out infinite; }
     @keyframes jb-pulse { 50% { opacity: .35; } }
-    @media (prefers-reduced-motion: reduce) { .vr.pending .ra { animation: none; } .tb:active { transform: none; } /* #156: , .sleep-strip .sp:active */ }
+    @media (prefers-reduced-motion: reduce) { .vr.pending .ra { animation: none; } .tb:active { transform: none; } .rc-spin { animation: none; } /* #156: , .sleep-strip .sp:active */ }
     .vn .else { display: block; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vr.muted .vs { opacity: var(--_dim); }
     @container vol (min-width: 600px) {
