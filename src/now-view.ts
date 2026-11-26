@@ -781,7 +781,7 @@ export class JbNow extends LitElement {
     .vr.out .vn, .vr.out .vs, .vr.out .vv, .vr.out .vm { opacity: var(--_dim); }
     .vr.pending .ra { animation: jb-pulse 1s ease-in-out infinite; }
     @keyframes jb-pulse { 50% { opacity: .35; } }
-    @media (prefers-reduced-motion: reduce) { .vr.pending .ra { animation: none; } .tb:active { transform: none; } .rc-spin { animation: none; } /* #156: , .sleep-strip .sp:active */ }
+    @media (prefers-reduced-motion: reduce) { .vr.pending .ra { animation: none; } .tb:active { transform: none; } .rc-spin { animation: jb-pulse 1.2s ease-in-out infinite; } /* #156: , .sleep-strip .sp:active */ }
     .vn .else { display: block; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); color: var(--_muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vr.muted .vs { opacity: var(--_dim); }
     @container vol (min-width: 600px) {
