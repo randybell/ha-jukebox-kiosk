@@ -1531,7 +1531,7 @@ const sigOf = (page) => ev(page, `(() => { const on = !!${SPK}.inlineRegrouping(
   await tap(p, act(lead));
   const on = await wait(p, `${SPK}.inlineRegrouping()`, 2000);
   const off = await wait(p, `!${SPK}.inlineRegrouping()`, 2500);
-  check('RG3 if Music Assistant never comes back, the signal clears at the __jbRegroupMs timeout',
+  check('RG3 if Music Assistant never comes back, the signal clears at the hard ceiling (__jbRegroupMs, default 90 s)',
     on && off && (await sigOf(p)).on === false, J({ on, off, sig: await sigOf(p) }));
   await p.close();
 }
@@ -1610,6 +1610,165 @@ const sigOf = (page) => ev(page, `(() => { const on = !!${SPK}.inlineRegrouping(
   check('RG7 a non-leader drop, a last-speaker Pause, and ordinary buffering do not turn the regroup signal on',
     afterNon.on === false && asked && afterLast.on === false && forced && afterBuf.on === false,
     J({ afterNon, asked, afterLast, forced, afterBuf, stl }));
+  await p.close();
+}
+
+{
+  // HA is already paused (lag) while MA is still playing: the signal must still start (playStateOf, not both-must-play).
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&gap=8000&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => { window.__jbRegroupMs = 20000; window.__jbResumeMs = 30000; });
+  await ev(p, `window.__desyncHa('${IN}', 'paused', 'playing')`);
+  await openPanel(p); await waitLoaded(p);
+  const pre = {
+    ha: await ev(p, `window.__hass.states['${IN}'].state`),
+    ma: await ev(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state`),
+  };
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const on = await wait(p, `${SPK}.inlineRegrouping() && ${SPK}.inlineRegroup()?.reason === 'leader-drop'`, 2000);
+  const mid = await sigOf(p);
+  check('RG8 leader drop while Home Assistant is paused and Music Assistant is playing starts the signal',
+    pre.ha === 'paused' && pre.ma === 'playing' && on && mid.on && mid.s?.reason === 'leader-drop',
+    J({ pre, mid }));
+  await p.close();
+}
+{
+  // Cap has already ended, group still not playing: joining the dropped leader back starts a new join-back signal.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&reform=fail&gap=8000&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => { window.__jbRegroupMs = 900; window.__jbResumeMs = 30000; window.__jbResumeGraceMs = 1000; window.__jbLeaderDropMs = 8000; });
+  await openPanel(p); await waitLoaded(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const onDrop = await wait(p, `${SPK}.inlineRegrouping()`, 2000);
+  const cleared = await wait(p, `!${SPK}.inlineRegrouping()`, 3000);
+  const afterCap = await sigOf(p);
+  await wait(p, `${act(lead)}?.dataset.act === 'join'`, 4000);
+  await tap(p, act(lead));
+  await wait(p, ASKQ, 800) && (await confirm(p));
+  const onJoin = await wait(p, `${SPK}.inlineRegrouping() && ${SPK}.inlineRegroup()?.reason === 'join-back'`, 4000);
+  const afterJoin = await sigOf(p);
+  const ma = await ev(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state`);
+  check('RG9 join-back after the cap has expired starts a new join-back signal when the group is still not playing',
+    onDrop && cleared && afterCap.on === false && onJoin && afterJoin.on && afterJoin.s?.reason === 'join-back' && ma !== 'playing',
+    J({ onDrop, cleared, afterCap, afterJoin, ma }));
+  await p.close();
+}
+{
+  // Still quiet after the old 24 s window would have fired: the signal stays until play or the hard ceiling.
+  // __jbRegroupMs is the 90 s ceiling (here 2.2 s); check mid-window, then at the ceiling.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&reform=fail&gap=8000&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => { window.__jbRegroupMs = 2200; window.__jbResumeMs = 30000; window.__jbResumeGraceMs = 1000; });
+  await openPanel(p); await waitLoaded(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const on = await wait(p, `${SPK}.inlineRegrouping()`, 2000);
+  const t0 = Date.now();
+  await sleep(1200);
+  const mid = await sigOf(p);
+  const maMid = await ev(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state`);
+  const off = await wait(p, `!${SPK}.inlineRegrouping()`, 2500);
+  const elapsed = Date.now() - t0;
+  const end = await sigOf(p);
+  const maEnd = await ev(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state`);
+  check('RG10 past a mid-window stretch while still quiet, the signal stays on (24 s is not a cutoff; unit U18 uses the real 24 s / 90 s numbers)',
+    on && mid.on && maMid !== 'playing' && mid.s?.startedAt && mid.s.until === mid.s.startedAt + 2200, J({ mid, maMid }));
+  check('RG11 the 90 s hard ceiling (__jbRegroupMs in tests) ends the signal while still quiet',
+    off && end.on === false && maEnd !== 'playing' && elapsed >= 2000 && elapsed < 5000, J({ elapsed, end, maEnd }));
+  await p.close();
+}
+
+{
+  // Re-add of a non-leader while the group never left playing must not start the signal (Randy, Office at 02:07 CT).
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await openPanel(p); await waitLoaded(p);
+  await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state === 'playing' && ${act(GAR)}?.dataset.act === 'join'`, 4000);
+  const before = await sigOf(p);
+  const ma = await ev(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state`);
+  await tap(p, act(GAR));
+  await wait(p, ASKQ, 800) && (await confirm(p));
+  const joined = await wait(p, `window.__ma.G.syncgroup_mock_indoor.members.includes('wiim_mock_garage')`, 4000);
+  await sleep(200);
+  const after = await sigOf(p);
+  check('RG12 re-adding a non-leader while the group is still playing does not start the regroup signal',
+    before.on === false && ma === 'playing' && joined && after.on === false,
+    J({ before, ma, joined, after }));
+  await p.close();
+}
+const feedOf = (page) => ev(page, `(() => {
+  const g = ${SPK}.store.players.get('syncgroup_mock_indoor');
+  const mem = g?.group_members ?? [];
+  const leadId = mem.find((id) => { const p = ${SPK}.store.players.get(id); return p && !p.synced_to && (p.group_members?.length ?? 0) > 1; }) ?? mem[0];
+  const lp = leadId ? ${SPK}.store.players.get(leadId) : null;
+  const s = ${SPK}.inlineRegroup?.() ?? null;
+  return { on: !!${SPK}.inlineRegrouping(), reason: s?.reason ?? null, ma: g?.playback_state,
+    members: mem, leadId, leadPlay: lp?.playback_state, leadMembers: lp?.group_members ?? [] };
+})()`);
+
+{
+  // Randy live drop 1 (01:59 CT Nov 26): false PLAYING at +0.6 s lasting until set_members on the new leader at +11.6 s;
+  // steady playing at +17.5 s after the new leader's protocol was set. Signal must stay on through the blip.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => {
+    window.__jbRegroupMs = 90_000;
+    window.__jbResumeMs = 120_000;
+    window.__jbResumeGraceMs = 1000;
+    window.__jbReformScript = { blipAt: 600, reformAt: 11_600, playAt: 17_500 };
+  });
+  await openPanel(p); await waitLoaded(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  const leadMa = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`);
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const on = await wait(p, `${SPK}.inlineRegrouping() && ${SPK}.inlineRegroup()?.reason === 'leader-drop'`, 2000);
+  const blip = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'false-playing')`, 4000);
+  const atBlip = await feedOf(p);
+  const reformed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed')`, 15_000);
+  const atReform = await feedOf(p);
+  const played = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed-playing')`, 10_000);
+  const off = await wait(p, `!${SPK}.inlineRegrouping()`, 4000);
+  const atPlay = await feedOf(p);
+  check('RG13 live drop 1 timeline: signal stays on through the +0.6 s false PLAYING and the +11.6 s re-form, and clears at +17.5 s steady playing',
+    on && blip && atBlip.on && (atBlip.members.length === 0 || atBlip.leadId === leadMa)
+    && reformed && atReform.on && atReform.leadId && atReform.leadId !== leadMa && !atReform.members.includes(leadMa)
+    && played && off && atPlay.on === false && (atPlay.ma === 'playing' || atPlay.leadPlay === 'playing'),
+    J({ on, blip, atBlip, reformed, atReform, played, off, atPlay, dropped: leadMa }));
+  await p.close();
+}
+{
+  // Randy live drop 2 (02:17 CT Nov 26): first re-form failed ("Can not resolve stream URL: Invalid PlayerMedia data"),
+  // idle-grace dissolved it, second re-form, steady playing at +42.2 s. Signal must stay on until then.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => {
+    window.__jbRegroupMs = 90_000;
+    window.__jbResumeMs = 120_000;
+    window.__jbResumeGraceMs = 1000;
+    window.__jbReformScript = { reformAt: 11_600, failAt: 17_500, reform2At: 35_900, playAt: 42_200 };
+  });
+  await openPanel(p); await waitLoaded(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  const leadMa = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`);
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const on = await wait(p, `${SPK}.inlineRegrouping()`, 2000);
+  const reformed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed' && e.attempt === 1)`, 16_000);
+  const atReform = await feedOf(p);
+  const failed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reform-failed')`, 10_000);
+  const atFail = await feedOf(p);
+  const reformed2 = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed' && e.attempt === 2)`, 25_000);
+  const atReform2 = await feedOf(p);
+  const played = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed-playing')`, 12_000);
+  const off = await wait(p, `!${SPK}.inlineRegrouping()`, 4000);
+  const atPlay = await feedOf(p);
+  check('RG14 live drop 2 timeline: signal stays on through the failed re-form and idle-grace dissolve, and clears at +42.2 s steady playing',
+    on && reformed && atReform.on
+    && failed && atFail.on
+    && reformed2 && atReform2.on
+    && played && off && atPlay.on === false && (atPlay.ma === 'playing' || atPlay.leadPlay === 'playing')
+    && atPlay.leadId && atPlay.leadId !== leadMa,
+    J({ on, atReform, atFail, atReform2, played, off, atPlay, dropped: leadMa }));
   await p.close();
 }
 

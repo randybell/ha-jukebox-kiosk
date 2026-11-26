@@ -127,7 +127,52 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
     }
     if (solo[s]?.state === 'playing') { solo[s] = { ...solo[s], state: 'idle' }; events.push({ ev: 'solo-stop', speaker: s }); }
   }
+  function scriptedReform(g, script) {
+    const ent = G[g].entity;
+    const parked = [...G[g].members];
+    const newLead = parked[0];
+    // live dissolve: the dropped leader is already out; the remaining speakers are not on a new leader yet
+    G[g].members = [];
+    events.push({ ev: 'reform', group: g, leader: newLead, parked });
+    syncHa(); commit();
+    const at = (ms, fn) => { if (ms == null) return; setTimeout(fn, Math.max(0, ms)); };
+    at(script.blipAt, () => {
+      if (G[g].members.length) return;
+      setState(ent, 'playing');
+      events.push({ ev: 'false-playing', group: g });
+      syncHa(); commit();
+    });
+    at(script.reformAt, () => {
+      G[g].members = [...parked];
+      delete G[g].idle;
+      setState(ent, 'idle');
+      events.push({ ev: 'reformed', group: g, leader: newLead, attempt: 1 });
+      syncHa(); commit();
+    });
+    at(script.failAt, () => {
+      G[g].idle = [...(G[g].members.length ? G[g].members : parked)];
+      stopGroup(g, 'reform failed');
+      events.push({ ev: 'reform-failed', group: g, error: 'Can not resolve stream URL: Invalid PlayerMedia data' });
+      syncHa(); commit();
+    });
+    at(script.reform2At, () => {
+      delete G[g].idle;
+      G[g].members = [...parked];
+      setState(ent, 'buffering');
+      events.push({ ev: 'reformed', group: g, leader: newLead, attempt: 2 });
+      syncHa(); commit();
+    });
+    at(script.playAt, () => {
+      G[g].members = [...parked];
+      delete G[g].idle;
+      setState(ent, 'playing');
+      events.push({ ev: 'reformed-playing', group: g, leader: newLead });
+      syncHa(); commit();
+    });
+  }
   function reform(g) {
+    const script = (typeof window !== 'undefined' && window.__jbReformScript) || null;
+    if (script && (script.reformAt != null || script.playAt != null)) { scriptedReform(g, script); return; }
     const ent = G[g].entity;
     events.push({ ev: 'reform', group: g, leader: G[g].members[0] });
     if (LIVE) {

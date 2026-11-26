@@ -22,7 +22,19 @@ const J = JSON.stringify;
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 const micro = () => new Promise((r) => queueMicrotask(r));
 
-check('U1 REGROUP_MS is 24 s (the safety net 18 s plus its 6 s grace)', R.REGROUP_MS === 24_000, String(R.REGROUP_MS));
+/** MA live-feed slice. playing/reformed helpers take only these fields (never HA entities). */
+const feed = (o = {}) => ({
+  members: o.members ?? ['wiim_kitchen'],
+  leaderId: o.leaderId ?? (o.members ? o.members[0] : 'wiim_kitchen'),
+  leaderMembers: o.leaderMembers ?? o.members ?? ['wiim_kitchen'],
+  groupPlaying: !!o.groupPlaying,
+  leaderPlaying: !!o.leaderPlaying,
+});
+const quiet = (members, lead) => feed({ members, leaderId: lead ?? members[0], leaderMembers: members, groupPlaying: false, leaderPlaying: false });
+const playing = (members, lead) => feed({ members, leaderId: lead ?? members[0], leaderMembers: members, groupPlaying: true, leaderPlaying: true });
+
+check('U1 REGROUP_MS is 24 s (the expected window: safety net 18 s plus its 6 s grace; not a cutoff)', R.REGROUP_MS === 24_000, String(R.REGROUP_MS));
+check('U1b REGROUP_CEILING_MS is 90 s (hard ceiling; __jbRegroupMs still overrides it)', R.REGROUP_CEILING_MS === 90_000, String(R.REGROUP_CEILING_MS));
 
 const rec = { group: 'syncgroup_everywhere', speakerId: 'wiim_office', reason: 'leader-drop', startedAt: 1_000, until: 25_000, seenOut: false, joinSettled: false };
 check('U2 snapshot shape: active, reason, groupId, entityId, speakerId, startedAt, until, maPlaybackState',
@@ -42,30 +54,45 @@ check('U4 join-back has not landed until the speaker is in and has been seen out
   && R.regroupLanded({ ...rec, reason: 'join-back', seenOut: false, joinSettled: true }, ['wiim_kitchen', 'wiim_office']) === true);
 
 const drop = { ...rec, reason: 'leader-drop', until: 25_000 };
-check('U5 leader-drop is not done until the speaker is out and the new leader is playing',
-  R.regroupDone(drop, ['wiim_kitchen'], false, 2_000) === false
-  && R.regroupDone(drop, ['wiim_office', 'wiim_kitchen'], true, 2_000) === false
-  && R.regroupDone(drop, ['wiim_kitchen'], true, 2_000) === true);
+const reformedKitchen = playing(['wiim_kitchen'], 'wiim_kitchen');
+check('U5 leader-drop is not done until the group has re-formed on a new leader and that leader or the group is playing',
+  R.regroupDone(drop, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', groupPlaying: false, leaderPlaying: false }), 2_000) === false
+  && R.regroupDone(drop, playing(['wiim_office', 'wiim_kitchen'], 'wiim_office'), 2_000) === false
+  && R.regroupDone(drop, playing(['wiim_kitchen'], 'wiim_kitchen'), 2_000) === true
+  && R.regroupReformed(drop, playing(['wiim_kitchen'], 'wiim_kitchen')) === true);
 
 const join = { ...rec, reason: 'join-back', until: 25_000, seenOut: true, joinSettled: false };
-check('U6 join-back is not done until the speaker is in (after being out) and the leader is playing',
-  R.regroupDone(join, ['wiim_kitchen'], true, 2_000) === false
-  && R.regroupDone(join, ['wiim_kitchen', 'wiim_office'], false, 2_000) === false
-  && R.regroupDone(join, ['wiim_kitchen', 'wiim_office'], true, 2_000) === true
-  && R.regroupDone({ ...join, seenOut: false, joinSettled: false }, ['wiim_kitchen', 'wiim_office'], true, 2_000) === false);
+check('U6 join-back is not done until the speaker is in (after being out) and the group or its leader is playing',
+  R.regroupDone(join, playing(['wiim_kitchen'], 'wiim_kitchen'), 2_000) === false
+  && R.regroupDone(join, quiet(['wiim_kitchen', 'wiim_office'], 'wiim_kitchen'), 2_000) === false
+  && R.regroupDone(join, playing(['wiim_kitchen', 'wiim_office'], 'wiim_kitchen'), 2_000) === true
+  && R.regroupDone({ ...join, seenOut: false, joinSettled: false }, playing(['wiim_kitchen', 'wiim_office'], 'wiim_kitchen'), 2_000) === false);
 
-check('U7 timeout clears the regroup even if membership has not landed and nothing is playing',
-  R.regroupDone(drop, ['wiim_office', 'wiim_kitchen'], false, 25_001) === true
-  && R.regroupDone(drop, ['wiim_kitchen'], false, 25_000) === false);
+check('U7 the hard ceiling (until) clears the regroup even if the group has not re-formed and nothing is playing',
+  R.regroupDone(drop, quiet(['wiim_office', 'wiim_kitchen'], 'wiim_office'), 25_001) === true
+  && R.regroupDone(drop, quiet(['wiim_kitchen'], 'wiim_kitchen'), 25_000) === false);
+
+{
+  const r = { ...rec, reason: 'leader-drop', startedAt: 1_000, until: 1_000 + R.REGROUP_CEILING_MS, seenOut: true };
+  check('U18 past 24 s still quiet: the signal is not done (until is the 90 s ceiling, not 24 s)',
+    R.regroupDone(r, quiet(['wiim_kitchen'], 'wiim_kitchen'), 1_000 + R.REGROUP_MS) === false
+    && R.regroupDone(r, quiet(['wiim_kitchen'], 'wiim_kitchen'), 1_000 + 24_000) === false
+    && R.regroupDone(r, quiet(['wiim_kitchen'], 'wiim_kitchen'), 1_000 + 89_999) === false);
+  check('U19 the 90 s hard ceiling ends the signal while still quiet',
+    R.regroupDone(r, quiet(['wiim_kitchen'], 'wiim_kitchen'), 1_000 + R.REGROUP_CEILING_MS) === false
+    && R.regroupDone(r, quiet(['wiim_kitchen'], 'wiim_kitchen'), 1_000 + 90_000) === false
+    && R.regroupDone(r, quiet(['wiim_kitchen'], 'wiim_kitchen'), 1_000 + 90_001) === true
+    && (1_000 + R.REGROUP_CEILING_MS + 1) === 91_001);
+}
 
 {
   let n = 0;
   const sig = new R.RegroupSignal(() => 50, () => n++);
   check('U8 starts off: record and snapshot are null', sig.record === null
-    && sig.snapshot('media_player.everywhere', 'playing', ['wiim_kitchen'], true) === null);
+    && sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_kitchen'], 'wiim_kitchen')) === null);
 
   sig.start('syncgroup_everywhere', 'wiim_office', 'leader-drop');
-  const on = sig.snapshot('media_player.everywhere', 'paused', ['wiim_office', 'wiim_kitchen'], false);
+  const on = sig.snapshot('media_player.everywhere', 'paused', quiet(['wiim_office', 'wiim_kitchen'], 'wiim_office'));
   check('U9 start a leader-drop: signal is on with that reason, group, speaker, and the live-feed play state',
     n >= 1 && sig.record?.reason === 'leader-drop' && on?.active === true && on.reason === 'leader-drop'
     && on.groupId === 'syncgroup_everywhere' && on.entityId === 'media_player.everywhere'
@@ -75,7 +102,7 @@ check('U7 timeout clears the regroup even if membership has not landed and nothi
   const startedAt = sig.record.startedAt, until = sig.record.until;
   await tick(10);
   const flipped = sig.joinBack('wiim_office');
-  const jb = sig.snapshot('media_player.everywhere', 'idle', ['wiim_office', 'wiim_kitchen'], false);
+  const jb = sig.snapshot('media_player.everywhere', 'idle', quiet(['wiim_office', 'wiim_kitchen'], 'wiim_office'));
   check('U10 join-back during a leader-drop keeps the signal on, flips the reason, and refreshes the deadline',
     flipped === true && jb?.reason === 'join-back' && jb.speakerId === 'wiim_office' && jb.active === true
     && sig.record.startedAt >= startedAt && sig.record.until > until, J({ flipped, jb, prev: { startedAt, until }, now: sig.record }));
@@ -85,13 +112,13 @@ check('U7 timeout clears the regroup even if membership has not landed and nothi
     ignored === false && sig.record?.reason === 'join-back' && sig.record?.speakerId === 'wiim_office');
 
   check('U12a join-back while the speaker is still listed and the group is still playing does not clear (the drop may not have landed yet)',
-    sig.snapshot('media_player.everywhere', 'playing', ['wiim_office', 'wiim_kitchen'], true)?.reason === 'join-back');
+    sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_office', 'wiim_kitchen'], 'wiim_office'))?.reason === 'join-back');
 
   // speaker leaves, then comes back playing: seenOut latches, then it clears
-  sig.snapshot('media_player.everywhere', 'idle', ['wiim_kitchen'], false);
-  const cleared = sig.snapshot('media_player.everywhere', 'playing', ['wiim_kitchen', 'wiim_office'], true);
+  sig.snapshot('media_player.everywhere', 'idle', quiet(['wiim_kitchen'], 'wiim_kitchen'));
+  const cleared = sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_kitchen', 'wiim_office'], 'wiim_kitchen'));
   await micro();
-  check('U13 MA playing after a join-back (speaker was seen out, then in) clears the snapshot at once',
+  check('U13 MA playing after a join-back (speaker was seen out, then in) clears the snapshot',
     cleared === null && sig.record === null);
 }
 
@@ -100,9 +127,9 @@ check('U7 timeout clears the regroup even if membership has not landed and nothi
   sig.start('syncgroup_everywhere', 'wiim_office', 'leader-drop');
   sig.joinBack('wiim_office', false);
   check('U13b a join-back that is still in and playing stays on until the join call settles',
-    sig.snapshot('media_player.everywhere', 'playing', ['wiim_office', 'wiim_kitchen'], true)?.reason === 'join-back');
+    sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_office', 'wiim_kitchen'], 'wiim_office'))?.reason === 'join-back');
   sig.markJoinSettled();
-  const cleared = sig.snapshot('media_player.everywhere', 'playing', ['wiim_office', 'wiim_kitchen'], true);
+  const cleared = sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_office', 'wiim_kitchen'], 'wiim_kitchen'));
   await micro();
   check('U13c markJoinSettled plus a playing group with the speaker in clears the join-back',
     cleared === null && sig.record === null);
@@ -113,7 +140,7 @@ check('U7 timeout clears the regroup even if membership has not landed and nothi
   sig.start('syncgroup_everywhere', 'wiim_office', 'leader-drop');
   await tick(80);
   check('U14 the timeout itself ends the signal when play never comes back', sig.record === null
-    && sig.snapshot('media_player.everywhere', 'idle', ['wiim_kitchen'], false) === null);
+    && sig.snapshot('media_player.everywhere', 'idle', quiet(['wiim_kitchen'], 'wiim_kitchen')) === null);
 }
 
 {
@@ -128,11 +155,63 @@ check('U7 timeout clears the regroup even if membership has not landed and nothi
 {
   const sig = new R.RegroupSignal(() => 5_000);
   sig.start('syncgroup_everywhere', 'wiim_office', 'leader-drop');
-  // new leader playing, dropped speaker still listed: not cleared (membership has not landed)
-  const still = sig.snapshot('media_player.everywhere', 'playing', ['wiim_office', 'wiim_kitchen'], true);
+  // group playing but the dropped speaker is still the listed leader: not a re-form
+  const still = sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_office', 'wiim_kitchen'], 'wiim_office'));
   check('U17 ordinary / incomplete membership does not clear a leader-drop, even if something is playing',
     still?.reason === 'leader-drop');
   sig.end();
+}
+
+{
+  const sig = new R.RegroupSignal(() => 5_000);
+  sig.start('syncgroup_everywhere', 'wiim_office', 'leader-drop');
+  const startedAt = sig.record.startedAt;
+  check('U20 startedAt is a Date.now() timestamp Themes can use for an elapsed-seconds counter',
+    typeof startedAt === 'number' && startedAt > 0 && (Date.now() - startedAt) >= 0 && (Date.now() - startedAt) < 2_000);
+  sig.end();
+  check('U21 joinBack after the cap has ended returns false and does not start a new record (join() starts one when still quiet)',
+    sig.joinBack('wiim_office') === false && sig.record === null);
+  sig.start('syncgroup_everywhere', 'wiim_office', 'join-back', { seenOut: true });
+  sig.markJoinSettled();
+  const on = sig.snapshot('media_player.everywhere', 'idle', quiet(['wiim_kitchen', 'wiim_office'], 'wiim_kitchen'));
+  check('U22 a fresh join-back started after the cap stays on while the group is not playing, and startedAt is set',
+    on?.reason === 'join-back' && on.active === true && typeof on.startedAt === 'number'
+    && on.until === on.startedAt + 5_000 && sig.record != null, J(on));
+  const afterPlay = sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_kitchen', 'wiim_office'], 'wiim_kitchen'));
+  await micro();
+  check('U23 that fresh join-back clears once MA is playing', afterPlay === null && sig.record === null);
+}
+
+{
+  // Randy live drop 1: 11 s of false PLAYING starting 0.6 s after the drop, before set_members on the new leader.
+  const sig = new R.RegroupSignal(() => 90_000);
+  sig.start('syncgroup_everywhere', 'wiim_office', 'leader-drop');
+  const blipEmpty = sig.snapshot('media_player.everywhere', 'playing', feed({
+    members: [], leaderId: undefined, leaderMembers: [], groupPlaying: true, leaderPlaying: false,
+  }));
+  const blipOldLead = sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_office'], 'wiim_office'));
+  const reformedQuiet = sig.snapshot('media_player.everywhere', 'idle', quiet(['wiim_kitchen', 'wiim_garage'], 'wiim_garage'));
+  const missingOnLeader = sig.snapshot('media_player.everywhere', 'playing', feed({
+    members: ['wiim_kitchen', 'wiim_garage'], leaderId: 'wiim_garage',
+    leaderMembers: ['wiim_garage'], // new leader does not yet list the members
+    groupPlaying: true, leaderPlaying: true,
+  }));
+  const steady = sig.snapshot('media_player.everywhere', 'playing', playing(['wiim_kitchen', 'wiim_garage'], 'wiim_garage'));
+  await micro();
+  check('U24 a false group PLAYING before the re-form (empty members, or the dropped speaker still leading) does not clear the signal',
+    blipEmpty?.reason === 'leader-drop' && blipOldLead?.reason === 'leader-drop', J({ blipEmpty, blipOldLead }));
+  check('U25 re-form on a new leader that does not yet list the members, or is not playing, does not clear',
+    reformedQuiet?.reason === 'leader-drop' && missingOnLeader?.reason === 'leader-drop', J({ reformedQuiet, missingOnLeader }));
+  check('U26 the signal clears once the group has re-formed on a new leader (id differs, in the group, has the members) and the group or that leader is playing',
+    steady === null && sig.record === null);
+}
+
+{
+  // group playing, leader playing: either is enough after re-form (MA fields only)
+  check('U27 after re-form, group playing or new-leader playing is enough (no HA member entity is consulted)',
+    R.regroupDone(drop, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', leaderMembers: ['wiim_kitchen'], groupPlaying: true, leaderPlaying: false }), 2_000) === true
+    && R.regroupDone(drop, feed({ members: ['wiim_kitchen'], leaderId: 'wiim_kitchen', leaderMembers: ['wiim_kitchen'], groupPlaying: false, leaderPlaying: true }), 2_000) === true
+    && R.regroupFeedPlaying({ groupPlaying: false, leaderPlaying: false }) === false);
 }
 
 console.log(`\n${total - failures}/${total} regroup unit checks passed`);

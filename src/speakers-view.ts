@@ -9,11 +9,11 @@ import type { HomeAssistant, JukeboxCardConfig, PresetConfig } from './types';
 import { SpeakerError, timeouts, type SpeakerStore } from './speakers/ma';
 import {
   mapRooms, targetMa, targetsOf, canGroup, canVolume, kindOf, isActive, isPlaying, membersOf, leaderOf, holderOf,
-  takeovers, takeoverText, dropBlock, planMembers, presetSpeakers, maPresets, type MaPlayer, type PlayerIds, type Players, type Room, type Takeover, type Target,
+  takeovers, takeoverText, dropBlock, planMembers, presetSpeakers, maPresets, playStateOf, type MaPlayer, type PlayerIds, type Players, type Room, type Takeover, type Target,
 } from './speakers/model';
 import { defineElement } from './define';
 import { AskHold } from './speakers/ask-hold';
-import { RegroupSignal, REGROUP_MS, type RegroupState } from './speakers/regroup';
+import { RegroupSignal, REGROUP_CEILING_MS, type RegroupFeed, type RegroupState } from './speakers/regroup';
 
 /**
  * Speakers panel (0.5.0). Opened from the header status.
@@ -45,7 +45,8 @@ const ms = (k: string, d: number) => (TEST_HOOKS ? Number((window as any)[k] ?? 
 const chipMs = (kind: ChipKind, undo: boolean) => kind === 'busy' ? BUSY_MS : kind === 'error' ? ms('__jbErrorMs', ERROR_MS) : kind === 'ask' ? ms('__jbAskMs', ASK_MS)
   : undo ? ms('__jbUndoMs', UNDO_MS) : ms('__jbChipMs', CHIP_MS);
 const HOLD_MS = 4000;
-/** cap for the regroup signal and the panel's "Regrouping…" window: the safety net's 18 s plus its 6 s grace. Play still clears it at once. Tests may shorten it through window.__jbRegroupMs. */
+/** Hard ceiling for the regroup signal: stay on until the group re-forms and plays, up to 90 s.
+ *  Play after a real re-form, a failed drop/join, or disconnect still clear earlier. Tests may shorten it through window.__jbRegroupMs. */
 /** 1.0.1: Music Assistant 2.10.13 answers a leader drop only after it stopped the old leader (up to 5 s) and dissolved the
  *  group, which can pass the 8 s call limit on a slow speaker; the card confirms it on the live feed this long after the tap */
 const LEADER_DROP_MS = 30000;
@@ -80,7 +81,7 @@ export class JbSpeakers extends LitElement {
   private _optN = 0;
   private _tick = 0;
   /** after the leader is dropped (or joined back) MA re-forms the group: 'Regrouping…' on the panel, and the Now Playing signal */
-  private _rgSig = new RegroupSignal(() => ms('__jbRegroupMs', REGROUP_MS), () => this.requestUpdate());
+  private _rgSig = new RegroupSignal(() => ms('__jbRegroupMs', REGROUP_CEILING_MS), () => this.requestUpdate());
   /** the latest leader drop's safety net (a newer drop, or the card moving elsewhere, cancels an older one) */
   private _resumeN = 0;
   /** the speaker the latest safety net is for */
@@ -139,9 +140,7 @@ export class JbSpeakers extends LitElement {
     const x = this.ctx();
     const r = this._rgSig.record;
     if (!r || r.group !== x.tMa) return null;
-    const mem = membersOf(x.tP, x.players), lead = leaderOf(x.tP, x.players);
-    const leadPlaying = !!lead && x.players.get(lead)?.playback_state === 'playing';
-    return this._rgSig.snapshot(x.c.entity, x.tP?.playback_state, mem, leadPlaying);
+    return this._rgSig.snapshot(x.c.entity, x.tP?.playback_state, this.regroupFeed(x));
   }
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -298,6 +297,10 @@ export class JbSpeakers extends LitElement {
     const staticStop = !!holder && kindOf(holder) === 'static';
     const back = holder && kindOf(holder) === 'dynamic' && !list[0]?.last ? holder.player_id : undefined;
     this.cancelLeaderDrop(room.ma); // a pending leader drop of this speaker is over: this join is the newer action
+    const entity = x.c.entity;
+    const groupPlaying = () => playStateOf(this.store, entity, this.hass?.states[entity!]?.state) === 'playing';
+    // no in-flight signal and the group is not playing: start a join-back. A re-add while the group is still playing must not.
+    if (!this._rgSig.record && !groupPlaying()) this._rgSig.start(x.tMa, room.ma, 'join-back', { seenOut: true });
     this.setBusy(room.ma, 'in');
     try {
       // a speaker that leads a playing static group is refused by set_members: stop that group first (it stops anyway)
@@ -308,6 +311,11 @@ export class JbSpeakers extends LitElement {
       const s = room.ma, t = x.tMa;
       this.status(`${room.name} joined ${tName}`, staticStop ? {} : { undo: { label: `${room.name} joined`, run: async () => { if (back) await this.store!.setMembers(back, [s], []); else await this.store!.setMembers(t, [], [s]); } } });
       if (this._rgSig.record?.speakerId === s) this._rgSig.markJoinSettled();
+      else if (!this._rgSig.record && !groupPlaying()) {
+        // join call finished, still quiet, still no signal: start a fresh join-back (seenOut + settled so play can close it)
+        this._rgSig.start(t, s, 'join-back', { seenOut: true });
+        this._rgSig.markJoinSettled();
+      }
     } catch (e) {
       this.fail(`Couldn't add ${room.name}: ${errText(e)}`);
       if (this._rgSig.record?.speakerId === room.ma) this._rgSig.end();
@@ -359,7 +367,9 @@ export class JbSpeakers extends LitElement {
    */
   private dropLeader(room: Room, x: ReturnType<JbSpeakers['ctx']>) {
     const s = room.ma!, group = x.tMa!, entity = x.c.entity!, store = this.store!;
-    const wasPlaying = x.tP?.playback_state === 'playing' && this.hass?.states[entity]?.state === 'playing';
+    // MA live play state (HA only when the feed is not ready). Same flag starts the signal and the safety net:
+    // a lagging HA "paused" must not hide a group that Music Assistant is still playing, and must not skip resume.
+    const wasPlaying = playStateOf(this.store, entity, this.hass?.states[entity]?.state) === 'playing';
     const n = ++this._optN;
     this.setOptOut(s, { group, n });
     if (wasPlaying) this._rgSig.start(group, s, 'leader-drop'); // MA re-forms a playing group on the next member: the status line and Now Playing signal follow it
@@ -389,7 +399,7 @@ export class JbSpeakers extends LitElement {
   /** 1.0.1: a join-back of a speaker whose leader drop is pending or just confirmed: the drop's pending state and
    *  its safety net end; the join owns the speaker now. The regroup signal stays on, flips to join-back, and the
    *  deadline starts again, so Now Playing keeps showing that a regroup is in progress until music is back (or the
-   *  timeout, or a failed join). */
+   *  90 s ceiling, or a failed join). If the cap had already ended, join() starts a fresh join-back when still quiet. */
   private cancelLeaderDrop(s: string) {
     this.setOptOut(s);
     const x = this.ctx();
@@ -434,13 +444,25 @@ export class JbSpeakers extends LitElement {
     const q = live.queues.get(live.activeQueue(group) ?? group);
     return !!q && q.items > (q.current_index ?? -1) + 1;
   }
-  /** true while the target is re-forming: our own leader drop or join-back not yet answered by a playing leader, or MA says buffering */
+  /** Music Assistant live-feed slice for the group Now Playing is showing. Never reads HA member entities
+   *  (live: media_player.master_bedroom stayed 'off' the whole time it was MA's leader). */
+  private regroupFeed(x: { tP?: MaPlayer; players: Players }): RegroupFeed {
+    const members = membersOf(x.tP, x.players);
+    const leaderId = leaderOf(x.tP, x.players);
+    const lead = leaderId ? x.players.get(leaderId) : undefined;
+    return {
+      members,
+      leaderId,
+      leaderMembers: lead?.group_members,
+      groupPlaying: x.tP?.playback_state === 'playing',
+      leaderPlaying: lead?.playback_state === 'playing',
+    };
+  }
+  /** true while the target is re-forming: our own leader drop or join-back not yet answered by a re-formed playing group, or MA says buffering */
   regrouping(x: { tMa?: string; tP?: MaPlayer; players: Players }): boolean {
     const r = this._rgSig.record;
     if (r && r.group === x.tMa) {
-      const mem = membersOf(x.tP, x.players), lead = leaderOf(x.tP, x.players);
-      const leadPlaying = !!lead && x.players.get(lead)?.playback_state === 'playing';
-      if (this._rgSig.snapshot(undefined, x.tP?.playback_state, mem, leadPlaying) == null) return false;
+      if (this._rgSig.snapshot(undefined, x.tP?.playback_state, this.regroupFeed(x)) == null) return false;
       return true;
     }
     return x.tP?.playback_state === 'buffering';
