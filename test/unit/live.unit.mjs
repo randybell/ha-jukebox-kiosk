@@ -46,7 +46,11 @@ const evt = (seq, event, object_id, data) => ({ seq, kind: 'event', event, objec
   check('U13 queue_updated merges (partial data keeps items)', s.apply(evt(6, 'queue_updated', GRP, { queue_id: GRP, active: false })) === 'ok' && s.queues.get(GRP).active === false && s.queues.get(GRP).items === 9, J(s.queues.get(GRP)));
   check('U14 queue_items_updated counts as a song-list change', s.apply(evt(7, 'queue_items_updated', GRP, { queue_id: GRP, items: 10 })) === 'ok' && s.itemsRev.get(GRP) === 1 && s.queues.get(GRP).items === 10);
   check('U15 queue_added with no data does not invent a queue', s.apply(evt(8, 'queue_added', 'q_x', null)) === 'ok' && !s.queues.has('q_x'));
-  check('U16 an unknown event uses its number and changes nothing', s.apply(evt(9, 'queue_time_updated', GRP, 42)) === 'ok' && s.seq === 9 && s.queues.get(GRP).items === 10);
+  check('U16 an unknown event uses its number and changes nothing', s.apply(evt(9, 'something_unknown', GRP, 42)) === 'ok' && s.seq === 9 && s.queues.get(GRP).items === 10 && s.players.get(GRP).elapsed_time == null);
+  check('U16b queue_time_updated stamps raw elapsed seconds on the queue player (not interpolated)',
+    s.apply(evt(10, 'queue_time_updated', GRP, 42)) === 'ok' && s.seq === 10
+    && s.players.get(GRP).elapsed_time === 42
+    && s.queues.get(GRP).items === 10);
   check('U17 a new snapshot always starts over (reconnect / fresh snapshot)', s.apply(snap(1)) === 'ok' && s.seq === 1 && s.players.has(A) && !s.players.has('player_c') && s.itemsRev.size === 0);
   check('U18 a message with no number is a gap', s.apply({ kind: 'event', event: 'player_updated' }) === 'gap');
   s.reset();

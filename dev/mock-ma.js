@@ -65,6 +65,61 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   const holder = (s, except) => Object.keys(G).find((g) => g !== except && (active(g) || formed(g)) && membersNow(g).includes(s));
   const leader = (g) => membersNow(g)[0];
 
+  // Raw MA elapsed_time (seconds), stamped only when it actually changes. Never interpolate a frozen value.
+  // Only started when a regroup play begins (playAt / unscripted re-form play / desyncHa to playing / test hook),
+  // so already-playing groups at page load do not tick every second and churn the live feed.
+  const elapsedRec = {};
+  let elapsedTimer = 0;
+  function startElapsed(g, value = 0, opts = {}) {
+    const now = Date.now();
+    const freezeFor = opts.freezeFor ?? 0;
+    elapsedRec[g] = {
+      value: value,
+      frozen: !!(opts.untilAdvance || freezeFor > 0),
+      unfreezeAt: opts.untilAdvance ? 0 : (freezeFor > 0 ? now + freezeFor : 0),
+      lastStamp: now,
+    };
+    ensureElapsedTimer();
+  }
+  function stopElapsed(g) { delete elapsedRec[g]; }
+  function bumpElapsed(g) {
+    const rec = elapsedRec[g];
+    if (!rec) return;
+    rec.frozen = false;
+    rec.unfreezeAt = 0;
+    rec.value += 1;
+    rec.lastStamp = Date.now();
+    syncHa(); commit();
+  }
+  function attachElapsed(obj, g) {
+    const rec = elapsedRec[g];
+    if (!rec) return obj;
+    const stamp = rec.lastStamp / 1000;
+    const cm = obj.current_media && typeof obj.current_media === 'object'
+      ? { ...obj.current_media, elapsed_time: rec.value, elapsed_time_last_updated: stamp }
+      : obj.current_media;
+    return { ...obj, elapsed_time: rec.value, elapsed_time_last_updated: stamp, current_media: cm };
+  }
+  function ensureElapsedTimer() {
+    if (elapsedTimer) return;
+    elapsedTimer = setInterval(() => {
+      let changed = false;
+      const now = Date.now();
+      for (const [g, rec] of Object.entries(elapsedRec)) {
+        if (gState(g) !== 'playing') continue;
+        if (rec.frozen) {
+          if (rec.unfreezeAt && now >= rec.unfreezeAt) rec.frozen = false;
+          else continue;
+        }
+        rec.value += 1;
+        rec.lastStamp = now;
+        changed = true;
+      }
+      if (changed) commit();
+      if (!Object.keys(elapsedRec).length) { clearInterval(elapsedTimer); elapsedTimer = 0; }
+    }, 1000);
+  }
+
   function players() {
     const out = [];
     for (const s of Object.values(SP)) {
@@ -83,6 +138,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
         supported_features: ['volume_set', 'volume_mute', 'pause', 'set_members'], volume_level: vol,
         current_media: h ? { title: st(G[h].entity)?.attributes?.media_title ?? null } : solo[s] ? { title: solo[s].title } : null,
       });
+      if (h) out[out.length - 1] = attachElapsed(out[out.length - 1], h);
     }
     for (const [g, d] of Object.entries(G)) {
       out.push({
@@ -95,6 +151,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
         volume_level: st(d.entity)?.attributes?.volume_level ?? 0.5,
         current_media: active(g) ? { title: st(d.entity)?.attributes?.media_title ?? null } : null,
       });
+      out[out.length - 1] = attachElapsed(out[out.length - 1], g);
     }
     return out;
   }
@@ -113,6 +170,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   }
   function stopGroup(g, why) {
     setState(G[g].entity, 'idle');
+    stopElapsed(g);
     if (G[g].kind === 'dynamic') { G[g].members = []; delete G[g].reformed; }
     events.push({ ev: 'stop', group: g, why });
   }
@@ -158,6 +216,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
       delete G[g].idle;
       G[g].reformed = true;
       setState(ent, 'idle');
+      stopElapsed(g);
       stamp('reformed', { attempt: 1 });
       syncHa(); commit();
     });
@@ -180,7 +239,14 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
       delete G[g].idle;
       G[g].reformed = true;
       setState(ent, 'playing');
-      stamp('reformed-playing');
+      startElapsed(g, 0, script.advanceAt != null ? { untilAdvance: true } : {});
+      stamp('reformed-playing', { elapsed: 0 });
+      syncHa(); commit();
+    });
+    at(script.advanceAt, () => {
+      if (gState(g) !== 'playing') return;
+      bumpElapsed(g);
+      stamp('elapsed-advanced', { elapsed: elapsedRec[g]?.value });
       syncHa(); commit();
     });
   }
@@ -192,7 +258,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
     if (LIVE) {
       // live 2.10.9: the group stays 'playing'; the next member leads after ~5.9 s of silence
       silent[g] = Date.now() + GAP; syncHa();
-      setTimeout(() => { delete silent[g]; events.push({ ev: 'reformed', group: g }); syncHa(); commit(); }, GAP);
+      setTimeout(() => { delete silent[g]; startElapsed(g, 0); events.push({ ev: 'reformed', group: g }); syncHa(); commit(); }, GAP);
       return;
     }
     setState(ent, 'buffering'); syncHa();
@@ -201,7 +267,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
       // reform=fail: MA 2.10.13's restart fails ("Can not resolve stream URL: Invalid PlayerMedia data"): the group goes
       // idle with its queue kept; a play starts it again on the same speakers
       if (REFORM_FAIL) { G[g].idle = [...G[g].members]; stopGroup(g, 'reform failed'); events.push({ ev: 'reform-failed', group: g }); syncHa(); commit(); return; }
-      setState(ent, 'playing'); events.push({ ev: 'reformed', group: g }); syncHa(); commit();
+      setState(ent, 'playing'); startElapsed(g, 0); events.push({ ev: 'reformed', group: g }); syncHa(); commit();
     }, GAP);
   }
   /** a group powers on with its preset (dynamic) or fixed list (static): takes the speakers, hijacks a group its leader leads */
@@ -451,7 +517,13 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   }
   if (EVDYN) syncHa();
   /** test hook: force a group's state (and dynamic members), e.g. an overlap MA can reach but the mock flows don't */
-  function force(g, state, members) { if (members && G[g].kind === 'dynamic') G[g].members = [...members]; setState(G[g].entity, state); syncHa(); commit(); }
+  function force(g, state, members) {
+    if (members && G[g].kind === 'dynamic') G[g].members = [...members];
+    setState(G[g].entity, state);
+    if (state === 'playing' && !elapsedRec[g]) startElapsed(g, 0);
+    if (state && state !== 'playing') stopElapsed(g);
+    syncHa(); commit();
+  }
   /** test hook: Home Assistant's group entity stays at haState while this group's Music Assistant player keeps maState */
   function desyncHa(entity, haState, maState) {
     const g = gidOf(entity);
@@ -459,6 +531,8 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
     if (maState == null) delete playOverride[g];
     else playOverride[g] = maState;
     if (haState != null) setState(entity, haState);
+    if (maState === 'playing' && !elapsedRec[g]) startElapsed(g, 0);
+    if (maState && maState !== 'playing') stopElapsed(g);
     syncHa(); commit();
     return true;
   }
@@ -468,6 +542,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
     delete playOverride[g];
     return true;
   }
-  window.__ma = { G, SP, solo, players, events, force, silent, desyncHa, clearPlayOverride, playOverride };
+  window.__ma = { G, SP, solo, players, events, force, silent, desyncHa, clearPlayOverride, playOverride,
+    startElapsed, bumpElapsed, stopElapsed, elapsedRec };
   return { command, willPlay, afterHa, groupStateChanged, isGroup: (e) => !!gidOf(e), desyncHa, clearPlayOverride, INDOOR, OUTDOOR };
 }

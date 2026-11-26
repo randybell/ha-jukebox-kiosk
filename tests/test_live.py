@@ -64,7 +64,7 @@ async def test_snapshot_then_changes_in_order(
     cb, events, id_filter = fake_ma.subs[0]
     assert id_filter is None
     assert {e.value for e in events} == {"player_added", "player_updated", "player_removed",
-                                          "queue_added", "queue_updated", "queue_items_updated"}
+                                          "queue_added", "queue_updated", "queue_items_updated", "queue_time_updated"}
     snap = (await ws.receive_json())["event"]
     assert snap["seq"] == 1 and snap["kind"] == "snapshot"
     assert {p["player_id"] for p in snap["players"]} == {PLAYER_A, PLAYER_B, SYNCGROUP}
@@ -74,16 +74,17 @@ async def test_snapshot_then_changes_in_order(
     assert fake_ma.calls == []
 
     cb(_ev("player_updated", PLAYER_A, {"player_id": PLAYER_A, "synced_to": PLAYER_B}))
-    cb(_ev("queue_time_updated", SYNCGROUP, 42))  # not forwarded (progress uses HA's position)
+    cb(_ev("queue_time_updated", SYNCGROUP, 42))  # forwarded so the regroup signal can see MA elapsed advance
     cb(_ev("queue_items_updated", SYNCGROUP, _Model({"queue_id": SYNCGROUP, "items": 13})))
     cb(_ev("player_removed", PLAYER_B))
-    got = [(await ws.receive_json())["event"] for _ in range(3)]
-    assert [g["seq"] for g in got] == [2, 3, 4]
-    assert [g["event"] for g in got] == ["player_updated", "queue_items_updated", "player_removed"]
+    got = [(await ws.receive_json())["event"] for _ in range(4)]
+    assert [g["seq"] for g in got] == [2, 3, 4, 5]
+    assert [g["event"] for g in got] == ["player_updated", "queue_time_updated", "queue_items_updated", "player_removed"]
     assert got[0] == {"seq": 2, "kind": "event", "event": "player_updated", "object_id": PLAYER_A,
                       "data": {"player_id": PLAYER_A, "synced_to": PLAYER_B}}
-    assert got[1]["data"] == {"queue_id": SYNCGROUP, "items": 13}
-    assert got[2]["object_id"] == PLAYER_B and got[2]["data"] is None
+    assert got[1] == {"seq": 3, "kind": "event", "event": "queue_time_updated", "object_id": SYNCGROUP, "data": 42}
+    assert got[2]["data"] == {"queue_id": SYNCGROUP, "items": 13}
+    assert got[3]["object_id"] == PLAYER_B and got[3]["data"] is None
 
     await _call(ws, type="unsubscribe_events", subscription=res["id"])
     assert fake_ma.subs == []

@@ -1708,7 +1708,8 @@ const feedOf = (page) => ev(page, `(() => {
   const lp = leadId ? ${SPK}.store.players.get(leadId) : null;
   const s = ${SPK}.inlineRegroup?.() ?? null;
   return { on: !!${SPK}.inlineRegrouping(), reason: s?.reason ?? null, ma: g?.playback_state,
-    members: mem, leadId, leadPlay: lp?.playback_state, leadMembers: lp?.group_members ?? [] };
+    members: mem, leadId, leadPlay: lp?.playback_state, leadMembers: lp?.group_members ?? [],
+    leadElapsed: lp?.elapsed_time, groupElapsed: g?.elapsed_time };
 })()`);
 /** Record the card + stamped mock event at each __liveTick so "at re-form" is not a later sample after play. */
 const armTrace = (page) => ev(page, `(() => {
@@ -1728,7 +1729,8 @@ const armTrace = (page) => ev(page, `(() => {
         evPlay: e.playback_state, evMembers: e.members, evLeadPlay: e.leadPlay,
         on: !!${SPK}.inlineRegrouping?.(), reason: s?.reason ?? null,
         ma: g?.playback_state, members: mem, leadId, leadPlay: lp?.playback_state,
-        leadMembers: lp?.group_members ?? [],
+        leadMembers: lp?.group_members ?? [], leadElapsed: lp?.elapsed_time, groupElapsed: g?.elapsed_time,
+        evElapsed: e.elapsed,
       });
     }
   };
@@ -1768,7 +1770,7 @@ const wasQuiet = (s) => !!s && s.evPlay !== 'playing' && s.evLeadPlay !== 'playi
   const off = await wait(p, `!${SPK}.inlineRegrouping()`, 4000);
   const atPlayEv = await traced(p, 'reformed-playing');
   const atPlay = await feedOf(p);
-  check('RG13 live drop 1 timeline: signal stays on through the +0.6 s false PLAYING and the +11.6 s re-form (idle, not playing), and clears at +17.5 s steady playing',
+  check('RG13 live drop 1 timeline: signal stays on through the +0.6 s false PLAYING and the +11.6 s re-form (idle, not playing), and clears after +17.5 s playing once the position has advanced',
     on && blip && atBlip?.on && (atBlip.evMembers?.length === 0 || atBlip.members?.length === 0 || atBlip.leadId === leadMa)
     && reformed && atReform?.on && wasQuiet(atReform)
     && played && atPlayEv?.evPlay === 'playing'
@@ -1844,6 +1846,95 @@ const wasQuiet = (s) => !!s && s.evPlay !== 'playing' && s.evLeadPlay !== 'playi
     && off && elapsed >= 3_500 && elapsed < 8_000
     && atOff.on === false && atOff.leadPlay === 'playing' && atOff.leadId && atOff.leadId !== leadMa,
     J({ on, played, atPlayEv, at2s, off, elapsed, atOff, dropped: leadMa }));
+  await p.close();
+}
+
+{
+  // Fresh Eyes v2: MA can report 'playing' with position frozen at 0:00 for several seconds before music is audible.
+  // blip at 0.8 s, idle re-form at 10 s, playing frozen from 25.6 s, position advancing from 33.6 s.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => {
+    window.__jbRegroupMs = 90_000;
+    window.__jbResumeMs = 120_000;
+    window.__jbResumeGraceMs = 1000;
+    window.__jbReformScript = { blipAt: 800, reformAt: 10_000, playAt: 25_600, advanceAt: 33_600 };
+  });
+  await openPanel(p); await waitLoaded(p);
+  await armTrace(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  const leadMa = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`);
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const on = await wait(p, `${SPK}.inlineRegrouping() && ${SPK}.inlineRegroup()?.reason === 'leader-drop'`, 2000);
+  const blip = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'false-playing')`, 4000);
+  const atBlip = await traced(p, 'false-playing');
+  const reformed = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed')`, 20_000);
+  const atReform = await traced(p, 'reformed', 1);
+  const played = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed-playing')`, 25_000);
+  const atPlayEv = await traced(p, 'reformed-playing');
+  const atPlay = await feedOf(p);
+  await sleep(5_000);
+  const stillFrozen = await feedOf(p);
+  const advanced = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'elapsed-advanced')`, 12_000);
+  const atAdvEv = await traced(p, 'elapsed-advanced');
+  const off = await wait(p, `!${SPK}.inlineRegrouping()`, 4000);
+  const atOff = await feedOf(p);
+  const frozenPos = (x) => (x?.leadElapsed ?? x?.groupElapsed ?? x?.evElapsed) === 0;
+  check('RG16 Fresh Eyes timeline: stays on through the 0.8 s blip, the 10 s idle re-form, and playing with position frozen at 0:00 from 25.6 s; clears only once elapsed advances from 33.6 s',
+    on && blip && atBlip?.on && (atBlip.evMembers?.length === 0 || atBlip.members?.length === 0 || atBlip.leadId === leadMa)
+    && reformed && atReform?.on && wasQuiet(atReform)
+    && played && atPlayEv?.evPlay === 'playing' && atPlay.on && atPlay.leadPlay === 'playing' && frozenPos(atPlay)
+    && stillFrozen.on && stillFrozen.leadPlay === 'playing' && frozenPos(stillFrozen)
+    && advanced && (atAdvEv?.evElapsed ?? stillFrozen.leadElapsed) >= 1
+    && off && atOff.on === false && atOff.leadPlay === 'playing' && atOff.leadId && atOff.leadId !== leadMa,
+    J({ on, blip, atBlip, reformed, atReform, played, atPlayEv, atPlay, stillFrozen, advanced, atAdvEv, off, atOff, dropped: leadMa }));
+  await p.close();
+}
+
+{
+  // Join-back with the same frozen-position pattern: first 'playing' at 0:00 does not clear; advance does.
+  // Join while the group is still active (a failed/idle dissolve makes join() no-op because the target is not active).
+  // Park the scripted re-form so it cannot start playback on its own during the test.
+  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&cfg=${encodeURIComponent(J({ leader_drop: 'allow' }))}`);
+  await p.evaluate(() => {
+    window.__jbRegroupMs = 90_000;
+    window.__jbResumeMs = 120_000;
+    window.__jbResumeGraceMs = 1000;
+    window.__jbReformScript = { reformAt: 80_000, playAt: 90_000 };
+  });
+  await openPanel(p); await waitLoaded(p);
+  const lead = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`) === 'wiim_mock_kitchen' ? KIT : LIV;
+  const leadMa = await ev(p, `window.__ma.G.syncgroup_mock_indoor.members[0]`);
+  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
+  await tap(p, act(lead));
+  const onDrop = await wait(p, `${SPK}.inlineRegrouping() && ${SPK}.inlineRegroup()?.reason === 'leader-drop'`, 2000);
+  await wait(p, `${act(lead)}?.dataset.act === 'join'`, 4000);
+  await tap(p, act(lead));
+  await wait(p, ASKQ, 800) && (await confirm(p));
+  const onJoin = await wait(p, `${SPK}.inlineRegrouping() && ${SPK}.inlineRegroup()?.reason === 'join-back'`, 4000);
+  const started = await ev(p, `(() => {
+    const g = 'syncgroup_mock_indoor';
+    const members = [...(window.__ma.G[g].idle ?? []), '${leadMa}'].filter((id, i, a) => id && a.indexOf(id) === i);
+    if (!members.includes('${leadMa}')) members.push('${leadMa}');
+    window.__ma.startElapsed(g, 0, { untilAdvance: true });
+    window.__ma.force(g, 'playing', members);
+    return { members, elapsed: window.__ma.elapsedRec[g]?.value, frozen: window.__ma.elapsedRec[g]?.frozen };
+  })()`);
+  const atPlay = await wait(p, `${SPK}.store.players.get('syncgroup_mock_indoor')?.playback_state === 'playing'`, 4000);
+  await sleep(400);
+  const frozen = await feedOf(p);
+  await sleep(3_000);
+  const stillFrozen = await feedOf(p);
+  const bumped = await ev(p, `window.__ma.bumpElapsed('syncgroup_mock_indoor')`);
+  const off = await wait(p, `!${SPK}.inlineRegrouping()`, 4000);
+  const atOff = await feedOf(p);
+  check('RG17 join-back stays on while MA is playing with position frozen at 0:00, and clears once elapsed advances',
+    onDrop && onJoin && started?.frozen === true && started?.elapsed === 0
+    && atPlay && frozen.on && frozen.reason === 'join-back' && frozen.leadPlay === 'playing'
+    && (frozen.leadElapsed === 0 || frozen.groupElapsed === 0)
+    && stillFrozen.on && (stillFrozen.leadElapsed === 0 || stillFrozen.groupElapsed === 0)
+    && off && atOff.on === false && (atOff.leadElapsed >= 1 || atOff.groupElapsed >= 1),
+    J({ onDrop, onJoin, started, atPlay, frozen, stillFrozen, bumped, off, atOff, dropped: leadMa }));
   await p.close();
 }
 

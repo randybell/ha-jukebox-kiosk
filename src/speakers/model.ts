@@ -33,7 +33,11 @@ export interface MaPlayer {
   active_group: string | null;
   supported_features: string[];
   volume_level: number | null;
-  current_media?: { title?: string; artist?: string; uri?: string } | null;
+  current_media?: { title?: string; artist?: string; uri?: string; elapsed_time?: number; elapsed_time_last_updated?: number; duration?: number } | null;
+  /** Seconds from the MA player dict (players/all / player_updated / queue_time_updated). Not interpolated. */
+  elapsed_time?: number;
+  /** MA's stamp for elapsed_time. The regroup signal does not extrapolate from this. */
+  elapsed_time_last_updated?: number;
   /* 2.6 groundwork: the rest of the Music Assistant fields the Build 3 Speakers panel needs (models 1.1.205 player.py),
    * carried by the live feed and kept here. Nothing in Build 1 reads them. */
   /** MA's group volume (0-100) of a group or a sync leader, null when MA has none */
@@ -49,6 +53,14 @@ export type Players = Map<string, MaPlayer>;
 export type Kind = 'static' | 'dynamic' | 'player';
 
 const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []);
+const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+
+/** Raw MA elapsed seconds on a player (player.elapsed_time, else current_media.elapsed_time). Undefined if the feed has none.
+ *  Callers must not add (now - elapsed_time_last_updated): a frozen 0:00 would look like it is advancing. */
+export function playerElapsed(p?: MaPlayer | null): number | undefined {
+  if (!p) return undefined;
+  return num(p.elapsed_time) ?? num(p.current_media?.elapsed_time);
+}
 /** MA player dicts (the live feed; the same shape as players/all) → Map by player_id. Accepts a list or {items}. Unknown
  *  shapes give an empty map. Nothing is filtered on hide_in_ui or enabled (that is Build 3's list filtering). */
 export function parsePlayers(raw: unknown): Players {
@@ -65,6 +77,8 @@ export function parsePlayers(raw: unknown): Players {
       active_group: typeof p.active_group === 'string' ? p.active_group : null,
       supported_features: arr(p.supported_features), volume_level: typeof p.volume_level === 'number' ? p.volume_level : null,
       current_media: p.current_media && typeof p.current_media === 'object' ? p.current_media : null,
+      elapsed_time: num(p.elapsed_time) ?? num(p.current_media?.elapsed_time),
+      elapsed_time_last_updated: num(p.elapsed_time_last_updated) ?? num(p.current_media?.elapsed_time_last_updated),
       group_volume: typeof p.group_volume === 'number' ? p.group_volume : null,
       group_volume_muted: typeof p.group_volume_muted === 'boolean' ? p.group_volume_muted : null,
       volume_control: typeof p.volume_control === 'string' ? p.volume_control : 'none',

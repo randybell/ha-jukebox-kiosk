@@ -9,7 +9,7 @@ import type { HomeAssistant, JukeboxCardConfig, PresetConfig } from './types';
 import { SpeakerError, timeouts, type SpeakerStore } from './speakers/ma';
 import {
   mapRooms, targetMa, targetsOf, canGroup, canVolume, kindOf, isActive, isPlaying, membersOf, leaderOf, holderOf,
-  takeovers, takeoverText, dropBlock, planMembers, presetSpeakers, maPresets, playStateOf, type MaPlayer, type PlayerIds, type Players, type Room, type Takeover, type Target,
+  takeovers, takeoverText, dropBlock, planMembers, presetSpeakers, maPresets, playStateOf, playerElapsed, type MaPlayer, type PlayerIds, type Players, type Room, type Takeover, type Target,
 } from './speakers/model';
 import { defineElement } from './define';
 import { AskHold } from './speakers/ask-hold';
@@ -45,7 +45,7 @@ const ms = (k: string, d: number) => (TEST_HOOKS ? Number((window as any)[k] ?? 
 const chipMs = (kind: ChipKind, undo: boolean) => kind === 'busy' ? BUSY_MS : kind === 'error' ? ms('__jbErrorMs', ERROR_MS) : kind === 'ask' ? ms('__jbAskMs', ASK_MS)
   : undo ? ms('__jbUndoMs', UNDO_MS) : ms('__jbChipMs', CHIP_MS);
 const HOLD_MS = 4000;
-/** Hard ceiling for the regroup signal: stay on until the group re-forms and plays, up to 90 s.
+/** Hard ceiling for the regroup signal: stay on until the group re-forms, plays, and the position has advanced, up to 90 s.
  *  Play after a real re-form, a failed drop/join, or disconnect still clear earlier. Tests may shorten it through window.__jbRegroupMs. */
 /** 1.0.1: Music Assistant 2.10.13 answers a leader drop only after it stopped the old leader (up to 5 s) and dissolved the
  *  group, which can pass the 8 s call limit on a slow speaker; the card confirms it on the live feed this long after the tap */
@@ -456,6 +456,8 @@ export class JbSpeakers extends LitElement {
       leaderMembers: lead?.group_members,
       groupPlaying: x.tP?.playback_state === 'playing',
       leaderPlaying: lead?.playback_state === 'playing',
+      leaderElapsed: playerElapsed(lead),
+      groupElapsed: playerElapsed(x.tP),
     };
   }
   /** true while the target is re-forming: our own leader drop or join-back not yet answered by a re-formed playing group, or MA says buffering */
