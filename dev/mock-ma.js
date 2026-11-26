@@ -59,8 +59,10 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   const playOverride = {}; // player_id -> playback_state, when Home Assistant's entity has fallen behind
   const gState = (g) => playOverride[g] ?? st(G[g].entity)?.state ?? 'idle';
   const active = (g) => ['playing', 'paused', 'buffering'].includes(gState(g));
-  const membersNow = (g) => (G[g].kind === 'static' ? (active(g) ? G[g].members : []) : active(g) ? G[g].members : []);
-  const holder = (s, except) => Object.keys(G).find((g) => g !== except && active(g) && membersNow(g).includes(s));
+  // reformed: scripted set_members has landed; the group may still be idle (live drop 1: idle from set_members until play)
+  const formed = (g) => !!(G[g] && G[g].reformed && G[g].members.length);
+  const membersNow = (g) => (G[g].kind === 'static' ? (active(g) ? G[g].members : []) : (active(g) || formed(g)) ? G[g].members : []);
+  const holder = (s, except) => Object.keys(G).find((g) => g !== except && (active(g) || formed(g)) && membersNow(g).includes(s));
   const leader = (g) => membersNow(g)[0];
 
   function players() {
@@ -87,7 +89,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
         player_id: g, provider: 'sync_group', type: 'group', name: d.name, available: true, powered: active(g), hide_in_ui: false, expose_to_ha: true,
         playback_state: active(g) ? gState(g) : 'idle',
         // live: an idle dynamic group still lists its (default / last set) members
-        group_members: d.kind === 'static' ? [...d.members] : active(g) ? [...d.members] : [...(d.idle ?? d.preset)],
+        group_members: d.kind === 'static' ? [...d.members] : (active(g) || formed(g)) ? [...d.members] : [...(d.idle ?? d.preset)],
         static_group_members: d.kind === 'static' ? [...d.preset] : [], can_group_with: [], synced_to: null, active_group: null, active_source: g,
         supported_features: d.kind === 'static' ? ['volume_set', 'volume_mute', 'pause'] : ['volume_set', 'volume_mute', 'pause', 'set_members'],
         volume_level: st(d.entity)?.attributes?.volume_level ?? 0.5,
@@ -111,7 +113,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
   }
   function stopGroup(g, why) {
     setState(G[g].entity, 'idle');
-    if (G[g].kind === 'dynamic') G[g].members = [];
+    if (G[g].kind === 'dynamic') { G[g].members = []; delete G[g].reformed; }
     events.push({ ev: 'stop', group: g, why });
   }
   /** take speaker s out of whatever holds it (not `except`) */
@@ -133,6 +135,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
     const newLead = parked[0];
     // live dissolve: the dropped leader is already out; the remaining speakers are not on a new leader yet
     G[g].members = [];
+    delete G[g].reformed;
     events.push({ ev: 'reform', group: g, leader: newLead, parked });
     syncHa(); commit();
     const at = (ms, fn) => { if (ms == null) return; setTimeout(fn, Math.max(0, ms)); };
@@ -153,6 +156,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
     at(script.reformAt, () => {
       G[g].members = [...parked];
       delete G[g].idle;
+      G[g].reformed = true;
       setState(ent, 'idle');
       stamp('reformed', { attempt: 1 });
       syncHa(); commit();
@@ -166,6 +170,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
     at(script.reform2At, () => {
       delete G[g].idle;
       G[g].members = [...parked];
+      G[g].reformed = true;
       setState(ent, 'buffering');
       stamp('reformed', { attempt: 2 });
       syncHa(); commit();
@@ -173,6 +178,7 @@ export function createMa({ params, st, setState, commit, sleep, QS, syncNowPlayi
     at(script.playAt, () => {
       G[g].members = [...parked];
       delete G[g].idle;
+      G[g].reformed = true;
       setState(ent, 'playing');
       stamp('reformed-playing');
       syncHa(); commit();

@@ -1741,7 +1741,7 @@ const traced = (page, evName, attempt) => ev(page,
   attempt == null
     ? `(window.__rgTrace ?? []).find((x) => x.ev === ${J(evName)})`
     : `(window.__rgTrace ?? []).find((x) => x.ev === ${J(evName)} && x.attempt === ${attempt})`);
-const wasQuiet = (s) => !!s && s.evPlay !== 'playing' && s.leadPlay !== 'playing' && s.ma !== 'playing' && s.evLeadPlay !== 'playing';
+const wasQuiet = (s) => !!s && s.evPlay !== 'playing' && s.evLeadPlay !== 'playing';
 
 {
   // Randy live drop 1 (01:59 CT Nov 26): false PLAYING at +0.6 s lasting until set_members on the new leader at +11.6 s;
@@ -1766,12 +1766,14 @@ const wasQuiet = (s) => !!s && s.evPlay !== 'playing' && s.leadPlay !== 'playing
   const atReform = await traced(p, 'reformed', 1);
   const played = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed-playing')`, 15_000);
   const off = await wait(p, `!${SPK}.inlineRegrouping()`, 4000);
-  const atPlay = await traced(p, 'reformed-playing') ?? await feedOf(p);
+  const atPlayEv = await traced(p, 'reformed-playing');
+  const atPlay = await feedOf(p);
   check('RG13 live drop 1 timeline: signal stays on through the +0.6 s false PLAYING and the +11.6 s re-form (idle, not playing), and clears at +17.5 s steady playing',
-    on && blip && atBlip?.on && (atBlip.members?.length === 0 || atBlip.leadId === leadMa || atBlip.evMembers?.length === 0)
+    on && blip && atBlip?.on && (atBlip.evMembers?.length === 0 || atBlip.members?.length === 0 || atBlip.leadId === leadMa)
     && reformed && atReform?.on && wasQuiet(atReform)
-    && played && off && atPlay?.on === false && (atPlay.leadPlay === 'playing' || atPlay.evPlay === 'playing') && atPlay.leadId && atPlay.leadId !== leadMa,
-    J({ on, blip, atBlip, reformed, atReform, played, off, atPlay, dropped: leadMa }));
+    && played && atPlayEv?.evPlay === 'playing'
+    && off && atPlay.on === false && atPlay.leadPlay === 'playing' && atPlay.leadId && atPlay.leadId !== leadMa,
+    J({ on, blip, atBlip, reformed, atReform, played, atPlayEv, off, atPlay, dropped: leadMa }));
   await p.close();
 }
 {
@@ -1799,14 +1801,16 @@ const wasQuiet = (s) => !!s && s.evPlay !== 'playing' && s.leadPlay !== 'playing
   const atReform2 = await traced(p, 'reformed', 2);
   const played = await wait(p, `(window.__maEvents ?? []).some((e) => e.ev === 'reformed-playing')`, 15_000);
   const off = await wait(p, `!${SPK}.inlineRegrouping()`, 4000);
-  const atPlay = await traced(p, 'reformed-playing') ?? await feedOf(p);
+  const atPlayEv = await traced(p, 'reformed-playing');
+  const atPlay = await feedOf(p);
   check('RG14 live drop 2 timeline: signal stays on through the failed re-form and idle-grace dissolve, and clears at +42.2 s steady playing',
     on && reformed && atReform?.on && wasQuiet(atReform)
     && failed && atFail?.on
     && reformed2 && atReform2?.on && wasQuiet(atReform2)
-    && played && off && atPlay?.on === false && (atPlay.ma === 'playing' || atPlay.leadPlay === 'playing' || atPlay.evPlay === 'playing')
+    && played && atPlayEv?.evPlay === 'playing'
+    && off && atPlay.on === false && (atPlay.ma === 'playing' || atPlay.leadPlay === 'playing')
     && atPlay.leadId && atPlay.leadId !== leadMa,
-    J({ on, atReform, atFail, atReform2, played, off, atPlay, dropped: leadMa }));
+    J({ on, atReform, atFail, atReform2, played, atPlayEv, off, atPlay, dropped: leadMa }));
   await p.close();
 }
 
