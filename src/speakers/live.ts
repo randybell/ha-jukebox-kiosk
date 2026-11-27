@@ -2,8 +2,7 @@
  * #103 live feed: Music Assistant's players and queues as Music Assistant's own app keeps them (frontend 2.17.297
  * api/index.ts handleEventMessage), from the integration's jukebox_kiosk/subscribe_live.
  *  - The first message is a full snapshot; after that each message is one change MA pushed: player_added / updated /
- *    removed, queue_added / updated, queue_items_updated, queue_time_updated (elapsed seconds while playing).
- *    Now Playing progress still uses HA's media_position; queue_time_updated is only for the regroup signal.
+ *    removed, queue_added / updated, queue_items_updated. queue_time_updated is never sent (progress uses HA's position).
  *  - Every message carries `seq`, counting up by one on that subscription. A snapshot always starts over. A message
  *    older than the last one applied is dropped, so an older answer never overwrites a newer one; a missing number (or a
  *    change before any snapshot) is a gap, and the caller asks for a fresh snapshot.
@@ -149,16 +148,6 @@ export class LiveState {
         if (this.activeQueues.has(id)) { const a = new Map(this.activeQueues); a.delete(id); this.activeQueues = a; }
         return;
       }
-      case 'queue_time_updated': {
-        // object_id is the queue id (often the group player_id); data is elapsed seconds, or {elapsed_time}.
-        const qid = id;
-        if (!qid) return;
-        const elapsed = typeof data === 'number' && Number.isFinite(data) ? data
-          : (d && typeof (d as any).elapsed_time === 'number' && Number.isFinite((d as any).elapsed_time) ? (d as any).elapsed_time : undefined);
-        if (elapsed == null) return;
-        this.applyElapsed(qid, elapsed);
-        return;
-      }
       case 'queue_added':
       case 'queue_updated':
       case 'queue_items_updated': {
@@ -175,25 +164,5 @@ export class LiveState {
       default:
         return;
     }
-  }
-
-  /** Stamp a fresh MA elapsed value (from queue_time_updated) on the queue's player and any
-   *  player whose active queue is this one. Values are as sent, not interpolated. */
-  private applyElapsed(qid: string, elapsed: number) {
-    const touch = (pid: string) => {
-      const prev = this.raw.get(pid);
-      if (!prev) return;
-      const cm = prev.current_media && typeof prev.current_media === 'object' ? { ...prev.current_media, elapsed_time: elapsed } : prev.current_media;
-      const merged = { ...prev, elapsed_time: elapsed, current_media: cm };
-      this.raw.set(pid, merged);
-      const parsed = parsePlayers([merged]).get(pid);
-      if (parsed) {
-        const next = new Map(this.players);
-        next.set(pid, parsed);
-        this.players = next;
-      }
-    };
-    touch(qid);
-    for (const [pid, q] of this.activeQueues) if (q === qid && pid !== qid) touch(pid);
   }
 }

@@ -241,10 +241,10 @@ QUEUE_EVENTS: Final = ("queue_updated", "queue_items_updated")
 # #156 sleep timer off (Randy: kept for a standalone player):
 # SLEEP_TIMER_EVENT: Final = "player_sleep_timer_updated"
 # #103 live feed (jukebox_kiosk/subscribe_live): the MA events Music Assistant's own app keeps its players and queues
-# from (frontend 2.17.297 api/index.ts handleEventMessage). queue_time_updated (once a second while playing) is
-# forwarded so the regroup signal can see MA elapsed_time advance; Now Playing progress still uses HA position.
+# from (frontend 2.17.297 api/index.ts handleEventMessage). queue_time_updated (once a second while playing) is left
+# out on purpose: the card's progress bar keeps using Home Assistant's position.
 LIVE_PLAYER_EVENTS: Final = ("player_added", "player_updated", "player_removed")
-LIVE_QUEUE_EVENTS: Final = ("queue_added", "queue_updated", "queue_items_updated", "queue_time_updated")
+LIVE_QUEUE_EVENTS: Final = ("queue_added", "queue_updated", "queue_items_updated")
 LIVE_EVENTS: Final = LIVE_PLAYER_EVENTS + LIVE_QUEUE_EVENTS
 # MA Autoplay (called "Don't stop the music" before MA 2.10). Sent only by jukebox_kiosk/set_autoplay, for the queue of an
 # entity the user may control; not in MA_COMMANDS, so `ma` callers can't name an arbitrary queue_id. Both need MA scope

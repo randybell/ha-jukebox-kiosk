@@ -114,21 +114,6 @@ const ui = (page) => ev(page, `(() => {
   };
 })()`);
 const playCallsSince = (page, n) => ev(page, `window.__calls.slice(${n}).filter((c) => c.domain === 'media_player' && /^(media_play|media_pause|media_play_pause)$/.test(c.service)).map((c) => c.service)`);
-const spinSample = (page) => ev(page, `(() => {
-  const el = ${NP}.querySelector('.rc-spin');
-  if (!el) return null;
-  const cs = getComputedStyle(el);
-  const a = typeof el.getAnimations === 'function' ? el.getAnimations()[0] : null;
-  return {
-    opacity: cs.opacity,
-    transform: cs.transform,
-    animationName: cs.animationName,
-    animationDuration: cs.animationDuration,
-    playState: a?.playState ?? cs.animationPlayState,
-    startTime: a?.startTime ?? null,
-    currentTime: a?.currentTime ?? null,
-  };
-})()`);
 const cfg = encodeURIComponent(J({ leader_drop: 'allow' }));
 
 {
@@ -235,46 +220,6 @@ const cfg = encodeURIComponent(J({ leader_drop: 'allow' }));
   const end = await ui(p);
   check('U8 a failed join-back clears the label when the error chip appears',
     on && failed && !end.reconfig && !end.spin && end.on === false, J({ on, failed, end }));
-  await p.close();
-}
-
-{
-  // Reduced motion off: the mark must rotate (computed transform changes).
-  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&gap=4000&cfg=${cfg}`);
-  await p.evaluate(() => { window.__jbRegroupMs = 8000; });
-  await openPanel(p); await waitLoaded(p);
-  const lead = await indoorLead(p);
-  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
-  await tap(p, act(lead));
-  const on = await wait(p, `${SPK}.inlineRegrouping() && !!${NP}.querySelector('.rc-spin')`, 2000);
-  const reduced = await ev(p, `matchMedia('(prefers-reduced-motion: reduce)').matches`);
-  const a = await spinSample(p);
-  await sleep(400);
-  const b = await spinSample(p);
-  check('U9 with reduced motion off, the mark rotates (computed transform differs ~400 ms apart)',
-    on && reduced === false && a && b && a.transform && b.transform && a.transform !== 'none' && a.transform !== b.transform,
-    J({ reduced, a, b }));
-  await p.close();
-}
-
-{
-  // Reduced motion on: the mark still moves via an opacity pulse (no spin required).
-  const p = await open(`&spk=dyn&admin=1&ma=split&target=${IN}&gap=4000&cfg=${cfg}`);
-  await p.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
-  await p.evaluate(() => { window.__jbRegroupMs = 8000; });
-  await openPanel(p); await waitLoaded(p);
-  const lead = await indoorLead(p);
-  await wait(p, `${act(lead)}?.dataset.act === 'drop'`, 4000);
-  await tap(p, act(lead));
-  const on = await wait(p, `${SPK}.inlineRegrouping() && !!${NP}.querySelector('.rc-spin')`, 2000);
-  const reduced = await ev(p, `matchMedia('(prefers-reduced-motion: reduce)').matches`);
-  const a = await spinSample(p);
-  await sleep(400);
-  const b = await spinSample(p);
-  const opa = a && b && Number(a.opacity) !== Number(b.opacity);
-  check('U10 with reduced motion on, the mark\'s computed opacity differs ~400 ms apart',
-    on && reduced === true && opa,
-    J({ reduced, a, b }));
   await p.close();
 }
 

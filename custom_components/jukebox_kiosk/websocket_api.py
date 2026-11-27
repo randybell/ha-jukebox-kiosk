@@ -914,7 +914,7 @@ async def ws_subscribe_live(
     while MA is offline: it starts with "offline" and the first snapshot comes when MA returns.
 
     Players and queues reach a non-admin only for players whose entity they may read (#105; queues as
-    player_queues/get), and so do their active-queue entries and changes. queue_time_updated (elapsed seconds, about once a second while playing) is forwarded for the regroup signal; Now Playing progress still uses Home Assistant's media_position.
+    player_queues/get), and so do their active-queue entries and changes. queue_time_updated is not forwarded.
 
     2.5: the feed also says which queue each player is playing, by the one active-queue rule (players.active_queue_id,
     Music Assistant's app rule), so the card follows its speaker's queue from the feed and never needs its own copy of
