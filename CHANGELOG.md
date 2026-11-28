@@ -4,6 +4,20 @@ All notable changes to Jukebox Card. Versions follow [semver](https://semver.org
 
 ## Unreleased
 
+## 1.0.1 — 2026-11-28
+
+- The card and the Jukebox Kiosk integration must be updated together.
+- The sleep timer has been taken off the card and the integration. The moon button is no longer on Now Playing. (#156)
+- The favorites heart no longer appears on Library tiles, Library list rows, or search results. You can still add a favorite from an item's page, from **More Info** (a round heart in the header, on the Queue, on Tracks, and in search), from the station sheet, and from Now Playing.
+- Now Playing takes play and pause from Music Assistant when the live updates are in. When a group starts playing again, Now Playing shows **Playing on** and the Pause button, not **Paused**, even if Home Assistant has not caught up yet.
+- When you drop the lead speaker of a group, it leaves the list at once and the card stays usable. While the group is coming back together, or when you add that speaker back, Now Playing shows **Reconfiguring speakers…** with a spinner, and play and pause taps do nothing until that finishes.
+- **Move** waits until the queue is active on the player you moved to before the card switches to it. If Move does not finish, the card stays on the player your card is set up with. (#104)
+- You can Remove a track from a long queue even when it is further down than the first 1,000 upcoming tracks. Queue actions use the queue that is playing now. (#105)
+- The speaker count in the header includes the other speakers synced to a leading speaker, not just that one speaker. (#101)
+- The Speakers panel and the header count tell whether a room is in the group by the track that is playing, not only by its title, so two different tracks with the same name are not mixed up. (#105)
+- A change to the Scale setting in the card's settings applies at once. (#161)
+- When you leave the card and come back, the large-screen size is fitted again. (#160)
+
 ## 1.0.0 — 2026-11-24
 
 - The card and the Jukebox Kiosk integration must be updated together. A card you already have keeps its speaker if that speaker is a Music Assistant player. A new card starts with no speaker: pick one under **Player** in the card's settings, or the card shows "Specify an entity from within the media_player domain".
